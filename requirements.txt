@@ -1,0 +1,5 @@
+streamlit
+google-generativeai
+google-auth
+google-api-python-client
+PyPDF2
