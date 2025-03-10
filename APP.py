@@ -18,7 +18,8 @@ current_api_key_index = 0
 def configure_api():
     global current_api_key_index
     genai.configure(api_key=api_keys[current_api_key_index])
-    st.write(f"API configurada con clave {current_api_key_index+1}/{len(api_keys)}")
+    # En producción, no mostramos la clave
+    # st.write(f"API configurada con clave {current_api_key_index+1}/{len(api_keys)}")
 
 configure_api()
 
@@ -54,19 +55,20 @@ def switch_api_key():
 # Función para llamar a Gemini
 # -------------------------------
 def call_gemini_api(prompt):
-    st.write("=== Enviando prompt a Gemini ===")
-    st.code(prompt)
+    # En producción, no mostramos el prompt
+    # st.write("=== Enviando prompt a Gemini ===")
+    # st.code(prompt)
     try:
         response = model.generate_content([prompt])
-        st.write("=== Respuesta cruda de Gemini ===")
-        st.code(response.text)
+        # st.write("=== Respuesta cruda de Gemini ===")
+        # st.code(response.text)
     except Exception as e:
         st.error(f"Error en la llamada a Gemini: {e}. Intentando cambiar API Key.")
         switch_api_key()
         try:
             response = model.generate_content([prompt])
-            st.write("=== Respuesta cruda de Gemini (reintento) ===")
-            st.code(response.text)
+            # st.write("=== Respuesta cruda de Gemini (reintento) ===")
+            # st.code(response.text)
         except Exception as e2:
             st.error(f"Error GRAVE en la llamada a Gemini: {e2}")
             return None
@@ -74,7 +76,6 @@ def call_gemini_api(prompt):
         result = json.loads(response.text)
     except json.JSONDecodeError as e:
         st.error(f"Error al convertir la respuesta a JSON: {e}")
-        st.code(response.text)
         result = {"error": response.text if response.text else "No response received", "json_error": str(e)}
     return result
 
@@ -88,17 +89,13 @@ def load_database(json_path):
 
 def get_relevant_info(db, question):
     """
-    Aquí puedes implementar lógica de filtrado o selección de la información
-    relevante de la base de datos en función de la pregunta.
-    En este ejemplo, concatenamos toda la información.
+    En este ejemplo concatenamos toda la información; puedes mejorar la lógica de filtrado.
     """
     all_text = ""
     for pres in db:
         all_text += f"Documento: {pres.get('nombre_archivo', 'Sin nombre')}\n"
-        # Por cada grupo, incluimos una referencia y citas concretas:
         for grupo in pres.get("grupos", []):
             all_text += f"Grupo {grupo.get('grupo_index')}: {grupo.get('contenido_texto', '')}\n"
-            # Se pueden incluir citas concretas extraídas de 'metadatos' o 'hechos'
             metadatos = grupo.get("metadatos", {})
             hechos = grupo.get("hechos", {})
             if metadatos:
@@ -112,7 +109,7 @@ def get_relevant_info(db, question):
 # Función para generar el informe final
 # -------------------------------
 def generate_final_report(question, db):
-    # Primer prompt: organizar la información relevante y generar metadatos
+    # Organizar la información relevante y generar metadatos
     relevant_info = get_relevant_info(db, question)
     prompt1 = (
         f"Con base en la siguiente información extraída de investigaciones (con citas y referencias), responde a la pregunta:\n"
@@ -124,7 +121,7 @@ def generate_final_report(question, db):
     if result1 is None:
         return None
     
-    # Segundo prompt: utilizar el resumen y metadatos generados para crear un informe formal en prosa
+    # Generar el informe formal en prosa
     prompt2 = (
         f"Utilizando el resumen y los metadatos que se muestran a continuación, redacta un informe formal en prosa dirigido a un cliente empresarial. "
         "El informe debe incluir citas concretas, referencias a los documentos de origen y describir hechos relevantes de la investigación.\n\n"
@@ -132,7 +129,13 @@ def generate_final_report(question, db):
         "Informe:"
     )
     result2 = call_gemini_api(prompt2)
-    return result2
+    if result2 and result2.get("informe"):
+        return result2["informe"]
+    # Si la respuesta no tiene la clave "informe", se devuelve el contenido completo convertido a HTML
+    elif result2:
+        return f"<pre>{json.dumps(result2, indent=2)}</pre>"
+    else:
+        return None
 
 # -------------------------------
 # Autenticación simple para el uso de la aplicación
@@ -141,7 +144,6 @@ def login():
     st.sidebar.title("Autenticación")
     username = st.sidebar.text_input("Usuario")
     password = st.sidebar.text_input("Contraseña", type="password")
-    # Puedes reemplazar la siguiente validación por una verificación más robusta
     if username == "admin" and password == "secret":
         st.sidebar.success("Acceso autorizado")
         return True
@@ -159,7 +161,6 @@ def main():
     if not login():
         st.stop()
 
-    # Cargar la base de datos (asegúrate de que el archivo JSON se encuentre en la misma carpeta)
     db_path = "resultado_presentacion_clean.json"
     try:
         db = load_database(db_path)
@@ -175,17 +176,15 @@ def main():
             st.warning("Ingrese una pregunta para generar el informe.")
         else:
             st.info("Generando informe. Esto puede tardar unos minutos...")
-            # Llamar a la función que genera el informe final
             report = generate_final_report(question, db)
             if report is None:
                 st.error("No se pudo generar el informe. Intente de nuevo más tarde.")
             else:
                 st.markdown("### Informe Final")
-                st.write(report)
-                # También se puede guardar el informe en un archivo
-                with open("informe_final.txt", "w", encoding="utf-8") as f:
-                    f.write(report.get("informe", str(report)))
-                st.success("Informe generado y guardado en 'informe_final.txt'.")
+                st.markdown(report, unsafe_allow_html=True)
+                with open("informe_final.html", "w", encoding="utf-8") as f:
+                    f.write(report)
+                st.success("Informe generado y guardado en 'informe_final.html'.")
 
 if __name__ == "__main__":
     main()
