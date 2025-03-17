@@ -162,7 +162,7 @@ def main():
     cliente = st.sidebar.selectbox("Seleccione el cliente", ["Mondelez", "Postobon"])
 
     # Cargar la base de datos (formato JSON)
-    db_path = "resultado_presentacion_clean.json"
+    db_path = "resultado_presentacion.json"
     try:
         db = load_database(db_path)
     except Exception as e:
