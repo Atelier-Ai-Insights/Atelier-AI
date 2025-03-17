@@ -18,7 +18,7 @@ def configure_api():
     global current_api_key_index
     genai.configure(api_key=api_keys[current_api_key_index])
     # Para producción, no mostramos la clave
-    st.write(f"API configurada con clave {current_api_key_index+1}/{len(api_keys)}")
+    # st.write(f"API configurada con clave {current_api_key_index+1}/{len(api_keys)}")
 
 configure_api()
 
@@ -166,18 +166,26 @@ def ideacion_mode(db, selected_files):
                 st.markdown(f"**Asistente:** {respuesta}")
 
 # -------------------------------
-# Autenticación simple para el uso de la aplicación
+# Autenticación y asignación de cliente según credenciales
 # -------------------------------
 def login():
     st.sidebar.title("Autenticación")
     username = st.sidebar.text_input("Usuario")
     password = st.sidebar.text_input("Contraseña", type="password")
+    
+    # Definir credenciales y asignar cliente
     if username == "admin" and password == "secret":
-        st.sidebar.success("Acceso autorizado")
-        return True
+        st.sidebar.success("Acceso autorizado como admin")
+        return username, None  # None indica sin restricción
+    elif username.lower() == "postobon" and password == "postobon":
+        st.sidebar.success("Acceso autorizado para Postobon")
+        return username, "Postobon"
+    elif username.lower() == "mondelez" and password == "mondelez":
+        st.sidebar.success("Acceso autorizado para Mondelez")
+        return username, "Mondelez"
     else:
         st.sidebar.error("Credenciales incorrectas")
-        return False
+        return None, None
 
 # -------------------------------
 # Aplicación principal de Streamlit
@@ -186,7 +194,8 @@ def main():
     st.title("Informe e Ideación de Investigaciones para Empresarios")
     st.markdown("Esta aplicación genera informes formales e interactúa creativamente con datos de investigaciones para clientes empresariales.")
     
-    if not login():
+    user, allowed_client = login()
+    if user is None:
         st.stop()
     
     # Cargar la base de datos (formato JSON)
@@ -197,25 +206,34 @@ def main():
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
     
-    # Filtrado por cliente
-    clientes = sorted(list({doc.get("cliente") for doc in db if doc.get("cliente")}))
-    clientes.insert(0, "Todas")
-    selected_cliente = st.sidebar.selectbox("Seleccione el cliente", clientes)
-    if selected_cliente != "Todas":
-        db = [doc for doc in db if doc.get("cliente") == selected_cliente]
+    # Filtrado por cliente según autenticación
+    if allowed_client:
+        db = [doc for doc in db if doc.get("cliente", "").strip().lower() == allowed_client.lower()]
+        st.sidebar.markdown(f"Filtrado automático para el cliente: {allowed_client}")
+    else:
+        # Si es admin, permite filtrar manualmente por cliente
+        clientes = sorted({doc.get("cliente", "").strip() for doc in db if doc.get("cliente", "").strip()})
+        clientes = ["Todas"] + list(clientes)
+        selected_cliente = st.sidebar.selectbox("Seleccione el cliente", clientes)
+        if selected_cliente != "Todas":
+            db = [doc for doc in db if doc.get("cliente", "").strip().lower() == selected_cliente.lower()]
     
-    # Filtrado por marca
-    marcas = sorted(list({doc.get("marca") for doc in db if doc.get("marca")}))
+    # Filtrado por marca (se corrige la identificación de marcas)
+    marcas_set = {doc.get("marca", "").strip() for doc in db if doc.get("marca", "").strip() != ""}
+    if not marcas_set:
+        marcas = ["Sin marca"]
+    else:
+        marcas = sorted(list(marcas_set))
     marcas.insert(0, "Todas")
     selected_marca = st.sidebar.selectbox("Seleccione la marca", marcas)
     if selected_marca != "Todas":
-        db = [doc for doc in db if doc.get("marca") == selected_marca]
+        db = [doc for doc in db if doc.get("marca", "").strip().lower() == selected_marca.lower()]
     
-    # Filtrado opcional por producto (si la propiedad existe en los documentos)
+    # Filtrado opcional por producto (si existe)
     if all("producto" in doc for doc in db):
-        productos_disponibles = sorted(list({doc.get("producto") for doc in db if doc.get("producto")}))
+        productos_disponibles = sorted({doc.get("producto", "").strip() for doc in db if doc.get("producto", "").strip()})
         selected_productos = st.sidebar.multiselect("Seleccione los productos a incluir", productos_disponibles, default=productos_disponibles)
-        db = [doc for doc in db if doc.get("producto") in selected_productos]
+        db = [doc for doc in db if doc.get("producto", "").strip() in selected_productos]
     
     # Lista de archivos seleccionados (se usarán todos los documentos filtrados)
     selected_files = [doc.get("nombre_archivo") for doc in db]
