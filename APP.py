@@ -18,7 +18,7 @@ def configure_api():
     global current_api_key_index
     genai.configure(api_key=api_keys[current_api_key_index])
     # Para producción, no mostramos la clave
-    # st.write(f"API configurada con clave {current_api_key_index+1}/{len(api_keys)}")
+    st.write(f"API configurada con clave {current_api_key_index+1}/{len(api_keys)}")
 
 configure_api()
 
@@ -166,26 +166,18 @@ def ideacion_mode(db, selected_files):
                 st.markdown(f"**Asistente:** {respuesta}")
 
 # -------------------------------
-# Autenticación y asignación de cliente según credenciales
+# Autenticación simple para el uso de la aplicación
 # -------------------------------
 def login():
     st.sidebar.title("Autenticación")
     username = st.sidebar.text_input("Usuario")
     password = st.sidebar.text_input("Contraseña", type="password")
-    
-    # Definir credenciales y asignar cliente
     if username == "admin" and password == "secret":
-        st.sidebar.success("Acceso autorizado como admin")
-        return username, None  # None indica sin restricción
-    elif username.lower() == "postobon" and password == "1515":
-        st.sidebar.success("Acceso autorizado para Postobon")
-        return username, "Postobon"
-    elif username.lower() == "mondelez" and password == "1313":
-        st.sidebar.success("Acceso autorizado para Mondelez")
-        return username, "Mondelez"
+        st.sidebar.success("Acceso autorizado")
+        return True
     else:
         st.sidebar.error("Credenciales incorrectas")
-        return None, None
+        return False
 
 # -------------------------------
 # Aplicación principal de Streamlit
@@ -194,8 +186,7 @@ def main():
     st.title("Informe e Ideación de Investigaciones para Empresarios")
     st.markdown("Esta aplicación genera informes formales e interactúa creativamente con datos de investigaciones para clientes empresariales.")
     
-    user, allowed_client = login()
-    if user is None:
+    if not login():
         st.stop()
     
     # Cargar la base de datos (formato JSON)
@@ -206,17 +197,12 @@ def main():
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
     
-    # Filtrado por cliente según autenticación
-    if allowed_client:
-        db = [doc for doc in db if doc.get("cliente") == allowed_client]
-        st.sidebar.markdown(f"Filtrado automático para el cliente: {allowed_client}")
-    else:
-        # Si es admin, permite filtrar manualmente por cliente
-        clientes = sorted(list({doc.get("cliente") for doc in db if doc.get("cliente")}))
-        clientes.insert(0, "Todas")
-        selected_cliente = st.sidebar.selectbox("Seleccione el cliente", clientes)
-        if selected_cliente != "Todas":
-            db = [doc for doc in db if doc.get("cliente") == selected_cliente]
+    # Filtrado por cliente
+    clientes = sorted(list({doc.get("cliente") for doc in db if doc.get("cliente")}))
+    clientes.insert(0, "Todas")
+    selected_cliente = st.sidebar.selectbox("Seleccione el cliente", clientes)
+    if selected_cliente != "Todas":
+        db = [doc for doc in db if doc.get("cliente") == selected_cliente]
     
     # Filtrado por marca
     marcas = sorted(list({doc.get("marca") for doc in db if doc.get("marca")}))
@@ -225,7 +211,7 @@ def main():
     if selected_marca != "Todas":
         db = [doc for doc in db if doc.get("marca") == selected_marca]
     
-    # Filtrado opcional por producto (si existe)
+    # Filtrado opcional por producto (si la propiedad existe en los documentos)
     if all("producto" in doc for doc in db):
         productos_disponibles = sorted(list({doc.get("producto") for doc in db if doc.get("producto")}))
         selected_productos = st.sidebar.multiselect("Seleccione los productos a incluir", productos_disponibles, default=productos_disponibles)
