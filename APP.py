@@ -117,22 +117,53 @@ def generate_final_report(question, db, selected_files):
     return result2
 
 # -------------------------------
-# Función para iniciar el modo de Ideación (Conversar con los datos)
+# Función para iniciar el modo de Ideación (chat interactivo)
 # -------------------------------
 def ideacion_mode(db, selected_files):
     st.subheader("Modo de Ideación: Conversa con los datos")
+    
+    # Botón para reiniciar la conversación
+    if st.button("Reiniciar conversación"):
+        st.session_state.chat_history = []
+    
+    # Inicializar el historial de conversación si no existe
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    
+    # Mostrar el historial de conversación
+    st.markdown("#### Historial de conversación:")
+    for msg in st.session_state.chat_history:
+        if msg["role"] == "user":
+            st.markdown(f"**Usuario:** {msg['message']}")
+        else:
+            st.markdown(f"**Asistente:** {msg['message']}")
+    
+    # Entrada del usuario
     user_input = st.text_input("Escribe tu consulta o idea:")
-    if user_input:
-        relevant_info = get_relevant_info(db, user_input, selected_files)
-        prompt = (
-            f"Utilizando la siguiente información extraída de investigaciones, conversa creativamente y genera ideas innovadoras o soluciones basadas en estos datos.\n\n"
-            f"Consulta/Idea: {user_input}\n\n"
-            f"Información:\n{relevant_info}\n\n"
-            "Responde de forma abierta y creativa:"
-        )
-        respuesta = call_gemini_api(prompt)
-        st.markdown("#### Respuesta:")
-        st.markdown(respuesta)
+    if st.button("Enviar"):
+        if not user_input.strip():
+            st.warning("Ingrese un mensaje para continuar la conversación.")
+        else:
+            # Agregar el mensaje del usuario al historial
+            st.session_state.chat_history.append({"role": "user", "message": user_input})
+            relevant_info = get_relevant_info(db, user_input, selected_files)
+            
+            # Construir el prompt incluyendo el historial de la conversación
+            conversation_prompt = "Historial de conversación:\n"
+            for msg in st.session_state.chat_history:
+                if msg["role"] == "user":
+                    conversation_prompt += f"Usuario: {msg['message']}\n"
+                else:
+                    conversation_prompt += f"Asistente: {msg['message']}\n"
+            conversation_prompt += "\nInformación de contexto de investigaciones:\n" + relevant_info + "\n\n"
+            conversation_prompt += "Genera una respuesta coherente, creativa y detallada que continúe la conversación basándote en el historial y la información de contexto."
+            
+            respuesta = call_gemini_api(conversation_prompt)
+            if respuesta is None:
+                st.error("Error al generar la respuesta.")
+            else:
+                st.session_state.chat_history.append({"role": "assistant", "message": respuesta})
+                st.markdown(f"**Asistente:** {respuesta}")
 
 # -------------------------------
 # Autenticación simple para el uso de la aplicación
@@ -154,13 +185,10 @@ def login():
 def main():
     st.title("Informe e Ideación de Investigaciones para Empresarios")
     st.markdown("Esta aplicación genera informes formales e interactúa creativamente con datos de investigaciones para clientes empresariales.")
-
+    
     if not login():
         st.stop()
-
-    # Selección de cliente
-    cliente = st.sidebar.selectbox("Seleccione el cliente", ["Mondelez", "Postobon"])
-
+    
     # Cargar la base de datos (formato JSON)
     db_path = "resultado_presentacion.json"
     try:
@@ -168,24 +196,36 @@ def main():
     except Exception as e:
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
-
-    # Filtrar la base de datos por cliente
-    filtered_db = [doc for doc in db if doc.get("cliente") == cliente]
-
-    # Selección de productos o categorías (ej.: "gums_and_candys", "galletas", etc.)
-    productos_disponibles = list({doc.get("producto") for doc in filtered_db})
-    selected_productos = st.sidebar.multiselect("Seleccione los productos a incluir", productos_disponibles, default=productos_disponibles)
-
-    # Filtrar documentos por productos seleccionados
-    filtered_db = [doc for doc in filtered_db if doc.get("producto") in selected_productos]
-    selected_files = [doc.get("nombre_archivo") for doc in filtered_db]
-
-    # Selección del modo de operación
-    modo = st.sidebar.radio("Seleccione el modo", ["Informe de Informes", "Ideación (Conversar con los datos)"])
-
+    
+    # Filtrado por cliente
+    clientes = sorted(list({doc.get("cliente") for doc in db if doc.get("cliente")}))
+    clientes.insert(0, "Todas")
+    selected_cliente = st.sidebar.selectbox("Seleccione el cliente", clientes)
+    if selected_cliente != "Todas":
+        db = [doc for doc in db if doc.get("cliente") == selected_cliente]
+    
+    # Filtrado por marca
+    marcas = sorted(list({doc.get("marca") for doc in db if doc.get("marca")}))
+    marcas.insert(0, "Todas")
+    selected_marca = st.sidebar.selectbox("Seleccione la marca", marcas)
+    if selected_marca != "Todas":
+        db = [doc for doc in db if doc.get("marca") == selected_marca]
+    
+    # Filtrado opcional por producto (si la propiedad existe en los documentos)
+    if all("producto" in doc for doc in db):
+        productos_disponibles = sorted(list({doc.get("producto") for doc in db if doc.get("producto")}))
+        selected_productos = st.sidebar.multiselect("Seleccione los productos a incluir", productos_disponibles, default=productos_disponibles)
+        db = [doc for doc in db if doc.get("producto") in selected_productos]
+    
+    # Lista de archivos seleccionados (se usarán todos los documentos filtrados)
+    selected_files = [doc.get("nombre_archivo") for doc in db]
+    
     st.markdown(f"#### Documentos seleccionados ({len(selected_files)}):")
     st.write(selected_files)
-
+    
+    # Selección del modo de operación
+    modo = st.sidebar.radio("Seleccione el modo", ["Informe de Informes", "Ideación (Conversar con los datos)"])
+    
     if modo == "Informe de Informes":
         st.markdown("### Ingrese la pregunta del empresario")
         question = st.text_area("Pregunta", height=150)
@@ -194,7 +234,7 @@ def main():
                 st.warning("Ingrese una pregunta para generar el informe.")
             else:
                 st.info("Generando informe. Esto puede tardar unos minutos...")
-                report = generate_final_report(question, filtered_db, selected_files)
+                report = generate_final_report(question, db, selected_files)
                 if report is None:
                     st.error("No se pudo generar el informe. Intente de nuevo más tarde.")
                 else:
@@ -204,9 +244,8 @@ def main():
                         f.write(report)
                     st.success("Informe generado y guardado en 'informe_final.html'.")
     else:
-        # Modo de Ideación
-        ideacion_mode(filtered_db, selected_files)
+        # Modo de Ideación (chat interactivo)
+        ideacion_mode(db, selected_files)
 
 if __name__ == "__main__":
     main()
-
