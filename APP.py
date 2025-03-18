@@ -3,7 +3,7 @@ import time
 import json
 import streamlit as st
 import google.generativeai as genai
-from supabase import create_client
+import boto3  # Asegúrate de instalar boto3: pip install boto3
 
 # -------------------------------
 # CONFIGURACIÓN DE LA API DE GEMINI
@@ -68,24 +68,31 @@ def call_gemini_api(prompt):
     return response.text
 
 # -------------------------------
-# Función para cargar la base de datos desde Supabase Storage
+# Función para cargar la base de datos desde S3 de Supabase
 # -------------------------------
 @st.cache_data(show_spinner=False)
 def load_database():
     # Obtener los parámetros de conexión desde los secretos de Streamlit
-    supabase_url = st.secrets["SUPABASE_URL"]
-    supabase_key = st.secrets["SUPABASE_KEY"]
-    bucket = st.secrets.get("SUPABASE_BUCKET", "default-bucket")  # Ajusta el nombre del bucket según corresponda
+    s3_endpoint_url = st.secrets["S3_ENDPOINT_URL"]
+    s3_access_key = st.secrets["S3_ACCESS_KEY"]
+    s3_secret_key = st.secrets["S3_SECRET_KEY"]
+    bucket_name = st.secrets.get("S3_BUCKET", "default-bucket")
+    object_key = "resultado_presentacion.json"  # Nombre del archivo en el bucket
 
-    # Crear el cliente de Supabase
-    supabase = create_client(supabase_url, supabase_key)
+    # Crear el cliente S3 con boto3
+    s3_client = boto3.client(
+        "s3",
+        endpoint_url=s3_endpoint_url,
+        aws_access_key_id=s3_access_key,
+        aws_secret_access_key=s3_secret_key
+    )
 
-    # Descargar el archivo JSON desde el storage
+    # Descargar y cargar el archivo JSON
     try:
-        response = supabase.storage.from_(bucket).download("resultado_presentacion.json")
-        data = json.loads(response.decode("utf-8"))
+        response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
+        data = json.loads(response['Body'].read().decode("utf-8"))
     except Exception as e:
-        st.error(f"Error al descargar la base de datos desde Supabase: {e}")
+        st.error(f"Error al descargar la base de datos desde S3: {e}")
         data = []
     return data
 
@@ -213,7 +220,7 @@ def main():
     if user is None:
         st.stop()
     
-    # Cargar la base de datos desde Supabase Storage
+    # Cargar la base de datos desde S3 de Supabase
     try:
         db = load_database()
     except Exception as e:
