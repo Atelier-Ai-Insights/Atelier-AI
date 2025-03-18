@@ -3,6 +3,7 @@ import time
 import json
 import streamlit as st
 import google.generativeai as genai
+from supabase import create_client
 
 # -------------------------------
 # CONFIGURACIÓN DE LA API DE GEMINI
@@ -67,12 +68,26 @@ def call_gemini_api(prompt):
     return response.text
 
 # -------------------------------
-# Función para cargar la base de datos
+# Función para cargar la base de datos desde Supabase Storage
 # -------------------------------
 @st.cache_data(show_spinner=False)
-def load_database(json_path):
-    with open(json_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+def load_database():
+    # Obtener los parámetros de conexión desde los secretos de Streamlit
+    supabase_url = st.secrets["SUPABASE_URL"]
+    supabase_key = st.secrets["SUPABASE_KEY"]
+    bucket = st.secrets.get("SUPABASE_BUCKET", "default-bucket")  # Ajusta el nombre del bucket según corresponda
+
+    # Crear el cliente de Supabase
+    supabase = create_client(supabase_url, supabase_key)
+
+    # Descargar el archivo JSON desde el storage
+    try:
+        response = supabase.storage.from_(bucket).download("resultado_presentacion.json")
+        data = json.loads(response.decode("utf-8"))
+    except Exception as e:
+        st.error(f"Error al descargar la base de datos desde Supabase: {e}")
+        data = []
+    return data
 
 def get_relevant_info(db, question, selected_files):
     """
@@ -198,10 +213,9 @@ def main():
     if user is None:
         st.stop()
     
-    # Cargar la base de datos (formato JSON)
-    db_path = "resultado_presentacion.json"
+    # Cargar la base de datos desde Supabase Storage
     try:
-        db = load_database(db_path)
+        db = load_database()
     except Exception as e:
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
