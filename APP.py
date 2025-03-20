@@ -6,45 +6,20 @@ import google.generativeai as genai
 import boto3  # Asegúrate de instalar boto3: pip install boto3
 
 # -------------------------------
-# Estilos personalizados: fondo blanco y textos azules
-# -------------------------------
-st.markdown(
-    """
-    <style>
-    body {
-        background-color: white;
-        color: blue;
-    }
-    .stMarkdown p {
-        color: blue;
-    }
-    .centered {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        height: 80vh;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# -------------------------------
 # CONFIGURACIÓN DE LA API DE GEMINI
 # -------------------------------
-# Cargar las API keys desde st.secrets con los nombres definidos
 api_keys = [
-    st.secrets["API_KEY_1"],
-    st.secrets["API_KEY_2"],
-    st.secrets["API_KEY_3"]
+    "AIzaSyAEaxnxgoMXwg9YVRmRH_tKVGD3pNgHKkk",  # Reemplaza con tu API Key 1
+    "AIzaSyDKzApq_jz4gOJJYG_PbBwc47Lw96FxHAY",
+    "AIzaSyAEaxnxgoMXwg9YVRmRH_tKVGD3pNgHKkk"
 ]
 current_api_key_index = 0
 
 def configure_api():
     global current_api_key_index
     genai.configure(api_key=api_keys[current_api_key_index])
-    # En producción se evita mostrar la clave
+    # Para producción, no mostramos la clave
+    # st.write(f"API configurada con clave {current_api_key_index+1}/{len(api_keys)}")
 
 configure_api()
 
@@ -146,7 +121,7 @@ def get_relevant_info(db, question, selected_files):
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
     prompt1 = (
-        f"Con base en la siguiente información extraída de investigaciones (con citas y referencias), responde a la siguiente pregunta:\n"
+        f"Con base en la siguiente información extraída de investigaciones (con citas y referencias), responde a la pregunta:\n"
         f"'{question}'\n\n"
         "Organiza la información en un resumen estructurado y extrae metadatos relevantes que permitan identificar documentos y hechos concretos.\n\n"
         "Información:\n" + relevant_info
@@ -168,7 +143,6 @@ def generate_final_report(question, db, selected_files):
 # -------------------------------
 def ideacion_mode(db, selected_files):
     st.subheader("Modo de Ideación: Conversa con los datos")
-    st.markdown("Utiliza este espacio para realizar consultas interactivas. Escribe tu pregunta y el sistema responderá basándose en el historial de la conversación y la información de investigación disponible.")
     
     # Botón para reiniciar la conversación
     if st.button("Reiniciar conversación"):
@@ -214,65 +188,37 @@ def ideacion_mode(db, selected_files):
                 st.markdown(f"**Asistente:** {respuesta}")
 
 # -------------------------------
-# Funciones de autenticación
+# Autenticación y asignación de cliente según credenciales
 # -------------------------------
-def show_login():
-    """Muestra el formulario de login centrado en la pantalla."""
-    with st.container():
-        st.markdown("<div class='centered'>", unsafe_allow_html=True)
-        st.header("Iniciar Sesión")
-        username = st.text_input("Usuario")
-        password = st.text_input("Contraseña", type="password")
-        if st.button("Ingresar"):
-            if username == "admin" and password == "secret":
-                st.session_state.logged_in = True
-                st.session_state.user = username
-                st.session_state.allowed_client = None
-                st.experimental_rerun()
-            elif username.lower() == "postobon" and password == "postobon":
-                st.session_state.logged_in = True
-                st.session_state.user = username
-                st.session_state.allowed_client = "Postobon"
-                st.experimental_rerun()
-            elif username.lower() == "mondelez" and password == "mondelez":
-                st.session_state.logged_in = True
-                st.session_state.user = username
-                st.session_state.allowed_client = "Mondelez"
-                st.experimental_rerun()
-            else:
-                st.error("Credenciales incorrectas")
-        st.markdown("</div>", unsafe_allow_html=True)
-
-def logout():
-    if st.sidebar.button("Cerrar Sesión"):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.experimental_rerun()
+def login():
+    st.sidebar.title("Autenticación")
+    username = st.sidebar.text_input("Usuario")
+    password = st.sidebar.text_input("Contraseña", type="password")
+    
+    # Definir credenciales y asignar cliente
+    if username == "admin" and password == "secret":
+        st.sidebar.success("Acceso autorizado como admin")
+        return username, None  # None indica sin restricción
+    elif username.lower() == "postobon" and password == "postobon":
+        st.sidebar.success("Acceso autorizado para Postobon")
+        return username, "Postobon"
+    elif username.lower() == "mondelez" and password == "mondelez":
+        st.sidebar.success("Acceso autorizado para Mondelez")
+        return username, "Mondelez"
+    else:
+        st.sidebar.error("Credenciales incorrectas")
+        return None, None
 
 # -------------------------------
 # Aplicación principal de Streamlit
 # -------------------------------
 def main():
-    st.title("Atelier IA")
+    st.title("Informe e Ideación de Investigaciones para Empresarios")
+    st.markdown("Esta aplicación genera informes formales e interactúa creativamente con datos de investigaciones para clientes empresariales.")
     
-    # Explicación para el usuario empresario
-    st.markdown(
-        """
-        Bienvenido a **Atelier IA**, la herramienta inteligente para generar informes y consultas sobre investigaciones empresariales.  
-        En esta aplicación podrás:
-        - **Generar informes formales:** Basados en información extraída de investigaciones, con citas y referencias concretas.
-        - **Interactuar mediante ideación:** Conversar y aclarar dudas con base en los datos disponibles.
-        
-        Utiliza el menú lateral para filtrar la información según el cliente, marca o producto. Una vez autenticado, tendrás acceso a todas las funcionalidades sin que el formulario de inicio interfiera en tu experiencia.
-        """
-    )
-    
-    # Si no se ha iniciado sesión, mostrar el formulario de autenticación en el centro
-    if "logged_in" not in st.session_state or not st.session_state.logged_in:
-        show_login()
-        return
-    else:
-        logout()  # Mostrar la opción de cerrar sesión en la barra lateral
+    user, allowed_client = login()
+    if user is None:
+        st.stop()
     
     # Cargar la base de datos desde S3 de Supabase
     try:
@@ -280,8 +226,6 @@ def main():
     except Exception as e:
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
-    
-    allowed_client = st.session_state.get("allowed_client", None)
     
     # Filtrado por cliente según autenticación
     if allowed_client:
@@ -312,15 +256,18 @@ def main():
         selected_productos = st.sidebar.multiselect("Seleccione los productos a incluir", productos_disponibles, default=productos_disponibles)
         db = [doc for doc in db if doc.get("producto", "").strip() in selected_productos]
     
-    # Se obtiene la lista de archivos filtrados, pero NO se muestra al usuario
+    # Lista de archivos seleccionados (se usarán todos los documentos filtrados)
     selected_files = [doc.get("nombre_archivo") for doc in db]
+    
+    st.markdown(f"#### Documentos seleccionados ({len(selected_files)}):")
+    st.write(selected_files)
     
     # Selección del modo de operación
     modo = st.sidebar.radio("Seleccione el modo", ["Informe de Informes", "Ideación (Conversar con los datos)"])
     
     if modo == "Informe de Informes":
-        st.markdown("### Ingrese una pregunta para generar el informe")
-        question = st.text_area("Pregunta", height=150, help="Escriba aquí la pregunta o el tema sobre el que desea obtener el informe.")
+        st.markdown("### Ingrese una pregunta para empezar la conversación")
+        question = st.text_area("Pregunta", height=150)
         if st.button("Generar Informe"):
             if not question.strip():
                 st.warning("Ingrese una pregunta para generar el informe.")
@@ -341,4 +288,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
