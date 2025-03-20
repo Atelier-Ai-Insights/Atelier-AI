@@ -266,7 +266,7 @@ def main():
     modo = st.sidebar.radio("Seleccione el modo", ["Informe de Informes", "Ideación (Conversar con los datos)"])
     
     if modo == "Informe de Informes":
-        st.markdown("### Ingrese la pregunta del empresario")
+        st.markdown("### Ingrese una pregunta para empezar la conversación")
         question = st.text_area("Pregunta", height=150)
         if st.button("Generar Informe"):
             if not question.strip():
