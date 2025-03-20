@@ -260,7 +260,7 @@ def main():
     selected_files = [doc.get("nombre_archivo") for doc in db]
     
     st.markdown(f"#### Documentos seleccionados ({len(selected_files)}):")
-    st.write(selected_files)
+    #st.write(selected_files)
     
     # Selección del modo de operación
     modo = st.sidebar.radio("Seleccione el modo", ["Informe de Informes", "Ideación (Conversar con los datos)"])
