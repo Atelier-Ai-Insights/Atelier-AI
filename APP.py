@@ -125,6 +125,10 @@ def get_relevant_info(db, question, selected_files):
     return all_text
 
 def generate_final_report(question, db, selected_files):
+    """
+    Genera un informe final que será el documento oficial que recibirá el cliente.
+    El informe final no debe incluir recomendaciones para edición posterior.
+    """
     relevant_info = get_relevant_info(db, question, selected_files)
     prompt1 = (
         f"Con base en la siguiente información extraída de investigaciones (con citas y referencias), responde a la siguiente pregunta:\n"
@@ -137,7 +141,8 @@ def generate_final_report(question, db, selected_files):
         return None
     prompt2 = (
         f"Utilizando el resumen y los metadatos que se muestran a continuación, redacta un informe formal en prosa dirigido a un cliente empresarial. "
-        "El informe debe incluir citas concretas, referencias a los documentos de origen y describir hechos relevantes de la investigación.\n\n"
+        "El informe final que se genere será el documento oficial que recibirá el cliente, sin incluir sugerencias o recomendaciones para edición posterior. "
+        "El informe debe incluir citas concretas, referencias a los documentos de origen y describir de forma precisa los hechos relevantes de la investigación.\n\n"
         "Resumen y Metadatos:\n" + result1 + "\n\n"
         "Informe:"
     )
@@ -150,12 +155,14 @@ def generate_final_report(question, db, selected_files):
 def generate_pdf(content, title="Documento"):
     pdf = FPDF()
     pdf.add_page()
+    # Agregar fuente UTF-8 si se dispone de ella; de lo contrario, se usa Arial y se ignoran errores
     pdf.set_font("Arial", size=12)
     pdf.cell(200, 10, txt=title, ln=True, align="C")
     pdf.ln(10)
     for line in content.split("\n"):
-        pdf.multi_cell(0, 10, line)
-    return pdf.output(dest="S").encode("latin1")
+        # Se usa "replace" para ignorar caracteres no representables en latin1
+        pdf.multi_cell(0, 10, line.encode("latin1", errors="replace").decode("latin1"))
+    return pdf.output(dest="S").encode("latin1", errors="replace")
 
 # ==============================
 # MODO DE IDEACIÓN (CHAT INTERACTIVO)
@@ -197,18 +204,27 @@ def ideacion_mode(db, selected_files):
 # ==============================
 # Autenticación Personalizada
 # ==============================
-ALLOWED_USERS = {"Nicolas", "Postobon", "Mondelez", "Placeholder_1", "Placeholder_2"}
+# Definimos los usuarios autorizados con su contraseña (4 dígitos)
+ALLOWED_USERS = {
+    "Nicolas": "1234",
+    "Postobon": "2345",
+    "Mondelez": "3456",
+    "Placeholder_1": "4567",
+    "Placeholder_2": "5678"
+}
 
 def show_login():
-    st.markdown("<div style='display: flex; justify-content: center; align-items: center; height: 80vh;'>", unsafe_allow_html=True)
+    # Mostrar el formulario de login en la parte superior (pantalla completa)
+    st.markdown("<div style='display: flex; flex-direction: column; justify-content: center; align-items: center; height: 80vh;'>", unsafe_allow_html=True)
     st.header("Iniciar Sesión")
     username = st.text_input("Usuario")
-    password = st.text_input("Contraseña", type="password")
+    password = st.text_input("Contraseña (4 dígitos)", type="password")
     if st.button("Ingresar"):
-        if username in ALLOWED_USERS and password == "secret":  # Contraseña fija para este ejemplo
+        if username in ALLOWED_USERS and password == ALLOWED_USERS[username]:
             st.session_state.logged_in = True
             st.session_state.user = username
-            st.experimental_set_query_params(user=username)  # Opcional: para persistir la info
+            # Usar st.query_params para persistir información si es necesario (opcional)
+            st.experimental_set_query_params(user=username)  # O bien, omitir si no es necesario
             st.rerun()
         else:
             st.error("Credenciales incorrectas")
@@ -252,8 +268,18 @@ def main():
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
     
-    # Se usa la lista de archivos filtrados para alimentar al modelo (no se muestra al usuario)
+    # Filtrar documentos para alimentar al modelo (no se muestra al usuario)
     selected_files = [doc.get("nombre_archivo") for doc in db]
+    
+    # Filtrado por marcas en la barra lateral según el cliente (si se requiere)
+    # Suponiendo que los documentos tienen la clave "marca"
+    marcas = sorted({doc.get("marca", "").strip() for doc in db if doc.get("marca", "").strip()})
+    marcas.insert(0, "Todas")
+    selected_marca = st.sidebar.selectbox("Seleccione la marca", marcas)
+    if selected_marca != "Todas":
+        db = [doc for doc in db if doc.get("marca", "").strip().lower() == selected_marca.lower()]
+        # Actualizamos la lista de archivos tras el filtro
+        selected_files = [doc.get("nombre_archivo") for doc in db]
     
     modo = st.sidebar.radio("Seleccione el modo", ["Informe de Informes", "Ideación (Conversar con los datos)"])
     
