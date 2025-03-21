@@ -224,7 +224,7 @@ def show_login():
             st.session_state.logged_in = True
             st.session_state.user = username
             # Usar st.query_params para persistir información si es necesario (opcional)
-            st.experimental_set_query_params(user=username)  # O bien, omitir si no es necesario
+            st.query_params(user=username)  # O bien, omitir si no es necesario
             st.rerun()
         else:
             st.error("Credenciales incorrectas")
