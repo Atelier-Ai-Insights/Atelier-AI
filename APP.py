@@ -7,8 +7,9 @@ import boto3  # pip install boto3
 from fpdf import FPDF  # pip install fpdf
 from supabase import create_client  # pip install supabase
 from io import BytesIO
-import PyPDF2 
+import PyPDF2
 import unicodedata
+import tempfile
 
 # ==============================
 # Autenticación Personalizada
@@ -23,7 +24,6 @@ ALLOWED_USERS = {
 }
 
 def show_login():
-    # Mostrar el formulario de login en pantalla completa, en la parte superior
     st.markdown(
         "<div style='display: flex; flex-direction: column; justify-content: center; align-items: center; height: 80vh;'>",
         unsafe_allow_html=True)
@@ -47,11 +47,9 @@ def logout():
             del st.session_state[key]
         st.rerun()
 
-
 # ==============================
 # CONFIGURACIÓN DE LA API DE GEMINI
 # ==============================
-# Utilizamos las API keys desde st.secrets
 api_keys = [
     st.secrets["API_KEY_1"],
     st.secrets["API_KEY_2"],
@@ -106,7 +104,6 @@ def call_gemini_api(prompt):
             return None
     return response.text
 
-
 # ==============================
 # CONEXIÓN A SUPABASE PARA GUARDAR CONSULTAS
 # ==============================
@@ -123,28 +120,26 @@ def log_query_event(query_text, mode, rating=None):
     }
     supabase.table("queries").insert(data).execute()
 
+# ==============================
+# Normalización de Texto
+# ==============================
+def normalize_text(text):
+    if not text:
+        return ""
+    normalized = unicodedata.normalize('NFD', text)
+    return ''.join(c for c in normalized if unicodedata.category(c) != 'Mn').lower()
 
 # ==============================
 # CARGA DEL ARCHIVO JSON DESDE S3 (para alimentar al modelo)
 # ==============================
-def normalize_text(text):
-    """Normaliza el texto eliminando acentos y convirtiendo a minúsculas."""
-    if not text:
-        return ""
-    # Normaliza en formato NFD y elimina los caracteres de marca (diacríticos)
-    normalized = unicodedata.normalize('NFD', text)
-    return ''.join(c for c in normalized if unicodedata.category(c) != 'Mn').lower()
-
 @st.cache_data(show_spinner=False)
 def load_database():
-    st.write("DEBUG: Iniciando carga de la base de datos desde S3...")
     s3_endpoint_url = st.secrets["S3_ENDPOINT_URL"]
     s3_access_key = st.secrets["S3_ACCESS_KEY"]
     s3_secret_key = st.secrets["S3_SECRET_KEY"]
     bucket_name = st.secrets.get("S3_BUCKET")
     object_key = "resultado_presentacion.json"
     
-    st.write(f"DEBUG: Conectando al bucket: {bucket_name} y descargando el archivo: {object_key}")
     s3_client = boto3.client(
         "s3",
         endpoint_url=s3_endpoint_url,
@@ -154,45 +149,36 @@ def load_database():
     try:
         response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response['Body'].read().decode("utf-8"))
-        st.write(f"DEBUG: Base de datos descargada, cantidad de documentos sin filtrar: {len(data)}")
-        # Filtrar por cliente solo si el usuario NO es "Nicolas" (admin)
+        # Filtrar por cliente solo si el usuario NO es "Nicolas"
         if "cliente" in st.session_state and normalize_text(st.session_state.cliente) != "nicolas":
             original_count = len(data)
             data = [doc for doc in data if normalize_text(doc.get("cliente", "")) == normalize_text(st.session_state.cliente)]
-            st.write(f"DEBUG: Filtrado por cliente '{st.session_state.cliente}': {len(data)} de {original_count} documentos")
-        else:
-            st.write("DEBUG: Usuario admin (Nicolas) o 'cliente' no definido, sin filtrado por cliente.")
+        # En caso de admin o si no hay 'cliente' definido, se usan todos los documentos
     except Exception as e:
         st.error(f"Error al descargar la base de datos desde S3: {e}")
         data = []
-    st.write(f"DEBUG: Carga de base de datos finalizada, documentos disponibles: {len(data)}")
     return data
 
-
 # =====================================================
-# FUNCION PARA OBTENER IMAGEN DE S3 (Para la plantilla)
+# FUNCION PARA OBTENER IMAGEN DE S3 (Para la plantilla/banner)
 # =====================================================
 @st.cache_data
 def load_template_from_s3():
-    st.write("DEBUG: Iniciando carga de la plantilla desde S3...")
     s3_endpoint_url = st.secrets["S3_ENDPOINT_URL"]
     s3_access_key = st.secrets["S3_ACCESS_KEY"]
     s3_secret_key = st.secrets["S3_SECRET_KEY"]
     bucket_name = st.secrets.get("S3_BUCKET")
     object_key_template = "Banner.png"  
 
-    st.write(f"DEBUG: Descargando plantilla del bucket: {bucket_name}, archivo: {object_key_template}")
-    s3_client = boto3.client(
-        "s3",
-        endpoint_url=s3_endpoint_url,
-        aws_access_key_id=s3_access_key,
-        aws_secret_access_key=s3_secret_key
-    )
     try:
         template_buffer = BytesIO()
-        s3_client.download_fileobj(Bucket=bucket_name, Key=object_key_template, Fileobj=template_buffer)
+        boto3.client(
+            "s3",
+            endpoint_url=s3_endpoint_url,
+            aws_access_key_id=s3_access_key,
+            aws_secret_access_key=s3_secret_key
+        ).download_fileobj(Bucket=bucket_name, Key=object_key_template, Fileobj=template_buffer)
         if template_buffer.getbuffer().nbytes > 0:
-            st.write("DEBUG: Plantilla descargada correctamente.")
             return template_buffer
         else:
             st.warning("La plantilla descargada está vacía.")
@@ -201,15 +187,12 @@ def load_template_from_s3():
         st.error(f"Error al descargar la plantilla: {e}")
         return None
 
-
 def get_relevant_info(db, question, selected_files):
     all_text = ""
-    cita_counter = 1  # Contador de citas
-    cita_mapping = {}  # Mapa de citas
-
+    cita_counter = 1
+    cita_mapping = {}
     for pres in db:
         if pres.get("nombre_archivo") in selected_files:
-            # Utiliza 'titulo_estudio' si existe; de lo contrario, 'nombre_archivo'
             all_text += f"Documento: {pres.get('titulo_estudio', pres.get('nombre_archivo', 'Sin nombre'))}\n"
             for grupo in pres.get("grupos", []):
                 contenido = grupo.get('contenido_texto', '')
@@ -233,18 +216,12 @@ def get_relevant_info(db, question, selected_files):
             all_text += "\n---\n\n"
     return all_text, cita_mapping
 
-
 def generate_final_report(question, db, selected_files):
-    # Extraer la información y el mapeo de citas
     relevant_info, cita_mapping = get_relevant_info(db, question, selected_files)
-    
-    # --- DEBUG: Mostrar información extraída y citas ---
-    st.write("DEBUG: Información relevante extraída:")
-    st.write(relevant_info)
+    # Muestra información de citas (debug)
     st.write("DEBUG: Mapeo de citas:")
     st.write(cita_mapping)
     
-    # --- PROMPT 1: Resumen Estructurado y Metadatos ---
     prompt1 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
         f"Repite la pregunta: ***{question}***. Asegúrate de que la respuesta esté completamente alineada con esta pregunta. "
@@ -257,7 +234,6 @@ def generate_final_report(question, db, selected_files):
     if result1 is None:
         return None, None
 
-    # --- PROMPT 2: Informe en Prosa con Énfasis en la Pregunta ---
     prompt2 = (
         f"Redacta la sección principal del informe en prosa, en un tono formal y profesional, dirigido a un cliente empresarial. "
         f"Repite la pregunta: ***{question}***. La respuesta debe estar completamente alineada con la pregunta del cliente. "
@@ -269,7 +245,6 @@ def generate_final_report(question, db, selected_files):
     if result2 is None:
         return None, None
 
-    # --- PROMPT 3: Metodología de los Estudios Revisados ---
     prompt_metodologia = (
         f"Basándote en los estudios reportados en la información de contexto, describe detalladamente la metodología utilizada en dichos estudios. "
         f"Explica cómo se realizaron los estudios, cómo se recolectaron los datos y qué procedimientos y técnicas se aplicaron. "
@@ -287,7 +262,6 @@ def generate_final_report(question, db, selected_files):
         f"**Preparado para:** {st.session_state.cliente}\n"
         f"**Fecha de elaboración:** {fecha_actual}\n\n"
     )
-    # Insertar la metodología de estudios después del encabezado
     informe_completo = encabezado + "## Metodología de los Estudios\n\n" + metodologia + "\n\n## Informe\n\n" + result2
     informe_completo += "\n\n## Fuentes\n\n"
     for cita_id, cita_info in cita_mapping.items():
@@ -296,13 +270,27 @@ def generate_final_report(question, db, selected_files):
 
     return informe_completo, cita_mapping
 
-
 # ==============================
 # Función para generar PDF a partir de texto
 # ==============================
 def generate_pdf(content, title="Documento", template_buffer=None):
     pdf = FPDF()
-    pdf.add_page()
+    # Si hay banner, agregarlo en la primera página
+    if template_buffer:
+        try:
+            # Guardar la imagen a un archivo temporal
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                tmp.write(template_buffer.getvalue())
+                tmp_path = tmp.name
+            pdf.add_page()
+            pdf.image(tmp_path, x=10, y=8, w=pdf.w - 20)
+            os.remove(tmp_path)
+            pdf.ln(20)  # Espacio después del banner
+        except Exception as e:
+            st.warning(f"Error al agregar el banner: {e}")
+            pdf.add_page()
+    else:
+        pdf.add_page()
     pdf.set_font("Arial", size=12)
     pdf.cell(200, 10, txt=title, ln=True, align="C")
     pdf.ln(10)
@@ -320,23 +308,7 @@ def generate_pdf(content, title="Documento", template_buffer=None):
                 pdf.multi_cell(0, 10, line.encode("latin1", errors="replace").decode("latin1"))
         pdf.ln(5)
     pdf_bytes = pdf.output(dest="S").encode("latin1", errors="replace")
-    
-    # Si se proporciona una plantilla, intentar fusionar
-    if template_buffer:
-        try:
-            template_buffer.seek(0)
-            template_pdf = PyPDF2.PdfReader(template_buffer)
-            merger = PyPDF2.PdfMerger()
-            merger.append(template_pdf)
-            merger.append(BytesIO(pdf_bytes))
-            output_buffer = BytesIO()
-            merger.write(output_buffer)
-            return output_buffer.getvalue()
-        except Exception as e:
-            st.warning(f"Error al fusionar la plantilla con el PDF: {e}. Se usará el PDF sin plantilla.")
-            return pdf_bytes
     return pdf_bytes
-
 
 # ==============================
 # MODO DE IDEACIÓN (CHAT INTERACTIVO)
@@ -371,12 +343,10 @@ def ideacion_mode(db, selected_files):
                                    title="Historial de Chat")
         st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat.pdf", mime="application/pdf")
 
-
 # ==============================
 # Aplicación Principal
 # ==============================
 def main():
-    # Mostrar la autenticación primero
     if "logged_in" not in st.session_state or not st.session_state.logged_in:
         show_login()
     logout()  # Opción de cerrar sesión en la barra lateral
@@ -392,7 +362,7 @@ def main():
     )
     template_buffer = load_template_from_s3()
     if template_buffer is None:
-        st.warning("No se pudo cargar la plantilla. Se generarán PDFs sin plantilla.")
+        st.warning("No se pudo cargar el banner. Se generarán PDFs sin banner.")
 
     try:
         db = load_database()
@@ -400,9 +370,7 @@ def main():
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
 
-    # Para depuración: mostrar la cantidad de documentos cargados
     st.write(f"DEBUG: Documentos cargados: {len(db)}")
-
     selected_files = [doc.get("nombre_archivo") for doc in db]
 
     # Filtrado por marcas en la barra lateral
@@ -410,7 +378,7 @@ def main():
     marcas.insert(0, "Todas")
     selected_marca = st.sidebar.selectbox("Seleccione la marca", marcas)
     if selected_marca != "Todas":
-        db = [doc for doc in db if doc.get("marca", "").strip().lower() == selected_marca.lower()]
+        db = [doc for doc in db if normalize_text(doc.get("marca", "")) == normalize_text(selected_marca)]
         selected_files = [doc.get("nombre_archivo") for doc in db]
     st.write(f"DEBUG: Documentos tras filtrar por marca: {len(db)}")
 
@@ -440,3 +408,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
