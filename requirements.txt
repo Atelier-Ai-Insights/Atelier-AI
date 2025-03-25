@@ -6,3 +6,4 @@ PyPDF2
 supabase
 boto3
 fpdf
+PyPDF2
