@@ -7,7 +7,8 @@ import boto3  # pip install boto3
 from fpdf import FPDF  # pip install fpdf
 from supabase import create_client  # pip install supabase
 from io import BytesIO
-import PyPDF2  
+import PyPDF2 
+import unicodedata
 
 # ==============================
 # Autenticación Personalizada
@@ -126,6 +127,14 @@ def log_query_event(query_text, mode, rating=None):
 # ==============================
 # CARGA DEL ARCHIVO JSON DESDE S3 (para alimentar al modelo)
 # ==============================
+def normalize_text(text):
+    """Normaliza el texto eliminando acentos y convirtiendo a minúsculas."""
+    if not text:
+        return ""
+    # Normaliza en formato NFD y elimina los caracteres de marca (diacríticos)
+    normalized = unicodedata.normalize('NFD', text)
+    return ''.join(c for c in normalized if unicodedata.category(c) != 'Mn').lower()
+
 @st.cache_data(show_spinner=False)
 def load_database():
     st.write("DEBUG: Iniciando carga de la base de datos desde S3...")
@@ -146,10 +155,10 @@ def load_database():
         response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response['Body'].read().decode("utf-8"))
         st.write(f"DEBUG: Base de datos descargada, cantidad de documentos sin filtrar: {len(data)}")
-        # Filtrar por cliente solo si el usuario NO es "Nicolas"
-        if "cliente" in st.session_state and st.session_state.cliente != "Nicolas":
+        # Filtrar por cliente solo si el usuario NO es "Nicolas" (admin)
+        if "cliente" in st.session_state and normalize_text(st.session_state.cliente) != "nicolas":
             original_count = len(data)
-            data = [doc for doc in data if doc.get("cliente") == st.session_state.cliente]
+            data = [doc for doc in data if normalize_text(doc.get("cliente", "")) == normalize_text(st.session_state.cliente)]
             st.write(f"DEBUG: Filtrado por cliente '{st.session_state.cliente}': {len(data)} de {original_count} documentos")
         else:
             st.write("DEBUG: Usuario admin (Nicolas) o 'cliente' no definido, sin filtrado por cliente.")
