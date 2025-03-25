@@ -4,13 +4,19 @@ import datetime
 import streamlit as st
 import google.generativeai as genai
 import boto3  # pip install boto3
-from fpdf import FPDF, HTMLMixin  # pip install fpdf2 (o fpdf>=2.4.0)
+from fpdf import FPDF, HTMLMixin  # pip install fpdf2
 from supabase import create_client  # pip install supabase
 from io import BytesIO
 import PyPDF2
 import unicodedata
 import tempfile
 import markdown2
+import html  # Para el monkey patch
+
+# --- Monkey patch para HTML2FPDF ---
+from fpdf.html import HTML2FPDF
+if not hasattr(HTML2FPDF, 'unescape'):
+    HTML2FPDF.unescape = staticmethod(html.unescape)
 
 # ==============================
 # Autenticación Personalizada
@@ -206,7 +212,6 @@ def get_relevant_info(db, question, selected_files):
                     all_text += f"Metadatos: {json.dumps(metadatos)}\n"
                 if hechos:
                     if "tipo" in hechos and hechos["tipo"] == "cita":
-                        # Se indica que es una cita para que Gemini la incluya en la sección Fuentes
                         all_text += "[Cita]\n"
                     else:
                         all_text += f"Hechos: {json.dumps(hechos)}\n"
@@ -219,7 +224,6 @@ def get_relevant_info(db, question, selected_files):
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
     
-    # Prompt 1: Resumen estructurado con metadatos y citas
     prompt1 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
         f"Repite la pregunta: ***{question}***. Asegúrate de que la respuesta esté completamente alineada con ella. "
@@ -233,13 +237,11 @@ def generate_final_report(question, db, selected_files):
     if result1 is None:
         return None
 
-    # Prompt 2: Informe en prosa con Fuentes
     prompt2 = (
         f"Redacta la sección principal del informe en prosa, en un tono formal y profesional, dirigido a un cliente empresarial. "
         f"Repite la pregunta: ***{question}***. La respuesta debe estar completamente alineada con la pregunta del cliente. "
-        f"Utiliza el siguiente resumen estructurado y metadatos como base. "
-        f"Al final, agrega una sección titulada 'Fuentes', donde cada línea comience con '[Cita X] - ' seguido del texto de la cita, "
-        f"y en el cuerpo del informe, las citas deben aparecer como call-out (precedidas por '>>').\n\n"
+        f"Utiliza el siguiente resumen estructurado y metadatos como base. Al final, agrega una sección titulada 'Fuentes', "
+        f"donde cada línea comience con '[Cita X] - ' seguido del texto de la cita. En el cuerpo del informe, las citas deben aparecer como call-out, precedidas por '>>'.\n\n"
         f"Resumen Estructurado y Metadatos:\n{result1}\n\n"
         f"Sección Principal del Informe (en prosa) con Fuentes:"
     )
@@ -254,7 +256,7 @@ def generate_final_report(question, db, selected_files):
         f"**Preparado para:** {st.session_state.cliente}\n"
         f"**Fecha de elaboración:** {fecha_actual}\n\n"
     )
-    informe_completo = encabezado + result2  # Se asume que Gemini ya incluye la sección "Fuentes"
+    informe_completo = encabezado + result2  # Se asume que Gemini ya agrega la sección "Fuentes"
     return informe_completo
 
 # ==============================
