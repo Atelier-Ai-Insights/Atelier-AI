@@ -128,12 +128,14 @@ def log_query_event(query_text, mode, rating=None):
 # ==============================
 @st.cache_data(show_spinner=False)
 def load_database():
+    st.write("DEBUG: Iniciando carga de la base de datos desde S3...")
     s3_endpoint_url = st.secrets["S3_ENDPOINT_URL"]
     s3_access_key = st.secrets["S3_ACCESS_KEY"]
     s3_secret_key = st.secrets["S3_SECRET_KEY"]
     bucket_name = st.secrets.get("S3_BUCKET")
     object_key = "resultado_presentacion.json"
     
+    st.write(f"DEBUG: Conectando al bucket: {bucket_name} y descargando el archivo: {object_key}")
     s3_client = boto3.client(
         "s3",
         endpoint_url=s3_endpoint_url,
@@ -143,14 +145,19 @@ def load_database():
     try:
         response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response['Body'].read().decode("utf-8"))
-        # Filtrar por cliente, si está definido en la sesión
-        if "cliente" in st.session_state:
+        st.write(f"DEBUG: Base de datos descargada, cantidad de documentos sin filtrar: {len(data)}")
+        # Filtrar por cliente, salvo si el usuario es "Nicolas" (admin)
+        if "cliente" in st.session_state and st.session_state.cliente != "Nicolas":
+            original_count = len(data)
             data = [doc for doc in data if doc.get("cliente") == st.session_state.cliente]
+            st.write(f"DEBUG: Filtrado por cliente '{st.session_state.cliente}': {len(data)} de {original_count} documentos")
+        else:
+            st.write("DEBUG: Usuario admin (o sin cliente definido), sin filtrado por cliente.")
     except Exception as e:
         st.error(f"Error al descargar la base de datos desde S3: {e}")
         data = []
+    st.write(f"DEBUG: Carga de base de datos finalizada, documentos disponibles: {len(data)}")
     return data
-
 
 # =====================================================
 # FUNCION PARA OBTENER IMAGEN DE S3 (Para la plantilla)
