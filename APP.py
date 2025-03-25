@@ -131,7 +131,7 @@ def load_database():
     s3_endpoint_url = st.secrets["S3_ENDPOINT_URL"]
     s3_access_key = st.secrets["S3_ACCESS_KEY"]
     s3_secret_key = st.secrets["S3_SECRET_KEY"]
-    bucket_name = st.secrets.get("S3_BUCKET", "default-bucket")
+    bucket_name = st.secrets.get("S3_BUCKET")
     object_key = "resultado_presentacion.json"
     
     s3_client = boto3.client(
@@ -160,8 +160,8 @@ def load_template_from_s3():
     s3_endpoint_url = st.secrets["S3_ENDPOINT_URL"]
     s3_access_key = st.secrets["S3_ACCESS_KEY"]
     s3_secret_key = st.secrets["S3_SECRET_KEY"]
-    bucket_name = st.secrets.get("S3_BUCKET", "default-bucket")
-    object_key_template = "Banner.png"  # Nombre del banner
+    bucket_name = st.secrets.get("S3_BUCKET")
+    object_key_template = "Banner.png"  
 
     s3_client = boto3.client(
         "s3",
