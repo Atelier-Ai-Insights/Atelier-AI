@@ -265,6 +265,18 @@ def generate_final_report(question, db, selected_files):
 class MyFPDF(FPDF, HTMLMixin):
     pass
 
+def encode_latin1_with_space(text):
+    # Recorre cada carácter y verifica si puede codificarse en latin1.
+    # Si no puede, lo reemplaza por un espacio en blanco.
+    result = []
+    for char in text:
+        try:
+            char.encode("latin1")
+            result.append(char)
+        except UnicodeEncodeError:
+            result.append(" ")
+    return "".join(result)
+
 def generate_pdf_html(content, title="Documento", template_buffer=None):
     # Convertir Markdown a HTML con extras para preservar saltos de línea y otros formatos importantes
     html_content = markdown2.markdown(content, extras=["break-on-newline", "fenced-code-blocks", "tables"])
@@ -297,9 +309,13 @@ def generate_pdf_html(content, title="Documento", template_buffer=None):
         html_content = f"<p>{html_content}</p>"
     
     pdf.write_html(html_content)
-    # Codificar el resultado ignorando caracteres que no se puedan codificar en latin1
-    pdf_bytes = pdf.output(dest="S").encode("latin1", errors="ignore")
+    # Obtener el contenido PDF generado en una cadena
+    pdf_output = pdf.output(dest="S")
+    # Reemplazar los caracteres que no se pueden codificar por espacios en blanco
+    safe_pdf_output = encode_latin1_with_space(pdf_output)
+    pdf_bytes = safe_pdf_output.encode("latin1")
     return pdf_bytes
+
 
 
 # ==============================
