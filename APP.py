@@ -1,12 +1,49 @@
 import os
-import time
 import json
 import datetime
 import streamlit as st
 import google.generativeai as genai
-import boto3  # pip install boto3
-from fpdf import FPDF  # pip install fpdf
-from supabase import create_client  # pip install supabase
+import boto3
+from fpdf import FPDF
+from supabase import create_client
+from io import BytesIO
+import PyPDF2  
+
+
+# ==============================
+# Autenticación Personalizada
+# ==============================
+ALLOWED_USERS = {
+    "Nicolas": "1234",
+    "Postobon": "2345",
+    "Mondelez": "3456",
+    "Meals": "6789",  # Agregamos el nuevo cliente
+    "Placeholder_1": "4567",
+    "Placeholder_2": "5678",
+}
+
+def show_login():
+    st.markdown("<div style='display: flex; flex-direction: column; justify-content: center; align-items: center; height: 80vh;'>", unsafe_allow_html=True)
+    st.header("Iniciar Sesión")
+    username = st.text_input("Usuario")
+    password = st.text_input("Contraseña (4 dígitos)", type="password")
+    if st.button("Ingresar"):
+        if username in ALLOWED_USERS and password == ALLOWED_USERS[username]:
+            st.session_state.logged_in = True
+            st.session_state.user = username
+            st.session_state.cliente = username  #  Deduce el cliente del usuario.
+            st.rerun()
+        else:
+            st.error("Credenciales incorrectas")
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.stop()
+
+def logout():
+    if st.sidebar.button("Cerrar Sesión"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+
 
 # ==============================
 # CONFIGURACIÓN DE LA API DE GEMINI
@@ -21,7 +58,6 @@ current_api_key_index = 0
 def configure_api():
     global current_api_key_index
     genai.configure(api_key=api_keys[current_api_key_index])
-    # No se muestra la clave en producción
 
 configure_api()
 
@@ -31,6 +67,7 @@ generation_config = {
     "top_k": 32,
     "max_output_tokens": 8192,
 }
+
 safety_settings = [
     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
@@ -40,7 +77,7 @@ safety_settings = [
 
 def create_model():
     return genai.GenerativeModel(
-        model_name="gemini-2.0-flash",  # Verifica que el modelo esté disponible
+        model_name="gemini-1.5-pro-002",  # Modelo más potente
         generation_config=generation_config,
         safety_settings=safety_settings
     )
@@ -66,24 +103,26 @@ def call_gemini_api(prompt):
             return None
     return response.text
 
+
 # ==============================
 # CONEXIÓN A SUPABASE PARA GUARDAR CONSULTAS
 # ==============================
 supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
-def log_query_event(query_text, mode):
-    """Registra la consulta en la tabla 'queries' de Supabase."""
+def log_query_event(query_text, mode, rating=None):  # Agregamos rating
     data = {
         "id": datetime.datetime.now().strftime("%Y%m%d%H%M%S"),
         "user_name": st.session_state.user,
         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "mode": mode,         # 'Informe' o 'Ideacion'
-        "query": query_text
+        "mode": mode,
+        "query": query_text,
+        "rating": rating  # Guardamos la calificación
     }
     supabase.table("queries").insert(data).execute()
 
+
 # ==============================
-# CARGA DEL ARCHIVO JSON DESDE S3 (para alimentar al modelo)
+# CARGA DEL ARCHIVO JSON DESDE S3
 # ==============================
 @st.cache_data(show_spinner=False)
 def load_database():
@@ -102,205 +141,297 @@ def load_database():
     try:
         response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response['Body'].read().decode("utf-8"))
+         # Filtrar por cliente
+        if "cliente" in st.session_state:
+            data = [doc for doc in data if doc.get("cliente") == st.session_state.cliente]
     except Exception as e:
         st.error(f"Error al descargar la base de datos desde S3: {e}")
         data = []
     return data
 
+
+# =====================================================
+#  FUNCION PARA OBTENER IMAGEN DE S3 (Para la plantilla)
+# =====================================================
+@st.cache_data
+def load_template_from_s3():
+    s3_endpoint_url = st.secrets["S3_ENDPOINT_URL"]
+    s3_access_key = st.secrets["S3_ACCESS_KEY"]
+    s3_secret_key = st.secrets["S3_SECRET_KEY"]
+    bucket_name = st.secrets.get("S3_BUCKET", "default-bucket")
+    object_key_template = "Banner.png" #Nombre del banner
+
+    s3 = boto3.client('s3',
+                      endpoint_url=s3_endpoint_url,
+                      aws_access_key_id=s3_access_key,
+                      aws_secret_access_key=s3_secret_key)
+
+    try:
+        # Descarga el archivo a un BytesIO buffer
+        template_buffer = BytesIO()
+        s3.download_fileobj(Bucket=bucket_name, Key=object_key_template, Fileobj=template_buffer)
+        return template_buffer
+
+    except Exception as e:
+        st.error(f"Error al descargar la plantilla: {e}")
+        return None
+
+
+
+
 def get_relevant_info(db, question, selected_files):
-    """Concatena la información de la DB filtrada por archivos seleccionados."""
     all_text = ""
+    cita_counter = 1  # Contador de citas
+    cita_mapping = {}  # Mapa de citas
+
     for pres in db:
         if pres.get("nombre_archivo") in selected_files:
-            all_text += f"Documento: {pres.get('nombre_archivo', 'Sin nombre')}\n"
+            all_text += f"Documento: {pres.get('titulo_estudio', pres.get('nombre_archivo', 'Sin nombre'))}\n"  # Usar título
             for grupo in pres.get("grupos", []):
-                all_text += f"Grupo {grupo.get('grupo_index')}: {grupo.get('contenido_texto', '')}\n"
+                contenido = grupo.get('contenido_texto', '')
+                all_text += f"Grupo {grupo.get('grupo_index')}: {contenido}\n"
+
+                # Manejo de citas y metadatos
                 metadatos = grupo.get("metadatos", {})
                 hechos = grupo.get("hechos", {})
                 if metadatos:
-                    all_text += f"Cita (metadatos): {json.dumps(metadatos)}\n"
+                    all_text += f"Metadatos: {json.dumps(metadatos)}\n"
                 if hechos:
-                    all_text += f"Cita (hechos): {json.dumps(hechos)}\n"
+                    #  Citas con formato y numeración
+                    if "tipo" in hechos and hechos["tipo"] == "cita":
+                        cita_id = f"cita_{cita_counter}"
+                        cita_mapping[cita_id] = {
+                            "texto": contenido,  # Texto completo de la cita
+                             "documento": pres.get('titulo_estudio', pres.get('nombre_archivo')),
+                            "grupo": grupo.get('grupo_index')
+                        }
+                        all_text += f"[Cita {cita_counter}]: {contenido}\n" #formato cita
+                        cita_counter += 1
+                    else:
+                         all_text += f"Hechos: {json.dumps(hechos)}\n"
             all_text += "\n---\n\n"
-    return all_text
+    return all_text, cita_mapping
+
+
 
 def generate_final_report(question, db, selected_files):
-    """
-    Genera un informe final que será el documento oficial que recibirá el cliente.
-    El informe final no debe incluir recomendaciones para edición posterior.
-    """
-    relevant_info = get_relevant_info(db, question, selected_files)
+    relevant_info, cita_mapping = get_relevant_info(db, question, selected_files)
+
+    # --- PROMPT 1: Resumen Estructurado y Metadatos ---
     prompt1 = (
         f"Con base en la siguiente información extraída de investigaciones (con citas y referencias), responde a la siguiente pregunta:\n"
         f"'{question}'\n\n"
-        "Organiza la información en un resumen estructurado y extrae metadatos relevantes que permitan identificar documentos y hechos concretos.\n\n"
+        "Organiza la información en un resumen estructurado y extrae metadatos relevantes, incluyendo identificadores de citas (ej. [Cita 1], [Cita 2]) "
+        "que permitan identificar documentos, grupos y hechos concretos dentro de los documentos de origen.  NO INCLUYAS EL TEXTO COMPLETO DE LAS CITAS EN ESTE RESUMEN.\n\n"
         "Información:\n" + relevant_info
     )
     result1 = call_gemini_api(prompt1)
     if result1 is None:
-        return None
+        return None, None  # Devuelve None para ambos si hay error
+
+
+      # --- PROMPT 2: Informe Final (PROSA) ---
+
     prompt2 = (
-        f"Utilizando el resumen y los metadatos que se muestran a continuación, redacta un informe formal en prosa dirigido a un cliente empresarial. "
-        "El informe final que se genere será el documento oficial que recibirá el cliente, sin incluir sugerencias o recomendaciones para edición posterior. "
-        "El informe debe incluir citas concretas, referencias a los documentos de origen y describir de forma precisa los hechos relevantes de la investigación.\n\n"
-        "Resumen y Metadatos:\n" + result1 + "\n\n"
-        "Informe:"
+      f"Utilizando el resumen y los metadatos que se muestran a continuación, redacta un informe formal en prosa dirigido a un cliente empresarial.\n"
+      f"El informe final que se genere será el documento oficial que recibirá el cliente.  No incluyas sugerencias o recomendaciones para edición posterior.\n\n"
+      f"El informe DEBE incluir referencias a las citas usando los identificadores generados (ej., [Cita 1], [Cita 2]).  Cuando uses una cita, INCLUYE EL IDENTIFICADOR DE LA CITA.\n"
+      f"Describe de forma precisa los hechos relevantes de la investigación, haciendo referencia a los documentos y grupos de origen según los metadatos.\n\n"
+      f"Resumen y Metadatos:\n{result1}\n\n"  # Usamos las variables correctamente
+      f"Información de contexto completa (para referencia, NO incluir directamente en el informe):\n{relevant_info}\n\n"
+      f"Informe:"
     )
+
     result2 = call_gemini_api(prompt2)
-    return result2
+    if result2 is None:
+      return None, None
+
+    # --- PROMPT 3:  Generación de Metodología ---
+    prompt_metodologia = (
+        "Describe detalladamente la metodología utilizada para generar el informe final a partir de la pregunta del usuario y la información de investigación. "
+        "Explica cómo se extrajo y organizó la información, cómo se identificaron y referenciaron las citas, y cómo se estructuró el informe final en prosa."
+    )
+    metodologia = call_gemini_api(prompt_metodologia)
+    if metodologia is None:
+        metodologia = "No se pudo generar la descripción de la metodología."
+
+    # --- Construcción del Informe Final (con Encabezado y Metodología) ---
+    fecha_actual = datetime.datetime.now().strftime("%d/%m/%Y")
+    encabezado = (
+        f"# {question}\n"
+        f"**Preparado por:** Atelier IA\n"
+        f"**Preparado para:** {st.session_state.cliente}\n"
+        f"**Fecha de elaboración:** {fecha_actual}\n\n"
+    )
+    informe_completo = encabezado + "## Metodología\n\n" + metodologia + "\n\n## Informe\n\n" + result2
+
+      # --- Sección de Fuentes (con Callouts) ---
+    informe_completo += "\n\n## Fuentes\n\n"
+    for cita_id, cita_info in cita_mapping.items():
+        informe_completo += f"**{cita_id}**: {cita_info['documento']}, Grupo {cita_info['grupo']}\n"
+        informe_completo += f"> {cita_info['texto']}\n\n"  # Callout
+
+    return informe_completo, cita_mapping  # Devuelve el informe y el mapa
+
 
 # ==============================
 # Función para generar PDF a partir de texto
 # ==============================
-def generate_pdf(content, title="Documento"):
+def generate_pdf(content, title="Documento", template_buffer=None):
+    pdf_buffer = BytesIO()
     pdf = FPDF()
     pdf.add_page()
-    # Agregar fuente UTF-8 si se dispone de ella; de lo contrario, se usa Arial y se ignoran errores
     pdf.set_font("Arial", size=12)
     pdf.cell(200, 10, txt=title, ln=True, align="C")
     pdf.ln(10)
-    for line in content.split("\n"):
-        # Se usa "replace" para ignorar caracteres no representables en latin1
-        pdf.multi_cell(0, 10, line.encode("latin1", errors="replace").decode("latin1"))
-    return pdf.output(dest="S").encode("latin1", errors="replace")
+
+     # Dividir el contenido en secciones si es necesario (para el manejo del footer).
+    sections = content.split("\n\n## ") #Separador
+
+    for section in sections:
+      if section.startswith("Fuentes"):
+        pdf.set_font("Arial", size=10)  # Fuentes más pequeñas
+      else:
+        pdf.set_font("Arial", size=12)
+
+      for line in section.split("\n"):
+          if line.startswith(">"):  # Formato para citas (callouts)
+            pdf.set_fill_color(230, 230, 230)  # Fondo gris claro
+            pdf.cell(0, 10, line[1:].strip(), ln=True, fill=True) #[1:] para el >
+          else:
+            pdf.multi_cell(0, 10, line.encode("latin1", errors="replace").decode("latin1"))
+      pdf.ln(5)
+
+    pdf.output(pdf_buffer)
+
+     # Combinar PDF con plantilla
+    if template_buffer:
+        template_buffer.seek(0)  # Reset
+        template_pdf = PyPDF2.PdfReader(template_buffer)
+        merger = PyPDF2.PdfMerger()
+        merger.append(template_pdf)
+        merger.append(BytesIO(pdf_buffer.getvalue()))
+        output_buffer = BytesIO()
+        merger.write(output_buffer)
+        return output_buffer.getvalue()
+
+    return pdf_buffer.getvalue()
+
 
 # ==============================
 # MODO DE IDEACIÓN (CHAT INTERACTIVO)
 # ==============================
 def ideacion_mode(db, selected_files):
     st.subheader("Modo de Ideación: Conversa con los datos")
-    st.markdown("Utiliza este espacio para realizar consultas interactivas. Escribe tu pregunta y el sistema responderá basándose en el historial y la información de investigación disponible.")
-    
+    st.markdown("Utiliza este espacio para realizar consultas interactivas.")
+
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
-    
+
     for msg in st.session_state.chat_history:
         st.markdown(f"**{msg['role'].capitalize()}:** {msg['message']}")
-    
+
     user_input = st.text_input("Escribe tu consulta o idea:")
     if st.button("Enviar consulta"):
         if not user_input.strip():
-            st.warning("Ingrese un mensaje para continuar la conversación.")
+            st.warning("Ingrese un mensaje")
         else:
             st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
-            relevant_info = get_relevant_info(db, user_input, selected_files)
+            relevant_info, _ = get_relevant_info(db, user_input, selected_files)  # No necesitamos el mapa aquí
             conversation_prompt = "Historial de conversación:\n"
             for msg in st.session_state.chat_history:
                 conversation_prompt += f"{msg['role']}: {msg['message']}\n"
             conversation_prompt += "\nInformación de contexto:\n" + relevant_info + "\n\nGenera una respuesta detallada y coherente."
+
             respuesta = call_gemini_api(conversation_prompt)
             if respuesta is None:
                 st.error("Error al generar la respuesta.")
             else:
                 st.session_state.chat_history.append({"role": "Asistente", "message": respuesta})
                 st.markdown(f"**Asistente:** {respuesta}")
-                # Registrar la consulta en Supabase
                 log_query_event(user_input, mode="Ideacion")
-    
+
     if st.session_state.chat_history:
         pdf_bytes = generate_pdf("\n".join([f"{m['role']}: {m['message']}" for m in st.session_state.chat_history]), title="Historial de Chat")
         st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat.pdf", mime="application/pdf")
 
-# ==============================
-# Autenticación Personalizada
-# ==============================
-# Definimos los usuarios autorizados con su contraseña (4 dígitos)
-ALLOWED_USERS = {
-    "Nicolas": "1234",
-    "Postobon": "2345",
-    "Mondelez": "3456",
-    "Placeholder_1": "4567",
-    "Placeholder_2": "5678"
-}
 
-def show_login():
-    # Mostrar el formulario de login en la parte superior (pantalla completa)
-    st.markdown("<div style='display: flex; flex-direction: column; justify-content: center; align-items: center; height: 80vh;'>", unsafe_allow_html=True)
-    st.header("Iniciar Sesión")
-    username = st.text_input("Usuario")
-    password = st.text_input("Contraseña (4 dígitos)", type="password")
-    if st.button("Ingresar"):
-        if username in ALLOWED_USERS and password == ALLOWED_USERS[username]:
-            st.session_state.logged_in = True
-            st.session_state.user = username
-            # Usar st.query_params para persistir información si es necesario (opcional)
-            st.query_params(user=username)  # O bien, omitir si no es necesario
-            st.rerun()
-        else:
-            st.error("Credenciales incorrectas")
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.stop()
-
-def logout():
-    if st.sidebar.button("Cerrar Sesión"):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
 
 # ==============================
 # Aplicación Principal
 # ==============================
 def main():
-    st.title("Atelier IA")
-    
     # La autenticación se realiza primero
     if "logged_in" not in st.session_state or not st.session_state.logged_in:
         show_login()
-    
-    logout()  # Opción de cerrar sesión en la barra lateral
+
+    logout()  # Opción de cerrar sesión
+
+    st.title("Atelier IA")
 
     st.markdown(
         """
-        Bienvenido a **Atelier IA**, la herramienta inteligente para generar informes y consultas sobre investigaciones empresariales.
+        Bienvenido a **Atelier IA**.
         
-        Funcionalidades:
-        - **Informe de Informes:** Genera un informe formal basado en información extraída de investigaciones (usando datos desde S3).
-        - **Ideación (Conversar con los datos):** Permite interactuar y aclarar dudas a través de un chat interactivo.
-        
-        Cada consulta se registra para mejorar el servicio.
+        - **Informe de Informes:** Genera un informe formal.
+        - **Ideación:** Permite interactuar con los datos.
         """
     )
-    
-    # Cargar la base de datos (archivo JSON desde S3)
+
+     # Cargar plantilla
+    template_buffer = load_template_from_s3()
+    if template_buffer is None:
+      st.warning("No se pudo cargar la plantilla. Se generarán PDFs sin plantilla.")
+
+
+    # Cargar la base de datos
     try:
         db = load_database()
     except Exception as e:
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
-    
-    # Filtrar documentos para alimentar al modelo (no se muestra al usuario)
+
+    # Filtrar documentos para el modelo
     selected_files = [doc.get("nombre_archivo") for doc in db]
-    
-    # Filtrado por marcas en la barra lateral según el cliente (si se requiere)
-    # Suponiendo que los documentos tienen la clave "marca"
+
+    # Filtrado por marcas en la barra lateral
     marcas = sorted({doc.get("marca", "").strip() for doc in db if doc.get("marca", "").strip()})
     marcas.insert(0, "Todas")
     selected_marca = st.sidebar.selectbox("Seleccione la marca", marcas)
     if selected_marca != "Todas":
         db = [doc for doc in db if doc.get("marca", "").strip().lower() == selected_marca.lower()]
-        # Actualizamos la lista de archivos tras el filtro
-        selected_files = [doc.get("nombre_archivo") for doc in db]
-    
+        selected_files = [doc.get("nombre_archivo") for doc in db]  # Actualizar archivos
+
     modo = st.sidebar.radio("Seleccione el modo", ["Informe de Informes", "Ideación (Conversar con los datos)"])
-    
+
     if modo == "Informe de Informes":
         st.markdown("### Ingrese una pregunta para generar el informe")
-        question = st.text_area("Pregunta", height=150, help="Escriba la pregunta o tema para el informe.")
+        question = st.text_area("Pregunta", height=150, help="Escriba la pregunta.")
         if st.button("Generar Informe"):
             if not question.strip():
-                st.warning("Ingrese una pregunta para generar el informe.")
+                st.warning("Ingrese una pregunta.")
             else:
-                st.info("Generando informe. Esto puede tardar unos minutos...")
-                report = generate_final_report(question, db, selected_files)
+                st.info("Generando informe...")
+                report, cita_mapping = generate_final_report(question, db, selected_files) #
                 if report is None:
-                    st.error("No se pudo generar el informe. Intente de nuevo más tarde.")
+                    st.error("No se pudo generar el informe. Intente de nuevo.")
                 else:
+                    # --- Edición y Adiciones (Opcional) ---
                     st.markdown("### Informe Final")
-                    st.markdown(report, unsafe_allow_html=True)
-                    pdf_bytes = generate_pdf(report, title="Informe Final")
+                    edited_report = st.text_area("Editar Informe (Opcional)", value=report, height=300) #para editar
+                    additional_info = st.text_area("Agregar Información Adicional (Opcional)", height=150) #Agregar info
+
+                    #Calificacion
+                    rating = st.radio("Calificar el Informe", options=[1, 2, 3, 4, 5], horizontal=True)
+
+                    final_report_content = edited_report + "\n\n" + additional_info #Se unen las ediciones
+
+                    # --- Descarga del PDF ---
+                    pdf_bytes = generate_pdf(final_report_content, title="Informe Final", template_buffer=template_buffer)
                     st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="informe_final.pdf", mime="application/pdf")
-                    # Registrar la consulta
-                    log_query_event(question, mode="Informe")
+
+                    log_query_event(question, mode="Informe", rating=rating)  # Guarda la calificación
+
     else:
         ideacion_mode(db, selected_files)
 
