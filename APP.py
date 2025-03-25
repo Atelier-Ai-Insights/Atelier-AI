@@ -11,7 +11,7 @@ import PyPDF2
 import unicodedata
 import tempfile
 import markdown2
-import html  # Para el monkey patch
+import html  # para el monkey patch
 
 # --- Monkey patch para HTML2FPDF ---
 from fpdf.html import HTML2FPDF
@@ -256,7 +256,7 @@ def generate_final_report(question, db, selected_files):
         f"**Preparado para:** {st.session_state.cliente}\n"
         f"**Fecha de elaboración:** {fecha_actual}\n\n"
     )
-    informe_completo = encabezado + result2  # Se asume que Gemini ya agrega la sección "Fuentes"
+    informe_completo = encabezado + result2  # Se asume que Gemini ya incluye la sección "Fuentes"
     return informe_completo
 
 # ==============================
@@ -266,8 +266,9 @@ class MyFPDF(FPDF, HTMLMixin):
     pass
 
 def generate_pdf_html(content, title="Documento", template_buffer=None):
-    # Convertir Markdown a HTML
+    # Convertir Markdown a HTML y reemplazar caracteres problemáticos
     html_content = markdown2.markdown(content)
+    html_content = html_content.replace('\u2013', '-')
     
     pdf = MyFPDF()
     # Agregar banner si existe
@@ -368,6 +369,9 @@ def main():
     if modo == "Informe de Informes":
         st.markdown("### Ingrese una pregunta para generar el informe")
         question = st.text_area("Pregunta", height=150, help="Escriba la pregunta o tema para el informe.")
+        # Widgets siempre visibles en la barra lateral para información adicional y rating
+        additional_info = st.sidebar.text_area("Agregar Información Adicional (Opcional)", key="additional_info", height=150)
+        rating = st.sidebar.radio("Calificar el Informe", options=[1, 2, 3, 4, 5], horizontal=True, key="rating")
         if st.button("Generar Informe"):
             if not question.strip():
                 st.warning("Ingrese una pregunta para generar el informe.")
@@ -381,8 +385,6 @@ def main():
                     st.session_state.report = report
                 st.markdown("### Informe Final")
                 edited_report = st.text_area("Editar Informe (Opcional)", value=st.session_state.report, key="edited_report", height=300)
-                additional_info = st.text_area("Agregar Información Adicional (Opcional)", key="additional_info", height=150)
-                rating = st.radio("Calificar el Informe", options=[1, 2, 3, 4, 5], horizontal=True, key="rating")
                 final_report_content = edited_report + "\n\n" + additional_info
                 pdf_bytes = generate_pdf_html(final_report_content, title="Informe Final", template_buffer=template_buffer)
                 st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="informe_final.pdf", mime="application/pdf")
@@ -392,3 +394,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
