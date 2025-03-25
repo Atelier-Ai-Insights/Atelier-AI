@@ -283,6 +283,8 @@ def generate_pdf_html(content, title="Documento", template_buffer=None):
     # Reemplazar caracteres problemáticos específicos
     html_content = html_content.replace('\u201c', ' ')
     html_content = html_content.replace('\u2013', ' ')
+    html_content = html_content.replace('\u201d', ' ')
+    
     
     pdf = MyFPDF()
     # Agregar banner si existe
