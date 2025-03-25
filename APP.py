@@ -149,11 +149,11 @@ def load_database():
     try:
         response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response['Body'].read().decode("utf-8"))
-        # Filtrar por cliente solo si el usuario NO es "Nicolas"
+        # Filtrar por cliente solo si el usuario NO es "Nicolas" (admin)
         if "cliente" in st.session_state and normalize_text(st.session_state.cliente) != "nicolas":
             original_count = len(data)
             data = [doc for doc in data if normalize_text(doc.get("cliente", "")) == normalize_text(st.session_state.cliente)]
-        # En caso de admin o si no hay 'cliente' definido, se usan todos los documentos
+        # Sino, se usan todos los documentos
     except Exception as e:
         st.error(f"Error al descargar la base de datos desde S3: {e}")
         data = []
@@ -187,10 +187,12 @@ def load_template_from_s3():
         st.error(f"Error al descargar la plantilla: {e}")
         return None
 
+# ==============================
+# Función para obtener la información relevante
+# ==============================
 def get_relevant_info(db, question, selected_files):
     all_text = ""
-    cita_counter = 1
-    cita_mapping = {}
+    # Aquí ya no se construye un mapa de citas local; se pedirá a Gemini que genere la sección de Fuentes
     for pres in db:
         if pres.get("nombre_archivo") in selected_files:
             all_text += f"Documento: {pres.get('titulo_estudio', pres.get('nombre_archivo', 'Sin nombre'))}\n"
@@ -202,58 +204,45 @@ def get_relevant_info(db, question, selected_files):
                 if metadatos:
                     all_text += f"Metadatos: {json.dumps(metadatos)}\n"
                 if hechos:
+                    # Se incluye el indicador de cita, pero se deja que Gemini genere la sección de Fuentes
                     if "tipo" in hechos and hechos["tipo"] == "cita":
-                        cita_id = f"cita_{cita_counter}"
-                        cita_mapping[cita_id] = {
-                            "texto": contenido,
-                            "documento": pres.get('titulo_estudio', pres.get('nombre_archivo')),
-                            "grupo": grupo.get('grupo_index')
-                        }
-                        all_text += f"[Cita {cita_counter}]\n"
-                        cita_counter += 1
+                        all_text += f"[Cita]\n"
                     else:
                         all_text += f"Hechos: {json.dumps(hechos)}\n"
             all_text += "\n---\n\n"
-    return all_text, cita_mapping
+    return all_text
 
+# ==============================
+# Generación del Informe Final
+# ==============================
 def generate_final_report(question, db, selected_files):
-    relevant_info, cita_mapping = get_relevant_info(db, question, selected_files)
-    # Muestra información de citas (debug)
-    st.write("DEBUG: Mapeo de citas:")
-    st.write(cita_mapping)
+    relevant_info = get_relevant_info(db, question, selected_files)
     
+    # Prompt 1: Resumen estructurado con metadatos y citas
     prompt1 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
-        f"Repite la pregunta: ***{question}***. Asegúrate de que la respuesta esté completamente alineada con esta pregunta. "
+        f"Repite la pregunta: ***{question}***. Asegúrate de que la respuesta esté completamente alineada con ella. "
         f"Utiliza la siguiente información de contexto (extractos de documentos de investigación) para elaborar un resumen estructurado. "
-        f"Extrae metadatos relevantes (documentos, grupos, etc.) e incluye identificadores de citas (ej. [Cita 1], [Cita 2]) sin incluir el texto completo de las citas.\n\n"
+        f"Incluye metadatos relevantes (documentos, grupos, etc.) e indica en cada caso si proviene de una cita, pero NO incluyas el texto completo de las citas.\n\n"
         f"Información de Contexto:\n{relevant_info}\n\n"
         f"Respuesta (Resumen Estructurado y Metadatos):"
     )
     result1 = call_gemini_api(prompt1)
     if result1 is None:
-        return None, None
+        return None
 
+    # Prompt 2: Informe en prosa con inclusión final de Fuentes
     prompt2 = (
         f"Redacta la sección principal del informe en prosa, en un tono formal y profesional, dirigido a un cliente empresarial. "
         f"Repite la pregunta: ***{question}***. La respuesta debe estar completamente alineada con la pregunta del cliente. "
-        f"Utiliza el siguiente resumen estructurado y metadatos como base e incluye referencias a las citas mediante sus identificadores (ej., [Cita 1], [Cita 2]).\n\n"
+        f"Utiliza el siguiente resumen estructurado y metadatos como base. Al final, agrega una sección titulada 'Fuentes', "
+        f"donde se listan todas las citas en el siguiente formato: cada línea debe comenzar con '[Cita X] - ' seguido del texto de la cita.\n\n"
         f"Resumen Estructurado y Metadatos:\n{result1}\n\n"
-        f"Sección Principal del Informe (en prosa):"
+        f"Sección Principal del Informe (en prosa) con Fuentes:"
     )
     result2 = call_gemini_api(prompt2)
     if result2 is None:
-        return None, None
-
-    prompt_metodologia = (
-        f"Basándote en los estudios reportados en la información de contexto, describe detalladamente la metodología utilizada en dichos estudios. "
-        f"Explica cómo se realizaron los estudios, cómo se recolectaron los datos y qué procedimientos y técnicas se aplicaron. "
-        f"Repite la pregunta: ***{question}*** y vincula la metodología de los estudios con la necesidad de responder esta pregunta.\n\n"
-        f"Metodología de los Estudios:"
-    )
-    metodologia = call_gemini_api(prompt_metodologia)
-    if metodologia is None:
-        metodologia = "No se pudo generar la descripción de la metodología de los estudios."
+        return None
 
     fecha_actual = datetime.datetime.now().strftime("%d/%m/%Y")
     encabezado = (
@@ -262,30 +251,24 @@ def generate_final_report(question, db, selected_files):
         f"**Preparado para:** {st.session_state.cliente}\n"
         f"**Fecha de elaboración:** {fecha_actual}\n\n"
     )
-    informe_completo = encabezado + "## Metodología de los Estudios\n\n" + metodologia + "\n\n## Informe\n\n" + result2
-    informe_completo += "\n\n## Fuentes\n\n"
-    for cita_id, cita_info in cita_mapping.items():
-        informe_completo += f"**{cita_id}**: {cita_info['documento']}, Grupo {cita_info['grupo']}\n"
-        informe_completo += f"> {cita_info['texto']}\n\n"
-
-    return informe_completo, cita_mapping
+    informe_completo = encabezado + result2  # Se asume que Gemini ya agrega la sección "Fuentes"
+    return informe_completo
 
 # ==============================
 # Función para generar PDF a partir de texto
 # ==============================
 def generate_pdf(content, title="Documento", template_buffer=None):
     pdf = FPDF()
-    # Si hay banner, agregarlo en la primera página
+    # Agregar banner si existe
     if template_buffer:
         try:
-            # Guardar la imagen a un archivo temporal
             with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
                 tmp.write(template_buffer.getvalue())
                 tmp_path = tmp.name
             pdf.add_page()
             pdf.image(tmp_path, x=10, y=8, w=pdf.w - 20)
             os.remove(tmp_path)
-            pdf.ln(20)  # Espacio después del banner
+            pdf.ln(20)
         except Exception as e:
             st.warning(f"Error al agregar el banner: {e}")
             pdf.add_page()
@@ -301,9 +284,9 @@ def generate_pdf(content, title="Documento", template_buffer=None):
         else:
             pdf.set_font("Arial", size=12)
         for line in section.split("\n"):
-            if line.startswith(">"):
+            if line.startswith("[Cita"):
                 pdf.set_fill_color(230, 230, 230)
-                pdf.cell(0, 10, line[1:].strip(), ln=True, fill=True)
+                pdf.cell(0, 10, line.strip(), ln=True, fill=True)
             else:
                 pdf.multi_cell(0, 10, line.encode("latin1", errors="replace").decode("latin1"))
         pdf.ln(5)
@@ -326,7 +309,7 @@ def ideacion_mode(db, selected_files):
             st.warning("Ingrese un mensaje para continuar la conversación.")
         else:
             st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
-            relevant_info, _ = get_relevant_info(db, user_input, selected_files)
+            relevant_info = get_relevant_info(db, user_input, selected_files)
             conversation_prompt = "Historial de conversación:\n"
             for msg in st.session_state.chat_history:
                 conversation_prompt += f"{msg['role']}: {msg['message']}\n"
@@ -390,22 +373,24 @@ def main():
             if not question.strip():
                 st.warning("Ingrese una pregunta para generar el informe.")
             else:
-                st.info("Generando informe...")
-                report, cita_mapping = generate_final_report(question, db, selected_files)
-                if report is None:
-                    st.error("No se pudo generar el informe. Intente de nuevo.")
-                else:
-                    st.markdown("### Informe Final")
-                    edited_report = st.text_area("Editar Informe (Opcional)", value=report, height=300)
-                    additional_info = st.text_area("Agregar Información Adicional (Opcional)", height=150)
-                    rating = st.radio("Calificar el Informe", options=[1, 2, 3, 4, 5], horizontal=True)
-                    final_report_content = edited_report + "\n\n" + additional_info
-                    pdf_bytes = generate_pdf(final_report_content, title="Informe Final", template_buffer=template_buffer)
-                    st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="informe_final.pdf", mime="application/pdf")
-                    log_query_event(question, mode="Informe", rating=rating)
+                # Se guarda el informe en el estado de sesión para evitar pérdida si se actualizan campos adicionales
+                if "report" not in st.session_state:
+                    st.info("Generando informe...")
+                    report = generate_final_report(question, db, selected_files)
+                    if report is None:
+                        st.error("No se pudo generar el informe. Intente de nuevo.")
+                        return
+                    st.session_state.report = report
+                st.markdown("### Informe Final")
+                edited_report = st.text_area("Editar Informe (Opcional)", value=st.session_state.report, height=300)
+                additional_info = st.text_area("Agregar Información Adicional (Opcional)", height=150)
+                rating = st.radio("Calificar el Informe", options=[1, 2, 3, 4, 5], horizontal=True)
+                final_report_content = edited_report + "\n\n" + additional_info
+                pdf_bytes = generate_pdf(final_report_content, title="Informe Final", template_buffer=template_buffer)
+                st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="informe_final.pdf", mime="application/pdf")
+                log_query_event(question, mode="Informe", rating=rating)
     else:
         ideacion_mode(db, selected_files)
 
 if __name__ == "__main__":
     main()
-
