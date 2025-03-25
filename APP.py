@@ -373,7 +373,7 @@ def main():
             if not question.strip():
                 st.warning("Ingrese una pregunta para generar el informe.")
             else:
-                # Se guarda el informe en el estado de sesión para evitar pérdida si se actualizan campos adicionales
+                # Generar y almacenar el informe solo una vez
                 if "report" not in st.session_state:
                     st.info("Generando informe...")
                     report = generate_final_report(question, db, selected_files)
@@ -382,13 +382,15 @@ def main():
                         return
                     st.session_state.report = report
                 st.markdown("### Informe Final")
-                edited_report = st.text_area("Editar Informe (Opcional)", value=st.session_state.report, height=300)
-                additional_info = st.text_area("Agregar Información Adicional (Opcional)", height=150)
-                rating = st.radio("Calificar el Informe", options=[1, 2, 3, 4, 5], horizontal=True)
+                # Asignar keys para preservar el estado de estos widgets
+                edited_report = st.text_area("Editar Informe (Opcional)", value=st.session_state.report, key="edited_report", height=300)
+                additional_info = st.text_area("Agregar Información Adicional (Opcional)", key="additional_info", height=150)
+                rating = st.radio("Calificar el Informe", options=[1, 2, 3, 4, 5], horizontal=True, key="rating")
                 final_report_content = edited_report + "\n\n" + additional_info
                 pdf_bytes = generate_pdf(final_report_content, title="Informe Final", template_buffer=template_buffer)
                 st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="informe_final.pdf", mime="application/pdf")
                 log_query_event(question, mode="Informe", rating=rating)
+
     else:
         ideacion_mode(db, selected_files)
 
