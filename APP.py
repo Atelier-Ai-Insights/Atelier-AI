@@ -155,14 +155,50 @@ def load_database():
 # =====================================================
 # FUNCION PARA OBTENER IMAGEN DE S3 (Para la plantilla)
 # =====================================================
+@st.cache_data(show_spinner=False)
+def load_database():
+    st.write("DEBUG: Iniciando carga de la base de datos desde S3...")
+    s3_endpoint_url = st.secrets["S3_ENDPOINT_URL"]
+    s3_access_key = st.secrets["S3_ACCESS_KEY"]
+    s3_secret_key = st.secrets["S3_SECRET_KEY"]
+    bucket_name = st.secrets.get("S3_BUCKET")
+    object_key = "resultado_presentacion.json"
+    
+    st.write(f"DEBUG: Conectando al bucket: {bucket_name} y descargando el archivo: {object_key}")
+    s3_client = boto3.client(
+        "s3",
+        endpoint_url=s3_endpoint_url,
+        aws_access_key_id=s3_access_key,
+        aws_secret_access_key=s3_secret_key
+    )
+    try:
+        response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
+        data = json.loads(response['Body'].read().decode("utf-8"))
+        st.write(f"DEBUG: Base de datos descargada, cantidad de documentos sin filtrar: {len(data)}")
+        # Filtrar por cliente, si está definido en la sesión
+        if "cliente" in st.session_state:
+            original_count = len(data)
+            data = [doc for doc in data if doc.get("cliente") == st.session_state.cliente]
+            st.write(f"DEBUG: Filtrado por cliente '{st.session_state.cliente}': {len(data)} de {original_count} documentos")
+        else:
+            st.write("DEBUG: No se encontró 'cliente' en st.session_state, sin filtrado por cliente.")
+    except Exception as e:
+        st.error(f"Error al descargar la base de datos desde S3: {e}")
+        data = []
+    st.write(f"DEBUG: Carga de base de datos finalizada, documentos disponibles: {len(data)}")
+    return data
+
+
 @st.cache_data
 def load_template_from_s3():
+    st.write("DEBUG: Iniciando carga de la plantilla desde S3...")
     s3_endpoint_url = st.secrets["S3_ENDPOINT_URL"]
     s3_access_key = st.secrets["S3_ACCESS_KEY"]
     s3_secret_key = st.secrets["S3_SECRET_KEY"]
     bucket_name = st.secrets.get("S3_BUCKET")
     object_key_template = "Banner.png"  
 
+    st.write(f"DEBUG: Descargando plantilla del bucket: {bucket_name}, archivo: {object_key_template}")
     s3_client = boto3.client(
         "s3",
         endpoint_url=s3_endpoint_url,
@@ -172,8 +208,8 @@ def load_template_from_s3():
     try:
         template_buffer = BytesIO()
         s3_client.download_fileobj(Bucket=bucket_name, Key=object_key_template, Fileobj=template_buffer)
-        # Verificamos que se haya descargado algo (longitud mayor a cero)
         if template_buffer.getbuffer().nbytes > 0:
+            st.write("DEBUG: Plantilla descargada correctamente.")
             return template_buffer
         else:
             st.warning("La plantilla descargada está vacía.")
@@ -182,37 +218,6 @@ def load_template_from_s3():
         st.error(f"Error al descargar la plantilla: {e}")
         return None
 
-
-def get_relevant_info(db, question, selected_files):
-    all_text = ""
-    cita_counter = 1  # Contador de citas
-    cita_mapping = {}  # Mapa de citas
-
-    for pres in db:
-        if pres.get("nombre_archivo") in selected_files:
-            # Utiliza 'titulo_estudio' si existe; de lo contrario, 'nombre_archivo'
-            all_text += f"Documento: {pres.get('titulo_estudio', pres.get('nombre_archivo', 'Sin nombre'))}\n"
-            for grupo in pres.get("grupos", []):
-                contenido = grupo.get('contenido_texto', '')
-                all_text += f"Grupo {grupo.get('grupo_index')}: {contenido}\n"
-                metadatos = grupo.get("metadatos", {})
-                hechos = grupo.get("hechos", {})
-                if metadatos:
-                    all_text += f"Metadatos: {json.dumps(metadatos)}\n"
-                if hechos:
-                    if "tipo" in hechos and hechos["tipo"] == "cita":
-                        cita_id = f"cita_{cita_counter}"
-                        cita_mapping[cita_id] = {
-                            "texto": contenido,
-                            "documento": pres.get('titulo_estudio', pres.get('nombre_archivo')),
-                            "grupo": grupo.get('grupo_index')
-                        }
-                        all_text += f"[Cita {cita_counter}]\n"
-                        cita_counter += 1
-                    else:
-                        all_text += f"Hechos: {json.dumps(hechos)}\n"
-            all_text += "\n---\n\n"
-    return all_text, cita_mapping
 
 
 def generate_final_report(question, db, selected_files):
