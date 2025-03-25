@@ -3,9 +3,9 @@ import json
 import datetime
 import streamlit as st
 import google.generativeai as genai
-import boto3  # pip install boto3
-from fpdf import FPDF  # pip install fpdf
-from supabase import create_client  # pip install supabase
+import boto3 
+from fpdf import FPDF  
+from supabase import create_client  
 from io import BytesIO
 import PyPDF2  
 
@@ -50,6 +50,7 @@ def logout():
 # ==============================
 # CONFIGURACIÓN DE LA API DE GEMINI
 # ==============================
+# Utilizamos las API keys desde st.secrets
 api_keys = [
     st.secrets["API_KEY_1"],
     st.secrets["API_KEY_2"],
@@ -69,7 +70,6 @@ generation_config = {
     "top_k": 32,
     "max_output_tokens": 8192,
 }
-
 safety_settings = [
     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
@@ -79,7 +79,7 @@ safety_settings = [
 
 def create_model():
     return genai.GenerativeModel(
-        model_name="gemini-2.0-flash-lite",  # Modelo utilizado
+        model_name="gemini-2.0-flash-lite",
         generation_config=generation_config,
         safety_settings=safety_settings
     )
@@ -124,7 +124,7 @@ def log_query_event(query_text, mode, rating=None):
 
 
 # ==============================
-# CARGA DEL ARCHIVO JSON DESDE S3
+# CARGA DEL ARCHIVO JSON DESDE S3 (para alimentar al modelo)
 # ==============================
 @st.cache_data(show_spinner=False)
 def load_database():
@@ -133,7 +133,7 @@ def load_database():
     s3_secret_key = st.secrets["S3_SECRET_KEY"]
     bucket_name = st.secrets.get("S3_BUCKET", "default-bucket")
     object_key = "resultado_presentacion.json"
-
+    
     s3_client = boto3.client(
         "s3",
         endpoint_url=s3_endpoint_url,
@@ -172,7 +172,12 @@ def load_template_from_s3():
     try:
         template_buffer = BytesIO()
         s3_client.download_fileobj(Bucket=bucket_name, Key=object_key_template, Fileobj=template_buffer)
-        return template_buffer
+        # Verificamos que se haya descargado algo (longitud mayor a cero)
+        if template_buffer.getbuffer().nbytes > 0:
+            return template_buffer
+        else:
+            st.warning("La plantilla descargada está vacía.")
+            return None
     except Exception as e:
         st.error(f"Error al descargar la plantilla: {e}")
         return None
@@ -185,7 +190,7 @@ def get_relevant_info(db, question, selected_files):
 
     for pres in db:
         if pres.get("nombre_archivo") in selected_files:
-            # Se usa 'titulo_estudio' si existe; de lo contrario, 'nombre_archivo'
+            # Utiliza 'titulo_estudio' si existe; de lo contrario, 'nombre_archivo'
             all_text += f"Documento: {pres.get('titulo_estudio', pres.get('nombre_archivo', 'Sin nombre'))}\n"
             for grupo in pres.get("grupos", []):
                 contenido = grupo.get('contenido_texto', '')
@@ -211,23 +216,21 @@ def get_relevant_info(db, question, selected_files):
 
 
 def generate_final_report(question, db, selected_files):
-    # Extraer información relevante y mapeo de citas
+    # Extraer la información y el mapeo de citas
     relevant_info, cita_mapping = get_relevant_info(db, question, selected_files)
     
-    # --- DEBUG: Visualizar información extraída y citas ---
+    # --- DEBUG: Mostrar información extraída y citas ---
     st.write("DEBUG: Información relevante extraída:")
     st.write(relevant_info)
     st.write("DEBUG: Mapeo de citas:")
     st.write(cita_mapping)
     
     # --- PROMPT 1: Resumen Estructurado y Metadatos ---
-    # Se repite la pregunta varias veces para reforzar la alineación con lo solicitado.
     prompt1 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
-        f"Por favor, asegúrate de que la respuesta esté 100% alineada con la pregunta: ***{question}***. "
+        f"Repite la pregunta: ***{question}***. Asegúrate de que la respuesta esté completamente alineada con esta pregunta. "
         f"Utiliza la siguiente información de contexto (extractos de documentos de investigación) para elaborar un resumen estructurado. "
-        f"Extrae metadatos relevantes (documentos, grupos, etc.) e incluye identificadores de citas (ej. [Cita 1], [Cita 2]) para la información proveniente de citas. "
-        f"NO INCLUYAS el texto completo de las citas, solo el identificador. Recuerda: la pregunta es ***{question}***.\n\n"
+        f"Extrae metadatos relevantes (documentos, grupos, etc.) e incluye identificadores de citas (ej. [Cita 1], [Cita 2]) sin incluir el texto completo de las citas.\n\n"
         f"Información de Contexto:\n{relevant_info}\n\n"
         f"Respuesta (Resumen Estructurado y Metadatos):"
     )
@@ -235,12 +238,11 @@ def generate_final_report(question, db, selected_files):
     if result1 is None:
         return None, None
 
-    # --- PROMPT 2: Informe en Prosa con Énfasis en la Relevancia de la Pregunta ---
+    # --- PROMPT 2: Informe en Prosa con Énfasis en la Pregunta ---
     prompt2 = (
-        f"Redacta la sección principal del informe en prosa, manteniendo un tono formal y profesional, dirigido a un cliente empresarial. "
-        f"Recuerda que la respuesta debe estar completamente alineada con la pregunta: ***{question}***, y la metodología de los estudios revisados debe ayudar a responder esa pregunta. "
-        f"Utiliza el siguiente resumen estructurado y metadatos como base, e incluye referencias a las citas mediante sus identificadores (ej., [Cita 1], [Cita 2]). "
-        f"Reitera la pregunta: ***{question}***, para asegurar que toda la respuesta esté centrada en ella.\n\n"
+        f"Redacta la sección principal del informe en prosa, en un tono formal y profesional, dirigido a un cliente empresarial. "
+        f"Repite la pregunta: ***{question}***. La respuesta debe estar completamente alineada con la pregunta del cliente. "
+        f"Utiliza el siguiente resumen estructurado y metadatos como base e incluye referencias a las citas mediante sus identificadores (ej., [Cita 1], [Cita 2]).\n\n"
         f"Resumen Estructurado y Metadatos:\n{result1}\n\n"
         f"Sección Principal del Informe (en prosa):"
     )
@@ -249,11 +251,10 @@ def generate_final_report(question, db, selected_files):
         return None, None
 
     # --- PROMPT 3: Metodología de los Estudios Revisados ---
-    # Se enfatiza cómo la metodología de los estudios respalda y aporta a la respuesta a la pregunta del cliente.
     prompt_metodologia = (
         f"Basándote en los estudios reportados en la información de contexto, describe detalladamente la metodología utilizada en dichos estudios. "
-        f"Explica cómo se realizaron los estudios, la forma en que se recolectaron los datos, y cuáles fueron los procedimientos y técnicas aplicadas. "
-        f"Asegúrate de vincular la metodología con la pregunta del cliente: ***{question}***, mostrando cómo estos métodos ayudan a responder dicha pregunta.\n\n"
+        f"Explica cómo se realizaron los estudios, cómo se recolectaron los datos y qué procedimientos y técnicas se aplicaron. "
+        f"Repite la pregunta: ***{question}*** y vincula la metodología de los estudios con la necesidad de responder esta pregunta.\n\n"
         f"Metodología de los Estudios:"
     )
     metodologia = call_gemini_api(prompt_metodologia)
@@ -267,7 +268,7 @@ def generate_final_report(question, db, selected_files):
         f"**Preparado para:** {st.session_state.cliente}\n"
         f"**Fecha de elaboración:** {fecha_actual}\n\n"
     )
-    # Se inserta la sección de metodología de estudios después de la introducción
+    # Insertar la metodología de estudios después del encabezado
     informe_completo = encabezado + "## Metodología de los Estudios\n\n" + metodologia + "\n\n## Informe\n\n" + result2
     informe_completo += "\n\n## Fuentes\n\n"
     for cita_id, cita_info in cita_mapping.items():
@@ -300,15 +301,21 @@ def generate_pdf(content, title="Documento", template_buffer=None):
                 pdf.multi_cell(0, 10, line.encode("latin1", errors="replace").decode("latin1"))
         pdf.ln(5)
     pdf_bytes = pdf.output(dest="S").encode("latin1", errors="replace")
+    
+    # Si se proporciona una plantilla, intentar fusionar
     if template_buffer:
-        template_buffer.seek(0)
-        template_pdf = PyPDF2.PdfReader(template_buffer)
-        merger = PyPDF2.PdfMerger()
-        merger.append(template_pdf)
-        merger.append(BytesIO(pdf_bytes))
-        output_buffer = BytesIO()
-        merger.write(output_buffer)
-        return output_buffer.getvalue()
+        try:
+            template_buffer.seek(0)
+            template_pdf = PyPDF2.PdfReader(template_buffer)
+            merger = PyPDF2.PdfMerger()
+            merger.append(template_pdf)
+            merger.append(BytesIO(pdf_bytes))
+            output_buffer = BytesIO()
+            merger.write(output_buffer)
+            return output_buffer.getvalue()
+        except Exception as e:
+            st.warning(f"Error al fusionar la plantilla con el PDF: {e}. Se usará el PDF sin plantilla.")
+            return pdf_bytes
     return pdf_bytes
 
 
@@ -325,7 +332,7 @@ def ideacion_mode(db, selected_files):
     user_input = st.text_input("Escribe tu consulta o idea:")
     if st.button("Enviar consulta"):
         if not user_input.strip():
-            st.warning("Ingrese un mensaje")
+            st.warning("Ingrese un mensaje para continuar la conversación.")
         else:
             st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
             relevant_info, _ = get_relevant_info(db, user_input, selected_files)
@@ -374,6 +381,9 @@ def main():
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
 
+    # Para depuración: mostrar la cantidad de documentos cargados
+    st.write(f"DEBUG: Documentos cargados: {len(db)}")
+
     selected_files = [doc.get("nombre_archivo") for doc in db]
 
     # Filtrado por marcas en la barra lateral
@@ -383,14 +393,15 @@ def main():
     if selected_marca != "Todas":
         db = [doc for doc in db if doc.get("marca", "").strip().lower() == selected_marca.lower()]
         selected_files = [doc.get("nombre_archivo") for doc in db]
+    st.write(f"DEBUG: Documentos tras filtrar por marca: {len(db)}")
 
     modo = st.sidebar.radio("Seleccione el modo", ["Informe de Informes", "Ideación (Conversar con los datos)"])
     if modo == "Informe de Informes":
         st.markdown("### Ingrese una pregunta para generar el informe")
-        question = st.text_area("Pregunta", height=150, help="Escriba la pregunta.")
+        question = st.text_area("Pregunta", height=150, help="Escriba la pregunta o tema para el informe.")
         if st.button("Generar Informe"):
             if not question.strip():
-                st.warning("Ingrese una pregunta.")
+                st.warning("Ingrese una pregunta para generar el informe.")
             else:
                 st.info("Generando informe...")
                 report, cita_mapping = generate_final_report(question, db, selected_files)
