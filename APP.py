@@ -77,7 +77,7 @@ safety_settings = [
 
 def create_model():
     return genai.GenerativeModel(
-        model_name="gemini-1.5-pro-002",  # Modelo más potente
+        model_name="gemini-2.0-flash-lite",  # Modelo más potente
         generation_config=generation_config,
         safety_settings=safety_settings
     )
@@ -217,45 +217,50 @@ def get_relevant_info(db, question, selected_files):
 def generate_final_report(question, db, selected_files):
     relevant_info, cita_mapping = get_relevant_info(db, question, selected_files)
 
-    # --- PROMPT 1: Resumen Estructurado y Metadatos ---
+    # --- PROMPT 1: Resumen Estructurado y Metadatos (Para el Informe Final) ---
     prompt1 = (
-        f"Con base en la siguiente información extraída de investigaciones (con citas y referencias), responde a la siguiente pregunta:\n"
-        f"'{question}'\n\n"
-        "Organiza la información en un resumen estructurado y extrae metadatos relevantes, incluyendo identificadores de citas (ej. [Cita 1], [Cita 2]) "
-        "que permitan identificar documentos, grupos y hechos concretos dentro de los documentos de origen.  NO INCLUYAS EL TEXTO COMPLETO DE LAS CITAS EN ESTE RESUMEN.\n\n"
-        "Información:\n" + relevant_info
+        f"Responde la siguiente pregunta: ***{question}***\n\n"
+        f"Utiliza la siguiente información de contexto (extractos de documentos de investigación) para elaborar tu respuesta. "
+        f"Organiza la información en un resumen estructurado. Extrae metadatos relevantes que permitan identificar la fuente de la información "
+        f"(documentos, grupos, etc.). Incluye identificadores de citas (ej. [Cita 1], [Cita 2]) para cualquier información que provenga directamente "
+        f"de una cita en los documentos.  NO INCLUYAS EL TEXTO COMPLETO DE LAS CITAS, solo el identificador.\n"
+        f"Si la información no es suficiente para responder completamente la pregunta, indica qué información adicional se necesitaría, "
+        f"pero intenta dar la mejor respuesta posible con la información disponible.\n"
+        f"Prioriza la información que sea más RELEVANTE para responder a la pregunta.  No incluyas detalles irrelevantes o tangenciales.\n"
+        f"Si encuentras información contradictoria o ambigua, indícalo.\n\n"
+        f"Información de Contexto:\n{relevant_info}\n\n"
+        f"Respuesta (Resumen Estructurado y Metadatos):"
     )
     result1 = call_gemini_api(prompt1)
     if result1 is None:
-        return None, None  # Devuelve None para ambos si hay error
+        return None, None
 
-
-      # --- PROMPT 2: Informe Final (PROSA) ---
-
+    # --- PROMPT 2: Informe en Prosa (Parte Principal del Informe Final) ---
     prompt2 = (
-      f"Utilizando el resumen y los metadatos que se muestran a continuación, redacta un informe formal en prosa dirigido a un cliente empresarial.\n"
-      f"El informe final que se genere será el documento oficial que recibirá el cliente.  No incluyas sugerencias o recomendaciones para edición posterior.\n\n"
-      f"El informe DEBE incluir referencias a las citas usando los identificadores generados (ej., [Cita 1], [Cita 2]).  Cuando uses una cita, INCLUYE EL IDENTIFICADOR DE LA CITA.\n"
-      f"Describe de forma precisa los hechos relevantes de la investigación, haciendo referencia a los documentos y grupos de origen según los metadatos.\n\n"
-      f"Resumen y Metadatos:\n{result1}\n\n"  # Usamos las variables correctamente
-      f"Información de contexto completa (para referencia, NO incluir directamente en el informe):\n{relevant_info}\n\n"
-      f"Informe:"
+        f"Redacta la sección principal del informe en prosa, en un tono formal y profesional, dirigido a un cliente empresarial. "
+        f"Esta sección debe responder a la pregunta: ***{question}***\n\n"
+        f"Utiliza la siguiente información (Resumen Estructurado y Metadatos) como base. Incluye referencias a las citas "
+        f"usando los identificadores proporcionados (ej., [Cita 1], [Cita 2]).\n\n"
+        f"Resumen Estructurado y Metadatos:\n{result1}\n\n"
+        f"Sección Principal del Informe (en prosa):"
     )
-
     result2 = call_gemini_api(prompt2)
     if result2 is None:
-      return None, None
+        return None, None
 
-    # --- PROMPT 3:  Generación de Metodología ---
+    # --- PROMPT 3: Metodología (Para el Informe Final) ---
     prompt_metodologia = (
-        "Describe detalladamente la metodología utilizada para generar el informe final a partir de la pregunta del usuario y la información de investigación. "
-        "Explica cómo se extrajo y organizó la información, cómo se identificaron y referenciaron las citas, y cómo se estructuró el informe final en prosa."
+        f"Describe detalladamente la metodología utilizada para generar este informe. "
+        f"Explica cómo se extrajo y organizó la información de los documentos de investigación originales, "
+        f"cómo se identificaron y referenciaron las citas, y cómo se estructuró el informe final. "
+        f"Si se utilizaron técnicas o herramientas específicas (como procesamiento del lenguaje natural, modelos de lenguaje, etc.), menciónalas.\n\n"
+        f"Sección de Metodología (para el informe final):"
     )
     metodologia = call_gemini_api(prompt_metodologia)
     if metodologia is None:
         metodologia = "No se pudo generar la descripción de la metodología."
 
-    # --- Construcción del Informe Final (con Encabezado y Metodología) ---
+    # --- Construcción del Informe Final (Ahora *sin* roles de Gemini) ---
     fecha_actual = datetime.datetime.now().strftime("%d/%m/%Y")
     encabezado = (
         f"# {question}\n"
@@ -265,11 +270,11 @@ def generate_final_report(question, db, selected_files):
     )
     informe_completo = encabezado + "## Metodología\n\n" + metodologia + "\n\n## Informe\n\n" + result2
 
-      # --- Sección de Fuentes (con Callouts) ---
+    # --- Sección de Fuentes (con Callouts) ---
     informe_completo += "\n\n## Fuentes\n\n"
     for cita_id, cita_info in cita_mapping.items():
         informe_completo += f"**{cita_id}**: {cita_info['documento']}, Grupo {cita_info['grupo']}\n"
-        informe_completo += f"> {cita_info['texto']}\n\n"  # Callout
+        informe_completo += f"> {cita_info['texto']}\n\n"
 
     return informe_completo, cita_mapping  # Devuelve el informe y el mapa
 
