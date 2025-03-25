@@ -281,7 +281,8 @@ def generate_pdf_html(content, title="Documento", template_buffer=None):
     # Convertir Markdown a HTML con extras para preservar saltos de línea y otros formatos importantes
     html_content = markdown2.markdown(content, extras=["break-on-newline", "fenced-code-blocks", "tables"])
     # Reemplazar caracteres problemáticos específicos
-    html_content = html_content.replace('\u201c', '-')
+    html_content = html_content.replace('\u201c', ' ')
+    html_content = html_content.replace('\u2013', ' ')
     
     pdf = MyFPDF()
     # Agregar banner si existe
