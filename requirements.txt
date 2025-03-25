@@ -7,3 +7,4 @@ supabase
 boto3
 fpdf
 PyPDF2
+markdown2
