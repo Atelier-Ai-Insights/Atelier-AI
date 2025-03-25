@@ -266,8 +266,9 @@ class MyFPDF(FPDF, HTMLMixin):
     pass
 
 def generate_pdf_html(content, title="Documento", template_buffer=None):
-    # Convertir Markdown a HTML y reemplazar caracteres problemáticos
-    html_content = markdown2.markdown(content)
+    # Convertir Markdown a HTML con extras para preservar saltos de línea y otros formatos importantes
+    html_content = markdown2.markdown(content, extras=["break-on-newline", "fenced-code-blocks", "tables"])
+    # Reemplazar caracteres problemáticos
     html_content = html_content.replace('\u2013', '-')
     
     pdf = MyFPDF()
@@ -286,9 +287,15 @@ def generate_pdf_html(content, title="Documento", template_buffer=None):
             pdf.add_page()
     else:
         pdf.add_page()
+        
     pdf.set_font("Arial", size=12)
     pdf.cell(200, 10, txt=title, ln=True, align="C")
     pdf.ln(10)
+    
+    # Es recomendable encapsular el contenido en párrafos o etiquetas <p> si no lo estuviera ya
+    if not html_content.startswith("<p>"):
+        html_content = f"<p>{html_content}</p>"
+    
     pdf.write_html(html_content)
     pdf_bytes = pdf.output(dest="S").encode("latin1", errors="replace")
     return pdf_bytes
