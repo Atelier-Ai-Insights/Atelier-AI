@@ -34,7 +34,7 @@ ALLOWED_USERS = {
 
 def show_login():
     st.markdown(
-        "<div style='display: flex; flex-direction: column; justify-content: center; align-items: center; height: 80vh;'>",
+        "<div style='display: flex; flex-direction: column; justify-content: center; align-items: center;'>",
         unsafe_allow_html=True,
     )
     st.header("Iniciar Sesión")
