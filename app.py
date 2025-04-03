@@ -1,20 +1,20 @@
-import os
-import json
 import datetime
-import streamlit as st
-import google.generativeai as genai
-import boto3  # pip install boto3
-from fpdf import FPDF, HTMLMixin  # pip install fpdf2
-from supabase import create_client  # pip install supabase
-from io import BytesIO
-import PyPDF2
-import unicodedata
-import tempfile
-import markdown2
 import html  # para el monkey patch
+import json
+import os
+import tempfile
+import unicodedata
+from io import BytesIO
+
+import boto3  # pip install boto3
+import google.generativeai as genai
+import markdown2
+import streamlit as st
+from fpdf import FPDF, HTMLMixin  # pip install fpdf2
 
 # --- Monkey patch para HTML2FPDF ---
 from fpdf.html import HTML2FPDF
+from supabase import create_client  # pip install supabase
 
 if not hasattr(HTML2FPDF, "unescape"):
     HTML2FPDF.unescape = staticmethod(html.unescape)
@@ -172,7 +172,6 @@ def load_database():
             "cliente" in st.session_state
             and normalize_text(st.session_state.cliente) != "nicolas"
         ):
-            original_count = len(data)
             data = [
                 doc
                 for doc in data
@@ -413,7 +412,7 @@ def main():
     st.markdown(
         """
         Bienvenido a **Atelier IA**.
-        
+
         - **Informe de Informes:** Genera un informe formal.
         - **Ideación:** Permite interactuar con los datos.
         """
