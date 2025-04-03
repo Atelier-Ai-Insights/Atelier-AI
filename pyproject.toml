@@ -6,7 +6,7 @@ ignore_missing_imports = true
 namespace_packages = false
 
 [tool.ruff.lint]
-# pyflakes, pycodestyle, isort
+ignore = ["E501"]
 select = ["F", "E", "W", "I001", "B"]
 
 [tool.ruff.lint.isort]
