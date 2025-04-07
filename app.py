@@ -156,7 +156,7 @@ def load_database():
     s3_access_key = st.secrets["S3_ACCESS_KEY"]
     s3_secret_key = st.secrets["S3_SECRET_KEY"]
     bucket_name = st.secrets.get("S3_BUCKET")
-    object_key = "resultado_presentacion (1).json"
+    object_key = "resultado_presentacion.json"
 
     s3_client = boto3.client(
         "s3",
