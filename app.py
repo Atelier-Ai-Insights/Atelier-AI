@@ -1,8 +1,6 @@
 import datetime
 import html  # para el monkey patch
 import json
-import os
-import tempfile
 import unicodedata
 from io import BytesIO
 
@@ -12,15 +10,11 @@ import markdown2
 import streamlit as st
 from fpdf import FPDF, HTMLMixin  # pip install fpdf2
 
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-from reportlab.platypus.doctemplate import LayoutError # Keep LayoutError for catching
-
 # --- Monkey patch para HTML2FPDF ---
 from fpdf.html import HTML2FPDF
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 from supabase import create_client  # pip install supabase
 
 if not hasattr(HTML2FPDF, "unescape"):
@@ -34,12 +28,15 @@ ALLOWED_USERS = {
     "Postobon": "2345",
     "Mondelez": "3456",
     "Meals": "6789",
-    "Atelier": "2468"
+    "Atelier": "2468",
 }
 
 
 def show_login():
-    st.markdown("<div style='display: flex; flex-direction: column; justify-content: center; align-items: center;'>", unsafe_allow_html=True)
+    st.markdown(
+        "<div style='display: flex; flex-direction: column; justify-content: center; align-items: center;'>",
+        unsafe_allow_html=True,
+    )
     st.header("Iniciar Sesión")
     username = st.text_input("Usuario")
     password = st.text_input("Contraseña (4 dígitos)", type="password")
@@ -170,9 +167,12 @@ def load_database():
             aws_secret_access_key=s3_secret_key,
         ).get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response["Body"].read().decode("utf-8"))
-        
+
         # Filtrar por cliente solo si el usuario no es "nicolas" (administrador)
-        if "cliente" in st.session_state and normalize_text(st.session_state.cliente) != "nicolas":
+        if (
+            "cliente" in st.session_state
+            and normalize_text(st.session_state.cliente) != "nicolas"
+        ):
             filtered_data = []
             for doc in data:
                 # Se verifica si el documento tiene el campo "cliente"
@@ -322,21 +322,33 @@ def generate_pdf_html(content, title="Documento", template_buffer=None):
     html_content = html_content.replace("\u201d", " ")
 
     # Crear un buffer para escribir el PDF
-    pdf_buffer = io.BytesIO()
+    pdf_buffer = BytesIO()
     # Inicializar el documento con márgenes razonables
-    doc = SimpleDocTemplate(pdf_buffer, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
+    doc = SimpleDocTemplate(
+        pdf_buffer,
+        pagesize=A4,
+        rightMargin=20,
+        leftMargin=20,
+        topMargin=20,
+        bottomMargin=20,
+    )
 
     # Obtener y ampliar la hoja de estilos base
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name='CustomTitle',
-                               fontName="Helvetica-Bold",
-                               fontSize=18,
-                               alignment=1,
-                               spaceAfter=12))
-    styles.add(ParagraphStyle(name='CustomBody',
-                               fontName="Helvetica",
-                               fontSize=12,
-                               spaceAfter=12))
+    styles.add(
+        ParagraphStyle(
+            name="CustomTitle",
+            fontName="Helvetica-Bold",
+            fontSize=18,
+            alignment=1,
+            spaceAfter=12,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="CustomBody", fontName="Helvetica", fontSize=12, spaceAfter=12
+        )
+    )
 
     elements = []
 
@@ -355,15 +367,17 @@ def generate_pdf_html(content, title="Documento", template_buffer=None):
 
     try:
         elements.append(Paragraph(html_content, styles["CustomBody"]))
-    except Exception as e:
+    except Exception:
         # En caso de error al procesar el HTML, se muestra un mensaje
-        elements.append(Paragraph("Error al procesar el contenido.", styles["CustomBody"]))
+        elements.append(
+            Paragraph("Error al procesar el contenido.", styles["CustomBody"])
+        )
 
     # Construir el documento PDF
     try:
         doc.build(elements)
-    except LayoutError as le:
-        raise Exception(f"Error en el layout del PDF: {le}")
+    except Exception as e:
+        raise Exception(f"Error en el layout del PDF: {e}") from e
 
     pdf_data = pdf_buffer.getvalue()
     pdf_buffer.close()
