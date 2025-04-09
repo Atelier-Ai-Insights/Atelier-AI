@@ -291,7 +291,7 @@ def generate_final_report(question, db, selected_files):
         "- Utiliza la siguiente información de contexto (extractos de documentos de investigación) para elaborar un resumen estructurado.\n"
         "- No incluyas el texto completo de las citas, sino extractos que permitan identificar la fuente.\n"
         "- Incluye metadatos relevantes (documentos, grupos, etc.) e indica en cada caso si la cita sigue el estilo IEEE: al final de la frase se incluye un número (por ejemplo, [1]). "
-        "Posteriormente, en la sección de Referencias, asocia dicho número a la referencia completa (por ejemplo, [1] Autor, 'Título', año, etc.).\n"
+        "- Posteriormente, en la sección de Referencias, asocia dicho número a la referencia completa (por ejemplo, [1] Autor, 'Título', año, etc.). Siempre provee las referencias citadas.\n"
         "- Supón que todas las preguntas se basan en estudios realizados. Resalta y enfatiza los aportes y hallazgos positivos de dichos estudios.\n\n"
         f"Información de Contexto:\n{relevant_info}\n\n"
         "Respuesta (Resumen Estructurado y Metadatos):"
@@ -541,8 +541,8 @@ def main():
     )
     if modo == "Informe de Informes":
         st.markdown("### Ingrese una pregunta para generar el informe")
-        question = st.text_area("Pregunta", height=150, help="Escriba la pregunta o tema para el informe.")
-        additional_info = st.text_area("Personaliza tu informe: Comentalo, firmalo o lo que tu quieras (Opcional)", key="additional_info", height=150)
+        question = st.text_area( "Pregunta", height=150, help="Escriba la pregunta o tema para el informe. Ejemplo: '¿Cuál es la percepción de los consumidores sobre nuestra marca?'", placeholder="Ejemplo: ¿Cuál es la percepción de los consumidores sobre nuestra marca?")
+        additional_info = st.text_area("Personaliza tu informe", placeholder="Ejemplo: Agrega una nota final, firma o comentarios adicionales que desees incluir en el informe final.", key="additional_info",height=150)
         rating = st.sidebar.radio("Calificar el Informe", options=[1, 2, 3, 4, 5], horizontal=True, key="rating")
         if st.button("Generar Informe"):
             if not question.strip():
