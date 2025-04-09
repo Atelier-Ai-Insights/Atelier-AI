@@ -331,8 +331,8 @@ def generate_final_report(question, db, selected_files):
     fecha_actual = datetime.datetime.now().strftime("%d/%m/%Y")
     encabezado = (
         f"# {question}\n"
-        f"**Preparado por:** Atelier IA\n"
-        f"**Preparado para:** {st.session_state.cliente}\n"
+        f"**Preparado por:** Atelier IA\n\n"
+        f"**Preparado para:** {st.session_state.cliente}\n\n"
         f"**Fecha de elaboración:** {fecha_actual}\n\n"
     )
     informe_completo = encabezado + result2  # Se asume que Gemini ya incluye la sección "Fuentes"
