@@ -26,7 +26,8 @@ ALLOWED_USERS = {
     "Nicolas": "1234",
     "Postobon": "2345",
     "Mondelez": "3456",
-    "Meals": "6789",  # Nuevo cliente
+    "Meals": "6789",
+    "Atelier": "2468", # Nuevo cliente
     "Placeholder_1": "4567",
     "Placeholder_2": "5678",
 }
@@ -156,7 +157,7 @@ def load_database():
     s3_access_key = st.secrets["S3_ACCESS_KEY"]
     s3_secret_key = st.secrets["S3_SECRET_KEY"]
     bucket_name = st.secrets.get("S3_BUCKET")
-    object_key = "resultado_presentacion.json"
+    object_key = "resultado_presentacion (1).json"
 
     s3_client = boto3.client(
         "s3",
