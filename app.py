@@ -1,24 +1,14 @@
 import datetime
-import html  # para el monkey patch
+import io
 import json
 import unicodedata
-from io import BytesIO
 
 import boto3  # pip install boto3
 import google.generativeai as genai
 import markdown2
 import streamlit as st
-from fpdf import FPDF, HTMLMixin  # pip install fpdf2
-
-# --- Monkey patch para HTML2FPDF ---
-from fpdf.html import HTML2FPDF
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
-from supabase import create_client  # pip install supabase
-
-if not hasattr(HTML2FPDF, "unescape"):
-    HTML2FPDF.unescape = staticmethod(html.unescape)
+from supabase import create_client
+from weasyprint import HTML
 
 # ==============================
 # Autenticación Personalizada
@@ -199,7 +189,7 @@ def load_template_from_s3():
     object_key_template = "Banner.png"
 
     try:
-        template_buffer = BytesIO()
+        template_buffer = io.BytesIO()
         boto3.client(
             "s3",
             endpoint_url=s3_endpoint_url,
@@ -287,13 +277,6 @@ def generate_final_report(question, db, selected_files):
     return informe_completo
 
 
-# ==============================
-# Clase para PDF con soporte HTML
-# ==============================
-class MyFPDF(FPDF, HTMLMixin):
-    pass
-
-
 def encode_latin1_with_space(text):
     # Recorre cada carácter y verifica si puede codificarse en latin1.
     # Si no puede, lo reemplaza por un espacio en blanco.
@@ -312,77 +295,13 @@ def generate_pdf_html(content, title="Documento", template_buffer=None):
     Genera un PDF a partir de contenido en Markdown y un banner opcional.
     Se emplea ReportLab para construir el documento de forma organizada.
     """
-    # Convertir Markdown a HTML (para usar el mini lenguaje marcado que entiende ReportLab)
     html_content = markdown2.markdown(
         content, extras=["break-on-newline", "fenced-code-blocks", "tables"]
     )
-    # Reemplazar caracteres problemáticos específicos
-    html_content = html_content.replace("\u201c", " ")
-    html_content = html_content.replace("\u2013", " ")
-    html_content = html_content.replace("\u201d", " ")
-
-    # Crear un buffer para escribir el PDF
-    pdf_buffer = BytesIO()
-    # Inicializar el documento con márgenes razonables
-    doc = SimpleDocTemplate(
-        pdf_buffer,
-        pagesize=A4,
-        rightMargin=20,
-        leftMargin=20,
-        topMargin=20,
-        bottomMargin=20,
-    )
-
-    # Obtener y ampliar la hoja de estilos base
-    styles = getSampleStyleSheet()
-    styles.add(
-        ParagraphStyle(
-            name="CustomTitle",
-            fontName="Helvetica-Bold",
-            fontSize=18,
-            alignment=1,
-            spaceAfter=12,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="CustomBody", fontName="Helvetica", fontSize=12, spaceAfter=12
-        )
-    )
-
-    elements = []
-
-    # Agregar banner si se proporciona (se asume que template_buffer es un objeto BytesIO con datos de imagen)
-
-    # Si no hay banner, se puede agregar un pequeño espacio
-    elements.append(Spacer(1, 20))
-
-    # Agregar título centrado
-    elements.append(Paragraph(title, styles["CustomTitle"]))
-    elements.append(Spacer(1, 12))
-
-    # Encapsular el contenido en un párrafo de ReportLab si no lo tiene
-    if not html_content.strip().lower().startswith("<p"):
-        html_content = f"<para>{html_content}</para>"
-
-    try:
-        elements.append(Paragraph(html_content, styles["CustomBody"]))
-    except Exception:
-        # En caso de error al procesar el HTML, se muestra un mensaje
-        elements.append(
-            Paragraph("Error al procesar el contenido.", styles["CustomBody"])
-        )
-
-    # Construir el documento PDF
-    try:
-        doc.build(elements)
-    except Exception as e:
-        raise Exception(f"Error en el layout del PDF: {e}") from e
-
-    pdf_data = pdf_buffer.getvalue()
-    pdf_buffer.close()
-
-    return pdf_data
+    file = io.BytesIO()
+    HTML(string=html_content).write_pdf(file)
+    file.seek(0)
+    return file
 
 
 # ==============================
