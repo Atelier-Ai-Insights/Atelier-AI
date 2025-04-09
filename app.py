@@ -12,6 +12,13 @@ import markdown2
 import streamlit as st
 from fpdf import FPDF, HTMLMixin  # pip install fpdf2
 
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.platypus.doctemplate import LayoutError # Keep LayoutError for catching
+
 # --- Monkey patch para HTML2FPDF ---
 from fpdf.html import HTML2FPDF
 from supabase import create_client  # pip install supabase
@@ -27,15 +34,12 @@ ALLOWED_USERS = {
     "Postobon": "2345",
     "Mondelez": "3456",
     "Meals": "6789",
-    "Atelier": "2468",  # Nuevo cliente
+    "Atelier": "2468"
 }
 
 
 def show_login():
-    st.markdown(
-        "<div style='display: flex; flex-direction: column; justify-content: center; align-items: center;'>",
-        unsafe_allow_html=True,
-    )
+    st.markdown("<div style='display: flex; flex-direction: column; justify-content: center; align-items: center;'>", unsafe_allow_html=True)
     st.header("Iniciar Sesión")
     username = st.text_input("Usuario")
     password = st.text_input("Contraseña (4 dígitos)", type="password")
@@ -43,7 +47,8 @@ def show_login():
         if username in ALLOWED_USERS and password == ALLOWED_USERS[username]:
             st.session_state.logged_in = True
             st.session_state.user = username
-            st.session_state.cliente = username  # Se deduce el cliente según el usuario
+            # Convertir a minúsculas para usar la normalización posteriormente
+            st.session_state.cliente = username.lower()
             st.rerun()
         else:
             st.error("Credenciales incorrectas")
@@ -165,27 +170,21 @@ def load_database():
             aws_secret_access_key=s3_secret_key,
         ).get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response["Body"].read().decode("utf-8"))
-
+        
+        # Filtrar por cliente solo si el usuario no es "nicolas" (administrador)
+        if "cliente" in st.session_state and normalize_text(st.session_state.cliente) != "nicolas":
+            filtered_data = []
+            for doc in data:
+                # Se verifica si el documento tiene el campo "cliente"
+                doc_cliente = normalize_text(doc.get("cliente", ""))
+                usuario_cliente = normalize_text(st.session_state.cliente)
+                if doc_cliente == usuario_cliente:
+                    filtered_data.append(doc)
+            data = filtered_data
     except Exception as e:
         st.error(f"Error al descargar la base de datos desde S3: {e}")
         data = []
     return data
-
-
-def filter_database(data):
-    # Filtrar por cliente solo si el usuario no es "nicolas" (administrador)
-    if getattr(st.session_state, "cliente", "") == "Nicolas":
-        return data
-
-    filtered_data = []
-    for doc in data:
-        # Se verifica si el documento tiene el campo "cliente"
-        doc_cliente = normalize_text(doc.get("cliente", ""))
-        usuario_cliente = normalize_text(st.session_state.cliente)
-        if doc_cliente == usuario_cliente:
-            filtered_data.append(doc)
-
-    return filtered_data
 
 
 # =====================================================
@@ -309,7 +308,11 @@ def encode_latin1_with_space(text):
 
 
 def generate_pdf_html(content, title="Documento", template_buffer=None):
-    # Convertir Markdown a HTML con extras para preservar saltos de línea y otros formatos importantes
+    """
+    Genera un PDF a partir de contenido en Markdown y un banner opcional.
+    Se emplea ReportLab para construir el documento de forma organizada.
+    """
+    # Convertir Markdown a HTML (para usar el mini lenguaje marcado que entiende ReportLab)
     html_content = markdown2.markdown(
         content, extras=["break-on-newline", "fenced-code-blocks", "tables"]
     )
@@ -318,38 +321,54 @@ def generate_pdf_html(content, title="Documento", template_buffer=None):
     html_content = html_content.replace("\u2013", " ")
     html_content = html_content.replace("\u201d", " ")
 
-    pdf = MyFPDF()
-    # Agregar banner si existe
-    if template_buffer:
-        try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-                tmp.write(template_buffer.getvalue())
-                tmp_path = tmp.name
-            pdf.add_page()
-            pdf.image(tmp_path, x=10, y=8, w=pdf.w - 20)
-            os.remove(tmp_path)
-            pdf.ln(20)
-        except Exception as e:
-            st.warning(f"Error al agregar el banner: {e}")
-            pdf.add_page()
-    else:
-        pdf.add_page()
+    # Crear un buffer para escribir el PDF
+    pdf_buffer = io.BytesIO()
+    # Inicializar el documento con márgenes razonables
+    doc = SimpleDocTemplate(pdf_buffer, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
 
-    pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt=title, ln=True, align="C")
-    pdf.ln(10)
+    # Obtener y ampliar la hoja de estilos base
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name='CustomTitle',
+                               fontName="Helvetica-Bold",
+                               fontSize=18,
+                               alignment=1,
+                               spaceAfter=12))
+    styles.add(ParagraphStyle(name='CustomBody',
+                               fontName="Helvetica",
+                               fontSize=12,
+                               spaceAfter=12))
 
-    # Asegurarse de que el contenido HTML esté encapsulado en párrafos
-    if not html_content.startswith("<p>"):
-        html_content = f"<p>{html_content}</p>"
+    elements = []
 
-    pdf.write_html(html_content)
-    # Obtener el contenido PDF generado en una cadena
-    pdf_output = pdf.output(dest="S")
-    # Reemplazar los caracteres que no se pueden codificar por espacios en blanco
-    safe_pdf_output = encode_latin1_with_space(pdf_output)
-    pdf_bytes = safe_pdf_output.encode("latin1")
-    return pdf_bytes
+    # Agregar banner si se proporciona (se asume que template_buffer es un objeto BytesIO con datos de imagen)
+
+    # Si no hay banner, se puede agregar un pequeño espacio
+    elements.append(Spacer(1, 20))
+
+    # Agregar título centrado
+    elements.append(Paragraph(title, styles["CustomTitle"]))
+    elements.append(Spacer(1, 12))
+
+    # Encapsular el contenido en un párrafo de ReportLab si no lo tiene
+    if not html_content.strip().lower().startswith("<p"):
+        html_content = f"<para>{html_content}</para>"
+
+    try:
+        elements.append(Paragraph(html_content, styles["CustomBody"]))
+    except Exception as e:
+        # En caso de error al procesar el HTML, se muestra un mensaje
+        elements.append(Paragraph("Error al procesar el contenido.", styles["CustomBody"]))
+
+    # Construir el documento PDF
+    try:
+        doc.build(elements)
+    except LayoutError as le:
+        raise Exception(f"Error en el layout del PDF: {le}")
+
+    pdf_data = pdf_buffer.getvalue()
+    pdf_buffer.close()
+
+    return pdf_data
 
 
 # ==============================
@@ -425,12 +444,10 @@ def main():
         st.warning("No se pudo cargar el banner. Se generarán PDFs sin banner.")
 
     try:
-        full_db = load_database()
+        db = load_database()
     except Exception as e:
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
-
-    db = filter_database(full_db)
 
     st.write(f"DEBUG: Documentos cargados: {len(db)}")
     selected_files = [doc.get("nombre_archivo") for doc in db]
