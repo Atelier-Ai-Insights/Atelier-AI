@@ -5,6 +5,7 @@ import unicodedata
 from io import BytesIO
 import os
 import tempfile
+from bs4 import BeautifulSoup  # pip install beautifulsoup4
 
 import boto3  # pip install boto3
 import google.generativeai as genai
@@ -140,6 +141,49 @@ def normalize_text(text):
         return ""
     normalized = unicodedata.normalize("NFD", text)
     return "".join(c for c in normalized if unicodedata.category(c) != "Mn").lower()
+
+
+def add_markdown_content(pdf, markdown_text):
+    """
+    Convierte un texto en Markdown a HTML y lo procesa para agregar al PDF.
+    Se reconocen encabezados (h1, h2, …), párrafos y listas (ordenadas y desordenadas).
+    """
+    # Convertir Markdown a HTML
+    html_text = markdown2.markdown(markdown_text, extras=["fenced-code-blocks", "tables", "break-on-newline"])
+    soup = BeautifulSoup(html_text, "html.parser")
+    
+    # Si el contenido tiene un <body> (algunos conversores lo agregan) usamos su contenido,
+    # de lo contrario, iteramos sobre el soup entero.
+    container = soup.body if soup.body else soup
+
+    for elem in container.children:
+        if elem.name:
+            if elem.name.startswith("h"):
+                # Extraer el nivel del encabezado; h1 => level 1, etc.
+                try:
+                    level = int(elem.name[1])
+                except:
+                    level = 1
+                pdf.add_title(elem.get_text(strip=True), level=level)
+            elif elem.name == "p":
+                pdf.add_paragraph(elem.get_text(strip=True))
+            elif elem.name == "ul":
+                # Listas sin ordenar
+                for li in elem.find_all("li"):
+                    pdf.add_paragraph("• " + li.get_text(strip=True))
+            elif elem.name == "ol":
+                # Listas ordenadas: Agregar número de ítem
+                for idx, li in enumerate(elem.find_all("li"), 1):
+                    pdf.add_paragraph(f"{idx}. {li.get_text(strip=True)}")
+            else:
+                # Otros elementos se tratan como párrafos
+                pdf.add_paragraph(elem.get_text(strip=True))
+        else:
+            # Texto plano fuera de etiquetas
+            text = elem.string
+            if text and text.strip():
+                pdf.add_paragraph(text.strip())
+
 
 # ==============================
 # CARGA DEL ARCHIVO JSON DESDE S3 (para alimentar al modelo)
@@ -387,6 +431,7 @@ class PDFReport:
 
 def generate_pdf_html(content, title="Documento Final", banner_path=None, output_filename=None):
     # Usamos un archivo temporal para generar el PDF en memoria.
+    import tempfile
     if output_filename is None:
         tmp_file = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
         output_filename = tmp_file.name
@@ -400,9 +445,8 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None, output
         pdf.elements.append(Spacer(1, 20))
     
     pdf.add_title(title, level=1)
-    for parrafo in content.split("\n\n"):
-        if parrafo.strip():
-            pdf.add_paragraph(parrafo.strip())
+    # En lugar de dividir el contenido por "\n\n", se agrega el contenido Markdown formateado.
+    add_markdown_content(pdf, content)
     
     pdf.build_pdf()
     
