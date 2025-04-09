@@ -318,7 +318,7 @@ def generate_final_report(question, db, selected_files):
     "- Basándote en los hallazgos, presenta conclusiones y recomendaciones estratégicas que aborden la pregunta del cliente.\n"
     "- Esta sección debe integrar la interpretación de la pregunta y los resultados de los estudios, generando una orientación positiva y constructiva sobre próximas acciones.\n\n"
     "5. **Referencias**:\n"
-    "- Lista todas las referencias utilizadas en formato IEEE. Cada referencia debe comenzar en una línea nueva (usa \n\n para el cambio de linea o una bullet list) con un identificador numérico entre corchetes (por ejemplo, [1]) seguido de la referencia completa.\n"
+    "- Lista todas las referencias utilizadas en formato IEEE. Cada referencia debe comenzar en una línea nueva (como un bulletlist) con un identificador numérico entre corchetes (por ejemplo, [1]) seguido de la referencia completa.\n"
     "- Las referencias deben provenir de los documentos citados en el resumen estructurado.\n\n"
     "Utiliza a continuación el siguiente resumen estructurado y metadatos, obtenido de los estudios e información contextual proporcionada:\n\n"
     f"Resumen Estructurado y Metadatos:\n{result1}\n\n"
@@ -525,7 +525,7 @@ def main():
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
 
-    st.write(f"DEBUG: Documentos cargados: {len(db)}")
+    st.write(f"Documentos cargados para el análisis: {len(db)}")
     selected_files = [doc.get("nombre_archivo") for doc in db]
 
     # Filtrado por marcas en la barra lateral
@@ -535,7 +535,6 @@ def main():
     if selected_marca != "Todas":
         db = [doc for doc in db if normalize_text(doc.get("marca", "")) == normalize_text(selected_marca)]
         selected_files = [doc.get("nombre_archivo") for doc in db]
-    st.write(f"DEBUG: Documentos tras filtrar por marca: {len(db)}")
 
     modo = st.sidebar.radio(
         "Seleccione el modo", ["Informe de Informes", "Ideación (Conversar con los datos)"]
