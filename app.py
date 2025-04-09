@@ -3,20 +3,26 @@ import html  # para el monkey patch
 import json
 import unicodedata
 from io import BytesIO
+import os
+import tempfile
 
 import boto3  # pip install boto3
 import google.generativeai as genai
 import markdown2
 import streamlit as st
-from fpdf import FPDF, HTMLMixin  # pip install fpdf2
+# --- Los siguientes imports de fpdf y HTMLMixin no se usan en esta versión (ESTÁN MARCADOS COMO UNUSED) ---
+from fpdf import FPDF, HTMLMixin  # UNUSED: Se reemplaza por ReportLab
+from fpdf.html import HTML2FPDF  # UNUSED: Se reemplaza por ReportLab
 
-# --- Monkey patch para HTML2FPDF ---
-from fpdf.html import HTML2FPDF
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from reportlab.lib.units import mm
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.platypus.doctemplate import LayoutError
 from supabase import create_client  # pip install supabase
 
+# Monkey patch para HTML2FPDF (ya no es necesario, pero se conserva)
 if not hasattr(HTML2FPDF, "unescape"):
     HTML2FPDF.unescape = staticmethod(html.unescape)
 
@@ -31,7 +37,6 @@ ALLOWED_USERS = {
     "Atelier": "2468",
 }
 
-
 def show_login():
     st.markdown(
         "<div style='display: flex; flex-direction: column; justify-content: center; align-items: center;'>",
@@ -44,7 +49,7 @@ def show_login():
         if username in ALLOWED_USERS and password == ALLOWED_USERS[username]:
             st.session_state.logged_in = True
             st.session_state.user = username
-            # Convertir a minúsculas para usar la normalización posteriormente
+            # Convertir a minúsculas para normalización posterior
             st.session_state.cliente = username.lower()
             st.rerun()
         else:
@@ -52,13 +57,11 @@ def show_login():
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
-
 def logout():
     if st.sidebar.button("Cerrar Sesión"):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.rerun()
-
 
 # ==============================
 # CONFIGURACIÓN DE LA API DE GEMINI
@@ -66,11 +69,9 @@ def logout():
 api_keys = [st.secrets["API_KEY_1"], st.secrets["API_KEY_2"], st.secrets["API_KEY_3"]]
 current_api_key_index = 0
 
-
 def configure_api():
     global current_api_key_index
     genai.configure(api_key=api_keys[current_api_key_index])
-
 
 configure_api()
 
@@ -87,7 +88,6 @@ safety_settings = [
     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
 ]
 
-
 def create_model():
     return genai.GenerativeModel(
         model_name="gemini-2.0-flash-lite",
@@ -95,16 +95,13 @@ def create_model():
         safety_settings=safety_settings,
     )
 
-
 model = create_model()
-
 
 def switch_api_key():
     global current_api_key_index, model
     current_api_key_index = (current_api_key_index + 1) % len(api_keys)
     configure_api()
     model = create_model()
-
 
 def call_gemini_api(prompt):
     try:
@@ -119,12 +116,10 @@ def call_gemini_api(prompt):
             return None
     return response.text
 
-
 # ==============================
 # CONEXIÓN A SUPABASE PARA GUARDAR CONSULTAS
 # ==============================
 supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
-
 
 def log_query_event(query_text, mode, rating=None):
     data = {
@@ -137,7 +132,6 @@ def log_query_event(query_text, mode, rating=None):
     }
     supabase.table("queries").insert(data).execute()
 
-
 # ==============================
 # Normalización de Texto
 # ==============================
@@ -146,7 +140,6 @@ def normalize_text(text):
         return ""
     normalized = unicodedata.normalize("NFD", text)
     return "".join(c for c in normalized if unicodedata.category(c) != "Mn").lower()
-
 
 # ==============================
 # CARGA DEL ARCHIVO JSON DESDE S3 (para alimentar al modelo)
@@ -158,7 +151,6 @@ def load_database():
     s3_secret_key = st.secrets["S3_SECRET_KEY"]
     bucket_name = st.secrets.get("S3_BUCKET")
     object_key = "resultado_presentacion (1).json"
-
     try:
         response = boto3.client(
             "s3",
@@ -167,15 +159,11 @@ def load_database():
             aws_secret_access_key=s3_secret_key,
         ).get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response["Body"].read().decode("utf-8"))
-
         # Filtrar por cliente solo si el usuario no es "nicolas" (administrador)
-        if (
-            "cliente" in st.session_state
-            and normalize_text(st.session_state.cliente) != "nicolas"
-        ):
+        if ("cliente" in st.session_state and 
+            normalize_text(st.session_state.cliente) != "nicolas"):
             filtered_data = []
             for doc in data:
-                # Se verifica si el documento tiene el campo "cliente"
                 doc_cliente = normalize_text(doc.get("cliente", ""))
                 usuario_cliente = normalize_text(st.session_state.cliente)
                 if doc_cliente == usuario_cliente:
@@ -185,7 +173,6 @@ def load_database():
         st.error(f"Error al descargar la base de datos desde S3: {e}")
         data = []
     return data
-
 
 # =====================================================
 # FUNCION PARA OBTENER IMAGEN DE S3 (Para la plantilla/banner)
@@ -197,7 +184,6 @@ def load_template_from_s3():
     s3_secret_key = st.secrets["S3_SECRET_KEY"]
     bucket_name = st.secrets.get("S3_BUCKET")
     object_key_template = "Banner.png"
-
     try:
         template_buffer = BytesIO()
         boto3.client(
@@ -217,13 +203,12 @@ def load_template_from_s3():
         st.error(f"Error al descargar la plantilla: {e}")
         return None
 
-
 # ==============================
 # Función para obtener la información relevante
 # ==============================
 def get_relevant_info(db, question, selected_files):
     all_text = ""
-    # Se construye el texto de contexto que se entregará a Gemini.
+    # Se construye el texto de contexto a entregar a Gemini.
     for pres in db:
         if pres.get("nombre_archivo") in selected_files:
             all_text += f"Documento: {pres.get('titulo_estudio', pres.get('nombre_archivo', 'Sin nombre'))}\n"
@@ -242,33 +227,58 @@ def get_relevant_info(db, question, selected_files):
             all_text += "\n---\n\n"
     return all_text
 
-
 # ==============================
 # Generación del Informe Final
 # ==============================
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
 
+    # Prompt 1: Genera el resumen estructurado con metadatos.
     prompt1 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
-        f"Repite la pregunta: ***{question}***. Asegúrate de que la respuesta esté completamente alineada con ella. "
-        f"Utiliza la siguiente información de contexto (extractos de documentos de investigación) para elaborar un resumen estructurado. "
-        f"Incluye metadatos relevantes (documentos, grupos, etc.) e indica en cada caso si proviene de una cita (solo el indicador '[Cita]'). "
-        f"No incluyas el texto completo de las citas.\n\n"
+        "Instrucciones:\n"
+        "- Reitera la pregunta del cliente: ***{question}*** y asegúrate de que la respuesta esté alineada con ella.\n"
+        "- El informe se organizará en cinco secciones: \n"
+        "   1. Introducción\n"
+        "   2. Enfoque metodológico\n"
+        "   3. Principales hallazgos\n"
+        "   4. Planteamiento estratégico (conclusiones)\n"
+        "   5. Referencias\n\n"
+        "- Utiliza la siguiente información de contexto (extractos de documentos de investigación) para elaborar un resumen estructurado.\n"
+        "- No incluyas el texto completo de las citas, sino extractos que permitan identificar la fuente.\n"
+        "- Incluye metadatos relevantes (documentos, grupos, etc.) e indica en cada caso si la cita sigue el estilo IEEE: al final de la frase se incluye un número (por ejemplo, [1]). "
+        "Posteriormente, en la sección de Referencias, asocia dicho número a la referencia completa (por ejemplo, [1] Autor, 'Título', año, etc.).\n"
+        "- Supón que todas las preguntas se basan en estudios realizados. Resalta y enfatiza los aportes y hallazgos positivos de dichos estudios.\n\n"
         f"Información de Contexto:\n{relevant_info}\n\n"
-        f"Respuesta (Resumen Estructurado y Metadatos):"
+        "Respuesta (Resumen Estructurado y Metadatos):"
     )
     result1 = call_gemini_api(prompt1)
     if result1 is None:
         return None
 
+    # Prompt 2: Redacta la sección principal del informe en prosa utilizando el resumen anterior.
     prompt2 = (
-        f"Redacta la sección principal del informe en prosa, en un tono formal y profesional, dirigido a un cliente empresarial. "
-        f"Repite la pregunta: ***{question}***. La respuesta debe estar completamente alineada con la pregunta del cliente. "
-        f"Utiliza el siguiente resumen estructurado y metadatos como base. Al final, agrega una sección titulada 'Fuentes', "
-        f"donde cada línea comience con '[Cita X] - ' seguido del texto de la cita. En el cuerpo del informe, las citas deben aparecer como call-out, precedidas por '>>'.\n\n"
-        f"Resumen Estructurado y Metadatos:\n{result1}\n\n"
-        f"Sección Principal del Informe (en prosa) con Fuentes:"
+    f"Pregunta del Cliente: ***{question}***\n\n"
+    "Instrucciones:\n"
+    "Redacta el informe final en prosa, utilizando un formato Markdown claro y coherente. El informe debe organizarse en cinco secciones bien delimitadas, describiendo a profundidad el contenido y la procedencia de cada una:\n\n"
+    "1. **Introducción**:\n"
+    "- Interpreta y analiza la pregunta del cliente, explicando su significado y relevancia.\n"
+    "- Esta sección debe fundamentarse en la interpretación de la pregunta junto con la información de contexto proporcionada.\n\n"
+    "2. **Enfoque Metodológico**:\n"
+    "- Describe detalladamente cómo se realizaron los estudios utilizados, incluyendo el diseño del estudio, los procedimientos y el alcance de la investigación.\n"
+    "- El contenido debe extraerse de los metadatos y resúmenes técnicos incluidos en el resumen estructurado.\n\n"
+    "3. **Principales Hallazgos**:\n"
+    "- Resume y sintetiza los descubrimientos más relevantes que responden a la pregunta del cliente.\n"
+    "- Explica de manera clara cómo cada hallazgo contribuye a la resolución de la pregunta, basándote en extractos de la información de contexto.\n\n"
+    "4. **Planteamiento Estratégico (Conclusiones)**:\n"
+    "- Basándote en los hallazgos, presenta conclusiones y recomendaciones estratégicas que aborden la pregunta del cliente.\n"
+    "- Esta sección debe integrar la interpretación de la pregunta y los resultados de los estudios, generando una orientación positiva y constructiva sobre próximas acciones.\n\n"
+    "5. **Referencias**:\n"
+    "- Lista todas las referencias utilizadas en formato IEEE. Cada referencia debe comenzar en una línea nueva con un identificador numérico entre corchetes (por ejemplo, [1]) seguido de la referencia completa.\n"
+    "- Las referencias deben provenir de los documentos citados en el resumen estructurado.\n\n"
+    "Utiliza a continuación el siguiente resumen estructurado y metadatos, obtenido de los estudios e información contextual proporcionada:\n\n"
+    f"Resumen Estructurado y Metadatos:\n{result1}\n\n"
+    "Por favor, redacta el informe completo respetando lo solicitado en los puntos anteriores, en un estilo profesional, claro y coherente, utilizando Markdown."
     )
     result2 = call_gemini_api(prompt2)
     if result2 is None:
@@ -281,109 +291,126 @@ def generate_final_report(question, db, selected_files):
         f"**Preparado para:** {st.session_state.cliente}\n"
         f"**Fecha de elaboración:** {fecha_actual}\n\n"
     )
-    informe_completo = (
-        encabezado + result2
-    )  # Se asume que Gemini ya incluye la sección "Fuentes"
+    informe_completo = encabezado + result2  # Se asume que Gemini ya incluye la sección "Fuentes"
     return informe_completo
 
-
 # ==============================
-# Clase para PDF con soporte HTML
+# NUEVA IMPLEMENTACIÓN DEL PDF CON REPORTLAB
 # ==============================
-class MyFPDF(FPDF, HTMLMixin):
-    pass
+# Función única para limpiar el texto (duplicada se ha unificado)
+def clean_text(text):
+    if not isinstance(text, str):
+        text = str(text)
+    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
+class PDFReport:
+    def __init__(self, filename):
+        self.filename = filename
+        self.elements = []
+        self.styles = getSampleStyleSheet()
+        self.doc = SimpleDocTemplate(
+            self.filename,
+            pagesize=A4,
+            rightMargin=12*mm,
+            leftMargin=12*mm,
+            topMargin=45*mm,
+            bottomMargin=18*mm
+        )
+        # Estilos personalizados
+        self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], alignment=1, spaceAfter=12))
+        self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['Heading2'], spaceBefore=10, spaceAfter=6))
+        self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], leading=12, alignment=4))
+        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], alignment=2, textColor=colors.grey))
 
-def encode_latin1_with_space(text):
-    # Recorre cada carácter y verifica si puede codificarse en latin1.
-    # Si no puede, lo reemplaza por un espacio en blanco.
-    result = []
-    for char in text:
+    def header(self, canvas, doc):
+        canvas.saveState()
+        banner_path = os.path.join(os.getcwd(), "Banner.png")
+        if os.path.isfile(banner_path):
+            try:
+                img_width, img_height = 210 * mm, 35 * mm
+                canvas.drawImage(banner_path, 0, A4[1] - img_height, width=img_width, height=img_height,
+                                   preserveAspectRatio=True, anchor='n')
+            except Exception as e:
+                canvas.setFont('Helvetica-Bold', 14)
+                canvas.drawCentredString(A4[0] / 2.0, A4[1] - 20 * mm, clean_text("Informe de Análisis"))
+        else:
+            canvas.setFont('Helvetica-Bold', 14)
+            canvas.drawCentredString(A4[0] / 2.0, A4[1] - 20 * mm, clean_text("Informe de Análisis"))
+        canvas.setStrokeColor(colors.lightgrey)
+        canvas.line(12 * mm, A4[1] - 40 * mm, A4[0] - 12 * mm, A4[1] - 40 * mm)
+        canvas.restoreState()
+
+    def footer(self, canvas, doc):
+        canvas.saveState()
+        footer_text = f"Generado: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} | Página {doc.page}"
+        p = Paragraph(footer_text, self.styles['CustomFooter'])
+        w, h = p.wrap(doc.width, doc.bottomMargin)
+        p.drawOn(canvas, doc.leftMargin, h)
+        canvas.restoreState()
+
+    def header_footer(self, canvas, doc):
+        self.header(canvas, doc)
+        self.footer(canvas, doc)
+
+    def add_paragraph(self, text, style='CustomBodyText'):
+        text = clean_text(text)
+        p = Paragraph(text, self.styles[style])
+        self.elements.append(p)
+        self.elements.append(Spacer(1, 6))
+
+    def add_title(self, text, level=1):
+        text = clean_text(text)
+        style = 'CustomTitle' if level == 1 else 'CustomHeading'
+        p = Paragraph(text, self.styles[style])
+        self.elements.append(p)
+        self.elements.append(Spacer(1, 12))
+
+    def insert_banner(self, banner_path, max_width_mm=210, max_height_mm=35):
+        if os.path.isfile(banner_path):
+            try:
+                rl_img = RLImage(banner_path, width=max_width_mm * mm, height=max_height_mm * mm)
+                rl_img.hAlign = 'CENTER'
+                self.elements.append(rl_img)
+                self.elements.append(Spacer(1, 10))
+            except Exception as e:
+                self.add_paragraph(f"Error al insertar el banner: {e}")
+        else:
+            self.add_paragraph("Banner no encontrado.")
+
+    def build_pdf(self):
         try:
-            char.encode("latin1")
-            result.append(char)
-        except UnicodeEncodeError:
-            result.append(" ")
-    return "".join(result)
+            self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
+        except LayoutError as e:
+            raise Exception(f"Error en el layout del PDF: {e}")
+        except Exception as e:
+            raise Exception(f"Error inesperado al generar el PDF: {e}")
 
-
-def generate_pdf_html(content, title="Documento", template_buffer=None):
-    """
-    Genera un PDF a partir de contenido en Markdown y un banner opcional.
-    Se emplea ReportLab para construir el documento de forma organizada.
-    """
-    # Convertir Markdown a HTML (para usar el mini lenguaje marcado que entiende ReportLab)
-    html_content = markdown2.markdown(
-        content, extras=["break-on-newline", "fenced-code-blocks", "tables"]
-    )
-    # Reemplazar caracteres problemáticos específicos
-    html_content = html_content.replace("\u201c", " ")
-    html_content = html_content.replace("\u2013", " ")
-    html_content = html_content.replace("\u201d", " ")
-
-    # Crear un buffer para escribir el PDF
-    pdf_buffer = BytesIO()
-    # Inicializar el documento con márgenes razonables
-    doc = SimpleDocTemplate(
-        pdf_buffer,
-        pagesize=A4,
-        rightMargin=20,
-        leftMargin=20,
-        topMargin=20,
-        bottomMargin=20,
-    )
-
-    # Obtener y ampliar la hoja de estilos base
-    styles = getSampleStyleSheet()
-    styles.add(
-        ParagraphStyle(
-            name="CustomTitle",
-            fontName="Helvetica-Bold",
-            fontSize=18,
-            alignment=1,
-            spaceAfter=12,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="CustomBody", fontName="Helvetica", fontSize=12, spaceAfter=12
-        )
-    )
-
-    elements = []
-
-    # Agregar banner si se proporciona (se asume que template_buffer es un objeto BytesIO con datos de imagen)
-
-    # Si no hay banner, se puede agregar un pequeño espacio
-    elements.append(Spacer(1, 20))
-
-    # Agregar título centrado
-    elements.append(Paragraph(title, styles["CustomTitle"]))
-    elements.append(Spacer(1, 12))
-
-    # Encapsular el contenido en un párrafo de ReportLab si no lo tiene
-    if not html_content.strip().lower().startswith("<p"):
-        html_content = f"<para>{html_content}</para>"
-
-    try:
-        elements.append(Paragraph(html_content, styles["CustomBody"]))
-    except Exception:
-        # En caso de error al procesar el HTML, se muestra un mensaje
-        elements.append(
-            Paragraph("Error al procesar el contenido.", styles["CustomBody"])
-        )
-
-    # Construir el documento PDF
-    try:
-        doc.build(elements)
-    except Exception as e:
-        raise Exception(f"Error en el layout del PDF: {e}") from e
-
-    pdf_data = pdf_buffer.getvalue()
-    pdf_buffer.close()
-
-    return pdf_data
-
+def generate_pdf_html(content, title="Documento Final", banner_path=None, output_filename=None):
+    # Usamos un archivo temporal para generar el PDF en memoria.
+    if output_filename is None:
+        tmp_file = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        output_filename = tmp_file.name
+        tmp_file.close()
+    pdf = PDFReport(output_filename)
+    
+    # Insertar banner si se proporciona (se supone que banner_path es ruta del archivo)
+    if banner_path:
+        pdf.insert_banner(banner_path)
+    else:
+        pdf.elements.append(Spacer(1, 20))
+    
+    pdf.add_title(title, level=1)
+    for parrafo in content.split("\n\n"):
+        if parrafo.strip():
+            pdf.add_paragraph(parrafo.strip())
+    
+    pdf.build_pdf()
+    
+    with open(output_filename, "rb") as f:
+        pdf_bytes = f.read()
+    
+    os.remove(output_filename)
+    return pdf_bytes
 
 # ==============================
 # MODO DE IDEACIÓN (CHAT INTERACTIVO)
@@ -400,32 +427,24 @@ def ideacion_mode(db, selected_files):
         if not user_input.strip():
             st.warning("Ingrese un mensaje para continuar la conversación.")
         else:
-            st.session_state.chat_history.append(
-                {"role": "Usuario", "message": user_input}
-            )
+            st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
             relevant_info = get_relevant_info(db, user_input, selected_files)
             conversation_prompt = "Historial de conversación:\n"
             for msg in st.session_state.chat_history:
                 conversation_prompt += f"{msg['role']}: {msg['message']}\n"
             conversation_prompt += (
-                "\nInformación de contexto:\n"
-                + relevant_info
-                + "\n\nGenera una respuesta detallada y coherente."
+                "\nInformación de contexto:\n" + relevant_info + "\n\nGenera una respuesta detallada y coherente."
             )
             respuesta = call_gemini_api(conversation_prompt)
             if respuesta is None:
                 st.error("Error al generar la respuesta.")
             else:
-                st.session_state.chat_history.append(
-                    {"role": "Asistente", "message": respuesta}
-                )
+                st.session_state.chat_history.append({"role": "Asistente", "message": respuesta})
                 st.markdown(f"**Asistente:** {respuesta}")
                 log_query_event(user_input, mode="Ideacion")
     if st.session_state.chat_history:
         pdf_bytes = generate_pdf_html(
-            "\n".join(
-                [f"{m['role']}: {m['message']}" for m in st.session_state.chat_history]
-            ),
+            "\n".join([f"{m['role']}: {m['message']}" for m in st.session_state.chat_history]),
             title="Historial de Chat",
         )
         st.download_button(
@@ -434,7 +453,6 @@ def ideacion_mode(db, selected_files):
             file_name="chat.pdf",
             mime="application/pdf",
         )
-
 
 # ==============================
 # Aplicación Principal
@@ -467,41 +485,22 @@ def main():
     selected_files = [doc.get("nombre_archivo") for doc in db]
 
     # Filtrado por marcas en la barra lateral
-    marcas = sorted(
-        {doc.get("marca", "").strip() for doc in db if doc.get("marca", "").strip()}
-    )
+    marcas = sorted({doc.get("marca", "").strip() for doc in db if doc.get("marca", "").strip()})
     marcas.insert(0, "Todas")
     selected_marca = st.sidebar.selectbox("Seleccione la marca", marcas)
     if selected_marca != "Todas":
-        db = [
-            doc
-            for doc in db
-            if normalize_text(doc.get("marca", "")) == normalize_text(selected_marca)
-        ]
+        db = [doc for doc in db if normalize_text(doc.get("marca", "")) == normalize_text(selected_marca)]
         selected_files = [doc.get("nombre_archivo") for doc in db]
     st.write(f"DEBUG: Documentos tras filtrar por marca: {len(db)}")
 
     modo = st.sidebar.radio(
-        "Seleccione el modo",
-        ["Informe de Informes", "Ideación (Conversar con los datos)"],
+        "Seleccione el modo", ["Informe de Informes", "Ideación (Conversar con los datos)"]
     )
     if modo == "Informe de Informes":
         st.markdown("### Ingrese una pregunta para generar el informe")
-        question = st.text_area(
-            "Pregunta", height=150, help="Escriba la pregunta o tema para el informe."
-        )
-        # Widgets siempre visibles en la barra lateral para información adicional y rating
-        additional_info = st.sidebar.text_area(
-            "Agregar Información Adicional (Opcional)",
-            key="additional_info",
-            height=150,
-        )
-        rating = st.sidebar.radio(
-            "Calificar el Informe",
-            options=[1, 2, 3, 4, 5],
-            horizontal=True,
-            key="rating",
-        )
+        question = st.text_area("Pregunta", height=150, help="Escriba la pregunta o tema para el informe.")
+        additional_info = st.sidebar.text_area("Agregar Información Adicional (Opcional)", key="additional_info", height=150)
+        rating = st.sidebar.radio("Calificar el Informe", options=[1, 2, 3, 4, 5], horizontal=True, key="rating")
         if st.button("Generar Informe"):
             if not question.strip():
                 st.warning("Ingrese una pregunta para generar el informe.")
@@ -514,18 +513,24 @@ def main():
                         return
                     st.session_state.report = report
                 st.markdown("### Informe Final")
-                edited_report = st.text_area(
-                    "Editar Informe (Opcional)",
-                    value=st.session_state.report,
-                    key="edited_report",
-                    height=300,
-                )
+                edited_report = st.text_area("Editar Informe (Opcional)", value=st.session_state.report, key="edited_report", height=300)
                 final_report_content = edited_report + "\n\n" + additional_info
+                # Aquí usamos generate_pdf_html para generar el PDF final con ReportLab y el banner (si se pudo descargar)
+                # Notar que template_buffer es del banner; se guarda temporalmente en disco.
+                banner_file = None
+                if template_buffer is not None:
+                    # Guardamos el buffer en un archivo temporal para que PDFReport lo pueda usar.
+                    tmp_banner = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                    tmp_banner.write(template_buffer.getvalue())
+                    tmp_banner.close()
+                    banner_file = tmp_banner.name
                 pdf_bytes = generate_pdf_html(
                     final_report_content,
                     title="Informe Final",
-                    template_buffer=template_buffer,
+                    banner_path=banner_file
                 )
+                if banner_file and os.path.exists(banner_file):
+                    os.remove(banner_file)  # Limpiar archivo temporal del banner
                 st.download_button(
                     "Descargar Informe en PDF",
                     data=pdf_bytes,
@@ -535,7 +540,6 @@ def main():
                 log_query_event(question, mode="Informe", rating=rating)
     else:
         ideacion_mode(db, selected_files)
-
 
 if __name__ == "__main__":
     main()
