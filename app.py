@@ -27,7 +27,7 @@ ALLOWED_USERS = {
     "Postobon": "2345",
     "Mondelez": "3456",
     "Meals": "6789",
-    "Atelier": "2468" # Nuevo cliente
+    "Atelier": "2468",  # Nuevo cliente
 }
 
 
@@ -165,21 +165,27 @@ def load_database():
             aws_secret_access_key=s3_secret_key,
         ).get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response["Body"].read().decode("utf-8"))
-        
-        # Filtrar por cliente solo si el usuario no es "nicolas" (administrador)
-        if "cliente" in st.session_state and normalize_text(st.session_state.cliente) != "nicolas":
-            filtered_data = []
-            for doc in data:
-                # Se verifica si el documento tiene el campo "cliente"
-                doc_cliente = normalize_text(doc.get("cliente", ""))
-                usuario_cliente = normalize_text(st.session_state.cliente)
-                if doc_cliente == usuario_cliente:
-                    filtered_data.append(doc)
-            data = filtered_data
+
     except Exception as e:
         st.error(f"Error al descargar la base de datos desde S3: {e}")
         data = []
     return data
+
+
+def filter_database(data):
+    # Filtrar por cliente solo si el usuario no es "nicolas" (administrador)
+    if getattr(st.session_state, "cliente", "") == "Nicolas":
+        return data
+
+    filtered_data = []
+    for doc in data:
+        # Se verifica si el documento tiene el campo "cliente"
+        doc_cliente = normalize_text(doc.get("cliente", ""))
+        usuario_cliente = normalize_text(st.session_state.cliente)
+        if doc_cliente == usuario_cliente:
+            filtered_data.append(doc)
+
+    return filtered_data
 
 
 # =====================================================
@@ -419,10 +425,12 @@ def main():
         st.warning("No se pudo cargar el banner. Se generarán PDFs sin banner.")
 
     try:
-        db = load_database()
+        full_db = load_database()
     except Exception as e:
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
+
+    db = filter_database(full_db)
 
     st.write(f"DEBUG: Documentos cargados: {len(db)}")
     selected_files = [doc.get("nombre_archivo") for doc in db]
