@@ -318,7 +318,7 @@ def generate_final_report(question, db, selected_files):
     "- Basándote en los hallazgos, presenta conclusiones y recomendaciones estratégicas que aborden la pregunta del cliente.\n"
     "- Esta sección debe integrar la interpretación de la pregunta y los resultados de los estudios, generando una orientación positiva y constructiva sobre próximas acciones.\n\n"
     "5. **Referencias**:\n"
-    "- Lista todas las referencias utilizadas en formato IEEE. Cada referencia debe comenzar en una línea nueva con un identificador numérico entre corchetes (por ejemplo, [1]) seguido de la referencia completa.\n"
+    "- Lista todas las referencias utilizadas en formato IEEE. Cada referencia debe comenzar en una línea nueva (usa \n\n para el cambio de linea o una bullet list) con un identificador numérico entre corchetes (por ejemplo, [1]) seguido de la referencia completa.\n"
     "- Las referencias deben provenir de los documentos citados en el resumen estructurado.\n\n"
     "Utiliza a continuación el siguiente resumen estructurado y metadatos, obtenido de los estudios e información contextual proporcionada:\n\n"
     f"Resumen Estructurado y Metadatos:\n{result1}\n\n"
@@ -331,9 +331,9 @@ def generate_final_report(question, db, selected_files):
     fecha_actual = datetime.datetime.now().strftime("%d/%m/%Y")
     encabezado = (
         f"# {question}\n"
-        f"**Preparado por:** Atelier IA\n\n"
-        f"**Preparado para:** {st.session_state.cliente}\n\n"
-        f"**Fecha de elaboración:** {fecha_actual}\n\n"
+        f"**Preparado por:**  Atelier IA\n\n"
+        f"**Preparado para:**  {st.session_state.cliente}\n\n"
+        f"**Fecha de elaboración:**  {fecha_actual}\n\n"
     )
     informe_completo = encabezado + result2  # Se asume que Gemini ya incluye la sección "Fuentes"
     return informe_completo
@@ -543,7 +543,7 @@ def main():
     if modo == "Informe de Informes":
         st.markdown("### Ingrese una pregunta para generar el informe")
         question = st.text_area("Pregunta", height=150, help="Escriba la pregunta o tema para el informe.")
-        additional_info = st.sidebar.text_area("Agregar Información Adicional (Opcional)", key="additional_info", height=150)
+        additional_info = st.text_area("Personaliza tu informe: Comentalo, firmalo o lo que tu quieras (Opcional)", key="additional_info", height=150)
         rating = st.sidebar.radio("Calificar el Informe", options=[1, 2, 3, 4, 5], horizontal=True, key="rating")
         if st.button("Generar Informe"):
             if not question.strip():
