@@ -27,9 +27,7 @@ ALLOWED_USERS = {
     "Postobon": "2345",
     "Mondelez": "3456",
     "Meals": "6789",
-    "Atelier": "2468", # Nuevo cliente
-    "Placeholder_1": "4567",
-    "Placeholder_2": "5678",
+    "Atelier": "2468" # Nuevo cliente
 }
 
 
@@ -159,27 +157,25 @@ def load_database():
     bucket_name = st.secrets.get("S3_BUCKET")
     object_key = "resultado_presentacion (1).json"
 
-    s3_client = boto3.client(
-        "s3",
-        endpoint_url=s3_endpoint_url,
-        aws_access_key_id=s3_access_key,
-        aws_secret_access_key=s3_secret_key,
-    )
     try:
-        response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
+        response = boto3.client(
+            "s3",
+            endpoint_url=s3_endpoint_url,
+            aws_access_key_id=s3_access_key,
+            aws_secret_access_key=s3_secret_key,
+        ).get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response["Body"].read().decode("utf-8"))
-        # Filtrar por cliente solo si el usuario NO es "Nicolas" (admin)
-        if (
-            "cliente" in st.session_state
-            and normalize_text(st.session_state.cliente) != "nicolas"
-        ):
-            data = [
-                doc
-                for doc in data
-                if normalize_text(doc.get("cliente", ""))
-                == normalize_text(st.session_state.cliente)
-            ]
-        # Sino, se usan todos los documentos
+        
+        # Filtrar por cliente solo si el usuario no es "nicolas" (administrador)
+        if "cliente" in st.session_state and normalize_text(st.session_state.cliente) != "nicolas":
+            filtered_data = []
+            for doc in data:
+                # Se verifica si el documento tiene el campo "cliente"
+                doc_cliente = normalize_text(doc.get("cliente", ""))
+                usuario_cliente = normalize_text(st.session_state.cliente)
+                if doc_cliente == usuario_cliente:
+                    filtered_data.append(doc)
+            data = filtered_data
     except Exception as e:
         st.error(f"Error al descargar la base de datos desde S3: {e}")
         data = []
