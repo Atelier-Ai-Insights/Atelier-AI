@@ -11,10 +11,6 @@ import boto3  # pip install boto3
 import google.generativeai as genai
 import markdown2
 import streamlit as st
-# --- Los siguientes imports de fpdf y HTMLMixin no se usan en esta versión (ESTÁN MARCADOS COMO UNUSED) ---
-from fpdf import FPDF, HTMLMixin  # UNUSED: Se reemplaza por ReportLab
-from fpdf.html import HTML2FPDF  # UNUSED: Se reemplaza por ReportLab
-
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -30,13 +26,7 @@ if not hasattr(HTML2FPDF, "unescape"):
 # ==============================
 # Autenticación Personalizada
 # ==============================
-ALLOWED_USERS = {
-    "Nicolas": "1234",
-    "Postobon": "2345",
-    "Mondelez": "3456",
-    "Meals": "6789",
-    "Atelier": "2468",
-}
+ALLOWED_USERS = st.secrets.get("ALLOWED_USERS", {})
 
 def show_login():
     st.markdown(
@@ -44,8 +34,8 @@ def show_login():
         unsafe_allow_html=True,
     )
     st.header("Iniciar Sesión")
-    username = st.text_input("Usuario")
-    password = st.text_input("Contraseña (4 dígitos)", type="password")
+    username = st.text_input("Usuario",placeholder="Apple")
+    password = st.text_input("Contraseña (4 dígitos)", type="password", placeholder="0000")
     if st.button("Ingresar"):
         if username in ALLOWED_USERS and password == ALLOWED_USERS[username]:
             st.session_state.logged_in = True
@@ -477,7 +467,7 @@ def ideacion_mode(db, selected_files):
             for msg in st.session_state.chat_history:
                 conversation_prompt += f"{msg['role']}: {msg['message']}\n"
             conversation_prompt += (
-                "\nInformación de contexto:\n" + relevant_info + "\n\nGenera una respuesta detallada y coherente."
+                "\nInformación de contexto:\n" + relevant_info + "\n\nGenera una respuesta detallada y coherente. Responde de forma creativa, cita los hechos que puedan ser relevantes, eres un modelo de ideación que busca la innovación y la creatividad"
             )
             respuesta = call_gemini_api(conversation_prompt)
             if respuesta is None:
@@ -511,8 +501,8 @@ def main():
         """
         Bienvenido a **Atelier IA**.
 
-        - **Informe de Informes:** Genera un informe formal.
-        - **Ideación:** Permite interactuar con los datos.
+        - **Informe de Informes:** Genera un informe formal resumiendo los estudios realizados para tus marcas.
+        - **Ideación:** Permite interactuar con los datos de forma abierta y creativa, aprovechalo para poder encontrar nuevas ideas.
         """
     )
     template_buffer = load_template_from_s3()
@@ -531,7 +521,7 @@ def main():
     # Filtrado por marcas en la barra lateral
     marcas = sorted({doc.get("marca", "").strip() for doc in db if doc.get("marca", "").strip()})
     marcas.insert(0, "Todas")
-    selected_marca = st.sidebar.selectbox("Seleccione la marca", marcas)
+    selected_marca = st.sidebar.selectbox("Seleccione la marca que quiera incluir en su consulta", marcas)
     if selected_marca != "Todas":
         db = [doc for doc in db if normalize_text(doc.get("marca", "")) == normalize_text(selected_marca)]
         selected_files = [doc.get("nombre_archivo") for doc in db]
