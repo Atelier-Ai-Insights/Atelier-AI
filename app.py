@@ -470,7 +470,7 @@ def main():
     st.title("Atelier IA")
     st.markdown(
         """
-        Bienvenido a **Atelier IA**.
+        Bienvenido a **Atelier IA**. Es una plataforma intuitiva y eficiente que te ayuda a generar informes y a interactuar con tus datos de forma creativa. Con herramientas de inteligencia artificial, puedes resumir estudios y obtener insights para mejorar tus estrategias de marca, todo en un entorno fácil de usar y con resultados profesionales.
 
         - **Informe de Informes:** Genera un informe formal resumiendo los estudios realizados para tus marcas.
         - **Ideación:** Permite interactuar con los datos de forma abierta y creativa, aprovechalo para poder encontrar nuevas ideas.
