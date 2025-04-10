@@ -208,31 +208,7 @@ def load_database():
 # =====================================================
 # FUNCION PARA OBTENER IMAGEN DE S3 (Para la plantilla/banner)
 # =====================================================
-@st.cache_data
-def load_template_from_s3():
-    s3_endpoint_url = st.secrets["S3_ENDPOINT_URL"]
-    s3_access_key = st.secrets["S3_ACCESS_KEY"]
-    s3_secret_key = st.secrets["S3_SECRET_KEY"]
-    bucket_name = st.secrets.get("S3_BUCKET")
-    object_key_template = "Banner.png"
-    try:
-        template_buffer = BytesIO()
-        boto3.client(
-            "s3",
-            endpoint_url=s3_endpoint_url,
-            aws_access_key_id=s3_access_key,
-            aws_secret_access_key=s3_secret_key,
-        ).download_fileobj(
-            Bucket=bucket_name, Key=object_key_template, Fileobj=template_buffer
-        )
-        if template_buffer.getbuffer().nbytes > 0:
-            return template_buffer
-        else:
-            st.warning("La plantilla descargada está vacía.")
-            return None
-    except Exception as e:
-        st.error(f"Error al descargar la plantilla: {e}")
-        return None
+banner_file = "banner.png"
 
 # ==============================
 # Función para obtener la información relevante
@@ -501,9 +477,6 @@ def main():
         - **Ideación:** Permite interactuar con los datos de forma abierta y creativa, aprovechalo para poder encontrar nuevas ideas.
         """
     )
-    template_buffer = load_template_from_s3()
-    if template_buffer is None:
-        st.warning("No se pudo cargar el banner. Se generarán PDFs sin banner.")
 
     try:
         db = load_database()
@@ -527,8 +500,18 @@ def main():
     )
     if modo == "Informe de Informes":
         st.markdown("### Ingrese una pregunta para generar el informe")
-        question = st.text_area( "Pregunta", height=150, help="Escriba la pregunta o tema para el informe. Ejemplo: '¿Cuál es la percepción de los consumidores sobre nuestra marca?'", placeholder="Ejemplo: ¿Cuál es la percepción de los consumidores sobre nuestra marca?")
-        additional_info = st.text_area("Personaliza tu informe", placeholder="Ejemplo: Agrega una nota final, firma o comentarios adicionales que desees incluir en el informe final.", key="additional_info",height=150)
+        question = st.text_area(
+            "Pregunta",
+            height=150,
+            help="Escriba la pregunta o tema para el informe. Ejemplo: '¿Cuál es la percepción de los consumidores sobre nuestra marca?'",
+            placeholder="Ejemplo: ¿Cuál es la percepción de los consumidores sobre nuestra marca?"
+        )
+        additional_info = st.text_area(
+            "Personaliza tu informe",
+            placeholder="Ejemplo: Agrega una nota final, firma o comentarios adicionales que desees incluir en el informe final.",
+            key="additional_info",
+            height=150
+        )
         rating = st.sidebar.radio("Calificar el Informe", options=[1, 2, 3, 4, 5], horizontal=True, key="rating")
         if st.button("Generar Informe"):
             if not question.strip():
@@ -544,22 +527,13 @@ def main():
                 st.markdown("### Informe Final")
                 edited_report = st.text_area("Puedes copiar aquí el texto del informe", value=st.session_state.report, key="edited_report", height=300)
                 final_report_content = edited_report + "\n\n" + additional_info
-                # Aquí usamos generate_pdf_html para generar el PDF final con ReportLab y el banner (si se pudo descargar)
-                # Notar que template_buffer es del banner; se guarda temporalmente en disco.
-                banner_file = None
-                if template_buffer is not None:
-                    # Guardamos el buffer en un archivo temporal para que PDFReport lo pueda usar.
-                    tmp_banner = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-                    tmp_banner.write(template_buffer.getvalue())
-                    tmp_banner.close()
-                    banner_file = tmp_banner.name
+
+                # Se utiliza el banner local (ya definido globalmente como "banner.png")
                 pdf_bytes = generate_pdf_html(
                     final_report_content,
                     title="Informe Final",
                     banner_path=banner_file
                 )
-                if banner_file and os.path.exists(banner_file):
-                    os.remove(banner_file)  # Limpiar archivo temporal del banner
                 st.download_button(
                     "Descargar Informe en PDF",
                     data=pdf_bytes,
@@ -569,6 +543,7 @@ def main():
                 log_query_event(question, mode="Informe", rating=rating)
     else:
         ideacion_mode(db, selected_files)
+
 
 if __name__ == "__main__":
     main()
