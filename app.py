@@ -483,7 +483,7 @@ def main():
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
 
-    st.write(f"Documentos cargados para el análisis: {len(db)}")
+    #st.write(f"Documentos cargados para el análisis: {len(db)}")
     selected_files = [doc.get("nombre_archivo") for doc in db]
 
     # Filtrado por marcas en la barra lateral
