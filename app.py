@@ -536,7 +536,7 @@ def main():
                 st.download_button(
                     "Descargar Informe en PDF",
                     data=pdf_bytes,
-                    file_name="informe_final.pdf",
+                    file_name="Informe_AtelierIA.pdf",
                     mime="application/pdf",
                 )
                 log_query_event(question, mode="Informe", rating=rating)
