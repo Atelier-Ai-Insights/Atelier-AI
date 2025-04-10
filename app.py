@@ -19,10 +19,6 @@ from reportlab.lib import colors
 from reportlab.platypus.doctemplate import LayoutError
 from supabase import create_client  # pip install supabase
 
-# Monkey patch para HTML2FPDF (ya no es necesario, pero se conserva)
-if not hasattr(HTML2FPDF, "unescape"):
-    HTML2FPDF.unescape = staticmethod(html.unescape)
-
 # ==============================
 # Autenticación Personalizada
 # ==============================
