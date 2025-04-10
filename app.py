@@ -506,8 +506,8 @@ def main():
             placeholder="Ejemplo: ¿Cuál es la percepción de los consumidores sobre nuestra marca?"
         )
         additional_info = st.text_area(
-            "Personaliza tu informe",
-            placeholder="Ejemplo: Agrega una nota final, firma o comentarios adicionales que desees incluir en el informe final.",
+            "Personaliza tu informe (esté fragmento va al final de lo generado por Atelier IA)",
+            placeholder="Ejemplo: Agrega una nota final, firma o escribe comentarios adicionales que desees incluir en el informe final.",
             key="additional_info",
             height=150
         )
