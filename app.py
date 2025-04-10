@@ -356,19 +356,27 @@ class PDFReport:
     def header(self, canvas, doc):
         canvas.saveState()
         banner_path = os.path.join(os.getcwd(), "Banner.png")
-        # Si existe el banner, dibuja únicamente la imagen.
+        # Si existe el banner, se dibuja únicamente la imagen
         if os.path.isfile(banner_path):
             try:
                 img_width, img_height = 210 * mm, 35 * mm
-                canvas.drawImage(banner_path, 0, A4[1] - img_height, width=img_width, height=img_height,
+                # Calculamos una posición Y más alta: agregamos un offset de 10 mm
+                y_pos = A4[1] - img_height + 10 * mm  
+                canvas.drawImage(banner_path, 0, y_pos, width=img_width, height=img_height,
                                 preserveAspectRatio=True, anchor='n')
+                # Dibujar la línea justo por debajo de la imagen (por ejemplo, 5 puntos debajo)
+                line_y = y_pos - 5
+                canvas.setStrokeColor(colors.lightgrey)
+                canvas.line(12 * mm, line_y, A4[0] - 12 * mm, line_y)
             except Exception as e:
-                # En caso de error al dibujar la imagen, no se muestra texto ni otro elemento.
+                # En caso de error, simplemente no se dibuja nada en el header.
                 pass
-        # Mantenemos la línea de separación debajo del header.
-        canvas.setStrokeColor(colors.lightgrey)
-        canvas.line(12 * mm, A4[1] - 40 * mm, A4[0] - 12 * mm, A4[1] - 40 * mm)
+        # En caso de que no exista el banner, se dibuja una línea para mantener el formato.
+        else:
+            canvas.setStrokeColor(colors.lightgrey)
+            canvas.line(12 * mm, A4[1] - 40 * mm, A4[0] - 12 * mm, A4[1] - 40 * mm)
         canvas.restoreState()
+
 
 
     def footer(self, canvas, doc):
