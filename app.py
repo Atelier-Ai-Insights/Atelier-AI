@@ -335,17 +335,18 @@ def clean_text(text):
     return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 class PDFReport:
-    def __init__(self, filename):
+    def __init__(self, filename, banner_path=None):
         self.filename = filename
+        self.banner_path = banner_path  # Guardamos el path del banner
         self.elements = []
         self.styles = getSampleStyleSheet()
         self.doc = SimpleDocTemplate(
             self.filename,
             pagesize=A4,
-            rightMargin=12*mm,
-            leftMargin=12*mm,
-            topMargin=45*mm,
-            bottomMargin=18*mm
+            rightMargin=12 * mm,
+            leftMargin=12 * mm,
+            topMargin=45 * mm,
+            bottomMargin=18 * mm
         )
         # Estilos personalizados
         self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], alignment=1, spaceAfter=12))
@@ -355,29 +356,25 @@ class PDFReport:
 
     def header(self, canvas, doc):
         canvas.saveState()
-        banner_path = os.path.join(os.getcwd(), "Banner.png")
-        # Si existe el banner, se dibuja únicamente la imagen
-        if os.path.isfile(banner_path):
+        # Usamos self.banner_path en vez de buscar "Banner.png" en la ruta actual
+        if self.banner_path and os.path.isfile(self.banner_path):
             try:
                 img_width, img_height = 210 * mm, 35 * mm
-                # Calculamos una posición Y más alta: agregamos un offset de 10 mm
-                y_pos = A4[1] - img_height + 10 * mm  
-                canvas.drawImage(banner_path, 0, y_pos, width=img_width, height=img_height,
-                                preserveAspectRatio=True, anchor='n')
-                # Dibujar la línea justo por debajo de la imagen (por ejemplo, 5 puntos debajo)
+                y_pos = A4[1] - img_height + 10 * mm
+                canvas.drawImage(self.banner_path, 0, y_pos, width=img_width, height=img_height,
+                                 preserveAspectRatio=True, anchor='n')
+                # Línea de separación debajo del banner
                 line_y = y_pos - 5
                 canvas.setStrokeColor(colors.lightgrey)
                 canvas.line(12 * mm, line_y, A4[0] - 12 * mm, line_y)
             except Exception as e:
-                # En caso de error, simplemente no se dibuja nada en el header.
+                # En caso de error, no se dibuja el banner
                 pass
-        # En caso de que no exista el banner, se dibuja una línea para mantener el formato.
         else:
+            # Si no hay banner, dibuja una línea para mantener el formato
             canvas.setStrokeColor(colors.lightgrey)
             canvas.line(12 * mm, A4[1] - 40 * mm, A4[0] - 12 * mm, A4[1] - 40 * mm)
         canvas.restoreState()
-
-
 
     def footer(self, canvas, doc):
         canvas.saveState()
@@ -425,22 +422,16 @@ class PDFReport:
             raise Exception(f"Error inesperado al generar el PDF: {e}")
 
 def generate_pdf_html(content, title="Documento Final", banner_path=None, output_filename=None):
-    # Usamos un archivo temporal para generar el PDF en memoria.
     import tempfile
     if output_filename is None:
         tmp_file = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
         output_filename = tmp_file.name
         tmp_file.close()
-    pdf = PDFReport(output_filename)
+    # Pasamos el banner_path al crear el PDFReport
+    pdf = PDFReport(output_filename, banner_path=banner_path)
     
-    # Insertar banner si se proporciona (se supone que banner_path es ruta del archivo)
-    if banner_path:
-        pdf.insert_banner(banner_path)
-    else:
-        pdf.elements.append(Spacer(1, 20))
-    
+    # Se omite la inserción del banner en el contenido, ya que se muestra en el header
     pdf.add_title(title, level=1)
-    # En lugar de dividir el contenido por "\n\n", se agrega el contenido Markdown formateado.
     add_markdown_content(pdf, content)
     
     pdf.build_pdf()
