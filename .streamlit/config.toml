@@ -1,5 +1,11 @@
 [theme]
 primaryColor="#395caa"
-backgroundColor="#fafafa"
+backgroundColor="#395caa"
 secondaryBackgroundColor="#e0e8f8"
-textColor="#000000"
+textColor="#fafafa"
+
+#[theme]
+#primaryColor="#395caa"
+#backgroundColor="#fafafa"
+#secondaryBackgroundColor="#e0e8f8"
+#textColor="#000000"
