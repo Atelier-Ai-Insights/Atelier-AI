@@ -332,13 +332,13 @@ class PDFReport:
 
     def header(self, canvas, doc):
         canvas.saveState()
-        # Usamos self.banner_path en vez de buscar "Banner.png" en la ruta actual
         if self.banner_path and os.path.isfile(self.banner_path):
             try:
                 img_width, img_height = 210 * mm, 35 * mm
-                y_pos = A4[1] - img_height + 10 * mm
+                # Calcular y_pos para que la imagen esté pegada al borde superior
+                y_pos = A4[1] - img_height
                 canvas.drawImage(self.banner_path, 0, y_pos, width=img_width, height=img_height,
-                                 preserveAspectRatio=True, anchor='n')
+                                preserveAspectRatio=True, anchor='n')
                 # Línea de separación debajo del banner
                 line_y = y_pos - 5
                 canvas.setStrokeColor(colors.lightgrey)
@@ -347,7 +347,6 @@ class PDFReport:
                 # En caso de error, no se dibuja el banner
                 pass
         else:
-            # Si no hay banner, dibuja una línea para mantener el formato
             canvas.setStrokeColor(colors.lightgrey)
             canvas.line(12 * mm, A4[1] - 40 * mm, A4[0] - 12 * mm, A4[1] - 40 * mm)
         canvas.restoreState()
