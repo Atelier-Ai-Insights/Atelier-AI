@@ -19,6 +19,7 @@ from reportlab.lib import colors
 from reportlab.platypus.doctemplate import LayoutError
 from supabase import create_client  # pip install supabase
 
+
 # ==============================
 # Autenticación Personalizada
 # ==============================
@@ -291,19 +292,19 @@ def generate_final_report(question, db, selected_files):
     f"Pregunta del Cliente: ***{question}***\n\n"
     "Instrucciones:\n"
     "Redacta el informe final en prosa, utilizando un formato Markdown claro y coherente. El informe debe organizarse en cinco secciones bien delimitadas, describiendo a profundidad el contenido y la procedencia de cada una:\n\n"
-    "1. **Introducción**:\n"
+    "##1. **Introducción**:\n"
     "- Interpreta y analiza la pregunta del cliente, explicando su significado y relevancia.\n"
     "- Esta sección debe fundamentarse en la interpretación de la pregunta junto con la información de contexto proporcionada.\n\n"
-    "2. **Enfoque Metodológico**:\n"
+    "##2. **Enfoque Metodológico**:\n"
     "- Describe detalladamente cómo se realizaron los estudios utilizados, incluyendo el diseño del estudio, los procedimientos y el alcance de la investigación.\n"
     "- El contenido debe extraerse de los metadatos y resúmenes técnicos incluidos en el resumen estructurado.\n\n"
-    "3. **Principales Hallazgos**:\n"
+    "##3. **Principales Hallazgos**:\n"
     "- Resume y sintetiza los descubrimientos más relevantes que responden a la pregunta del cliente.\n"
     "- Explica de manera clara cómo cada hallazgo contribuye a la resolución de la pregunta, basándote en extractos de la información de contexto.\n\n"
-    "4. **Planteamiento Estratégico (Conclusiones)**:\n"
+    "##4. **Planteamiento Estratégico (Conclusiones)**:\n"
     "- Basándote en los hallazgos, presenta conclusiones y recomendaciones estratégicas que aborden la pregunta del cliente.\n"
     "- Esta sección debe integrar la interpretación de la pregunta y los resultados de los estudios, generando una orientación positiva y constructiva sobre próximas acciones.\n\n"
-    "5. **Referencias**:\n"
+    "##5. **Referencias**:\n"
     "- Lista todas las referencias utilizadas en formato IEEE. Cada referencia debe comenzar en una línea nueva (como un bulletlist) con un identificador numérico entre corchetes (por ejemplo, [1]) seguido de la referencia completa.\n"
     "- Las referencias deben provenir de los documentos citados en el resumen estructurado.\n\n"
     "Utiliza a continuación el siguiente resumen estructurado y metadatos, obtenido de los estudios e información contextual proporcionada:\n\n"
@@ -355,24 +356,24 @@ class PDFReport:
     def header(self, canvas, doc):
         canvas.saveState()
         banner_path = os.path.join(os.getcwd(), "Banner.png")
+        # Si existe el banner, dibuja únicamente la imagen.
         if os.path.isfile(banner_path):
             try:
                 img_width, img_height = 210 * mm, 35 * mm
                 canvas.drawImage(banner_path, 0, A4[1] - img_height, width=img_width, height=img_height,
-                                   preserveAspectRatio=True, anchor='n')
+                                preserveAspectRatio=True, anchor='n')
             except Exception as e:
-                canvas.setFont('Helvetica-Bold', 14)
-                canvas.drawCentredString(A4[0] / 2.0, A4[1] - 20 * mm, clean_text("Informe de Análisis"))
-        else:
-            canvas.setFont('Helvetica-Bold', 14)
-            canvas.drawCentredString(A4[0] / 2.0, A4[1] - 20 * mm, clean_text("Informe de Análisis"))
+                # En caso de error al dibujar la imagen, no se muestra texto ni otro elemento.
+                pass
+        # Mantenemos la línea de separación debajo del header.
         canvas.setStrokeColor(colors.lightgrey)
         canvas.line(12 * mm, A4[1] - 40 * mm, A4[0] - 12 * mm, A4[1] - 40 * mm)
         canvas.restoreState()
 
+
     def footer(self, canvas, doc):
         canvas.saveState()
-        footer_text = f"Generado: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} | Página {doc.page}"
+        footer_text = f"Generado por Atelier IA el {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} | Página {doc.page}"
         p = Paragraph(footer_text, self.styles['CustomFooter'])
         w, h = p.wrap(doc.width, doc.bottomMargin)
         p.drawOn(canvas, doc.leftMargin, h)
@@ -542,7 +543,7 @@ def main():
                         return
                     st.session_state.report = report
                 st.markdown("### Informe Final")
-                edited_report = st.text_area("Editar Informe (Opcional)", value=st.session_state.report, key="edited_report", height=300)
+                edited_report = st.text_area("Puedes copiar aquí el texto del informe", value=st.session_state.report, key="edited_report", height=300)
                 final_report_content = edited_report + "\n\n" + additional_info
                 # Aquí usamos generate_pdf_html para generar el PDF final con ReportLab y el banner (si se pudo descargar)
                 # Notar que template_buffer es del banner; se guarda temporalmente en disco.
