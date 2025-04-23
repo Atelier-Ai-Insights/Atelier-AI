@@ -18,6 +18,14 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.platypus.doctemplate import LayoutError
 from supabase import create_client  # pip install supabase
+# ======== Fragmento 2: Registrar fuente Unicode para tildes/ñ ========
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase import pdfmetrics
+
+# Ajusta la ruta al .ttf según tu entorno
+pdfmetrics.registerFont(
+    TTFont('DejaVuSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
+)
 
 
 # ==============================
@@ -47,8 +55,8 @@ def show_login():
 
 def logout():
     if st.sidebar.button("Cerrar Sesión"):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
+        st.session_state.clear()          # limpia todo session_state de un plumazo
+        st.cache_data.clear()             # limpia todos los @st.cache_data
         st.rerun()
 
 # ==============================
@@ -64,7 +72,7 @@ def configure_api():
 configure_api()
 
 generation_config = {
-    "temperature": 0.4,
+    "temperature": 0.5,
     "top_p": 0.8,
     "top_k": 32,
     "max_output_tokens": 8192,
@@ -190,14 +198,15 @@ def load_database():
             aws_secret_access_key=s3_secret_key,
         ).get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response["Body"].read().decode("utf-8"))
-        # Filtrar por cliente solo si el usuario no es "nicolas" (administrador)
+        # Filtrar por cliente (salvo administrador "nicolas"), pero siempre incluir docs de Atelier IA
         if ("cliente" in st.session_state and 
             normalize_text(st.session_state.cliente) != "nicolas"):
             filtered_data = []
+            usuario_cliente = normalize_text(st.session_state.cliente)
             for doc in data:
                 doc_cliente = normalize_text(doc.get("cliente", ""))
-                usuario_cliente = normalize_text(st.session_state.cliente)
-                if doc_cliente == usuario_cliente:
+                # Incluye si es del usuario o de Atelier IA
+                if doc_cliente == usuario_cliente or doc_cliente == normalize_text("Atelier IA"):
                     filtered_data.append(doc)
             data = filtered_data
     except Exception as e:
@@ -244,6 +253,7 @@ def generate_final_report(question, db, selected_files):
     prompt1 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
         "Instrucciones:\n"
+        "Busca en la pregunta la marca de la ue se hace la pregunta y el producto exacto del que se está haciendo la pregunta, debes ser muy especifico y riguroso en responder exactamente lo que el cliente esta preguntando."
         "- Reitera la pregunta del cliente: ***{question}*** y asegúrate de que la respuesta esté alineada con ella.\n"
         "- El informe se organizará en cinco secciones: \n"
         "   1. Introducción\n"
@@ -267,6 +277,8 @@ def generate_final_report(question, db, selected_files):
     prompt2 = (
     f"Pregunta del Cliente: ***{question}***\n\n"
     "Instrucciones:\n"
+    "Busca en la pregunta la marca de la ue se hace la pregunta y el producto exacto del que se está haciendo la pregunta, debes ser muy especifico y riguroso en responder exactamente lo que el cliente esta preguntando."
+    "Recuerda que todos los estudios en la base de datos que usamos fueron realizados por Atelier. Referencía especialmente en principales hayazgos." 
     "Actúa como un analista experto en investigación de mercados y en comunicación estratégica, con enfoque en claridad, síntesis poderosa y pensamiento estructurado. Tu tarea es generar un reporte de alto impacto dividido en cinco secciones:\n"
     "- **Introducción**\n"
     "- **Metodología**\n"
@@ -280,12 +292,16 @@ def generate_final_report(question, db, selected_files):
     "##2. **Metodología**:\n"
     "- Describe brevemente cómo se obtuvo la información, asegurando claridad sobre las fuentes consultadas y enfatizando en la diversidad (evitando fuentes redundantes o repetitivas). Explica por qué el enfoque elegido aporta un valor diferencial al análisis.\n\n"
     "##3. **Principales Hallazgos**:\n"
-    "- Presenta de forma estructurada los hechos más relevantes descubiertos (por temas, niveles, fuentes, etc.), garantizando que cada hallazgo ofrezca un valor original y no simplemente repita lugares comunes.\n\n"
+    "- Presenta de forma estructurada los hechos más relevantes descubiertos (por temas, niveles, fuentes, etc.), garantizando que cada hallazgo ofrezca un valor original y no simplemente repita lugares comunes. Receurda siempre referenciar estudios si hay disponibles.\n\n"
     "##4. **Insights**:\n"
     "- Extrae aprendizajes y verdades profundas a partir de los hallazgos. Utiliza analogías y comparaciones que refuercen el mensaje y transformen la comprensión del problema.\n\n"
     "##5. **Conclusiones**:\n"
     "- Sintetiza la información y ofrece una dirección clara sobre cómo actuar con base en los insights obtenidos. Incluye recomendaciones breves que estén alineadas con los aprendizajes, sin repetir lo anterior.\n\n"
     "Utiliza a continuación el siguiente resumen estructurado y metadatos, obtenido de los estudios e información contextual proporcionada:\n\n"
+    "##6. **Recomendaciones**
+    "Con base en el informe realizado, que se le puede recomendar al cliente, deben ser recomendaciones interesantes, creativas, precisas y accionables. Estructura las recomendaciones utilizando referentes contextuales (matrices o estructuras) y teóricos del marketing o de psicologia o de innovación que se hayan publicado entre 2015 y 2025."
+    "##7. **Referencias**"
+    "Cita el titulo del estudio, no el nombre del archivo, usa la información de la primera diapositiva que se reporta en la base de datos"
     f"Resumen Estructurado y Metadatos:\n{result1}\n\n"
     "Información de Contexto:\n"
     f"{relevant_info}\n\n"
@@ -333,7 +349,9 @@ class PDFReport:
         self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['Heading2'], spaceBefore=10, spaceAfter=6))
         self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], leading=12, alignment=4))
         self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], alignment=2, textColor=colors.grey))
-
+        for style_name in ['CustomTitle','CustomHeading','CustomBodyText','CustomFooter']:
+            self.styles[style_name].fontName = 'DejaVuSans'
+            
     def header(self, canvas, doc):
         canvas.saveState()
         if self.banner_path and os.path.isfile(self.banner_path):
@@ -516,22 +534,40 @@ def main():
             height=150
         )
         rating = st.sidebar.radio("Calificar el Informe", options=[1, 2, 3, 4, 5], horizontal=True, key="rating")
+
+        if 'last_question' not in st.session_state:
+            st.session_state['last_question'] = ''
+        
+        # --- Bloque completo para Generar Informe, con regeneración dinámica ---
         if st.button("Generar Informe"):
             if not question.strip():
                 st.warning("Ingrese una pregunta para generar el informe.")
             else:
-                if "report" not in st.session_state:
+                # Regenerar si la pregunta cambió
+                if question != st.session_state['last_question']:
+                    st.session_state.pop('report', None)
+                    st.session_state['last_question'] = question
+        
+                # Sólo llamar a Gemini si no hay reporte en el estado
+                if 'report' not in st.session_state:
                     st.info("Generando informe...")
                     report = generate_final_report(question, db, selected_files)
                     if report is None:
                         st.error("No se pudo generar el informe. Intente de nuevo.")
                         return
-                    st.session_state.report = report
+                    st.session_state['report'] = report
+        
+                # Mostrar y permitir edición del informe
                 st.markdown("### Informe Final")
-                edited_report = st.text_area("Puedes copiar aquí el texto del informe", value=st.session_state.report, key="edited_report", height=300)
+                edited_report = st.text_area(
+                    "Puedes copiar aquí el texto del informe",
+                    value=st.session_state['report'],
+                    key="edited_report",
+                    height=300
+                )
+        
+                # Generar PDF con el contenido editado y el footer adicional
                 final_report_content = edited_report + "\n\n" + additional_info
-
-                # Se utiliza el banner local (ya definido globalmente como "banner.png")
                 pdf_bytes = generate_pdf_html(
                     final_report_content,
                     title="Informe Final",
@@ -543,10 +579,9 @@ def main():
                     file_name="Informe_AtelierIA.pdf",
                     mime="application/pdf",
                 )
+        
+                # Registrar el evento en la base de datos
                 log_query_event(question, mode="Informe", rating=rating)
-    else:
-        ideacion_mode(db, selected_files)
-
-
+                
 if __name__ == "__main__":
     main()
