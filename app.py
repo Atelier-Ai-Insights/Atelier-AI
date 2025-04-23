@@ -24,7 +24,7 @@ from reportlab.pdfbase import pdfmetrics
 
 # Ajusta la ruta al .ttf según tu entorno
 pdfmetrics.registerFont(
-    TTFont('DejaVuSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
+    TTFont('DejaVuSans', 'DejaVuSans.ttf')
 )
 
 
