@@ -110,7 +110,19 @@ def call_gemini_api(prompt):
         except Exception as e2:
             st.error(f"Error GRAVE en la llamada a Gemini: {e2}")
             return None
-    return response.text
+
+    raw = response.text
+
+    # 1) Convierte entidades HTML (&ntilde;, &aacute;, etc.) de vuelta a caracteres
+    unescaped = html.unescape(raw)
+
+    # 2) Decodifica posibles secuencias \u00e1 que vengan como literales
+    try:
+        decoded = unescaped.encode("utf-8").decode("unicode_escape")
+    except Exception:
+        decoded = unescaped
+
+    return decoded
 
 # ==============================
 # CONEXIÓN A SUPABASE PARA GUARDAR CONSULTAS
@@ -272,7 +284,7 @@ def generate_final_report(question, db, selected_files):
     result1 = call_gemini_api(prompt1)
     if result1 is None:
         return None
-
+    result1 = html.unescape(result1)
     # Prompt 2: Redacta la sección principal del informe en prosa utilizando el resumen anterior.
     prompt2 = (
     f"Pregunta del Cliente: ***{question}***\n\n"
@@ -310,7 +322,8 @@ def generate_final_report(question, db, selected_files):
     result2 = call_gemini_api(prompt2)
     if result2 is None:
         return None
-
+    result2 = html.unescape(result2)
+    
     fecha_actual = datetime.datetime.now().strftime("%d/%m/%Y")
     encabezado = (
         f"# {question}\n"
