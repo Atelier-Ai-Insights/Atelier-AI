@@ -113,16 +113,22 @@ def call_gemini_api(prompt):
 
     raw = response.text
 
-    # 1) Convierte entidades HTML (&ntilde;, &aacute;, etc.) de vuelta a caracteres
-    unescaped = html.unescape(raw)
+    # 1) Des-escapa entidades HTML (&ntilde; → ñ; &aacute; → á; etc.)
+    text = html.unescape(raw)
 
-    # 2) Decodifica posibles secuencias \u00e1 que vengan como literales
+    # 2) Convierte literales "\u00e1" → "á"
     try:
-        decoded = unescaped.encode("utf-8").decode("unicode_escape")
+        text = text.encode("utf-8").decode("unicode_escape")
     except Exception:
-        decoded = unescaped
+        pass
 
-    return decoded
+    # 3) Corrige mojibake: si "ó" salió como "Ã³", recompónlo:
+    try:
+        text = text.encode("latin-1").decode("utf-8")
+    except Exception:
+        pass
+
+    return text
 
 # ==============================
 # CONEXIÓN A SUPABASE PARA GUARDAR CONSULTAS
