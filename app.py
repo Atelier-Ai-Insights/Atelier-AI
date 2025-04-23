@@ -310,7 +310,7 @@ def generate_final_report(question, db, selected_files):
     "##2. **Metodología**:\n"
     "- Describe brevemente cómo se obtuvo la información, asegurando claridad sobre las fuentes consultadas y enfatizando en la diversidad (evitando fuentes redundantes o repetitivas). Explica por qué el enfoque elegido aporta un valor diferencial al análisis.\n\n"
     "##3. **Principales Hallazgos**:\n"
-    "- Presenta de forma estructurada los hechos más relevantes descubiertos (por temas, niveles, fuentes, etc.), garantizando que cada hallazgo ofrezca un valor original y no simplemente repita lugares comunes. Receurda siempre referenciar estudios si hay disponibles.\n\n"
+    "- Presenta de forma estructurada los hechos más relevantes descubiertos (por temas, niveles, fuentes, etc.), garantizando que cada hallazgo ofrezca un valor original y no simplemente repita lugares comunes. Receurda siempre referenciar estudios si hay disponibles relacionados con la marca y producto citado, utiliza solo información relevante a la marca y el producto, no utilices estudios de forma innecesaria. Referencia en formato IEEE, mas que el nombre del documento el titulo o el producto del que se habla.\n\n"
     "##4. **Insights**:\n"
     "- Extrae aprendizajes y verdades profundas a partir de los hallazgos. Utiliza analogías y comparaciones que refuercen el mensaje y transformen la comprensión del problema.\n\n"
     "##5. **Conclusiones**:\n"
