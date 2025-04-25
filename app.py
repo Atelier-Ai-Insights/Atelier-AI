@@ -204,32 +204,41 @@ def add_markdown_content(pdf, markdown_text):
 @st.cache_data(show_spinner=False)
 def load_database():
     s3_endpoint_url = st.secrets["S3_ENDPOINT_URL"]
-    s3_access_key = st.secrets["S3_ACCESS_KEY"]
-    s3_secret_key = st.secrets["S3_SECRET_KEY"]
-    bucket_name = st.secrets.get("S3_BUCKET")
-    object_key = "resultado_presentacion (1).json"
+    s3_access_key   = st.secrets["S3_ACCESS_KEY"]
+    s3_secret_key   = st.secrets["S3_SECRET_KEY"]
+    bucket_name     = st.secrets.get("S3_BUCKET")
+    object_key      = "resultado_presentacion (1).json"
+
     try:
         response = boto3.client(
             "s3",
-            endpoint_url=s3_endpoint_url,
-            aws_access_key_id=s3_access_key,
-            aws_secret_access_key=s3_secret_key,
+            endpoint_url          = s3_endpoint_url,
+            aws_access_key_id     = s3_access_key,
+            aws_secret_access_key = s3_secret_key,
         ).get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response["Body"].read().decode("utf-8"))
-        # Filtrar por cliente (salvo administrador "nicolas"), pero siempre incluir docs de Atelier IA
-        if ("cliente" in st.session_state and 
-            normalize_text(st.session_state.cliente) != "nicolas"):
-            filtered_data = []
+
+        # Si no es Nicolas, filtramos por su cliente y por Atelier (siempre)
+        if "cliente" in st.session_state and normalize_text(st.session_state.cliente) != "nicolas":
             usuario_cliente = normalize_text(st.session_state.cliente)
+            filtered_data   = []
+
             for doc in data:
                 doc_cliente = normalize_text(doc.get("cliente", ""))
-                # Incluye si es del usuario o de Atelier IA
-                if doc_cliente == usuario_cliente or doc_cliente == normalize_text("Atelier IA"):
+
+                # Incluye siempre todo lo de Atelier, en cualquiera de sus formas
+                if "atelier" in doc_cliente:
                     filtered_data.append(doc)
+                # Incluye si el nombre de usuario está dentro del campo cliente
+                elif usuario_cliente and usuario_cliente in doc_cliente:
+                    filtered_data.append(doc)
+
             data = filtered_data
+
     except Exception as e:
         st.error(f"Error al descargar la base de datos desde S3: {e}")
         data = []
+
     return data
 
 
