@@ -225,20 +225,6 @@ def extract_brand(filename):
 # =====================================================
 banner_file = "banner.png"
 
-st.sidebar.header("Documentos cargados")
-if db:
-    df_docs = pd.DataFrame([
-        {
-            "Nombre de archivo": doc.get("nombre_archivo", "<sin nombre>"),
-            "Cliente":           doc.get("cliente", "<no definido>"),
-            "Marca (año)":      doc.get("marca", "<vacía>")
-        }
-        for doc in db
-    ])
-    st.sidebar.table(df_docs)
-else:
-    st.sidebar.write("No hay documentos cargados para este usuario.")
-
 def get_relevant_info(db, question, selected_files):
     all_text = ""
     for pres in db:
@@ -482,6 +468,16 @@ def main():
 
     selected_files = [doc.get("nombre_archivo") for doc in db]
 
+    # ——— Mostrar en consola ———
+    print("Artículos cargados para enviar a la API:")
+    for fname in selected_files:
+        print(f"  • {fname}")
+
+    # ——— Mostrar en la interfaz de Streamlit ———
+    st.sidebar.markdown("### Artículos cargados")
+    for fname in selected_files:
+        st.sidebar.write(f"• {fname}")
+    
     # Modo de uso
     modo = st.sidebar.radio("Seleccione el modo", ["Informe de Informes", "Ideación (Conversar con los datos)"])
 
