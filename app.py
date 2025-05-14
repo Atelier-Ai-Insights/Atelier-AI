@@ -225,19 +225,19 @@ def extract_brand(filename):
 # =====================================================
 banner_file = "banner.png"
 
-#st.sidebar.header("Documentos cargados")
-#if db:
-#    df_docs = pd.DataFrame([
-#        {
-#            "Nombre de archivo": doc.get("nombre_archivo", "<sin nombre>"),
-#            "Cliente":           doc.get("cliente", "<no definido>"),
-#            "Marca (año)":      doc.get("marca", "<vacía>")
-#        }
-#        for doc in db
-#    ])
-#    st.sidebar.table(df_docs)
-#else:
-#    st.sidebar.write("No hay documentos cargados para este usuario.")
+st.sidebar.header("Documentos cargados")
+if db:
+    df_docs = pd.DataFrame([
+        {
+            "Nombre de archivo": doc.get("nombre_archivo", "<sin nombre>"),
+            "Cliente":           doc.get("cliente", "<no definido>"),
+            "Marca (año)":      doc.get("marca", "<vacía>")
+        }
+        for doc in db
+    ])
+    st.sidebar.table(df_docs)
+else:
+    st.sidebar.write("No hay documentos cargados para este usuario.")
 
 def get_relevant_info(db, question, selected_files):
     all_text = ""
