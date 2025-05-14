@@ -468,6 +468,7 @@ def main():
 
     selected_files = [doc.get("nombre_archivo") for doc in db]
 
+    # IMPRIMIR LOS DOCUMENTOS CARGADOS
     # ——— Mostrar en consola ———
     print("Artículos cargados para enviar a la API:")
     for fname in selected_files:
