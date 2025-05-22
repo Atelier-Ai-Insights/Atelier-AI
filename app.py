@@ -176,7 +176,6 @@ def add_markdown_content(pdf, markdown_text):
 # ==============================
 # CARGA DEL ARCHIVO JSON DESDE S3
 # ==============================
-@st.cache_data(show_spinner=False)
 def load_database():
     s3_endpoint_url = st.secrets["S3_ENDPOINT_URL"]
     s3_access_key   = st.secrets["S3_ACCESS_KEY"]
@@ -446,7 +445,7 @@ def main():
     """)
 
     try:
-        db = load_database()
+        db = load_database(st.session_state.cliente)
     except Exception as e:
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
