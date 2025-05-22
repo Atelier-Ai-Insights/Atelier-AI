@@ -176,7 +176,12 @@ def add_markdown_content(pdf, markdown_text):
 # ==============================
 # CARGA DEL ARCHIVO JSON DESDE S3
 # ==============================
-def load_database():
+@st.cache_data(show_spinner=False)
+def load_database(cliente: str):
+    """
+    Carga y filtra la base de datos JSON en S3 según el cliente.
+    Cada cliente obtiene su propio caché de datos.
+    """
     s3_endpoint_url = st.secrets["S3_ENDPOINT_URL"]
     s3_access_key   = st.secrets["S3_ACCESS_KEY"]
     s3_secret_key   = st.secrets["S3_SECRET_KEY"]
@@ -184,24 +189,28 @@ def load_database():
     object_key      = "resultado_presentacion (1).json"
 
     try:
-        response = boto3.client(
+        s3 = boto3.client(
             "s3",
             endpoint_url          = s3_endpoint_url,
             aws_access_key_id     = s3_access_key,
             aws_secret_access_key = s3_secret_key,
-        ).get_object(Bucket=bucket_name, Key=object_key)
+        )
+        response = s3.get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response["Body"].read().decode("utf-8"))
 
-        # Filtrar por cliente (salvo administrador "nicolas"), pero siempre incluir docs de Atelier IA
-        if ("cliente" in st.session_state and 
-            normalize_text(st.session_state.cliente) != "nicolas"):
-            usuario_cliente = normalize_text(st.session_state.cliente)
-            filtered_data   = []
+        # Filtrar por cliente (salvo admin "nicolas"), pero siempre incluir docs de Atelier IA
+        cliente_norm = unicodedata.normalize("NFD", cliente or "").lower()
+        cliente_norm = "".join(c for c in cliente_norm if unicodedata.category(c) != "Mn")
+
+        if cliente_norm != "nicolas":
+            filtered_data = []
             for doc in data:
-                doc_cliente = normalize_text(doc.get("cliente", ""))
-                if "atelier" in doc_cliente:
-                    filtered_data.append(doc)
-                elif usuario_cliente and usuario_cliente in doc_cliente:
+                doc_cliente = doc.get("cliente", "")
+                doc_norm = unicodedata.normalize("NFD", doc_cliente).lower()
+                doc_norm = "".join(c for c in doc_norm if unicodedata.category(c) != "Mn")
+
+                # incluir siempre si es Atelier IA o coincide con el cliente
+                if "atelier" in doc_norm or cliente_norm in doc_norm:
                     filtered_data.append(doc)
             data = filtered_data
 
