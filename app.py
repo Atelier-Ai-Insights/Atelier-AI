@@ -462,7 +462,7 @@ def main():
     # 2) Filtrar por marca extraída del nombre de archivo
     brands = sorted({extract_brand(doc.get("nombre_archivo", "")) for doc in db})
     brands.insert(0, "Todas")
-    selected_brand = st.sidebar.selectbox("Seleccione la marca", brands)
+    selected_brand = st.sidebar.selectbox("Seleccione el proyecto", brands)
     if selected_brand != "Todas":
         db = [doc for doc in db if extract_brand(doc.get("nombre_archivo", "")) == selected_brand]
 
