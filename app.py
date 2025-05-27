@@ -413,117 +413,156 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None, output
     return data
 
 def ideacion_mode(db, selected_files):
-    st.subheader("Modo de Ideación: Conversa con los datos")
+    """
+    Modo Conversación: permite al usuario interactuar libremente con los datos.
+    """
+    st.subheader("Modo Conversación: Conversa con los datos")
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
+    # Mostrar historial
     for msg in st.session_state.chat_history:
         st.markdown(f"**{msg['role'].capitalize()}:** {msg['message']}")
-    user_input = st.text_input("Escribe tu consulta o idea:")
-    if st.button("Enviar consulta"):
+    # Entrada del usuario
+    user_input = st.text_input("Pregunta algo…")
+    # Botón para enviar pregunta
+    if st.button("Enviar pregunta"):
         if not user_input.strip():
-            st.warning("Ingrese un mensaje para continuar la conversación.")
+            st.warning("Ingrese una pregunta para continuar la conversación.")
         else:
-            st.session_state.chat_history.append({"role":"Usuario","message":user_input})
+            st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
+            # Preparar prompt para Gemini
             relevant = get_relevant_info(db, user_input, selected_files)
             conv_prompt = "Historial de conversación:\n"
             for m in st.session_state.chat_history:
                 conv_prompt += f"{m['role']}: {m['message']}\n"
             conv_prompt += "\nInformación de contexto:\n" + relevant + "\n\nGenera respuesta detallada."
+            # Llamada a la API
             resp = call_gemini_api(conv_prompt)
             if resp:
-                st.session_state.chat_history.append({"role":"Asistente","message":resp})
+                st.session_state.chat_history.append({"role": "Asistente", "message": resp})
                 st.markdown(f"**Asistente:** {resp}")
-                log_query_event(user_input, mode="Ideacion")
+                log_query_event(user_input, mode="Conversación")
             else:
                 st.error("Error al generar la respuesta.")
-    if st.session_state.chat_history:
+    # Opción de descargar historial
+    if st.session_state.get("chat_history"):
         pdf_bytes = generate_pdf_html(
             "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history),
             title="Historial de Chat"
         )
         st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat.pdf", mime="application/pdf")
 
+
 def main():
-    if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    # Forzar login si no hay sesión activa
+    if not st.session_state.get("logged_in"):
         show_login()
-    logout()
 
-    st.title("Atelier IA")
-    st.markdown("""
-    Bienvenido a **Atelier IA**. Plataforma para generar informes e interactuar con datos.
-    """)
+    # Cabecera y descripción
+    st.title("Atelier Ai")
+    st.markdown(
+        "Atelier Ai es una herramienta de inteligencia artificial para realizar consultas\n"
+        "y conversar con datos arrojados por distintos estudios de mercados\n"
+        "realizados para el entendimiento del consumidor y del mercado, impulsada\n"
+        "por modelos lingüísticos de vanguardia.\n\n"
+        "**Modo Generación de Reportes / Modo Conversación**"
+    )
 
+    # Cargar base de datos
     try:
         db = load_database(st.session_state.cliente)
     except Exception as e:
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
 
-    # --- FILTROS ---
-    # 1) Filtrar por año (campo "marca" en el JSON es en realidad el año)
+    # --- PANEL LATERAL (ordenado) ---
+    # 1. Seleccione el modo de uso
+    modo = st.sidebar.radio(
+        "Seleccione el modo de uso:",
+        ["Generar un reporte de reportes", "Conversar con los datos"]
+    )
+    # 2. Seleccione año
     years = sorted({doc.get("marca", "") for doc in db if doc.get("marca")})
     years.insert(0, "Todos")
-    selected_year = st.sidebar.selectbox("Seleccione el año", years)
+    selected_year = st.sidebar.selectbox("Seleccione el año:", years)
     if selected_year != "Todos":
         db = [doc for doc in db if doc.get("marca", "") == selected_year]
 
-    # 2) Filtrar por marca extraída del nombre de archivo
+    # 3. Seleccione el proyecto
     brands = sorted({extract_brand(doc.get("nombre_archivo", "")) for doc in db})
     brands.insert(0, "Todas")
-    selected_brand = st.sidebar.selectbox("Seleccione el proyecto", brands)
+    selected_brand = st.sidebar.selectbox("Seleccione el proyecto:", brands)
     if selected_brand != "Todas":
         db = [doc for doc in db if extract_brand(doc.get("nombre_archivo", "")) == selected_brand]
 
-    selected_files = [doc.get("nombre_archivo") for doc in db]
+    # 4. Califique el informe (solo en generación de reportes)
+    if modo == "Generar un reporte de reportes":
+        rating = st.sidebar.radio(
+            "Califique el informe:",
+            [1, 2, 3, 4, 5],
+            horizontal=True,
+            key="rating"
+        )
 
-    # IMPRIMIR LOS DOCUMENTOS CARGADOS
-    # ——— Mostrar en consola ———
-    print("Artículos cargados para enviar a la API:")
-    for fname in selected_files:
-        print(f"  • {fname}")
+    # 5. Cerrar Sesión
+    if st.sidebar.button("Cerrar Sesión"):
+        st.session_state.clear()
+        st.cache_data.clear()
+        st.rerun()
 
-    # ——— Mostrar en la interfaz de Streamlit ———
-    st.sidebar.markdown("### Artículos cargados")
-    for fname in selected_files:
-        st.sidebar.write(f"• {fname}")
-    
-    # Modo de uso
-    modo = st.sidebar.radio("Seleccione el modo", ["Informe de Informes", "Ideación (Conversar con los datos)"])
+    # --- LÓGICA PRINCIPAL ---
+    if modo == "Generar un reporte de reportes":
+        st.markdown("### Generar reporte")
+        # Caja de texto para la consulta
+        question = st.text_area("Escribe tu consulta…", height=150)
+        # Caja de texto para personalizar
+        additional_info = st.text_area("Personaliza el reporte…", height=150, key="additional_info")
 
-    if modo == "Informe de Informes":
-        st.markdown("### Ingrese una pregunta para generar el informe")
-        question = st.text_area("Pregunta", height=150)
-        additional_info = st.text_area("Personaliza tu informe (fragmento adicional)", key="additional_info", height=150)
-        rating = st.sidebar.radio("Calificar el Informe", [1,2,3,4,5], horizontal=True, key="rating")
-
+        # Estado de pregunta anterior
         if 'last_question' not in st.session_state:
             st.session_state['last_question'] = ''
 
-        if st.button("Generar Informe"):
+        # Botón de generación
+        if st.button("Generar reporte"):
             if not question.strip():
-                st.warning("Ingrese una pregunta.")
+                st.warning("Ingrese una consulta.")
             else:
+                # Reiniciar informe si cambió la pregunta
                 if question != st.session_state['last_question']:
                     st.session_state.pop('report', None)
                     st.session_state['last_question'] = question
 
+                # Generar informe si es la primera vez para esta pregunta
                 if 'report' not in st.session_state:
-                    st.info("Generando informe...")
-                    report = generate_final_report(question, db, selected_files)
+                    st.info("Generando informe…")
+                    report = generate_final_report(question, db, [doc.get("nombre_archivo") for doc in db])
                     if report is None:
                         st.error("No se pudo generar el informe.")
                         return
                     st.session_state['report'] = report
 
+                # Mostrar y permitir edición
                 st.markdown("### Informe Final")
-                edited_report = st.text_area("Puedes editar el informe", value=st.session_state['report'], height=300)
+                edited_report = st.text_area(
+                    "Informe generado (puede editarlo abajo)",
+                    value=st.session_state['report'],
+                    height=300
+                )
                 final_content = edited_report + "\n\n" + additional_info
-                pdf_bytes = generate_pdf_html(final_content, title="Informe Final", banner_path=banner_file)
-                st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="Informe_AtelierIA.pdf", mime="application/pdf")
-                log_query_event(question, mode="Informe", rating=rating)
-
+                pdf_bytes = generate_pdf_html(
+                    final_content,
+                    title="Informe Final",
+                    banner_path=banner_file
+                )
+                st.download_button(
+                    "Descargar Informe en PDF",
+                    data=pdf_bytes,
+                    file_name="Informe_AtelierIA.pdf",
+                    mime="application/pdf"
+                )
+                log_query_event(question, mode="Generación", rating=rating)
     else:
-        ideacion_mode(db, selected_files)
+        ideacion_mode(db, [doc.get("nombre_archivo") for doc in db])
 
 if __name__ == "__main__":
     main()
