@@ -256,63 +256,60 @@ def get_relevant_info(db, question, selected_files):
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
 
-    # Prompt 1: Genera el resumen estructurado con metadatos.
+   # Prompt 1: Extrae hallazgos clave y referencias.
     prompt1 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
         "Instrucciones:\n"
-        "Busca en la pregunta la marca de la ue se hace la pregunta y el producto exacto del que se está haciendo la pregunta, debes ser muy especifico y riguroso en responder exactamente lo que el cliente esta preguntando."
-        "- Reitera la pregunta del cliente: ***{question}*** y asegúrate de que la respuesta esté alineada con ella.\n"
-        "- El informe se organizará en cinco secciones: \n"
-        "   1. Introducción\n"
-        "   2. Enfoque metodológico\n"
-        "   3. Principales hallazgos\n"
-        "   4. Planteamiento estratégico (conclusiones)\n"
-        "   5. Referencias\n\n"
-        "- Utiliza la siguiente información de contexto (extractos de documentos de investigación) para elaborar un resumen estructurado.\n"
-        "- No incluyas el texto completo de las citas, sino extractos que permitan identificar la fuente.\n"
-        "- Incluye metadatos relevantes (documentos, grupos, etc.) e indica en cada caso si la cita sigue el estilo IEEE: al final de la frase se incluye un número (por ejemplo, [1]). "
-        "- Posteriormente, en la sección de Referencias, asocia dicho número a la referencia completa (por ejemplo, [1] Autor, 'Título', año, etc.). Siempre provee las referencias citadas.\n"
-        "- Supón que todas las preguntas se basan en estudios realizados. Resalta y enfatiza los aportes y hallazgos positivos de dichos estudios.\n\n"
+        "1. Identifica en la pregunta la marca y el producto exacto sobre el cual se consulta. Sé muy específico y riguroso.\n"
+        "2. Reitera la pregunta del cliente: ***{question}***.\n"
+        "3. Utiliza la 'Información de Contexto' (extractos de documentos de investigación) para extraer los hallazgos más relevantes que respondan directamente a la pregunta.\n"
+        "4. No incluyas el texto completo de las citas, sino extractos breves que permitan identificar la fuente.\n"
+        "5. Incluye metadatos relevantes (documentos, grupos, etc.) e indica en cada hallazgo si la cita sigue el estilo IEEE (ejemplo: [1]).\n"
+        "6. En la sección 'Referencias', asocia cada número a la referencia completa, no escribas el nombre del archivo, sino el titulo del proyecto (ejemplo: [1] Autor, 'Título', año, etc.). Siempre provee las referencias citadas.\n"
+        "7. Enfócate en los resultados y hallazgos positivos de los estudios, asumiendo que todos son estudios realizados.\n\n"
         f"Información de Contexto:\n{relevant_info}\n\n"
-        "Respuesta (Resumen Estructurado y Metadatos):"
+        "Respuesta (Hallazgos Clave y Referencias):\n"
+        "## Hallazgos Clave:\n"
+        "- [Hallazgo 1 con cita IEEE]\n"
+        "- [Hallazgo 2 con cita IEEE]\n"
+        "## Referencias:\n"
+        "- [1] [Referencia completa]\n"
+        "- [2] [Referencia completa]\n"
     )
     result1 = call_gemini_api(prompt1)
     if result1 is None:
         return None
     result1 = html.unescape(result1)
-    # Prompt 2: Redacta la sección principal del informe en prosa utilizando el resumen anterior.
+
+    # Prompt 2: Redacta el informe principal en prosa utilizando el resumen anterior.
     prompt2 = (
-    f"Pregunta del Cliente: ***{question}***\n\n"
-    "Instrucciones:\n"
-    "Busca en la pregunta la marca de la ue se hace la pregunta y el producto exacto del que se está haciendo la pregunta, debes ser muy especifico y riguroso en responder exactamente lo que el cliente esta preguntando."
-    "Recuerda que todos los estudios en la base de datos que usamos fueron realizados por Atelier. Referencía especialmente en principales hayazgos." 
-    "Actúa como un analista experto en investigación de mercados y en comunicación estratégica, con enfoque en claridad, síntesis poderosa y pensamiento estructurado. Tu tarea es generar un reporte de alto impacto dividido en cinco secciones:\n"
-    "- **Introducción**\n"
-    "- **Metodología**\n"
-    "- **Principales hallazgos**\n"
-    "- **Insights**\n"
-    "- **Conclusiones**\n\n"
-    "El estilo de redacción debe estar inspirado en “Ideas que pegan” de Chip Heath y Dan Heath: usa un lenguaje claro, directo, con ejemplos concretos, metáforas memorables y estructuras que ayuden a fijar la información en la mente del lector. Evita el lenguaje técnico innecesario y prioriza lo emocional, lo inesperado y lo relevante.\n\n"
-    "Estructura esperada:\n\n"
-    "##1. **Introducción**:\n"
-    "- Plantea el contexto y el problema o pregunta central. Usa una historia corta, un dato inesperado o una analogía poderosa para captar la atención desde el inicio.\n\n"
-    "##2. **Metodología**:\n"
-    "- Describe brevemente cómo se obtuvo la información, asegurando claridad sobre las fuentes consultadas y enfatizando en la diversidad (evitando fuentes redundantes o repetitivas). Explica por qué el enfoque elegido aporta un valor diferencial al análisis.\n\n"
-    "##3. **Principales Hallazgos**:\n"
-    "- Presenta de forma estructurada los hechos más relevantes descubiertos (por temas, niveles, fuentes, etc.), garantizando que cada hallazgo ofrezca un valor original y no simplemente repita lugares comunes. Receurda siempre referenciar estudios si hay disponibles relacionados con la marca y producto citado, utiliza solo información relevante a la marca y el producto, no utilices estudios de forma innecesaria. Referencia en formato IEEE, mas que el nombre del documento el titulo o el producto del que se habla.\n\n"
-    "##4. **Insights**:\n"
-    "- Extrae aprendizajes y verdades profundas a partir de los hallazgos. Utiliza analogías y comparaciones que refuercen el mensaje y transformen la comprensión del problema.\n\n"
-    "##5. **Conclusiones**:\n"
-    "- Sintetiza la información y ofrece una dirección clara sobre cómo actuar con base en los insights obtenidos. Incluye recomendaciones breves que estén alineadas con los aprendizajes, sin repetir lo anterior.\n\n"
-    "Utiliza a continuación el siguiente resumen estructurado y metadatos, obtenido de los estudios e información contextual proporcionada:\n\n"
-    "##6. **Recomendaciones**\n"
-    "Con base en el informe realizado, que se le puede recomendar al cliente, deben ser recomendaciones interesantes, creativas, precisas y accionables. Estructura las recomendaciones utilizando referentes contextuales (matrices o estructuras) y teóricos del marketing o de psicologia o de innovación que se hayan publicado entre 2015 y 2025.\n\n"
-    "##7. **Referencias**\n"
-    "Cita el titulo del estudio, no el nombre del archivo, usa la información de la primera diapositiva que se reporta en la base de datos\n\n"
-    f"Resumen Estructurado y Metadatos:\n{result1}\n\n"
-    "Información de Contexto:\n"
-    f"{relevant_info}\n\n"
-    "Por favor, redacta el informe completo respetando lo solicitado en los puntos anteriores, en un estilo profesional, claro y coherente, utilizando Markdown."
+        f"Pregunta del Cliente: ***{question}***\n\n"
+        "Instrucciones Generales:\n"
+        "1. Identifica en la pregunta la marca y el producto exacto. Responde de manera específica y rigurosa a lo que el cliente pregunta.\n"
+        "2. Recuerda que todos los estudios en la base de datos fueron realizados por Atelier. Menciónalo si es relevante, especialmente en 'Principales Hallazgos'.\n"
+        "3. Actúa como un analista experto en investigación de mercados y comunicación estratégica. Enfócate en claridad, síntesis poderosa y pensamiento estructurado.\n"
+        "4. El estilo de redacción debe ser claro, directo, conciso y memorable (inspirado en “Ideas que pegan” de Chip Heath y Dan Heath). Evita lenguaje técnico innecesario; prioriza lo relevante y accionable.\n\n"
+        "Estructura del Informe (sé breve y preciso en cada sección):\n\n"
+        "##1. **Introducción**:\n"
+        "   - Preserva esta sección. Plantea el contexto y la pregunta central. Usa una historia corta, un dato inesperado o una analogía poderosa para captar la atención.\n\n"
+        "##2. **Principales Hallazgos**:\n"
+        "   - Presenta de forma estructurada los hechos más relevantes descubiertos, directamente desde la sección de resultados de los diferentes reportes y la información de contexto.\n"
+        "   - Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original.\n"
+        "   - Utiliza solo información relevante a la marca y el producto citados. No utilices estudios de forma innecesaria.\n"
+        "   - Referencia en formato IEEE (ej. [1]), usando el título del estudio o el producto del que se habla, más que el nombre del archivo.\n\n"
+        "##3. **Insights**:\n"
+        "   - Extrae aprendizajes y verdades profundas a partir de los hallazgos. Utiliza analogías y comparaciones que refuercen el mensaje y transformen la comprensión del problema. Sé conciso.\n\n"
+        "##4. **Conclusiones**:\n"
+        "   - Sintetiza la información y ofrece una dirección clara basada en los insights. Evita repetir información.\n\n"
+        "##5. **Recomendaciones**:\n"
+        "   - Con base en el informe, proporciona 2-3 recomendaciones concretas, creativas, precisas y accionables que sirvan como inspiración.\n"
+        "   - Deben estar alineadas con los insights y conclusiones. Evita la extensión innecesaria.\n\n"
+        "##6. **Referencias**:\n"
+        "   - Cita el título del estudio (no el nombre del archivo), utilizando la información de la primera diapositiva o metadatos disponibles.\n\n"
+        "Utiliza el siguiente resumen (Hallazgos Clave y Referencias) y la Información de Contexto para elaborar el informe:\n\n"
+        f"Resumen de Hallazgos Clave y Referencias:\n{result1}\n\n"
+        f"Información de Contexto Adicional (si es necesaria para complementar el resumen):\n{relevant_info}\n\n"
+        "Por favor, redacta el informe completo respetando la estructura y las instrucciones, en un estilo profesional, claro, conciso y coherente, utilizando Markdown."
     )
     result2 = call_gemini_api(prompt2)
     if result2 is None:
@@ -320,13 +317,15 @@ def generate_final_report(question, db, selected_files):
     result2 = html.unescape(result2)
     
     fecha_actual = datetime.datetime.now().strftime("%d/%m/%Y")
+    # st.session_state.cliente debe estar definido en tu aplicación Streamlit
+    cliente_nombre = getattr(st.session_state, 'cliente', 'Cliente Confidencial') # Fallback
     encabezado = (
         f"# {question}\n"
-        f"**Preparado por:**  Atelier IA\n\n"
-        f"**Preparado para:**  {st.session_state.cliente}\n\n"
-        f"**Fecha de elaboración:**  {fecha_actual}\n\n"
+        f"**Preparado por:** \nAtelier IA\n\n"
+        f"**Preparado para:** \n{cliente_nombre}\n\n"
+        f"**Fecha de elaboración:** \n{fecha_actual}\n\n"
     )
-    informe_completo = encabezado + result2  # Se asume que Gemini ya incluye la sección "Fuentes"
+    informe_completo = encabezado + result2
     return informe_completo
 
 def clean_text(text):
@@ -376,8 +375,13 @@ class PDFReport:
 
     def footer(self, canvas, doc):
         canvas.saveState()
-        footer_text = f"Generado por Atelier IA el {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} | Página {doc.page}"
-        p = Paragraph(footer_text, self.styles['CustomFooter'])
+        footer_text = (
+            "El uso de esta información está sujeto a los términos "
+            "y condiciones que rigen su suscripción a Atelier Ai. Es su responsabilidad "
+            "asegurarse de que el uso de esta información no infrinja los derechos de "
+            "propiedad intelectual."
+        )
+        p = Paragraph(clean_text(footer_text), self.styles['CustomFooter'])
         w, h = p.wrap(doc.width, doc.bottomMargin)
         p.drawOn(canvas, doc.leftMargin, h)
         canvas.restoreState()
@@ -414,51 +418,80 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None, output
 
 def ideacion_mode(db, selected_files):
     """
-    Modo Conversación: permite al usuario interactuar libremente con los datos.
+    Modo Conversación: interactúa con los datos, centrado en la sección de resultados.
     """
     st.subheader("Modo Conversación: Conversa con los datos")
+
+    # Inicializar historial
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
-    # Mostrar historial
+
+    # Mostrar historial de mensajes
     for msg in st.session_state.chat_history:
         st.markdown(f"**{msg['role'].capitalize()}:** {msg['message']}")
-    # Entrada del usuario
-    user_input = st.text_input("Pregunta algo…")
-    # Botón para enviar pregunta
+
+    # Instrucciones justo debajo de la última consulta
+    st.markdown(
+        "Para hacer nuevas consultas, escribe tu pregunta en el cuadro de abajo "
+        "y presiona **Enviar pregunta**."
+    )
+
+    # Caja de texto amplia para la consulta
+    user_input = st.text_area("Pregunta algo…", height=150)
+
+    # Botón para enviar la consulta
     if st.button("Enviar pregunta"):
         if not user_input.strip():
             st.warning("Ingrese una pregunta para continuar la conversación.")
         else:
-            st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
-            # Preparar prompt para Gemini
+            # Añadir mensaje del usuario al historial
+            st.session_state.chat_history.append({
+                "role": "Usuario",
+                "message": user_input
+            })
+
+            # Construir prompt simplificado
             relevant = get_relevant_info(db, user_input, selected_files)
-            conv_prompt = "Historial de conversación:\n"
-            for m in st.session_state.chat_history:
-                conv_prompt += f"{m['role']}: {m['message']}\n"
-            conv_prompt += "\nInformación de contexto:\n" + relevant + "\n\nGenera respuesta detallada."
+            conv_prompt = (
+                "Historial de conversación:\n"
+                + "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history)
+                + "\n\nInformación de contexto:\n" + relevant
+                + "\n\nInstrucciones:\n"
+                "- Responde usando únicamente la sección de resultados de los reportes.\n"
+                "- Incluye citas numeradas al estilo IEEE (por ejemplo, [1]).\n\n"
+                "Respuesta detallada:"
+            )
+
             # Llamada a la API
             resp = call_gemini_api(conv_prompt)
             if resp:
-                st.session_state.chat_history.append({"role": "Asistente", "message": resp})
+                st.session_state.chat_history.append({
+                    "role": "Asistente",
+                    "message": resp
+                })
                 st.markdown(f"**Asistente:** {resp}")
                 log_query_event(user_input, mode="Conversación")
             else:
                 st.error("Error al generar la respuesta.")
-    # Opción de descargar historial
-    if st.session_state.get("chat_history"):
+
+    # Oferta de descarga del historial
+    if st.session_state.chat_history:
         pdf_bytes = generate_pdf_html(
             "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history),
             title="Historial de Chat"
         )
-        st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat.pdf", mime="application/pdf")
+        st.download_button(
+            "Descargar Chat en PDF",
+            data=pdf_bytes,
+            file_name="chat.pdf",
+            mime="application/pdf"
+        )
 
 
 def main():
-    # Forzar login si no hay sesión activa
     if not st.session_state.get("logged_in"):
         show_login()
 
-    # Cabecera y descripción
     st.title("Atelier Ai")
     st.markdown(
         "Atelier Ai es una herramienta de inteligencia artificial para realizar consultas\n"
@@ -468,87 +501,75 @@ def main():
         "**Modo Generación de Reportes / Modo Conversación**"
     )
 
-    # Cargar base de datos
     try:
         db = load_database(st.session_state.cliente)
     except Exception as e:
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
 
-    # --- PANEL LATERAL (ordenado) ---
-    # 1. Seleccione el modo de uso
+    # Sidebar ordenado
     modo = st.sidebar.radio(
         "Seleccione el modo de uso:",
         ["Generar un reporte de reportes", "Conversar con los datos"]
     )
-    # 2. Seleccione año
     years = sorted({doc.get("marca", "") for doc in db if doc.get("marca")})
     years.insert(0, "Todos")
     selected_year = st.sidebar.selectbox("Seleccione el año:", years)
     if selected_year != "Todos":
-        db = [doc for doc in db if doc.get("marca", "") == selected_year]
+        db = [d for d in db if d.get("marca") == selected_year]
 
-    # 3. Seleccione el proyecto
-    brands = sorted({extract_brand(doc.get("nombre_archivo", "")) for doc in db})
+    brands = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db})
     brands.insert(0, "Todas")
     selected_brand = st.sidebar.selectbox("Seleccione el proyecto:", brands)
     if selected_brand != "Todas":
-        db = [doc for doc in db if extract_brand(doc.get("nombre_archivo", "")) == selected_brand]
+        db = [d for d in db if extract_brand(d.get("nombre_archivo", "")) == selected_brand]
 
-    # 4. Califique el informe (solo en generación de reportes)
+    # Calificación (solo en modo reporte)
     if modo == "Generar un reporte de reportes":
         rating = st.sidebar.radio(
-            "Califique el informe:",
-            [1, 2, 3, 4, 5],
-            horizontal=True,
-            key="rating"
+            "Califique el informe:", [1,2,3,4,5], horizontal=True, key="rating"
         )
 
-    # 5. Cerrar Sesión
     if st.sidebar.button("Cerrar Sesión"):
         st.session_state.clear()
         st.cache_data.clear()
         st.rerun()
 
-    # --- LÓGICA PRINCIPAL ---
+    # Lógica principal
     if modo == "Generar un reporte de reportes":
         st.markdown("### Generar reporte")
-        # Caja de texto para la consulta
         question = st.text_area("Escribe tu consulta…", height=150)
-        # Caja de texto para personalizar
-        additional_info = st.text_area("Personaliza el reporte…", height=150, key="additional_info")
 
-        # Estado de pregunta anterior
-        if 'last_question' not in st.session_state:
-            st.session_state['last_question'] = ''
-
-        # Botón de generación
         if st.button("Generar reporte"):
             if not question.strip():
                 st.warning("Ingrese una consulta.")
             else:
-                # Reiniciar informe si cambió la pregunta
-                if question != st.session_state['last_question']:
+                # Verificar si cambia la pregunta
+                if question != st.session_state.get('last_question'):
                     st.session_state.pop('report', None)
                     st.session_state['last_question'] = question
 
-                # Generar informe si es la primera vez para esta pregunta
                 if 'report' not in st.session_state:
                     st.info("Generando informe…")
-                    report = generate_final_report(question, db, [doc.get("nombre_archivo") for doc in db])
+                    report = generate_final_report(question, db, [d.get("nombre_archivo") for d in db])
                     if report is None:
                         st.error("No se pudo generar el informe.")
                         return
                     st.session_state['report'] = report
 
-                # Mostrar y permitir edición
+                # Mostrar y editar resultado
                 st.markdown("### Informe Final")
-                edited_report = st.text_area(
+                edited = st.text_area(
                     "Informe generado (puede editarlo abajo)",
                     value=st.session_state['report'],
                     height=300
                 )
-                final_content = edited_report + "\n\n" + additional_info
+                # Caja de personalización debajo del informe
+                additional_info = st.text_area(
+                    "Personaliza el reporte…", height=150, key="personalization"
+                )
+
+                final_content = f"{edited}\n\n{additional_info}" if additional_info.strip() else edited
                 pdf_bytes = generate_pdf_html(
                     final_content,
                     title="Informe Final",
@@ -562,7 +583,7 @@ def main():
                 )
                 log_query_event(question, mode="Generación", rating=rating)
     else:
-        ideacion_mode(db, [doc.get("nombre_archivo") for doc in db])
+        ideacion_mode(db, [d.get("nombre_archivo") for d in db])
 
 if __name__ == "__main__":
     main()
