@@ -497,7 +497,6 @@ def main():
         "y conversar con datos arrojados por distintos estudios de mercados\n"
         "realizados para el entendimiento del consumidor y del mercado, impulsada\n"
         "por modelos lingüísticos de vanguardia.\n\n"
-        "**Modo Generación de Reportes / Modo Conversación**"
     )
 
     try:
