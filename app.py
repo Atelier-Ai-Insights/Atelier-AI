@@ -540,7 +540,7 @@ def report_mode(db, selected_files):
                 st.session_state.pop("report", None)
                 st.session_state["last_question"] = question
 
-            # Generar informe
+            # Generar informe solo una vez por pregunta
             if "report" not in st.session_state:
                 st.info("Generando informe…")
                 report = generate_final_report(question, db, selected_files)
@@ -576,7 +576,7 @@ def report_mode(db, selected_files):
                 mime="application/pdf"
             )
 
-            # Registrar evento (usa la calificación si corresponde)
+            # Registrar evento usando el rating ya guardado via widget
             rating = st.session_state.get("rating", None)
             log_query_event(question, mode="Generación", rating=rating)
 
@@ -587,10 +587,10 @@ def main():
 
     st.title("Atelier Ai")
     st.markdown(
-        "Atelier Ai es una herramienta de inteligencia artificial para realizar consultas"
-        "y conversar con datos arrojados por distintos estudios de mercados"
-        "realizados para el entendimiento del consumidor y del mercado, impulsada"
-        "por modelos lingüísticos de vanguardia."
+        "Atelier Ai es una herramienta de inteligencia artificial para realizar consultas\n"
+        "y conversar con datos arrojados por distintos estudios de mercados\n"
+        "realizados para el entendimiento del consumidor y del mercado, impulsada\n"
+        "por modelos lingüísticos de vanguardia.\n\n"
     )
 
     try:
@@ -604,6 +604,7 @@ def main():
         "Seleccione el modo de uso:",
         ["Generar un reporte de reportes", "Conversar con los datos"]
     )
+
     years = sorted({doc.get("marca", "") for doc in db if doc.get("marca")})
     years.insert(0, "Todos")
     selected_year = st.sidebar.selectbox("Seleccione el año:", years)
@@ -618,22 +619,28 @@ def main():
 
     # Calificación (solo en modo reporte)
     if modo == "Generar un reporte de reportes":
-        st.session_state.rating = st.sidebar.radio(
-            "Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating"
+        # Asigna el widget con key="rating", no escribir en session_state directamente
+        st.sidebar.radio(
+            "Califique el informe:",
+            [1, 2, 3, 4, 5],
+            horizontal=True,
+            key="rating"
         )
 
-    # Cerrar sesión
+    # Botón Cerrar Sesión
     if st.sidebar.button("Cerrar Sesión"):
         st.session_state.clear()
         st.cache_data.clear()
         st.rerun()
 
-    # Lógica principal
     selected_files = [d.get("nombre_archivo") for d in db]
+
+    # Ejecutar el modo correspondiente
     if modo == "Generar un reporte de reportes":
         report_mode(db, selected_files)
     else:
         ideacion_mode(db, selected_files)
-        
+
+
 if __name__ == "__main__":
     main()
