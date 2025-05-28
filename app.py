@@ -108,8 +108,19 @@ def call_gemini_api(prompt):
             st.error(f"Error GRAVE en la llamada a Gemini: {e2}")
             return None
 
-    # Solo des-escape HTML, confiamos en que response.text ya es Unicode correcto
-    return html.unescape(response.text)
+    raw = response.text
+
+    # 1) Decodifica secuencias \uXXXX → caracteres Unicode
+    try:
+        text = raw.encode("utf-8").decode("unicode_escape")
+    except Exception:
+        text = raw
+
+    # 2) Des-escape de entidades HTML (&amp;, &lt;, etc.)
+    text = html.unescape(text)
+
+    return text
+
 
 # ==============================
 # CONEXIÓN A SUPABASE PARA GUARDAR CONSULTAS
@@ -471,6 +482,7 @@ def ideacion_mode(db, selected_files):
                 + "\n\nInstrucciones:\n"
                 "- Responde usando únicamente la sección de resultados de los reportes.\n"
                 "- Responde de forma creativa, eres un experto en innovación y creativiadad empresarial, ayuda al usuario que esta hablando contigo a conversar con sus datos y tener ideas novedosas basado en la información que hay"
+                "- Escribe de forma sintetica y concreta"
                 "- Incluye citas numeradas al estilo IEEE (por ejemplo, [1]).\n\n"
                 "Respuesta detallada:"
             )
