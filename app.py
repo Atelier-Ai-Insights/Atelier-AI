@@ -243,6 +243,17 @@ def extract_brand(filename):
         return ""
     return filename.split("In-ATL_")[1].rsplit(".", 1)[0]
 
+def apply_filter_criteria(db, selected_filter):
+    """
+    Filtra la lista de documentos por la key 'filtro' del JSON.
+    Actualmente inactivo: comentar/descomentar su llamada en main() cuando el JSON incluya este campo.
+    """
+    # Si no hay filtro o se selecciona "Todos", devolvemos la DB completa
+    if not selected_filter or selected_filter == "Todos":
+        return db
+    # Filtramos por el valor exacto de la key 'filtro'
+    return [doc for doc in db if doc.get("filtro") == selected_filter]
+
 # =====================================================
 # FUNCIONES DE GENERACIÓN DE INFORMES Y PDF
 # =====================================================
@@ -622,6 +633,14 @@ def main():
     selected_brand = st.sidebar.selectbox("Seleccione el proyecto:", brands)
     if selected_brand != "Todas":
         db = [d for d in db if extract_brand(d.get("nombre_archivo", "")) == selected_brand]
+
+    # =====================================================================
+    # 3. Filtro adicional por 'filtro' (inactivo hasta disponer del key)
+    # =====================================================================
+    # filtros = sorted({doc.get("filtro", "") for doc in db if doc.get("filtro")})
+    # filtros.insert(0, "Todos")
+    # selected_filter = st.sidebar.selectbox("Seleccione filtro:", filtros, disabled=True)
+    # db = apply_filter_criteria(db, selected_filter)
 
     # Calificación (solo en modo reporte)
     if modo == "Generar un reporte de reportes":
