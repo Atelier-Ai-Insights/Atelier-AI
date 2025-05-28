@@ -307,6 +307,7 @@ def generate_final_report(question, db, selected_files):
         "##6. **Referencias**:\n"
         "   - Cita el título del estudio (no el nombre del archivo), utilizando la información de la primera diapositiva o metadatos disponibles.\n\n"
         "Utiliza el siguiente resumen (Hallazgos Clave y Referencias) y la Información de Contexto para elaborar el informe:\n\n"
+        "5. MUY IMPORTANTE: Asegúrate de que los nombres de marcas y productos estén correctamente espaciados del texto circundante. Por ejemplo, escribe 'la marca Crem Helado debe...' en lugar de 'lamarcaCrem Heladodebe...'. Presta especial atención a este detalle de formato para asegurar la legibilidad.\n\n"
         f"Resumen de Hallazgos Clave y Referencias:\n{result1}\n\n"
         f"Información de Contexto Adicional (si es necesaria para complementar el resumen):\n{relevant_info}\n\n"
         "Por favor, redacta el informe completo respetando la estructura y las instrucciones, en un estilo profesional, claro, conciso y coherente, utilizando Markdown."
@@ -320,10 +321,10 @@ def generate_final_report(question, db, selected_files):
     # st.session_state.cliente debe estar definido en tu aplicación Streamlit
     cliente_nombre = getattr(st.session_state, 'cliente', 'Cliente Confidencial') # Fallback
     encabezado = (
-        f"# {question}\n"
-        f"**Preparado por:** \nAtelier IA\n\n"
-        f"**Preparado para:** \n{cliente_nombre}\n\n"
-        f"**Fecha de elaboración:** \n{fecha_actual}\n\n"
+        f"# {question}\n\n"  # Asegura un espacio después del título principal
+        f"**Preparado por:**\n\nAtelier IA\n\n"
+        f"**Preparado para:**\n\n{cliente_nombre}\n\n"
+        f"**Fecha de elaboración:**\n\n{fecha_actual}\n\n"
     )
     informe_completo = encabezado + result2
     return informe_completo
@@ -376,10 +377,8 @@ class PDFReport:
     def footer(self, canvas, doc):
         canvas.saveState()
         footer_text = (
-            "El uso de esta información está sujeto a los términos "
-            "y condiciones que rigen su suscripción a Atelier Ai. Es su responsabilidad "
-            "asegurarse de que el uso de esta información no infrinja los derechos de "
-            "propiedad intelectual."
+            "El uso de esta información está sujeto a los términos y condiciones que rigen su suscripción a Atelier AI. Es su responsabilidad "
+            "asegurarse de que el uso de esta información no infrinja los derechos de propiedad intelectual."
         )
         p = Paragraph(clean_text(footer_text), self.styles['CustomFooter'])
         w, h = p.wrap(doc.width, doc.bottomMargin)
