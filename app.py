@@ -146,32 +146,45 @@ def normalize_text(text):
     return "".join(c for c in normalized if unicodedata.category(c) != "Mn").lower()
 
 def add_markdown_content(pdf, markdown_text):
-    html_text = markdown2.markdown(markdown_text, extras=["fenced-code-blocks", "tables", "break-on-newline"])
+    """
+    Añade el contenido Markdown al PDF preservando etiquetas de formato y espacios.
+    """
+    html_text = markdown2.markdown(
+        markdown_text,
+        extras=["fenced-code-blocks", "tables", "break-on-newline"]
+    )
     soup = BeautifulSoup(html_text, "html.parser")
-    container = soup.body if soup.body else soup
+    container = soup.body or soup
 
     for elem in container.children:
         if elem.name:
             if elem.name.startswith("h"):
+                # Nivel de encabezado
                 try:
                     level = int(elem.name[1])
                 except:
                     level = 1
                 pdf.add_title(elem.get_text(strip=True), level=level)
+
             elif elem.name == "p":
-                pdf.add_paragraph(elem.get_text(strip=True))
+                # Usamos decode_contents() para preservar <b>, <i>, espacios, etc.
+                pdf.add_paragraph(elem.decode_contents())
+
             elif elem.name == "ul":
                 for li in elem.find_all("li"):
-                    pdf.add_paragraph("• " + li.get_text(strip=True))
+                    pdf.add_paragraph("• " + li.decode_contents())
+
             elif elem.name == "ol":
                 for idx, li in enumerate(elem.find_all("li"), 1):
-                    pdf.add_paragraph(f"{idx}. {li.get_text(strip=True)}")
+                    pdf.add_paragraph(f"{idx}. {li.decode_contents()}")
+
             else:
-                pdf.add_paragraph(elem.get_text(strip=True))
+                pdf.add_paragraph(elem.decode_contents())
+
         else:
             text = elem.string
             if text and text.strip():
-                pdf.add_paragraph(text.strip())
+                pdf.add_paragraph(text)
 
 # ==============================
 # CARGA DEL ARCHIVO JSON DESDE S3
@@ -330,9 +343,13 @@ def generate_final_report(question, db, selected_files):
     return informe_completo
 
 def clean_text(text):
+    """
+    Escapa solo ampersands para preservar etiquetas HTML y formatos (negritas, espacios).
+    """
     if not isinstance(text, str):
         text = str(text)
-    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    # Solo escapamos '&' para no eliminar <b>, <i>, etc.
+    return text.replace('&', '&amp;')
 
 class PDFReport:
     def __init__(self, filename, banner_path=None):
@@ -376,13 +393,16 @@ class PDFReport:
 
     def footer(self, canvas, doc):
         canvas.saveState()
+
         footer_text = (
-            "El uso de esta información está sujeto a los términos y condiciones que rigen su suscripción a Atelier AI. Es su responsabilidad "
-            "asegurarse de que el uso de esta información no infrinja los derechos de propiedad intelectual."
+            "El uso de esta información está sujeto a los términos y condiciones que rigen su suscripción a Atelier AI.<br/>"
+            "Es su responsabilidad asegurarse de que el uso de esta información no infrinja los derechos de propiedad intelectual."
         )
+        
         p = Paragraph(clean_text(footer_text), self.styles['CustomFooter'])
-        w, h = p.wrap(doc.width, doc.bottomMargin)
-        p.drawOn(canvas, doc.leftMargin, h)
+        y_position = 3 * mm 
+        p.drawOn(canvas, doc.leftMargin, y_position)
+        
         canvas.restoreState()
 
     def header_footer(self, canvas, doc):
@@ -486,6 +506,80 @@ def ideacion_mode(db, selected_files):
             mime="application/pdf"
         )
 
+def report_mode(db, selected_files):
+    """
+    Módulo de Generación de Reportes:
+    • Cuadro de personalización persistente (no se borra al generar).
+    • Incluye el texto de personalización en el PDF.
+    """
+    st.markdown("### Generar reporte")
+
+    # 1. Entrada de la pregunta
+    question = st.text_area(
+        "Escribe tu consulta…",
+        value=st.session_state.get("last_question", ""),
+        height=150,
+        key="report_question"
+    )
+
+    # 2. Cuadro de personalización PERSISTENTE
+    personalization = st.text_area(
+        "Personaliza el reporte…",
+        value=st.session_state.get("personalization", ""),
+        height=150,
+        key="personalization"
+    )
+
+    # 3. Botón para generar
+    if st.button("Generar reporte"):
+        if not question.strip():
+            st.warning("Ingrese una consulta.")
+        else:
+            # Guardar última pregunta
+            if question != st.session_state.get("last_question"):
+                st.session_state.pop("report", None)
+                st.session_state["last_question"] = question
+
+            # Generar informe
+            if "report" not in st.session_state:
+                st.info("Generando informe…")
+                report = generate_final_report(question, db, selected_files)
+                if report is None:
+                    st.error("No se pudo generar el informe.")
+                    return
+                st.session_state["report"] = report
+
+            # Mostrar informe y permitir edición
+            st.markdown("### Informe Final")
+            edited = st.text_area(
+                "Informe generado (puede editarlo abajo)",
+                value=st.session_state["report"],
+                height=300,
+                key="report_edit"
+            )
+
+            # 4. Combinar con personalización y generar PDF
+            final_content = edited
+            if personalization.strip():
+                final_content += "\n\n" + personalization
+
+            pdf_bytes = generate_pdf_html(
+                final_content,
+                title="Informe Final",
+                banner_path=banner_file
+            )
+
+            st.download_button(
+                "Descargar Informe en PDF",
+                data=pdf_bytes,
+                file_name="Informe_AtelierIA.pdf",
+                mime="application/pdf"
+            )
+
+            # Registrar evento (usa la calificación si corresponde)
+            rating = st.session_state.get("rating", None)
+            log_query_event(question, mode="Generación", rating=rating)
+
 
 def main():
     if not st.session_state.get("logged_in"):
@@ -493,10 +587,10 @@ def main():
 
     st.title("Atelier Ai")
     st.markdown(
-        "Atelier Ai es una herramienta de inteligencia artificial para realizar consultas\n"
-        "y conversar con datos arrojados por distintos estudios de mercados\n"
-        "realizados para el entendimiento del consumidor y del mercado, impulsada\n"
-        "por modelos lingüísticos de vanguardia.\n\n"
+        "Atelier Ai es una herramienta de inteligencia artificial para realizar consultas"
+        "y conversar con datos arrojados por distintos estudios de mercados"
+        "realizados para el entendimiento del consumidor y del mercado, impulsada"
+        "por modelos lingüísticos de vanguardia."
     )
 
     try:
@@ -524,64 +618,22 @@ def main():
 
     # Calificación (solo en modo reporte)
     if modo == "Generar un reporte de reportes":
-        rating = st.sidebar.radio(
-            "Califique el informe:", [1,2,3,4,5], horizontal=True, key="rating"
+        st.session_state.rating = st.sidebar.radio(
+            "Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating"
         )
 
+    # Cerrar sesión
     if st.sidebar.button("Cerrar Sesión"):
         st.session_state.clear()
         st.cache_data.clear()
         st.rerun()
 
     # Lógica principal
+    selected_files = [d.get("nombre_archivo") for d in db]
     if modo == "Generar un reporte de reportes":
-        st.markdown("### Generar reporte")
-        question = st.text_area("Escribe tu consulta…", height=150)
-
-        if st.button("Generar reporte"):
-            if not question.strip():
-                st.warning("Ingrese una consulta.")
-            else:
-                # Verificar si cambia la pregunta
-                if question != st.session_state.get('last_question'):
-                    st.session_state.pop('report', None)
-                    st.session_state['last_question'] = question
-
-                if 'report' not in st.session_state:
-                    st.info("Generando informe…")
-                    report = generate_final_report(question, db, [d.get("nombre_archivo") for d in db])
-                    if report is None:
-                        st.error("No se pudo generar el informe.")
-                        return
-                    st.session_state['report'] = report
-
-                # Mostrar y editar resultado
-                st.markdown("### Informe Final")
-                edited = st.text_area(
-                    "Informe generado (puede editarlo abajo)",
-                    value=st.session_state['report'],
-                    height=300
-                )
-                # Caja de personalización debajo del informe
-                additional_info = st.text_area(
-                    "Personaliza el reporte…", height=150, key="personalization"
-                )
-
-                final_content = f"{edited}\n\n{additional_info}" if additional_info.strip() else edited
-                pdf_bytes = generate_pdf_html(
-                    final_content,
-                    title="Informe Final",
-                    banner_path=banner_file
-                )
-                st.download_button(
-                    "Descargar Informe en PDF",
-                    data=pdf_bytes,
-                    file_name="Informe_AtelierIA.pdf",
-                    mime="application/pdf"
-                )
-                log_query_event(question, mode="Generación", rating=rating)
+        report_mode(db, selected_files)
     else:
-        ideacion_mode(db, [d.get("nombre_archivo") for d in db])
-
+        ideacion_mode(db, selected_files)
+        
 if __name__ == "__main__":
     main()
