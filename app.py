@@ -108,17 +108,8 @@ def call_gemini_api(prompt):
             st.error(f"Error GRAVE en la llamada a Gemini: {e2}")
             return None
 
-    raw = response.text
-    text = html.unescape(raw)
-    try:
-        text = text.encode("utf-8").decode("unicode_escape")
-    except Exception:
-        pass
-    try:
-        text = text.encode("latin-1").decode("utf-8")
-    except Exception:
-        pass
-    return text
+    # Solo des-escape HTML, confiamos en que response.text ya es Unicode correcto
+    return html.unescape(response.text)
 
 # ==============================
 # CONEXIÓN A SUPABASE PARA GUARDAR CONSULTAS
@@ -392,18 +383,20 @@ class PDFReport:
         canvas.restoreState()
 
     def footer(self, canvas, doc):
-        canvas.saveState()
-
-        footer_text = (
-            "El uso de esta información está sujeto a los términos y condiciones que rigen su suscripción a Atelier AI.<br/>"
-            "Es su responsabilidad asegurarse de que el uso de esta información no infrinja los derechos de propiedad intelectual."
-        )
-        
-        p = Paragraph(clean_text(footer_text), self.styles['CustomFooter'])
-        y_position = 3 * mm 
-        p.drawOn(canvas, doc.leftMargin, y_position)
-        
-        canvas.restoreState()
+            canvas.saveState()
+            footer_text = (
+                "El uso de esta información está sujeto a los términos y condiciones "
+                "que rigen su suscripción a Atelier AI.<br/>"
+                "Es su responsabilidad asegurarse de que el uso de esta información "
+                "no infrinja los derechos de propiedad intelectual."
+            )
+            p = Paragraph(footer_text, self.styles['CustomFooter'])
+            # Primero hacemos wrap para asignar blPara y medir altura
+            w, h = p.wrap(doc.width, doc.bottomMargin)
+            # Dibujamos a 3 mm del pie
+            y_position = 3 * mm
+            p.drawOn(canvas, doc.leftMargin, y_position)
+            canvas.restoreState()
 
     def header_footer(self, canvas, doc):
         self.header(canvas, doc)
@@ -477,6 +470,7 @@ def ideacion_mode(db, selected_files):
                 + "\n\nInformación de contexto:\n" + relevant
                 + "\n\nInstrucciones:\n"
                 "- Responde usando únicamente la sección de resultados de los reportes.\n"
+                "- Responde de forma creativa, eres un experto en innovación y creativiadad empresarial, ayuda al usuario que esta hablando contigo a conversar con sus datos y tener ideas novedosas basado en la información que hay"
                 "- Incluye citas numeradas al estilo IEEE (por ejemplo, [1]).\n\n"
                 "Respuesta detallada:"
             )
