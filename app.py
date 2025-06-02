@@ -569,7 +569,7 @@ def report_mode(db, selected_files):
             # Mostrar informe y permitir edición
             st.markdown("### Informe Final")
             edited = st.text_area(
-                "Informe generado (puede editarlo abajo)",
+                "Informe generado (puede copiar el texto markdown abajo)",
                 value=st.session_state["report"],
                 height=300,
                 key="report_edit"
