@@ -108,16 +108,16 @@ def call_gemini_api(prompt):
             st.error(f"Error GRAVE en la llamada a Gemini: {e2}")
             return None
 
-    raw = response.text
+    # response.text ya debería ser un string Python (Unicode)
+    text = response.text
 
-    # 1) Decodifica secuencias \uXXXX → caracteres Unicode
-    try:
-        text = raw.encode("utf-8").decode("unicode_escape")
-    except Exception:
-        text = raw
-
-    # 2) Des-escape de entidades HTML (&amp;, &lt;, etc.)
+    # Des-escapar entidades HTML (ej. &aacute; -> á, &ntilde; -> ñ)
+    # Esto es importante porque el modelo puede generar entidades HTML.
     text = html.unescape(text)
+
+    # La decodificación explícita con unicode_escape se elimina,
+    # ya que es la fuente más probable de corrupción si el texto ya está en Unicode.
+    # Python maneja internamente los strings como Unicode.
 
     return text
 
