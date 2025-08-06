@@ -286,7 +286,7 @@ def generate_final_report(question, db, selected_files):
     prompt1 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
         "Instrucciones:\n"
-        "1. Identifica en la pregunta la marca y el producto exacto sobre el cual se consulta. Sé muy específico y riguroso.\n"
+        "1. Identifica en la pregunta la marca exacta y el producto exacto sobre el cual se hace la consulta. Sé muy específico y riguroso en referenciar información asociada a la marca consultada.\n"
         "2. Reitera la pregunta del cliente: ***{question}***.\n"
         "3. Utiliza la 'Información de Contexto' (extractos de documentos de investigación) para extraer los hallazgos más relevantes que respondan directamente a la pregunta.\n"
         "4. No incluyas el texto completo de las citas, sino extractos breves que permitan identificar la fuente.\n"
