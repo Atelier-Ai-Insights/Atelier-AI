@@ -492,8 +492,8 @@ def ideacion_mode(db, selected_files):
                 + "\n\nInformación de contexto:\n" + relevant
                 + "\n\nInstrucciones:\n"
                 "- Responde usando únicamente la sección de resultados de los reportes.\n"
-                "- Responde de forma creativa, eres un experto en innovación y creativiadad empresarial, ayuda al usuario que esta hablando contigo a conversar con sus datos y tener ideas novedosas basado en la información que hay"
-                "- Escribe de forma sintetica y concreta"
+                "- Responde de forma creativa, eres un científico de datos y un experto en innovación y creativiadad, así que ayudarás al usuario que esta hablando contigo a conversar con sus datos para ofrecerle ideas novedosas basadas en la información y en los datos que hay sobre la temática que te está solicitando"
+                "- Escribe de forma clara, sintética y concreta"
                 "- Incluye citas numeradas al estilo IEEE (por ejemplo, [1]).\n\n"
                 "Respuesta detallada:"
             )
@@ -548,7 +548,7 @@ def report_mode(db, selected_files):
     )
 
     # 3. Botón para generar
-    if st.button("Generar reporte"):
+    if st.button("Generar Reporte"):
         if not question.strip():
             st.warning("Ingrese una consulta.")
         else:
