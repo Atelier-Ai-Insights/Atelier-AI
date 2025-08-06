@@ -320,15 +320,15 @@ def generate_final_report(question, db, selected_files):
         "   - Preserva esta sección. Plantea el contexto y la pregunta central. Usa una historia corta, un dato inesperado o una analogía poderosa para captar la atención.\n\n"
         "##2. **Principales Hallazgos**:\n"
         "   - Presenta de forma estructurada los hechos más relevantes descubiertos, directamente desde la sección de resultados de los diferentes reportes y la información de contexto.\n"
-        "   - Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original.\n"
-        "   - Utiliza solo información relevante a la marca y el producto citados. No utilices estudios de forma innecesaria.\n"
+        "   - Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original y que sume valor para responder a la pregunta.\n"
+        "   - Utiliza solo información relevante y que haga referencia a la marca y al producto citados. No utilices estudios de forma innecesaria.\n"
         "   - Referencia en formato IEEE (ej. [1]), usando el título del estudio o el producto del que se habla, más que el nombre del archivo.\n\n"
         "##3. **Insights**:\n"
-        "   - Extrae aprendizajes y verdades profundas a partir de los hallazgos. Utiliza analogías y comparaciones que refuercen el mensaje y transformen la comprensión del problema. Sé conciso.\n\n"
+        "   - Extrae aprendizajes y verdades profundas a partir de los hallazgos. Utiliza analogías y comparaciones que refuercen el mensaje y transformen la comprensión del problema. Sé conciso. Utiliza frases suscitantas, es decir, frase cortas con mucho significado\n\n"
         "##4. **Conclusiones**:\n"
         "   - Sintetiza la información y ofrece una dirección clara basada en los insights. Evita repetir información.\n\n"
         "##5. **Recomendaciones**:\n"
-        "   - Con base en el informe, proporciona 2-3 recomendaciones concretas, creativas, precisas y accionables que sirvan como inspiración.\n"
+        "   - Con base en el informe, proporciona 3-4 recomendaciones concretas, creativas, precisas y accionables que sirvan como inspiración.\n"
         "   - Deben estar alineadas con los insights y conclusiones. Evita la extensión innecesaria.\n\n"
         "##6. **Referencias**:\n"
         "   - Cita el título del estudio (no el nombre del archivo), utilizando la información de la primera diapositiva o metadatos disponibles.\n\n"
@@ -407,7 +407,7 @@ class PDFReport:
     def footer(self, canvas, doc):
             canvas.saveState()
             footer_text = (
-                "El uso de esta información está sujeto a los términos y condiciones "
+                "El uso de esta información está sujeto a términos y condiciones "
                 "que rigen su suscripción a Atelier AI.<br/>"
                 "Es su responsabilidad asegurarse de que el uso de esta información "
                 "no infrinja los derechos de propiedad intelectual."
