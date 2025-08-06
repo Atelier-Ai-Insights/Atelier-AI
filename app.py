@@ -257,7 +257,7 @@ def apply_filter_criteria(db, selected_filter):
 # =====================================================
 # FUNCIONES DE GENERACIÓN DE INFORMES Y PDF
 # =====================================================
-banner_file = "Banner (2).png"
+banner_file = "Banner (2).jpg"
 
 def get_relevant_info(db, question, selected_files):
     all_text = ""
