@@ -622,12 +622,6 @@ def main():
         ["Generar un reporte de reportes", "Conversar con los datos"]
     )
 
-    years = sorted({doc.get("marca", "") for doc in db if doc.get("marca")})
-    years.insert(0, "Todos")
-    selected_year = st.sidebar.selectbox("Seleccione el año:", years)
-    if selected_year != "Todos":
-        db = [d for d in db if d.get("marca") == selected_year]
-
     # =====================================================================
     # 3. Filtro adicional por 'filtro'
     # =====================================================================
@@ -636,6 +630,12 @@ def main():
     selected_filter = st.sidebar.selectbox("Seleccione marca/filtro:", filtros)
     db = apply_filter_criteria(db, selected_filter)
     
+    years = sorted({doc.get("marca", "") for doc in db if doc.get("marca")})
+    years.insert(0, "Todos")
+    selected_year = st.sidebar.selectbox("Seleccione el año:", years)
+    if selected_year != "Todos":
+        db = [d for d in db if d.get("marca") == selected_year]
+
     brands = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db})
     brands.insert(0, "Todas")
     selected_brand = st.sidebar.selectbox("Seleccione el proyecto:", brands)
