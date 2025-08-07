@@ -628,12 +628,6 @@ def main():
     if selected_year != "Todos":
         db = [d for d in db if d.get("marca") == selected_year]
 
-    brands = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db})
-    brands.insert(0, "Todas")
-    selected_brand = st.sidebar.selectbox("Seleccione el proyecto:", brands)
-    if selected_brand != "Todas":
-        db = [d for d in db if extract_brand(d.get("nombre_archivo", "")) == selected_brand]
-
     # =====================================================================
     # 3. Filtro adicional por 'filtro'
     # =====================================================================
@@ -641,6 +635,12 @@ def main():
     filtros.insert(0, "Todos")
     selected_filter = st.sidebar.selectbox("Seleccione marca/filtro:", filtros)
     db = apply_filter_criteria(db, selected_filter)
+    
+    brands = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db})
+    brands.insert(0, "Todas")
+    selected_brand = st.sidebar.selectbox("Seleccione el proyecto:", brands)
+    if selected_brand != "Todas":
+        db = [d for d in db if extract_brand(d.get("nombre_archivo", "")) == selected_brand]
 
     # Calificación (solo en modo reporte)
     if modo == "Generar un reporte de reportes":
