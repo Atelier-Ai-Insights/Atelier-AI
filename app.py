@@ -637,10 +637,10 @@ def main():
     # =====================================================================
     # 3. Filtro adicional por 'filtro' (inactivo hasta disponer del key)
     # =====================================================================
-    # filtros = sorted({doc.get("filtro", "") for doc in db if doc.get("filtro")})
-    # filtros.insert(0, "Todos")
-    # selected_filter = st.sidebar.selectbox("Seleccione filtro:", filtros, disabled=True)
-    # db = apply_filter_criteria(db, selected_filter)
+    filtros = sorted({doc.get("filtro", "") for doc in db if doc.get("filtro")})
+    filtros.insert(0, "Todos")
+    selected_filter = st.sidebar.selectbox("Seleccione filtro:", filtros, disabled=True)
+    db = apply_filter_criteria(db, selected_filter)
 
     # Calificación (solo en modo reporte)
     if modo == "Generar un reporte de reportes":
