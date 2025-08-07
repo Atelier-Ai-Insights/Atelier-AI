@@ -639,7 +639,7 @@ def main():
     # =====================================================================
     filtros = sorted({doc.get("filtro", "") for doc in db if doc.get("filtro")})
     filtros.insert(0, "Todos")
-    selected_filter = st.sidebar.selectbox("Seleccione filtro:", filtros, disabled=True)
+    selected_filter = st.sidebar.selectbox("Seleccione filtro:", filtros)
     db = apply_filter_criteria(db, selected_filter)
 
     # Calificación (solo en modo reporte)
