@@ -313,7 +313,7 @@ def generate_final_report(question, db, selected_files):
         "Instrucciones Generales:\n"
         "1. Identifica en la pregunta la marca y el producto exacto. Responde de manera específica y rigurosa a lo que el cliente pregunta.\n"
         "2. Recuerda que todos los estudios en la base de datos fueron realizados por Atelier. Menciónalo si es relevante, especialmente en 'Principales Hallazgos'.\n"
-        "3. Actúa como un analista experto en investigación de mercados, en marketing y en comunicación estratégica. Enfócate en claridad, síntesis poderosa y pensamiento estructurado.\n"
+        "3. Actúa como un analista experto en ciencias del comportamiento, en investigación de mercados, en marketing y en comunicación estratégica. Enfócate en claridad, síntesis poderosa y pensamiento estructurado.\n"
         "4. El estilo de redacción debe ser claro, directo, conciso y memorable (inspirado en “Ideas que pegan” de Chip Heath y Dan Heath). Evita lenguaje técnico innecesario; prioriza lo relevante y accionable.\n\n"
         "Estructura del Informe (sé breve y preciso en cada sección):\n\n"
         "##1. **Introducción**:\n"
@@ -408,7 +408,7 @@ class PDFReport:
             canvas.saveState()
             footer_text = (
                 "El uso de esta información está sujeto a términos y condiciones "
-                "que rigen su suscripción a Atelier AI.<br/>"
+                "que rigen su suscripción a los servicios prestados por Atelier AI.<br/>"
                 "Es su responsabilidad asegurarse que el uso de esta información "
                 "no infrinja los derechos de propiedad intelectual."
             )
