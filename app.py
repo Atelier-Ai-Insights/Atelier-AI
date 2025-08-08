@@ -55,6 +55,18 @@ def logout():
         st.session_state.clear()
         st.cache_data.clear()
         st.rerun()
+        
+# ====== Helper para reiniciar el flujo de reportes ======
+def reset_report_workflow():
+    """
+    Limpia el estado del flujo de 'Generar un reporte de reportes' para
+    empezar una nueva consulta. No toca el login ni los filtros.
+    """
+    for k in ["report", "last_question", "report_question", "personalization"]:
+        st.session_state.pop(k, None)
+    # Opcional: limpiar calificación
+    st.session_state.pop("rating", None)
+    st.rerun()
 
 # ==============================
 # CONFIGURACIÓN DE LA API DE GEMINI
@@ -522,6 +534,14 @@ def ideacion_mode(db, selected_files):
             file_name="chat.pdf",
             mime="application/pdf"
         )
+        
+        st.button(
+            "🔁 Nueva consulta",
+            help="Borra el informe actual y vuelve a empezar con una nueva pregunta",
+            on_click=reset_report_workflow,
+            key="new_report_query_btn"
+        )
+
 
 def report_mode(db, selected_files):
     """
