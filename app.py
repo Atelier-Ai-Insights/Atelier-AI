@@ -627,7 +627,7 @@ def main():
     # =====================================================================
     filtros = sorted({doc.get("filtro", "") for doc in db if doc.get("filtro")})
     filtros.insert(0, "Todos")
-    selected_filter = st.sidebar.selectbox("Seleccione marca:", filtros)
+    selected_filter = st.sidebar.selectbox("Seleccione la marca:", filtros)
     db = apply_filter_criteria(db, selected_filter)
     
     years = sorted({doc.get("marca", "") for doc in db if doc.get("marca")})
