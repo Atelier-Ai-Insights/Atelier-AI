@@ -408,7 +408,7 @@ class PDFReport:
             canvas.saveState()
             footer_text = (
                 "El uso de esta información está sujeto a términos y condiciones "
-                "que rigen su suscripción a los servicios prestados por Atelier AI.<br/>"
+                "que rigen su suscripción a los servicios prestados por Atelier Data Studio.<br/>"
                 "Es su responsabilidad asegurarse que el uso de esta información "
                 "no infrinja los derechos de propiedad intelectual."
             )
@@ -602,9 +602,9 @@ def main():
     if not st.session_state.get("logged_in"):
         show_login()
 
-    st.title("Atelier Ai")
+    st.title("Atelier Data Studio")
     st.markdown(
-        "Atelier Ai es una herramienta de inteligencia artificial impulsada\n"
+        "Atelier Data Studio es una herramienta de inteligencia artificial impulsada\n"
         "por modelos lingüísticos de vanguardia para realizar consultas\n"
         "y conversar con datos arrojados por los distintos estudios de mercados\n"
         "realizados para el entendimiento del consumidor y del mercado.\n\n"
