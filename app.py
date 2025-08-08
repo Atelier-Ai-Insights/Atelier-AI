@@ -66,11 +66,11 @@ def reset_report_workflow():
         st.session_state.pop(k, None)
     # Opcional: limpiar calificación
     st.session_state.pop("rating", None)
-    st.rerun()
+    #st.rerun()
 
 def reset_chat_workflow():
     st.session_state.pop("chat_history", None)
-    st.rerun()
+    #st.rerun()
 
 # ==============================
 # CONFIGURACIÓN DE LA API DE GEMINI
