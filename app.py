@@ -213,11 +213,11 @@ def load_database(cliente: str):
         response = s3.get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response["Body"].read().decode("utf-8"))
 
-        # Filtrar por cliente (salvo admin "nicolas"), pero siempre incluir docs de Atelier IA
+        # Filtrar por cliente (salvo admin "insights.atelier"), pero siempre incluir docs de Atelier IA
         cliente_norm = unicodedata.normalize("NFD", cliente or "").lower()
         cliente_norm = "".join(c for c in cliente_norm if unicodedata.category(c) != "Mn")
 
-        if cliente_norm != "nicolas":
+        if cliente_norm != "insights.atelier":
             filtered_data = []
             for doc in data:
                 doc_cliente = doc.get("cliente", "")
