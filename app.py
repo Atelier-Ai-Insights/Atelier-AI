@@ -68,6 +68,10 @@ def reset_report_workflow():
     st.session_state.pop("rating", None)
     st.rerun()
 
+def reset_chat_workflow():
+    st.session_state.pop("chat_history", None)
+    st.rerun()
+
 # ==============================
 # CONFIGURACIÓN DE LA API DE GEMINI
 # ==============================
@@ -536,10 +540,10 @@ def ideacion_mode(db, selected_files):
         )
         
         st.button(
-            "🔁 Nueva consulta",
-            help="Borra el informe actual y vuelve a empezar con una nueva pregunta",
-            on_click=reset_report_workflow,
-            key="new_report_query_btn"
+            "🔁 Nueva conversación",
+            help="Borra el historial del chat y empieza de cero",
+            on_click=reset_chat_workflow,
+            key="new_chat_btn"
         )
 
 
@@ -611,6 +615,13 @@ def report_mode(db, selected_files):
                 data=pdf_bytes,
                 file_name="Informe_AtelierIA.pdf",
                 mime="application/pdf"
+            )
+            
+            st.button(
+                "🔁 Nueva consulta",
+                help="Borra el informe actual y vuelve a empezar con una nueva pregunta",
+                on_click=reset_report_workflow,
+                key="new_report_query_btn"
             )
 
             # Registrar evento usando el rating ya guardado via widget
