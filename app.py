@@ -286,12 +286,12 @@ def get_relevant_info(db, question, selected_files):
                 metadatos = grupo.get("metadatos", {})
                 hechos     = grupo.get("hechos", {})
                 if metadatos:
-                    all_text += f"Metadatos: {json.dumps(metadatos)}\n"
+                    all_text += f"Metadatos: {json.dumps(metadatos, ensure_ascii=False)}\n"
                 if hechos:
                     if hechos.get("tipo") == "cita":
                         all_text += "[Cita]\n"
                     else:
-                        all_text += f"Hechos: {json.dumps(hechos)}\n"
+                        all_text += f"Hechos: {json.dumps(hechos, ensure_ascii=False)}\n"
             all_text += "\n---\n\n"
     return all_text
 
