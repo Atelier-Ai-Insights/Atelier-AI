@@ -304,10 +304,10 @@ def generate_final_report(question, db, selected_files):
         "Instrucciones:\n"
         "1. Identifica en la pregunta la marca exacta y el producto exacto sobre el cual se hace la consulta. Sé muy específico y riguroso en referenciar información asociada a la marca consultada.\n"
         "2. Reitera la pregunta del cliente: ***{question}***.\n"
-        "3. Utiliza la 'Información de Contexto' (extractos de documentos de investigación) para extraer los hallazgos más relevantes que respondan directamente a la pregunta.\n"
+        "3. Utiliza la 'Información de Contexto' (extractos de documentos de investigación) para extraer los hallazgos más relevantes que respondan directamente a la pregunta. Cuando se pregunte por una marca (ejemplo: oreo) siempre traer información relacionada.\n"
         "4. No incluyas el texto completo de las citas, sino extractos breves que permitan identificar la fuente.\n"
         "5. Incluye metadatos relevantes (documentos, grupos, etc.) e indica en cada hallazgo si la cita sigue el estilo IEEE (ejemplo: [1]).\n"
-        "6. En la sección 'Referencias', asocia cada número a la referencia completa, no escribas el nombre del archivo, sino el titulo del proyecto (ejemplo: [1] Autor, 'Título', año, etc.). Siempre provee las referencias citadas.\n"
+        "6. En la sección 'Referencias', asocia cada número a la referencia completa, no escribas el nombre del archivo, sino el titulo del proyecto (ejemplo: [1] 'Título del Proyecto', año, etc.). Siempre provee las referencias citadas.\n"
         "7. Enfócate en los resultados y hallazgos positivos de los estudios, asumiendo que todos son estudios realizados.\n\n"
         f"Información de Contexto:\n{relevant_info}\n\n"
         "Respuesta (Hallazgos Clave y Referencias):\n"
@@ -344,7 +344,7 @@ def generate_final_report(question, db, selected_files):
         "##4. **Conclusiones**:\n"
         "   - Sintetiza la información y ofrece una dirección clara basada en los insights. Evita repetir información.\n\n"
         "##5. **Recomendaciones**:\n"
-        "   - Con base en el informe, proporciona 3-4 recomendaciones concretas, creativas, precisas y accionables que sirvan como inspiración.\n"
+        "   - Con base en el informe, proporciona 3-4 recomendaciones concretas, creativas, precisas y accionables que sirvan como inspiración para la toma de decisiones.\n"
         "   - Deben estar alineadas con los insights y conclusiones. Evita la extensión innecesaria.\n\n"
         "##6. **Referencias**:\n"
         "   - Cita el título del estudio (no el nombre del archivo), utilizando la información de la primera diapositiva o metadatos disponibles.\n\n"
@@ -364,7 +364,7 @@ def generate_final_report(question, db, selected_files):
     cliente_nombre = getattr(st.session_state, 'cliente', 'Cliente Confidencial') # Fallback
     encabezado = (
         f"# {question}\n\n"  # Asegura un espacio después del título principal
-        f"**Preparado por:**\n\nAtelier IA\n\n"
+        f"**Preparado por:**\n\nAtelier Data Studio\n\n"
         f"**Preparado para:**\n\n{cliente_nombre}\n\n"
         f"**Fecha de elaboración:**\n\n{fecha_actual}\n\n"
     )
@@ -540,7 +540,7 @@ def ideacion_mode(db, selected_files):
         )
         
         st.button(
-            "🔁 Nueva conversación",
+            "Nueva conversación",
             help="Borra el historial del chat y empieza de cero",
             on_click=reset_chat_workflow,
             key="new_chat_btn"
@@ -618,7 +618,7 @@ def report_mode(db, selected_files):
             )
             
             st.button(
-                "🔁 Nueva consulta",
+                "Nueva consulta",
                 help="Borra el informe actual y vuelve a empezar con una nueva pregunta",
                 on_click=reset_report_workflow,
                 key="new_report_query_btn"
