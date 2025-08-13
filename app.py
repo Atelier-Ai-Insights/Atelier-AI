@@ -650,7 +650,7 @@ def main():
     # Sidebar ordenado
     modo = st.sidebar.radio(
         "Seleccione el modo de uso:",
-        ["Generar un reporte de reportes", "Conversar con los datos"]
+        ["Generar un reporte de reportes", "Conversa creativamente con los datos"]
     )
 
     # =====================================================================
