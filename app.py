@@ -302,9 +302,9 @@ def generate_final_report(question, db, selected_files):
     prompt1 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
         "Instrucciones:\n"
-        "1. Identifica en la pregunta la marca exacta y el producto exacto sobre el cual se hace la consulta. Sé muy específico y riguroso en referenciar información asociada a la marca consultada.\n"
+        "1. Identifica en la pregunta la marca exacta y/o el producto exacto sobre el cual se hace la consulta. Sé muy específico y riguroso en referenciar información asociada a la marca y/o producto consultado.\n"
         "2. Reitera la pregunta del cliente: ***{question}***.\n"
-        "3. Utiliza la 'Información de Contexto' (extractos de documentos de investigación) para extraer los hallazgos más relevantes que respondan directamente a la pregunta. Cuando se pregunte por una marca (ejemplo: oreo) siempre traer información relacionada.\n"
+        "3. Utiliza la 'Información de Contexto' (extractos de documentos de investigación) para extraer los hallazgos más relevantes que respondan directamente a la pregunta. Cuando se pregunte por una marca (ejemplo: oreo) siempre traer información de todos los reportes relacionados.\n"
         "4. No incluyas el texto completo de las citas, sino extractos breves que permitan identificar la fuente.\n"
         "5. Incluye metadatos relevantes (documentos, grupos, etc.) e indica en cada hallazgo si la cita sigue el estilo IEEE (ejemplo: [1]).\n"
         "6. En la sección 'Referencias', asocia cada número a la referencia completa, no escribas el nombre del archivo, sino el titulo del proyecto (ejemplo: [1] 'Título del Proyecto', año, etc.). Siempre provee las referencias citadas.\n"
@@ -327,7 +327,7 @@ def generate_final_report(question, db, selected_files):
     prompt2 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
         "Instrucciones Generales:\n"
-        "1. Identifica en la pregunta la marca y el producto exacto. Responde de manera específica y rigurosa a lo que el cliente pregunta.\n"
+        "1. Identifica en la pregunta la marca y/o el producto exacto. Responde de manera específica y rigurosa a lo que el cliente pregunta.\n"
         "2. Recuerda que todos los estudios en la base de datos fueron realizados por Atelier. Menciónalo si es relevante, especialmente en 'Principales Hallazgos'.\n"
         "3. Actúa como un analista experto en ciencias del comportamiento, en investigación de mercados, en marketing y en comunicación estratégica. Enfócate en claridad, síntesis poderosa y pensamiento estructurado.\n"
         "4. El estilo de redacción debe ser claro, directo, conciso y memorable (inspirado en “Ideas que pegan” de Chip Heath y Dan Heath). Evita lenguaje técnico innecesario; prioriza lo relevante y accionable.\n\n"
@@ -508,7 +508,7 @@ def ideacion_mode(db, selected_files):
                 + "\n\nInformación de contexto:\n" + relevant
                 + "\n\nInstrucciones:\n"
                 "- Responde usando únicamente la sección de resultados de los reportes.\n"
-                "- Responde de forma creativa, eres un experto en las áreas de la psicología del consumidor y en innovación y creativiadad, así que ayudarás al usuario que esta hablando contigo a conversar con sus datos para ofrecerle ideas novedosas basadas en la información y en los datos que hay sobre la temática que te está solicitando"
+                "- Responde de forma creativa, eres un experto en las áreas de la psicología del consumidor y en innovación y creativiadad, así que ayudarás al usuario que esta hablando contigo a conversar con sus datos para ofrecerle ideas novedosas basadas en la información y en los datos que hay sobre la temática que te está solicitando. comienza siempre dando un breve resumen de los proyectos relacionados con la solicitud"
                 "- Escribe de forma clara, sintética y concreta"
                 "- Incluye citas numeradas al estilo IEEE (por ejemplo, [1]).\n\n"
                 "Respuesta detallada:"
