@@ -489,10 +489,10 @@ def main():
 
     st.title("Atelier Data Studio")
     st.markdown(
-        "Atelier Data Studio es una herramienta impulsada "
-        "por modelos lingüísticos de vanguardia para realizar consultas "
-        "y conversar con datos arrojados por los distintos estudios de mercados "
-        "realizados para el entendimiento del consumidor y del mercado.\n\n"
+        "Atelier Data Studio es una herramienta impulsada por modelos "
+        "lingüísticos para realizar consultas y conversar con datos "
+        "arrojados por los distintos estudios de mercados realizados "
+        "para el entendimiento del consumidor y del mercado.\n\n"
     )
 
     try:
