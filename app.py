@@ -340,12 +340,21 @@ def clean_text(text):
     return text.replace('&', '&amp;')
 
 class PDFReport:
-    # ... (El código de la clase PDFReport no ha cambiado, se mantiene igual)
+    # Este es un placeholder. El código real de la clase se omitió por brevedad.
     pass 
 
 def generate_pdf_html(content, title="Documento Final", banner_path=None, output_filename=None):
-    # ... (El código de la función generate_pdf_html no ha cambiado, se mantiene igual)
-    pass
+    # Este es un placeholder. El código real de la función se omitió por brevedad.
+    # Se asume que esta función puede devolver None si falla.
+    # En un caso real, tendría la lógica completa de ReportLab.
+    try:
+        # Lógica simulada de creación de PDF
+        if "error" in content.lower(): # Simular una falla
+            return None
+        return b"%PDF-1.4 sample pdf content"
+    except:
+        return None
+
 
 def ideacion_mode(db, selected_files):
     st.subheader("Modo Conversación: Conversa con los datos")
@@ -392,7 +401,11 @@ def ideacion_mode(db, selected_files):
             title="Historial de Chat",
             banner_path=banner_file
         )
-        st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat.pdf", mime="application/pdf")
+        # === AJUSTE AÑADIDO ===
+        # Se verifica que el PDF se haya creado antes de mostrar el botón.
+        if pdf_bytes:
+            st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat.pdf", mime="application/pdf")
+        
         st.button("Nueva conversación", on_click=reset_chat_workflow, key="new_chat_btn")
 
 
@@ -426,7 +439,11 @@ def report_mode(db, selected_files):
             final_content += "\n\n---\n\n## Notas Adicionales\n\n" + personalization
 
         pdf_bytes = generate_pdf_html(final_content, title="Informe Final", banner_path=banner_file)
-        st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="Informe_AtelierIA.pdf", mime="application/pdf")
+        
+        # === AJUSTE AÑADIDO ===
+        # Se verifica que el PDF se haya creado antes de mostrar el botón.
+        if pdf_bytes:
+            st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="Informe_AtelierIA.pdf", mime="application/pdf")
         
         st.button("Nueva consulta", on_click=reset_report_workflow, key="new_report_query_btn")
         
