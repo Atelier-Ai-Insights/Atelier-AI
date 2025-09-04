@@ -21,9 +21,12 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 
 # Registrar fuente Unicode para tildes/ñ
-pdfmetrics.registerFont(
-    TTFont('DejaVuSans', 'DejaVuSans.ttf')
-)
+# Asegúrate de que el archivo 'DejaVuSans.ttf' esté en el mismo directorio.
+try:
+    pdfmetrics.registerFont(TTFont('DejaVuSans', 'DejaVuSans.ttf'))
+except Exception as e:
+    # Si la fuente no se encuentra, la app funcionará pero el PDF puede no mostrar tildes/ñ correctamente.
+    st.sidebar.warning(f"Advertencia: No se encontró la fuente DejaVuSans.ttf. {e}")
 
 
 # ==============================
