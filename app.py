@@ -21,33 +21,46 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 
 # Registrar fuente Unicode para tildes/ñ
-pdfmetrics.registerFont(
-    TTFont('DejaVuSans', 'DejaVuSans.ttf')
-)
+# Asegúrate de que el archivo 'DejaVuSans.ttf' esté en el mismo directorio.
+try:
+    pdfmetrics.registerFont(TTFont('DejaVuSans', 'DejaVuSans.ttf'))
+except Exception as e:
+    # Si la fuente no se encuentra, la app funcionará pero el PDF puede no mostrar tildes/ñ correctamente.
+    st.sidebar.warning(f"Advertencia: No se encontró la fuente DejaVuSans.ttf. {e}")
+
 
 # ==============================
 # Autenticación Personalizada
 # ==============================
 ALLOWED_USERS = st.secrets.get("ALLOWED_USERS", {})
 
+# === FUNCIÓN AJUSTADA ===
 def show_login():
-    st.markdown(
-        "<div style='display: flex; flex-direction: column; justify-content: center; align-items: center;'>",
-        unsafe_allow_html=True,
-    )
-    st.header("Iniciar Sesión")
-    username = st.text_input("Usuario", placeholder="Apple")
-    password = st.text_input("Contraseña (4 dígitos)", type="password", placeholder="0000")
-    if st.button("Ingresar"):
-        if username in ALLOWED_USERS and password == ALLOWED_USERS[username]:
-            st.session_state.logged_in = True
-            st.session_state.user = username
-            st.session_state.cliente = username.lower()
-            st.rerun()
-        else:
-            st.error("Credenciales incorrectas")
-    st.markdown("</div>", unsafe_allow_html=True)
+    """
+    Muestra el formulario de inicio de sesión centrado en la página utilizando st.columns.
+    """
+    # Creamos tres columnas para centrar el formulario.
+    # Las columnas de los lados (col1 y col3) actúan como márgenes vacíos.
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    # Todo el contenido del formulario se coloca dentro de la columna central (col2).
+    with col2:
+        st.header("Iniciar Sesión")
+        username = st.text_input("Usuario", placeholder="Apple")
+        password = st.text_input("Contraseña (4 dígitos)", type="password", placeholder="0000")
+
+        if st.button("Ingresar"):
+            # Usamos .get() para una comprobación más segura y evitar errores
+            if username in ALLOWED_USERS and password == ALLOWED_USERS.get(username):
+                st.session_state.logged_in = True
+                st.session_state.user = username
+                st.session_state.cliente = username.lower()
+                st.rerun()
+            else:
+                st.error("Credenciales incorrectas")
+    
     st.stop()
+
 
 def logout():
     if st.sidebar.button("Cerrar Sesión"):
