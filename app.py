@@ -340,20 +340,90 @@ def clean_text(text):
     return text.replace('&', '&amp;')
 
 class PDFReport:
-    # Este es un placeholder. El código real de la clase se omitió por brevedad.
-    pass 
+    def __init__(self, filename, banner_path=None):
+        self.filename   = filename
+        self.banner_path= banner_path
+        self.elements   = []
+        self.styles     = getSampleStyleSheet()
+        self.doc        = SimpleDocTemplate(
+            self.filename,
+            pagesize=A4,
+            rightMargin = 12 * mm,
+            leftMargin  = 12 * mm,
+            topMargin   = 45 * mm,
+            bottomMargin= 18 * mm
+        )
+        # Estilos personalizados
+        self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], alignment=1, spaceAfter=12))
+        self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['Heading2'], spaceBefore=10, spaceAfter=6))
+        self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], leading=12, alignment=4))
+        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], alignment=2, textColor=colors.grey))
+        for style_name in ['CustomTitle','CustomHeading','CustomBodyText','CustomFooter']:
+            self.styles[style_name].fontName = 'DejaVuSans'
+
+    def header(self, canvas, doc):
+        canvas.saveState()
+        if self.banner_path and os.path.isfile(self.banner_path):
+            try:
+                img_w, img_h = 210*mm, 35*mm
+                y_pos = A4[1] - img_h
+                canvas.drawImage(self.banner_path, 0, y_pos, width=img_w, height=img_h,
+                                 preserveAspectRatio=True, anchor='n')
+                line_y = y_pos - 5
+                canvas.setStrokeColor(colors.lightgrey)
+                canvas.line(12*mm, line_y, A4[0]-12*mm, line_y)
+            except:
+                pass
+        else:
+            canvas.setStrokeColor(colors.lightgrey)
+            canvas.line(12*mm, A4[1]-40*mm, A4[0]-12*mm, A4[1]-40*mm)
+        canvas.restoreState()
+
+    def footer(self, canvas, doc):
+            canvas.saveState()
+            footer_text = (
+                "El uso de esta información está sujeto a términos y condiciones "
+                "que rigen su suscripción a los servicios prestados por Atelier Data Studio.<br/>"
+                "Es su responsabilidad asegurarse que el uso de esta información "
+                "no infrinja los derechos de propiedad intelectual."
+            )
+            p = Paragraph(footer_text, self.styles['CustomFooter'])
+            # Primero hacemos wrap para asignar blPara y medir altura
+            w, h = p.wrap(doc.width, doc.bottomMargin)
+            # Dibujamos a 3 mm del pie
+            y_position = 3 * mm
+            p.drawOn(canvas, doc.leftMargin, y_position)
+            canvas.restoreState()
+
+    def header_footer(self, canvas, doc):
+        self.header(canvas, doc)
+        self.footer(canvas, doc)
+
+    def add_paragraph(self, text, style='CustomBodyText'):
+        p = Paragraph(clean_text(text), self.styles[style])
+        self.elements += [p, Spacer(1, 6)]
+
+    def add_title(self, text, level=1):
+        style = 'CustomTitle' if level==1 else 'CustomHeading'
+        p = Paragraph(clean_text(text), self.styles[style])
+        self.elements += [p, Spacer(1, 12)]
+
+    def build_pdf(self):
+        self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
 
 def generate_pdf_html(content, title="Documento Final", banner_path=None, output_filename=None):
-    # Este es un placeholder. El código real de la función se omitió por brevedad.
-    # Se asume que esta función puede devolver None si falla.
-    # En un caso real, tendría la lógica completa de ReportLab.
-    try:
-        # Lógica simulada de creación de PDF
-        if "error" in content.lower(): # Simular una falla
-            return None
-        return b"%PDF-1.4 sample pdf content"
-    except:
-        return None
+    if output_filename is None:
+        tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        output_filename = tmp.name
+        tmp.close()
+    pdf = PDFReport(output_filename, banner_path=banner_path)
+    pdf.add_title(title, level=1)
+    add_markdown_content(pdf, content)
+    pdf.build_pdf()
+    with open(output_filename, "rb") as f:
+        data = f.read()
+    os.remove(output_filename)
+    return data
 
 
 def ideacion_mode(db, selected_files):
