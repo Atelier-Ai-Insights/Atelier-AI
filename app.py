@@ -424,7 +424,7 @@ def report_mode(db, selected_files):
 def concept_generation_mode(db, selected_files):
     """
     Modo de Generación de Conceptos:
-    Crea un concepto de producto estructurado a partir de una idea inicial
+    Crea un concepto de producto a partir de una idea inicial
     y los hallazgos de los estudios seleccionados.
     """
     st.subheader("Modo Generación de Conceptos")
@@ -489,7 +489,7 @@ def main():
 
     st.title("Atelier Data Studio")
     st.markdown(
-        "Atelier Data Studio es una herramienta de inteligencia artificial impulsada "
+        "Atelier Data Studio es una herramienta impulsada "
         "por modelos lingüísticos de vanguardia para realizar consultas "
         "y conversar con datos arrojados por los distintos estudios de mercados "
         "realizados para el entendimiento del consumidor y del mercado.\n\n"
