@@ -272,10 +272,10 @@ def generate_final_report(question, db, selected_files):
         "Instrucciones:\n"
         "1. Identifica en la pregunta la marca exacta y/o el producto exacto sobre el cual se hace la consulta. Sé muy específico y riguroso en referenciar información asociada a la marca y/o producto consultado.\n"
         "2. Reitera la pregunta del cliente: ***{question}***.\n"
-        "3. Utiliza la 'Información de Contexto' (extractos de documentos de investigación) para extraer los hallazgos más relevantes que respondan directamente a la pregunta. Cuando se pregunte por una marca (ejemplo: oreo) siempre traer información de todos los reportes relacionados.\n"
+        "3. Utiliza la 'Información de Contexto' (únicamente extractos de documentos de investigación) para extraer los hallazgos más relevantes que respondan directamente a la pregunta. Cuando se pregunte por una marca (ejemplo: oreo) siempre traer información de todos los reportes relacionados.\n"
         "4. No incluyas el texto completo de las citas, sino extractos breves que permitan identificar la fuente.\n"
         "5. Incluye metadatos relevantes (documentos, grupos, etc.) e indica en cada hallazgo si la cita sigue el estilo IEEE (ejemplo: [1]).\n"
-        "6. En la sección 'Referencias', asocia cada número a la referencia completa, no escribas el nombre del archivo, sino el titulo del proyecto (ejemplo: [1] 'Título del Proyecto', año, etc.). Siempre provee las referencias citadas.\n"
+        "6. En la sección 'Referencias', asocia cada número a la referencia completa, no escribas el nombre del archivo, sino el título del proyecto (ejemplo: [1] 'Título del Proyecto', año, etc.). Siempre provee las referencias citadas.\n"
         "7. Enfócate en los resultados y hallazgos positivos de los estudios, asumiendo que todos son estudios realizados.\n\n"
         f"Información de Contexto:\n{relevant_info}\n\n"
         "Respuesta (Hallazgos Clave y Referencias):\n"
@@ -299,7 +299,7 @@ def generate_final_report(question, db, selected_files):
         "4. El estilo de redacción debe ser claro, directo, conciso y memorable (inspirado en “Ideas que pegan” de Chip Heath y Dan Heath). Evita lenguaje técnico innecesario; prioriza lo relevante y accionable.\n\n"
         "Estructura del Informe (sé breve y preciso en cada sección):\n\n"
         "##1. **Introducción**:\n"
-        "   - Preserva esta sección. Plantea el contexto y la pregunta central. Usa un un dato inesperado para captar la atención.\n\n"
+        "   - Preserva esta sección. Plantea el contexto y la pregunta central. Usa un un dato inesperado (que provenga de los reportes realizados), para captar la atención.\n\n"
         "##2. **Principales Hallazgos**:\n"
         "   - Presenta de forma estructurada los hechos más relevantes descubiertos, directamente desde la sección de resultados de los diferentes reportes y la información de contexto.\n"
         "   - Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original y que sume valor para responder a la pregunta.\n"
@@ -442,7 +442,7 @@ def ideacion_mode(db, selected_files):
 
     if st.button("Enviar pregunta"):
         if not user_input.strip():
-            st.warning("Ingrese una pregunta para continuar la conversación.")
+            st.warning("Ingrese su pregunta para continuar la conversación.")
         else:
             st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
             relevant = get_relevant_info(db, user_input, selected_files)
@@ -452,7 +452,7 @@ def ideacion_mode(db, selected_files):
                 + "\n\nInformación de contexto:\n" + relevant
                 + "\n\nInstrucciones:\n"
                 "- Responde usando únicamente la sección de resultados de los reportes.\n"
-                "- Responde de forma creativa, eres un experto en las áreas de la psicología del consumidor y en innovación y creativiadad, así que ayudarás al usuario que esta hablando contigo a conversar con sus datos para ofrecerle ideas novedosas basadas en la información y en los datos que hay sobre la temática que te está solicitando. comienza siempre dando un breve resumen de los proyectos relacionados con la solicitud\n"
+                "- Responde de forma creativa, eres un experto en las áreas de la psicología del consumidor y en innovación y creativiadad, así que ayudarás al usuario que esta hablando contigo a conversar con sus datos para ofrecerle ideas novedosas de productos, servicios, mensajes, etc basadas en la información y en los datos que hay sobre la temática que te está solicitando. comienza siempre dando un breve resumen de los proyectos relacionados con la solicitud\n"
                 "- Escribe de forma clara, sintética y concreta\n"
                 "- Incluye citas numeradas al estilo IEEE (por ejemplo, [1]).\n\n"
                 "Respuesta detallada:"
@@ -524,11 +524,11 @@ def report_mode(db, selected_files):
 def concept_generation_mode(db, selected_files):
     """
     Modo de Generación de Conceptos:
-    Crea un concepto de producto a partir de una idea inicial
+    Crea un concepto de producto o servicio a partir de una idea inicial
     y los hallazgos de los estudios seleccionados.
     """
     st.subheader("Modo Generación de Conceptos")
-    st.markdown("A partir de una idea inicial y los hallazgos de los estudios seleccionados, generaremos un concepto de producto sólido y estructurado.")
+    st.markdown("A partir de una idea inicial y los hallazgos de los estudios seleccionados, generaremos un concepto de producto o servicio sólido y estructurado.")
 
     product_idea = st.text_area(
         "Describe tu idea de producto o servicio:",
@@ -546,7 +546,7 @@ def concept_generation_mode(db, selected_files):
                 
                 # 2. Crear el prompt específico para la generación de conceptos
                 prompt = f"""
-                **Tarea:** Eres un estratega de innovación y marketing. A partir de una idea de producto y un contexto de estudios de mercado, debes desarrollar un concepto de producto estructurado.
+                **Tarea:** Eres un estratega de innovación y marketing. A partir de una idea de producto y un contexto de estudios de mercado, debes desarrollar un concepto de producto o servicio estructurado.
 
                 **Idea de Producto del Usuario:**
                 "{product_idea}"
@@ -555,21 +555,21 @@ def concept_generation_mode(db, selected_files):
                 "{context_info}"
 
                 **Instrucciones:**
-                Genera una respuesta en formato Markdown con la siguiente estructura exacta. Basa tus respuestas en los hallazgos del contexto proporcionado. Sé claro, conciso y accionable.
+                Genera una respuesta en formato Markdown con la siguiente estructura exacta. Basa tus respuestas en los hallazgos relevantes del contexto proporcionado. Sé claro, conciso y accionable.
 
                 ---
 
                 ### 1. Definición de la Necesidad del Consumidor
-                * Identifica y describe las tensiones, deseos o problemas clave de los consumidores que se encuentran en el **Contexto de los estudios**. Conecta estos hallazgos con la oportunidad para la idea de producto.
+                * Identifica y describe las tensiones, deseos o problemas clave de los consumidores que se encuentran en el **Contexto de los estudios**. Conecta estos hallazgos con la oportunidad para la idea de producto o servicio.
 
                 ### 2. Descripción del Producto
-                * Basado en la **Idea del Usuario**, describe el producto o servicio propuesto. Detalla sus características principales y cómo funcionaría. Sé creativo pero mantente anclado en la necesidad detectada.
+                * Basado en la **Idea del Usuario**, describe el producto o servicio propuesto. Detalla sus características principales y cómo funcionaría. Sé creativo pero mantente anclado en la necesidad insatisfecha detectada.
 
                 ### 3. Beneficios Clave
-                * Enumera 3-4 beneficios principales del producto. Cada beneficio debe responder directamente a una de las necesidades del consumidor identificadas en el punto 1 y estar sustentado por la evidencia del **Contexto**.
+                * Enumera 3-4 beneficios principales del producto. Cada beneficio debe responder directamente a una de las necesidades del consumidor identificadas en el punto 1 y estar sustentado por la evidencia del **Contexto**. Los beneficios pueden ser funcionales, racionales o emocionales. 
 
-                ### 4. Frase Resumen (Claim)
-                * Crea una frase corta, memorable y poderosa que resuma la esencia y la principal promesa de valor del producto. Debe ser sucinta y con mucho significado.
+                ### 4. Resumen
+                * Crea un resumen del concepto que sea memorable y tenga tres secciones: Insight (definición de la tensión), What (Caracteristicas y beneficios del producto o servicio), Reason To Belive (por qué el producto puede resolver la tensión). Cierra el resumen con un claim, este debe captar la esencia del producto o servidio y se debe redactar de manera sucinta: corto pero con con mucho significado.
                 """
 
                 # 3. Llamar a la API y mostrar la respuesta
