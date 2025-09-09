@@ -568,8 +568,8 @@ def concept_generation_mode(db, selected_files):
                 ### 3. Beneficios Clave
                 * Enumera 3-4 beneficios principales del producto. Cada beneficio debe responder directamente a una de las necesidades del consumidor identificadas en el punto 1 y estar sustentado por la evidencia del **Contexto**. Los beneficios pueden ser funcionales, racionales o emocionales. 
 
-                ### 4. Concepto para testear
-                * Crea un resumen del concepto que sea memorable y contenga tres secciones: Insight (definición de la tensión), What (Caracteristicas y beneficios del producto o servicio), Reason To Belive (por qué el producto puede resolver la tensión). Cierra el resumen con un claim, este debe captar la esencia del producto o servidio y se debe redactar de manera sucinta: corto pero con con mucho significado.
+                ### 4. Conceptos para evaluar
+                * Entrega dos opciones de concepto resumido. Estos deben ser memorables y para su redacción se deben considerar tres frases o párrafos: Insight (definición de la tensión), What (Caracteristicas y beneficios del producto o servicio), Reason To Belive (por qué el producto puede resolver la tensión). Cierra el resumen con un claim, este debe captar la esencia del producto o servidio y se debe redactar de manera sucinta: corto pero con con mucho significado.
                 """
 
                 # 3. Llamar a la API y mostrar la respuesta
