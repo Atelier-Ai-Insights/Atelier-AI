@@ -123,6 +123,8 @@ def call_gemini_api(prompt):
 supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
 def log_query_event(query_text, mode, rating=None):
+    if "user" not in st.session_state:
+        return
     data = {
         "id": datetime.datetime.now().strftime("%Y%m%d%H%M%S"),
         "user_name": st.session_state.user,
@@ -148,7 +150,7 @@ def load_database(cliente: str):
     s3_access_key   = st.secrets["S3_ACCESS_KEY"]
     s3_secret_key   = st.secrets["S3_SECRET_KEY"]
     bucket_name     = st.secrets.get("S3_BUCKET")
-    object_key      = "resultado_presentacion (1).json" # Asumo que este es tu archivo principal
+    object_key      = "resultado_presentacion (1).json"
     try:
         s3 = boto3.client("s3", endpoint_url=s3_endpoint_url, aws_access_key_id=s3_access_key, aws_secret_access_key=s3_secret_key)
         response = s3.get_object(Bucket=bucket_name, Key=object_key)
@@ -192,8 +194,131 @@ def get_relevant_info(db, selected_files):
             all_text += "---\n\n"
     return all_text
 
-# ... Aquí irían tus funciones de PDF y los modos existentes (report_mode, ideacion_mode, etc.)
-# Se omiten por brevedad pero están en el código completo al final.
+# ==============================
+# Funciones de Generación de PDF
+# ==============================
+banner_file = "Banner (2).jpg"
+
+def clean_text_for_pdf(text):
+    if not isinstance(text, str):
+        text = str(text)
+    return text.replace('&', '&amp;')
+
+class PDFReport:
+    def __init__(self, filename, banner_path=None):
+        self.filename = filename
+        self.banner_path = banner_path
+        self.elements = []
+        self.styles = getSampleStyleSheet()
+        self.doc = SimpleDocTemplate(
+            self.filename, pagesize=A4,
+            rightMargin=12*mm, leftMargin=12*mm,
+            topMargin=45*mm, bottomMargin=18*mm
+        )
+        self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], alignment=1, spaceAfter=12))
+        self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['Heading2'], spaceBefore=10, spaceAfter=6))
+        self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], leading=12, alignment=4))
+        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], alignment=2, textColor=colors.grey))
+        if 'DejaVuSans' in pdfmetrics.getRegisteredFontNames():
+            for style_name in ['CustomTitle', 'CustomHeading', 'CustomBodyText', 'CustomFooter']:
+                self.styles[style_name].fontName = 'DejaVuSans'
+
+    def header(self, canvas, doc):
+        canvas.saveState()
+        if self.banner_path and os.path.isfile(self.banner_path):
+            try:
+                img_w, img_h = 210*mm, 35*mm
+                y_pos = A4[1] - img_h
+                canvas.drawImage(self.banner_path, 0, y_pos, width=img_w, height=img_h, preserveAspectRatio=True, anchor='n')
+                line_y = y_pos - 5
+                canvas.setStrokeColor(colors.lightgrey)
+                canvas.line(12*mm, line_y, A4[0]-12*mm, line_y)
+            except:
+                pass
+        canvas.restoreState()
+
+    def footer(self, canvas, doc):
+        canvas.saveState()
+        footer_text = "El uso de esta información está sujeto a términos y condiciones..."
+        p = Paragraph(footer_text, self.styles['CustomFooter'])
+        w, h = p.wrap(doc.width, doc.bottomMargin)
+        p.drawOn(canvas, doc.leftMargin, 3 * mm)
+        canvas.restoreState()
+
+    def header_footer(self, canvas, doc):
+        self.header(canvas, doc)
+        self.footer(canvas, doc)
+
+    def add_paragraph(self, text, style='CustomBodyText'):
+        p = Paragraph(clean_text_for_pdf(text), self.styles[style])
+        self.elements.extend([p, Spacer(1, 6)])
+
+    def add_title(self, text, level=1):
+        style = 'CustomTitle' if level == 1 else 'CustomHeading'
+        p = Paragraph(clean_text_for_pdf(text), self.styles[style])
+        self.elements.extend([p, Spacer(1, 12)])
+
+    def build_pdf(self):
+        self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
+
+
+def add_markdown_content(pdf, markdown_text):
+    html_text = markdown2.markdown(markdown_text, extras=["fenced-code-blocks", "tables", "break-on-newline"])
+    soup = BeautifulSoup(html_text, "html.parser")
+    container = soup.body or soup
+    for elem in container.children:
+        if elem.name:
+            if elem.name.startswith("h"):
+                level = int(elem.name[1]) if len(elem.name) > 1 and elem.name[1].isdigit() else 1
+                pdf.add_title(elem.get_text(strip=True), level=level)
+            elif elem.name == "p":
+                pdf.add_paragraph(elem.decode_contents())
+            elif elem.name == "ul":
+                for li in elem.find_all("li"):
+                    pdf.add_paragraph("• " + li.decode_contents())
+            elif elem.name == "ol":
+                for idx, li in enumerate(elem.find_all("li"), 1):
+                    pdf.add_paragraph(f"{idx}. {li.decode_contents()}")
+            else:
+                pdf.add_paragraph(elem.decode_contents())
+        else:
+            text = elem.string
+            if text and text.strip():
+                pdf.add_paragraph(text)
+
+def generate_pdf_from_html(content, title="Documento", banner_path=None):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        output_filename = tmp.name
+    
+    pdf = PDFReport(output_filename, banner_path=banner_path)
+    # pdf.add_title(title, level=1) # El título ya suele estar en el contenido
+    add_markdown_content(pdf, content)
+    
+    try:
+        pdf.build_pdf()
+        with open(output_filename, "rb") as f:
+            pdf_bytes = f.read()
+    except Exception as e:
+        st.error(f"Error al generar el PDF: {e}")
+        pdf_bytes = None
+    finally:
+        if os.path.exists(output_filename):
+            os.remove(output_filename)
+            
+    return pdf_bytes
+
+# =====================================================
+# LÓGICA DE LOS MODOS DE OPERACIÓN
+# =====================================================
+
+def report_mode(db, selected_files):
+    st.write("Modo 'Generar Reporte' no implementado en este código.")
+
+def ideacion_mode(db, selected_files):
+    st.write("Modo 'Conversaciones Creativas' no implementado en este código.")
+
+def concept_generation_mode(db, selected_files):
+    st.write("Modo 'Generación de Conceptos' no implementado en este código.")
 
 # === INICIO DE LA NUEVA FUNCIÓN DE CHAT ===
 
@@ -273,7 +398,6 @@ def research_chat_mode(db, selected_files):
 
 # === FIN DE LA NUEVA FUNCIÓN ===
 
-
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
@@ -305,7 +429,6 @@ def main():
         st.divider()
         st.header("Filtros de Datos")
         
-        # Lógica de filtros... (sin cambios)
         filtros = sorted({doc.get("filtro", "") for doc in db if doc.get("filtro")})
         filtros.insert(0, "Todos")
         selected_filter = st.selectbox("Seleccione la marca:", filtros)
@@ -344,17 +467,13 @@ def main():
     
     # === BLOQUE MODIFICADO: Se añade la lógica para el nuevo modo ===
     if modo == "Generar un reporte de reportes":
-        # Tu función report_mode(final_db, selected_files) iría aquí
-        st.write("Modo 'Generar Reporte' seleccionado.")
+        report_mode(final_db, selected_files)
     elif modo == "Conversaciones creativas":
-        # Tu función ideacion_mode(final_db, selected_files) iría aquí
-        st.write("Modo 'Conversaciones Creativas' seleccionado.")
+        ideacion_mode(final_db, selected_files)
     elif modo == "Generación de conceptos":
-        # Tu función concept_generation_mode(final_db, selected_files) iría aquí
-        st.write("Modo 'Generación de Conceptos' seleccionado.")
+        concept_generation_mode(final_db, selected_files)
     elif modo == "Chat de Investigación":
         research_chat_mode(final_db, selected_files)
-
 
 if __name__ == "__main__":
     main()
