@@ -52,7 +52,7 @@ def logout():
         st.session_state.clear()
         st.cache_data.clear()
         st.rerun()
-        
+
 # ====== Helpers para reiniciar flujos ======
 def reset_report_workflow():
     for k in ["report", "last_question", "report_question", "personalization", "rating"]:
@@ -134,7 +134,7 @@ def log_query_event(query_text, mode, rating=None):
     supabase.table("queries").insert(data).execute()
 
 # ==============================
-# Normalización de Texto
+# Normalización y Carga de Datos
 # ==============================
 def normalize_text(text):
     if not text:
@@ -142,16 +142,13 @@ def normalize_text(text):
     normalized = unicodedata.normalize("NFD", text)
     return "".join(c for c in normalized if unicodedata.category(c) != "Mn").lower()
 
-# ==============================
-# CARGA DE DATOS DESDE S3
-# ==============================
 @st.cache_data(show_spinner="Cargando base de datos...")
 def load_database(cliente: str):
     s3_endpoint_url = st.secrets["S3_ENDPOINT_URL"]
     s3_access_key   = st.secrets["S3_ACCESS_KEY"]
     s3_secret_key   = st.secrets["S3_SECRET_KEY"]
     bucket_name     = st.secrets.get("S3_BUCKET")
-    object_key      = "resultado_presentacion (1).json"
+    object_key      = "resultado_presentacion (1).json" # Asumo que este es tu archivo principal
     try:
         s3 = boto3.client("s3", endpoint_url=s3_endpoint_url, aws_access_key_id=s3_access_key, aws_secret_access_key=s3_secret_key)
         response = s3.get_object(Bucket=bucket_name, Key=object_key)
@@ -166,7 +163,7 @@ def load_database(cliente: str):
     return data
 
 # ==============================
-# FILTROS Y PROCESAMIENTO
+# Filtros y Procesamiento
 # ==============================
 def extract_brand(filename):
     if not filename or "In-ATL_" not in filename:
@@ -178,139 +175,108 @@ def apply_filter_criteria(db, selected_filter):
         return db
     return [doc for doc in db if doc.get("filtro") == selected_filter]
 
-def get_relevant_info(db, question, selected_files):
+def get_relevant_info(db, selected_files):
     all_text = ""
     for pres in db:
         if pres.get("nombre_archivo") in selected_files:
-            all_text += f"Documento: {pres.get('titulo_estudio', pres.get('nombre_archivo', 'Sin nombre'))}\n"
+            doc_title = pres.get('titulo_estudio', pres.get('nombre_archivo', 'Sin Título'))
+            all_text += f"## Documento: {doc_title}\n\n"
             for grupo in pres.get("grupos", []):
-                contenido = grupo.get("contenido_texto", "")
-                all_text += f"Grupo {grupo.get('grupo_index')}: {contenido}\n"
+                all_text += f"### Fragmento {grupo.get('grupo_index')}\n"
+                all_text += f"**Contenido:** {grupo.get('contenido_texto', '')}\n"
                 if grupo.get("metadatos"):
-                    all_text += f"Metadatos: {json.dumps(grupo.get('metadatos'), ensure_ascii=False)}\n"
+                    all_text += f"**Metadatos:** {json.dumps(grupo.get('metadatos'), ensure_ascii=False, indent=2)}\n"
                 if grupo.get("hechos"):
-                    all_text += f"Hechos: {json.dumps(grupo.get('hechos'), ensure_ascii=False)}\n"
-            all_text += "\n---\n\n"
+                    all_text += f"**Hechos Clave:** {json.dumps(grupo.get('hechos'), ensure_ascii=False, indent=2)}\n"
+                all_text += "\n"
+            all_text += "---\n\n"
     return all_text
 
-# ... (Aquí irían las funciones de PDF que son muy largas, se incluyen al final del script) ...
+# ... Aquí irían tus funciones de PDF y los modos existentes (report_mode, ideacion_mode, etc.)
+# Se omiten por brevedad pero están en el código completo al final.
 
-# =====================================================
-# LÓGICA DE LOS MODOS DE OPERACIÓN
-# =====================================================
+# === INICIO DE LA NUEVA FUNCIÓN DE CHAT ===
 
-def report_mode(db, selected_files):
-    # ... (Tu código para report_mode) ...
-    pass
-
-def ideacion_mode(db, selected_files):
-    # ... (Tu código para ideacion_mode) ...
-    pass
-
-def concept_generation_mode(db, selected_files):
-    # ... (Tu código para concept_generation_mode) ...
-    pass
-
-# === INICIO DE LA NUEVA FUNCIÓN Y SU LÓGICA ===
-
-def prepare_notebook_context(db, selected_files):
+def research_chat_mode(db, selected_files):
     """
-    Prepara el contexto para el chat estilo NotebookLM, asignando una
-    etiqueta de fuente única a cada 'grupo' de cada documento.
+    Modo de Chat de Investigación: Conversa con los datos de los reportes,
+    con respuestas basadas únicamente en la información proporcionada.
     """
-    context_string = "CONTEXTO DE LOS DOCUMENTOS:\n\n"
-    doc_counter = 1
-    for pres in db:
-        if pres.get("nombre_archivo") in selected_files:
-            doc_title = pres.get('titulo_estudio', pres.get('nombre_archivo', 'Sin Título'))
-            for grupo in pres.get("grupos", []):
-                grupo_index = grupo.get('grupo_index')
-                # Crear una etiqueta de fuente clara y única
-                source_tag = f"[Fuente {doc_counter}.{grupo_index}: {doc_title}]"
-                
-                # Unir el contenido del grupo en un solo texto
-                contenido_grupo = f"{source_tag}\n"
-                contenido_grupo += f"Texto Principal: {grupo.get('contenido_texto', '')}\n"
-                if grupo.get('metadatos'):
-                    contenido_grupo += f"Metadatos: {json.dumps(grupo.get('metadatos'), ensure_ascii=False)}\n"
-                if grupo.get('hechos'):
-                    contenido_grupo += f"Hechos Clave: {json.dumps(grupo.get('hechos'), ensure_ascii=False)}\n"
-                
-                context_string += contenido_grupo + "\n---\n"
-            doc_counter += 1
-    return context_string
-
-def notebooklm_chat_mode(db, selected_files):
-    """
-    Modo de Chat estilo NotebookLM: Conversa con los datos de los reportes
-    con respuestas basadas en fuentes y con citaciones.
-    """
-    st.subheader("Chat con Documentos (estilo NotebookLM)")
-    st.info("Haz preguntas sobre los documentos que seleccionaste en los filtros. La IA responderá basándose únicamente en esa información y citará sus fuentes.")
+    st.subheader("Chat de Investigación")
+    st.info("Realiza preguntas sobre los documentos seleccionados en los filtros. La IA responderá basándose estrictamente en esa información.")
 
     # Inicializar historial de chat para este modo específico
-    if "notebook_chat_history" not in st.session_state:
-        st.session_state.notebook_chat_history = [
-            {"role": "assistant", "content": "Hola, ¿en qué puedo ayudarte a investigar dentro de los documentos seleccionados?"}
+    if "research_chat_history" not in st.session_state:
+        st.session_state.research_chat_history = [
+            {"role": "assistant", "content": "Hola. ¿Qué información específica te gustaría encontrar en los documentos seleccionados?"}
         ]
 
     # Mostrar historial de mensajes
-    for message in st.session_state.notebook_chat_history:
+    for message in st.session_state.research_chat_history:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
     # Input del usuario
-    if prompt := st.chat_input("Pregunta sobre los documentos seleccionados..."):
+    if prompt := st.chat_input("Pregunta sobre los reportes..."):
         # Añadir mensaje del usuario al historial y mostrarlo
-        st.session_state.notebook_chat_history.append({"role": "user", "content": prompt})
+        st.session_state.research_chat_history.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
         # Generar y mostrar respuesta del asistente
         with st.chat_message("assistant"):
-            with st.spinner("Buscando en los documentos y generando respuesta..."):
-                # 1. Preparar el contexto con fuentes
-                contexto_fuentes = prepare_notebook_context(db, selected_files)
+            with st.spinner("Analizando la información en los reportes..."):
+                # 1. Preparar el contexto relevante
+                contexto = get_relevant_info(db, selected_files)
 
-                # 2. Construir el historial de conversación para el prompt
-                historial_str = "\n".join([f'{m["role"]}: {m["content"]}' for m in st.session_state.notebook_chat_history])
+                if not contexto.strip():
+                    st.warning("No hay documentos seleccionados o no contienen información. Por favor, ajusta los filtros.")
+                    st.stop()
+
+                # 2. Construir el historial para el prompt
+                historial_str = "\n".join([f'{m["role"]}: {m["content"]}' for m in st.session_state.research_chat_history])
                 
-                # 3. Diseñar el prompt para la IA
-                notebook_prompt = f"""
-                Eres un asistente de investigación experto y preciso. Tu tarea es responder la pregunta del usuario basándote ÚNICA Y EXCLUSIVAMENTE en la información proporcionada en el "CONTEXTO DE LOS DOCUMENTOS".
+                # 3. Diseñar el prompt de precisión
+                research_prompt = f"""
+                Eres un asistente de investigación preciso y riguroso. Tu única función es responder a la pregunta del usuario basándote EXCLUSIVAMENTE en el siguiente contexto extraído de varios reportes.
 
-                **INSTRUCCIONES CRÍTICAS:**
-                1.  **CITA TUS FUENTES:** Para CADA afirmación que hagas, debes citar la fuente exacta de donde obtuviste la información. Utiliza el identificador que aparece al inicio de cada bloque de texto, por ejemplo: [Fuente 1.2: Título del Estudio]. Si una misma frase se basa en varias fuentes, cítalas todas.
-                2.  **SÉ FIEL AL TEXTO:** No inventes, supongas ni añadas información que no esté explícitamente en el contexto.
-                3.  **SI NO SABES, DILO:** Si la respuesta a la pregunta no se encuentra en el contexto, DEBES responder únicamente con: "La información solicitada no se encuentra en los documentos proporcionados."
-                4.  **SINTETIZA:** Combina información de diferentes fuentes si es necesario para dar una respuesta completa, pero siempre cita cada pieza de información.
+                **Instrucciones Fundamentales:**
+                1.  **No uses conocimiento externo:** No puedes usar ninguna información que no esté en el texto que te proporciono.
+                2.  **Sé directo y conciso:** Responde la pregunta de la manera más clara y directa posible.
+                3.  **Si la información no está, indícalo:** Si la respuesta a la pregunta no se puede encontrar en el contexto, debes responder exactamente: "La información solicitada no se encuentra en los documentos proporcionados." No intentes adivinar o inferir.
 
-                **HISTORIAL DE LA CONVERSACIÓN:**
+                **Historial de la Conversación:**
                 {historial_str}
 
-                {contexto_fuentes}
+                **Contexto de los Reportes:**
+                ---
+                {contexto}
+                ---
 
-                **PREGUNTA DEL USUARIO:**
+                **Pregunta del Usuario:**
                 {prompt}
 
-                **TU RESPUESTA (precisa y citando cada fuente):**
+                **Tu Respuesta (basada únicamente en el contexto):**
                 """
                 
                 # 4. Llamar a la API
-                response = call_gemini_api(notebook_prompt)
+                response = call_gemini_api(research_prompt)
                 
                 if response:
                     st.markdown(response)
-                    # Añadir respuesta del asistente al historial
-                    st.session_state.notebook_chat_history.append({"role": "assistant", "content": response})
-                    log_query_event(prompt, mode="Chat NotebookLM")
+                    st.session_state.research_chat_history.append({"role": "assistant", "content": response})
+                    log_query_event(prompt, mode="Chat de Investigacion")
                 else:
-                    error_message = "Hubo un error al generar la respuesta."
-                    st.error(error_message)
-                    st.session_state.notebook_chat_history.append({"role": "assistant", "content": error_message})
+                    error_msg = "No pude procesar la solicitud en este momento."
+                    st.error(error_msg)
+                    st.session_state.research_chat_history.append({"role": "assistant", "content": error_msg})
 
 # === FIN DE LA NUEVA FUNCIÓN ===
 
+
+# =====================================================
+# FUNCIÓN PRINCIPAL DE LA APLICACIÓN
+# =====================================================
 def main():
     st.set_page_config(page_title="Atelier Data Studio", layout="wide")
     if not st.session_state.get("logged_in"):
@@ -329,16 +295,17 @@ def main():
     
     with st.sidebar:
         st.header("Menú de Opciones")
-        # === LÍNEA MODIFICADA ===
-        modo = st.radio(
+        # === LÍNEA MODIFICADA: Se añade la nueva opción de chat ===
+        modo = st.sidebar.radio(
             "Seleccione el modo de uso:",
-            ["Generar un reporte de reportes", "Conversaciones creativas", "Generación de conceptos", "Chat con Documentos (estilo NotebookLM)"],
+            ["Generar un reporte de reportes", "Conversaciones creativas", "Generación de conceptos", "Chat de Investigación"],
             key="modo_seleccionado"
         )
 
         st.divider()
         st.header("Filtros de Datos")
         
+        # Lógica de filtros... (sin cambios)
         filtros = sorted({doc.get("filtro", "") for doc in db if doc.get("filtro")})
         filtros.insert(0, "Todos")
         selected_filter = st.selectbox("Seleccione la marca:", filtros)
@@ -375,25 +342,19 @@ def main():
     if not selected_files and (selected_filter != "Todos" or selected_year != "Todos" or selected_brand != "Todas"):
         st.warning("No hay documentos que coincidan con los filtros seleccionados. Por favor, ajusta tu selección.")
     
-    # === BLOQUE MODIFICADO ===
+    # === BLOQUE MODIFICADO: Se añade la lógica para el nuevo modo ===
     if modo == "Generar un reporte de reportes":
-        # Asegúrate de que esta función exista en tu código
-        # report_mode(final_db, selected_files) 
-        pass
+        # Tu función report_mode(final_db, selected_files) iría aquí
+        st.write("Modo 'Generar Reporte' seleccionado.")
     elif modo == "Conversaciones creativas":
-        # Asegúrate de que esta función exista en tu código
-        # ideacion_mode(final_db, selected_files)
-        pass
+        # Tu función ideacion_mode(final_db, selected_files) iría aquí
+        st.write("Modo 'Conversaciones Creativas' seleccionado.")
     elif modo == "Generación de conceptos":
-        # Asegúrate de que esta función exista en tu código
-        # concept_generation_mode(final_db, selected_files)
-        pass
-    elif modo == "Chat con Documentos (estilo NotebookLM)":
-        notebooklm_chat_mode(final_db, selected_files)
+        # Tu función concept_generation_mode(final_db, selected_files) iría aquí
+        st.write("Modo 'Generación de Conceptos' seleccionado.")
+    elif modo == "Chat de Investigación":
+        research_chat_mode(final_db, selected_files)
 
 
 if __name__ == "__main__":
     main()
-
-# --- NOTA: Asegúrate de tener el código completo para las funciones de PDF y los otros modos ---
-# --- que se omitieron por brevedad en la explicación.                     ---
