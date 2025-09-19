@@ -625,7 +625,7 @@ def grounded_chat_mode(db, selected_files):
 
             # Prompt estricto para respuestas basadas en datos
             grounded_prompt = f"""
-            **Tarea:** Eres un **analista de investigación estratégico**. Tu misión es **sintetizar** información proveniente de múltiples estudios de mercado para ofrecer una respuesta completa y cohesionada. Tu única fuente de conocimiento es la 'Información documentada en los reportes' proporcionada.
+            **Tarea:** Eres un **asistente de AI**. Tu misión es **sintetizar** información proveniente de múltiples estudios de mercado para ofrecer una respuesta completa y cohesionada. Tu única fuente de conocimiento es la 'Información documentada en los reportes' proporcionada.
 
             **Historial de la Conversación:**
             {conversation_history}
@@ -635,10 +635,9 @@ def grounded_chat_mode(db, selected_files):
 
             **Instrucciones Estrictas:**
             1.  **Síntesis Integral (Instrucción Clave):** Tu objetivo principal es conectar y relacionar hallazgos de **TODOS los reportes relevantes** en el contexto para construir una respuesta completa. No te limites a un solo documento si hay información complementaria en otros.
-            2.  **Estructura de la Respuesta:** Comienza con un resumen directo y ejecutivo de la respuesta. Luego, detalla los puntos clave, agrupando la información por temas y citando de qué reporte proviene cada hallazgo.
+            2.  **Estructura de la Respuesta:** Comienza con un parrafo dando una respuesta clara y concreta a la solicitud realizada. Luego, detalla los puntos clave, agrupando la información por temas.
             3.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE en la 'Información documentada en los reportes'. NO utilices conocimiento externo ni hagas suposiciones.
             4.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
-            5.  **Citas Múltiples y Precisas:** Para cada punto clave que menciones, cita **todos** los estudios que lo respaldan (ej: "Se observa una preferencia por empaques sostenibles [Estudio de Sostenibilidad 2023, Perfil del Consumidor Moderno 2024]").
 
             **Respuesta:**
             """
