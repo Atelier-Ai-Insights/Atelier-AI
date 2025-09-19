@@ -625,7 +625,7 @@ def grounded_chat_mode(db, selected_files):
 
             # Prompt estricto para respuestas basadas en datos
             grounded_prompt = f"""
-            **Tarea:** Eres un **asistente de AI**. Tu misión es **sintetizar** información proveniente de múltiples estudios de mercado para ofrecer una respuesta completa y cohesionada. Tu única fuente de conocimiento es la 'Información documentada en los reportes' proporcionada.
+            **Tarea:** Eres un **asistente de AI**. Tu misión es **sintetizar** información proveniente de múltiples estudios de mercado para ofrecer una respuesta clara completa y bien articulada. Tu única fuente de conocimiento es la 'Información documentada en los reportes' proporcionada.
 
             **Historial de la Conversación:**
             {conversation_history}
