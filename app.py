@@ -592,7 +592,7 @@ def grounded_chat_mode(db, selected_files):
     """
     Modo de Chat de Consulta Directa:
     Permite una conversación con el usuario donde las respuestas se basan
-    en la información de los reportes seleccionados.
+    estrictamente en la información de los reportes seleccionados.
     """
     st.subheader("Modo Chat de Consulta Directa")
     st.markdown(
@@ -623,9 +623,9 @@ def grounded_chat_mode(db, selected_files):
             # Crear el historial de conversación para el prompt
             conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history)
 
-            # Prompt para respuestas basadas en hallazgos
+            # Prompt estricto para respuestas basadas en datos
             grounded_prompt = f"""
-            **Tarea:** Eres un asistente de IA especializado en procesar, analizar e interpretar los datos de estudios de mercado. Tu fuente de conocimiento son los hallazgos documentados en los diferentes reportes proporcionados. Debes responder a la 'Última Pregunta del Usuario' de manera clara, concreta utilizando los hallazgos de los distintos reportes.
+            **Tarea:** Eres un **analista de investigación estratégico**. Tu misión es **sintetizar** información proveniente de múltiples estudios de mercado para ofrecer una respuesta completa y cohesionada. Tu única fuente de conocimiento es la 'Información documentada en los reportes' proporcionada.
 
             **Historial de la Conversación:**
             {conversation_history}
@@ -634,10 +634,11 @@ def grounded_chat_mode(db, selected_files):
             {relevant_info}
 
             **Instrucciones Estrictas:**
-            1.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE de los reportes. NO utilices conocimiento externo ni hagas suposiciones.
-            2.  **Respuesta Directa:** Responde la última pregunta del usuario de forma clara, concisa y sin redundancias.
-            3.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en los reportes, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
-            4.  **Cita tus Fuentes:** Si es posible, menciona el título del estudio del cual extrajiste la información (ej: "Según el estudio 'Título del Estudio', se encontró que...").
+            1.  **Síntesis Integral (Instrucción Clave):** Tu objetivo principal es conectar y relacionar hallazgos de **TODOS los reportes relevantes** en el contexto para construir una respuesta completa. No te limites a un solo documento si hay información complementaria en otros.
+            2.  **Estructura de la Respuesta:** Comienza con un resumen directo y ejecutivo de la respuesta. Luego, detalla los puntos clave, agrupando la información por temas y citando de qué reporte proviene cada hallazgo.
+            3.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE en la 'Información documentada en los reportes'. NO utilices conocimiento externo ni hagas suposiciones.
+            4.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
+            5.  **Citas Múltiples y Precisas:** Para cada punto clave que menciones, cita **todos** los estudios que lo respaldan (ej: "Se observa una preferencia por empaques sostenibles [Estudio de Sostenibilidad 2023, Perfil del Consumidor Moderno 2024]").
 
             **Respuesta:**
             """
@@ -663,6 +664,7 @@ def grounded_chat_mode(db, selected_files):
             st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat_consulta.pdf", mime="application/pdf")
         
         st.button("Nueva Conversación", on_click=reset_chat_workflow, key="new_grounded_chat_btn")
+
 
 
 def main():
