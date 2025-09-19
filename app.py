@@ -452,7 +452,7 @@ def ideacion_mode(db, selected_files):
                 + "\n\nInformación de contexto:\n" + relevant
                 + "\n\nInstrucciones:\n"
                 "- Responde usando únicamente la sección de resultados de los reportes.\n"
-                "- Responde de forma creativa, eres un experto en las áreas de la psicología del consumidor y en innovación y creativiadad, así que ayudarás al usuario que esta hablando contigo a conversar con sus datos para ofrecerle ideas novedosas de productos, servicios, mensajes, etc basadas en la información y en los datos que hay sobre la temática que te está solicitando. comienza siempre dando un breve resumen de los proyectos relacionados con la solicitud\n"
+                "- Responde de forma creativa, eres un experto en marketing, así que ayudarás al usuario que esta hablando contigo a conversar con sus datos para ofrecerle una solución creativa a su problema o situación, esto lo harás basado en la información y en los datos que hay sobre la temática que te está solicitando. comienza siempre dando un breve resumen de los proyectos relacionados con la solicitud\n"
                 "- Escribe de forma clara, sintética y concreta\n"
                 "- Incluye citas numeradas al estilo IEEE (por ejemplo, [1]).\n\n"
                 "Respuesta detallada:"
@@ -592,7 +592,7 @@ def grounded_chat_mode(db, selected_files):
     """
     Modo de Chat de Consulta Directa:
     Permite una conversación con el usuario donde las respuestas se basan
-    estrictamente en la información de los reportes seleccionados.
+    en la información de los reportes seleccionados.
     """
     st.subheader("Modo Chat de Consulta Directa")
     st.markdown(
@@ -625,7 +625,7 @@ def grounded_chat_mode(db, selected_files):
 
             # Prompt estricto para respuestas basadas en datos
             grounded_prompt = f"""
-            **Tarea:** Eres un asistente de IA especializado en análisis de datos de estudios de mercado. Tu única fuente de conocimiento es la 'Información de Contexto' proporcionada. Debes responder a la 'Última Pregunta del Usuario' de manera directa y fiel a los datos.
+            **Tarea:** Eres un asistente de IA especializado en procesar, analizar e interpretar los datos de estudios de mercado. Tu única fuente de conocimiento es la 'Información de Contexto' y 'hechos' proporcionada. Debes responder a la 'Última Pregunta del Usuario' de manera clara, concreta y fiel a los datos que se encuentran en los distintos reportes.
 
             **Historial de la Conversación:**
             {conversation_history}
@@ -634,9 +634,9 @@ def grounded_chat_mode(db, selected_files):
             {relevant_info}
 
             **Instrucciones Estrictas:**
-            1.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE en la 'Información de Contexto'. NO utilices conocimiento externo ni hagas suposiciones.
+            1.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE de la sección de 'Información de Contexto' y 'hechos'. NO utilices conocimiento externo ni hagas suposiciones.
             2.  **Respuesta Directa:** Responde la última pregunta del usuario de forma clara, concisa y sin redundancias.
-            3.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
+            3.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto o en los hechos, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
             4.  **Cita tus Fuentes:** Si es posible, menciona el título del estudio del cual extrajiste la información (ej: "Según el estudio 'Título del Estudio', se encontró que...").
 
             **Respuesta:**
