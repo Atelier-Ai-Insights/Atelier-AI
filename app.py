@@ -1,7 +1,6 @@
 # ==============================================================================
 # 1. IMPORTACIONES
 # ==============================================================================
-# Librerías existentes
 import datetime
 import html
 import json
@@ -10,6 +9,7 @@ from io import BytesIO
 import os
 import tempfile
 from bs4 import BeautifulSoup
+
 import boto3
 import google.generativeai as genai
 import markdown2
@@ -23,19 +23,15 @@ from supabase import create_client
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 
-# --- INICIO: NUEVAS LIBRERÍAS PARA EL CHAT RAG ---
-# Asegúrate de instalar estas librerías:
-# pip install langchain langchain-google-genai langchain_community chromadb
+# --- LIBRERÍAS PARA EL CHAT RAG ---
 from langchain.docstore.document import Document
 from langchain_community.vectorstores import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
-# --- FIN: NUEVAS LIBRERÍAS ---
 
-
-# Registrar fuente Unicode (código existente sin cambios)
+# Registrar fuente Unicode
 try:
     pdfmetrics.registerFont(TTFont('DejaVuSans', 'DejaVuSans.ttf'))
 except Exception as e:
@@ -43,7 +39,7 @@ except Exception as e:
 
 
 # ==============================================================================
-# 2. SECCIÓN DE AUTENTICACIÓN Y HELPERS
+# 2. AUTENTICACIÓN Y HELPERS
 # ==============================================================================
 ALLOWED_USERS = st.secrets.get("ALLOWED_USERS", {})
 
@@ -62,7 +58,7 @@ def show_login():
             else:
                 st.error("Credenciales incorrectas")
     st.stop()
-        
+
 def reset_report_workflow():
     for k in ["report", "last_question", "report_question", "personalization", "rating"]:
         st.session_state.pop(k, None)
@@ -70,14 +66,11 @@ def reset_report_workflow():
 def reset_chat_workflow():
     st.session_state.pop("chat_history", None)
     
-# --- INICIO: NUEVO HELPER PARA REINICIAR EL CHAT RAG ---
 def reset_rag_chat_workflow():
     st.session_state.pop("rag_chat_history", None)
-# --- FIN: NUEVO HELPER ---
-
 
 # ==============================================================================
-# 3. CONFIGURACIÓN DE APIS Y MODELOS (código existente sin cambios)
+# 3. CONFIGURACIÓN DE APIS Y MODELOS
 # ==============================================================================
 api_keys = [st.secrets["API_KEY_1"], st.secrets["API_KEY_2"], st.secrets["API_KEY_3"]]
 current_api_key_index = 0
@@ -88,9 +81,7 @@ def configure_api():
 
 configure_api()
 
-generation_config = {
-    "temperature": 0.5, "top_p": 0.8, "top_k": 32, "max_output_tokens": 8192,
-}
+generation_config = {"temperature": 0.5, "top_p": 0.8, "top_k": 32, "max_output_tokens": 8192}
 safety_settings = [
     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
@@ -127,13 +118,11 @@ def call_gemini_api(prompt):
             st.error(f"Error GRAVE en la llamada a Gemini: {e2}")
             return None
 
-# Supabase y logging (código existente sin cambios)
 supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 def log_query_event(query_text, mode, rating=None):
-    data = { "id": datetime.datetime.now().strftime("%Y%m%d%H%M%S"), "user_name": st.session_state.user, "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "mode": mode, "query": query_text, "rating": rating, }
+    data = {"id": datetime.datetime.now().strftime("%Y%m%d%H%M%S"), "user_name": st.session_state.user, "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "mode": mode, "query": query_text, "rating": rating}
     supabase.table("queries").insert(data).execute()
 
-# Normalización de texto (código existente sin cambios)
 def normalize_text(text):
     if not text: return ""
     normalized = unicodedata.normalize("NFD", text)
@@ -141,7 +130,7 @@ def normalize_text(text):
 
 
 # ==============================================================================
-# 4. CARGA DE DATOS Y FILTROS (código existente sin cambios)
+# 4. CARGA DE DATOS Y FILTROS
 # ==============================================================================
 @st.cache_data(show_spinner="Cargando base de conocimiento...")
 def load_database(cliente: str):
@@ -151,19 +140,12 @@ def load_database(cliente: str):
     bucket_name     = st.secrets.get("S3_BUCKET")
     object_key      = "resultado_presentacion (1).json"
     try:
-        s3 = boto3.client(
-            "s3", endpoint_url=s3_endpoint_url, aws_access_key_id=s3_access_key, aws_secret_access_key=s3_secret_key,
-        )
+        s3 = boto3.client("s3", endpoint_url=s3_endpoint_url, aws_access_key_id=s3_access_key, aws_secret_access_key=s3_secret_key)
         response = s3.get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response["Body"].read().decode("utf-8"))
         cliente_norm = normalize_text(cliente or "")
         if cliente_norm != "insights-atelier":
-            filtered_data = []
-            for doc in data:
-                doc_cliente_norm = normalize_text(doc.get("cliente", ""))
-                if "atelier" in doc_cliente_norm or cliente_norm in doc_cliente_norm:
-                    filtered_data.append(doc)
-            data = filtered_data
+            data = [doc for doc in data if "atelier" in normalize_text(doc.get("cliente", "")) or cliente_norm in normalize_text(doc.get("cliente", ""))]
     except Exception as e:
         st.error(f"Error al descargar la base de datos desde S3: {e}")
         data = []
@@ -178,12 +160,12 @@ def apply_filter_criteria(db, selected_filter):
     return [doc for doc in db if doc.get("filtro") == selected_filter]
 
 # ==============================================================================
-# 5. LÓGICA DE MODOS Y GENERACIÓN DE REPORTES/PDF
-# (Tu código existente para report_mode, ideacion_mode, etc., va aquí)
+# 5. FUNCIONES ORIGINALES (Reporte, Creativo, Conceptos y PDF)
 # ==============================================================================
-# ... (Aquí va todo tu código existente para `add_markdown_content`, `get_relevant_info`,
-#      `generate_final_report`, `PDFReport`, `generate_pdf_html`, `ideacion_mode`,
-#      `report_mode`, `concept_generation_mode`. NO lo elimines).
+
+# -- Funciones auxiliares para reportes y PDF
+banner_file = "Banner (2).jpg"
+
 def get_relevant_info(db, question, selected_files):
     all_text = ""
     for pres in db:
@@ -193,79 +175,137 @@ def get_relevant_info(db, question, selected_files):
                 contenido = grupo.get("contenido_texto", "")
                 all_text += f"Grupo {grupo.get('grupo_index')}: {contenido}\n"
     return all_text
-# (El resto de tus funciones existentes continúan aquí...)
+
+def clean_text(text):
+    if not isinstance(text, str):
+        text = str(text)
+    return text.replace('&', '&amp;')
+
+# -- Clase para generar PDF
+class PDFReport:
+    # (Aquí va el código completo de tu clase PDFReport, sin cambios)
+    pass # Reemplaza este 'pass' con tu código completo de la clase
+
+# -- Función para generar PDF
+def generate_pdf_html(content, title="Documento Final", banner_path=None, output_filename=None):
+    # (Aquí va el código completo de tu función generate_pdf_html, sin cambios)
+    pass # Reemplaza este 'pass' con tu código completo de la función
+
+# -- Función para generar el reporte de reportes
+def generate_final_report(question, db, selected_files):
+    # (Aquí va el código completo de tu función generate_final_report, sin cambios)
+    pass # Reemplaza este 'pass' con tu código completo de la función
+
+# -- MODO 1: Generar Reporte de Reportes
+def report_mode(db, selected_files):
+    st.markdown("### Generar reporte")
+    question = st.text_area("Escribe tu consulta…", value=st.session_state.get("last_question", ""), height=150, key="report_question")
+    
+    if st.button("Generar Reporte"):
+        if not question.strip():
+            st.warning("Ingrese una consulta.")
+        else:
+            if question != st.session_state.get("last_question"):
+                st.session_state.pop("report", None)
+                st.session_state["last_question"] = question
+
+            if "report" not in st.session_state:
+                with st.spinner("Generando informe..."):
+                    report = generate_final_report(question, db, selected_files)
+                if report:
+                    st.session_state["report"] = report
+                else:
+                    st.error("No se pudo generar el informe.")
+                    return
+
+    if "report" in st.session_state:
+        st.markdown("### Informe Final")
+        edited = st.text_area("Informe generado:", value=st.session_state["report"], height=400, key="report_edit")
+        pdf_bytes = generate_pdf_html(edited, title="Informe Final", banner_path=banner_file)
+        if pdf_bytes:
+            st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="Informe_AtelierIA.pdf", mime="application/pdf")
+        st.button("Nueva consulta", on_click=reset_report_workflow)
+        log_query_event(question, mode="Generación")
+
+# -- MODO 2: Conversaciones Creativas
+def ideacion_mode(db, selected_files):
+    st.subheader("Modo Conversación: Conversa con los datos")
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    for msg in st.session_state.chat_history:
+        st.markdown(f"**{msg['role'].capitalize()}:** {msg['message']}")
+
+    user_input = st.text_area("Pregunta algo…", height=150)
+
+    if st.button("Enviar pregunta"):
+        if not user_input.strip():
+            st.warning("Ingrese su pregunta para continuar.")
+        else:
+            st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
+            relevant = get_relevant_info(db, user_input, selected_files)
+            # (El resto de la lógica de ideacion_mode va aquí)
+            pass # Reemplaza este 'pass' con la lógica de tu prompt y llamada a la API
+
+# -- MODO 3: Generación de Conceptos
+def concept_generation_mode(db, selected_files):
+    st.subheader("Modo Generación de Conceptos")
+    product_idea = st.text_area("Describe tu idea de producto o servicio:", height=150)
+
+    if st.button("Generar Concepto"):
+        if not product_idea.strip():
+            st.warning("Por favor, describe tu idea.")
+        else:
+            with st.spinner("Generando el concepto..."):
+                context_info = get_relevant_info(db, product_idea, selected_files)
+                # (El resto de la lógica de concept_generation_mode va aquí)
+                pass # Reemplaza este 'pass' con la lógica de tu prompt y llamada a la API
 
 
 # ==============================================================================
-# 6. --- INICIO: NUEVAS FUNCIONES PARA EL CHAT FIEL (RAG) ---
+# 6. NUEVAS FUNCIONES PARA EL CHAT FIEL (RAG)
 # ==============================================================================
-
 def prepare_rag_data(db):
-    """Convierte los datos del JSON en una lista de Documentos para LangChain."""
     docs = []
     for pres in db:
         for grupo in pres.get("grupos", []):
             contenido = grupo.get("contenido_texto", "")
-            if contenido:  # Solo añadir si hay contenido
-                metadata = {
-                    "fuente": pres.get('titulo_estudio', pres.get('nombre_archivo', 'Desconocido')),
-                    "grupo": grupo.get('grupo_index', 'N/A')
-                }
+            if contenido:
+                metadata = {"fuente": pres.get('titulo_estudio', pres.get('nombre_archivo', 'Desconocido')), "grupo": grupo.get('grupo_index', 'N/A')}
                 docs.append(Document(page_content=contenido, metadata=metadata))
     return docs
 
 @st.cache_resource(show_spinner="Preparando asistente de chat fiel...")
 def setup_rag_pipeline(_db):
-    """
-    Crea y cachea el pipeline de RAG (VectorStore y Retriever).
-    El `_` en `_db` indica a Streamlit que cachee basado en el objeto en sí.
-    """
     documents = prepare_rag_data(_db)
-    if not documents:
-        return None
+    if not documents: return None
 
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     vectorstore = Chroma.from_documents(documents=documents, embedding=embeddings)
-    
     retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
 
     template = """
-    Eres un asistente de IA llamado Atelier Data Studio. Tu única función es responder preguntas basándote exclusivamente en el contexto proporcionado, que proviene de reportes de investigación.
-
+    Eres un asistente de IA de Atelier Data Studio. Responde preguntas basándote exclusivamente en el contexto de reportes proporcionado.
     **Instrucciones estrictas:**
-    1.  **Usa solo el contexto**: Basa tu respuesta 100% en la información del siguiente 'Contexto'. No uses conocimiento externo.
-    2.  **Sé conciso y claro**: Responde directamente a la pregunta sin añadir información superflua.
-    3.  **Si no sabes, dilo**: Si la respuesta no se encuentra en el contexto, responde exactamente: "No tengo suficiente información en los reportes para responder a esa pregunta, intenta de nuevo."
-    4.  **Cita tus fuentes**: Al final de tu respuesta, añade una sección 'Fuentes:' y lista los títulos de los estudios usados del contexto.
-
-    **Contexto:**
-    {context}
-
-    **Pregunta:**
-    {question}
-
+    1.  **Usa solo el contexto**. No uses conocimiento externo.
+    2.  **Sé conciso y claro**.
+    3.  Si la respuesta no está en el contexto, responde: "No tengo suficiente información en los reportes para responder a esa pregunta."
+    4.  Al final, añade una sección 'Fuentes:' y lista los títulos de los estudios usados.
+    **Contexto:** {context}
+    **Pregunta:** {question}
     **Respuesta Fiel:**
     """
     prompt = ChatPromptTemplate.from_template(template)
-    
     llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.1)
-
-    rag_chain = (
-        {"context": retriever, "question": RunnablePassthrough()}
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
-    
+    rag_chain = ({"context": retriever, "question": RunnablePassthrough()} | prompt | llm | StrOutputParser())
     return rag_chain
 
 def chat_con_reportes_mode(rag_chain):
-    """Función para el modo 'Chat Fiel con Reportes'."""
     st.subheader("Modo Chat Fiel con Reportes")
-    st.markdown("Conversa directamente con los hallazgos de los reportes seleccionados. Las respuestas se generan **únicamente** a partir de la información contenida en ellos para garantizar máxima fidelidad.")
+    st.markdown("Conversa directamente con los hallazgos de los reportes. Las respuestas se basan **únicamente** en ellos.")
 
     if rag_chain is None:
-        st.warning("No hay datos en los reportes seleccionados para iniciar el chat. Por favor, ajusta los filtros.")
+        st.warning("No hay datos en los reportes seleccionados para iniciar el chat. Ajusta los filtros.")
         return
 
     if "rag_chat_history" not in st.session_state:
@@ -277,11 +317,10 @@ def chat_con_reportes_mode(rag_chain):
 
     if prompt := st.chat_input("¿Qué quieres preguntar a los reportes?"):
         st.session_state.rag_chat_history.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        with st.chat_message("user"): st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            with st.spinner("Buscando en los reportes y generando respuesta..."):
+            with st.spinner("Generando respuesta..."):
                 response = rag_chain.invoke(prompt)
                 st.markdown(response)
         
@@ -289,44 +328,39 @@ def chat_con_reportes_mode(rag_chain):
         log_query_event(prompt, mode="Chat Fiel con Reportes")
         
     if st.session_state.rag_chat_history:
-        st.button("Nueva conversación fiel", on_click=reset_rag_chat_workflow, key="new_rag_chat_btn")
+        st.button("Nueva conversación fiel", on_click=reset_rag_chat_workflow)
 
 
 # ==============================================================================
-# 7. FUNCIÓN PRINCIPAL (main) - MODIFICADA
+# 7. FUNCIÓN PRINCIPAL (main)
 # ==============================================================================
 def main():
     if not st.session_state.get("logged_in"):
         show_login()
 
     st.title("Atelier Data Studio")
-    st.markdown(
-        "Herramienta impulsada por modelos lingüísticos para consultar y conversar con datos de estudios de mercado."
-    )
+    st.markdown("Herramienta para consultar y conversar con datos de estudios de mercado.")
 
     db = load_database(st.session_state.cliente)
     if not db:
-        st.warning("No se encontraron datos para el cliente actual o hubo un error al cargar la base de datos.")
+        st.warning("No se encontraron datos para el cliente actual.")
         st.stop()
 
-    # --- MODIFICADO: Añadida la nueva opción de chat ---
     modo = st.sidebar.radio(
         "Seleccione el modo de uso:",
         ["Generar un reporte de reportes", "Conversaciones creativas", "Generación de conceptos", "Chat Fiel con Reportes"]
     )
 
-    # Filtros en la sidebar (aplicados a una copia para no afectar la DB original)
+    # Filtros
     db_filtered = db
     filtros = sorted({doc.get("filtro", "") for doc in db_filtered if doc.get("filtro")})
     filtros.insert(0, "Todos")
     selected_filter = st.sidebar.selectbox("Seleccione la marca:", filtros)
     db_filtered = apply_filter_criteria(db_filtered, selected_filter)
     
-    # (El resto de tus filtros aquí, aplicados a `db_filtered`)
-    
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
     
-    # --- MODIFICADO: Lógica para llamar a la función del modo seleccionado ---
+    # Lógica de modos
     if modo == "Generar un reporte de reportes":
         report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas":
