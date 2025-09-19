@@ -235,7 +235,7 @@ def setup_rag_pipeline(_db):
     **Instrucciones estrictas:**
     1.  **Usa solo el contexto**: Basa tu respuesta 100% en la información del siguiente 'Contexto'. No uses conocimiento externo.
     2.  **Sé conciso y claro**: Responde directamente a la pregunta sin añadir información superflua.
-    3.  **Si no sabes, dilo**: Si la respuesta no se encuentra en el contexto, responde exactamente: "No tengo suficiente información en los reportes para responder a esa pregunta."
+    3.  **Si no sabes, dilo**: Si la respuesta no se encuentra en el contexto, responde exactamente: "No tengo suficiente información en los reportes para responder a esa pregunta, intenta de nuevo."
     4.  **Cita tus fuentes**: Al final de tu respuesta, añade una sección 'Fuentes:' y lista los títulos de los estudios usados del contexto.
 
     **Contexto:**
