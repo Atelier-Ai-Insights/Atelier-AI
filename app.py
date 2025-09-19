@@ -639,7 +639,8 @@ def grounded_chat_mode(db, selected_files):
             3.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE en la 'Información documentada en los reportes'. NO utilices conocimiento externo ni hagas suposiciones.
             4.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
             5.  **Identificación de la marca y el producto EXACTO:** Si te preguntan por una marca puntual (por ejemplo: Manzana Postobón) o producto en específico (galletas saladas, galletas dulces, chicles, etc), identifica en la pregunta la marca y el producto exacto sobre el cual se hace la consulta y sé muy específico y riguroso al incluir y referenciar la información asociada a la marca y al producto mencionado en la consulta (por ejemplo: diferenciar galletas dulces de galletas saladas).
-
+            6.  **Referencias:** En esta seccion no es necesario citar las fuentes.
+            
             **Respuesta:**
             """
 
