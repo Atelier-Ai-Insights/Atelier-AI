@@ -625,16 +625,16 @@ def grounded_chat_mode(db, selected_files):
 
             # Prompt para respuestas basadas en hallazgos
             grounded_prompt = f"""
-            **Tarea:** Eres un asistente de IA especializado en procesar, analizar e interpretar los datos de estudios de mercado. Tu fuente de conocimiento son los hallazgos documentados en los diferentes reportes proporcionados. Debes responder a la 'Última Pregunta del Usuario' de manera clara, concreta y fiel a los datos que se encuentran en los distintos reportes.
+            **Tarea:** Eres un asistente de IA especializado en procesar, analizar e interpretar los datos de estudios de mercado. Tu fuente de conocimiento son los hallazgos documentados en los diferentes reportes proporcionados. Debes responder a la 'Última Pregunta del Usuario' de manera clara, concreta utilizando los hallazgos de los distintos reportes.
 
             **Historial de la Conversación:**
             {conversation_history}
 
-            **Información de hallazgos (Única fuente de verdad):**
+            **Información documentada en los reportes (Única fuente de verdad):**
             {relevant_info}
 
             **Instrucciones Estrictas:**
-            1.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE de los hallazgos de los reportes. NO utilices conocimiento externo ni hagas suposiciones.
+            1.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE de los reportes. NO utilices conocimiento externo ni hagas suposiciones.
             2.  **Respuesta Directa:** Responde la última pregunta del usuario de forma clara, concisa y sin redundancias.
             3.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en los reportes, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
             4.  **Cita tus Fuentes:** Si es posible, menciona el título del estudio del cual extrajiste la información (ej: "Según el estudio 'Título del Estudio', se encontró que...").
