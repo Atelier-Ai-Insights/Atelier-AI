@@ -638,7 +638,7 @@ def grounded_chat_mode(db, selected_files):
             2.  **Estructura de la Respuesta:** Redacta un parrafo corto dando una respuesta corta clara y concreta a la solicitud realizada incluyendo principalmente información asociada a los hallazgos de los reportes.
             3.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE en la 'Información documentada en los reportes'. NO utilices conocimiento externo ni hagas suposiciones.
             4.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
-            5.  **Identificación de la marca y el producto:** Si te preguntan por una marca (por ejemplo: Manzana Postobón) o producto (galletas saladas, galletas dulces, chicles, etc), identifica en la pregunta la marca y el producto exacto sobre el cual se hace la consulta y sé muy específico y riguroso en incluir y referenciar información asociada a la marca y al producto consultado.
+            5.  **Identificación de la marca y el producto EXACTO:** Si te preguntan por una marca puntual (por ejemplo: Manzana Postobón) o producto en específico (galletas saladas, galletas dulces, chicles, etc), identifica en la pregunta la marca y el producto exacto sobre el cual se hace la consulta y sé muy específico y riguroso al incluir y referenciar la información asociada a la marca y al producto mencionado en la consulta (por ejemplo: diferenciar galletas dulces de galletas saladas).
 
             **Respuesta:**
             """
