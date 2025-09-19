@@ -427,22 +427,22 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None, output
 
 
 def ideacion_mode(db, selected_files):
-    st.subheader("Modo Conversación: Conversa con los datos")
+    st.subheader("Modo Conversaciones Creativas")
+    st.markdown(
+        "Este es un espacio para explorar ideas novedosas. "
+        "Basado en los hallazgos, el asistente te ayudará a generar conceptos creativos para productos, servicios o campañas."
+    )
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
     for msg in st.session_state.chat_history:
         st.markdown(f"**{msg['role'].capitalize()}:** {msg['message']}")
 
-    st.markdown(
-        "Para hacer nuevas consultas, escribe tu pregunta en el cuadro de abajo "
-        "y presiona **Enviar pregunta**."
-    )
-    user_input = st.text_area("Pregunta algo…", height=150)
+    user_input = st.text_area("Lanza una idea o pregunta para iniciar la conversación...", height=150)
 
-    if st.button("Enviar pregunta"):
+    if st.button("Enviar"):
         if not user_input.strip():
-            st.warning("Ingrese su pregunta para continuar la conversación.")
+            st.warning("Por favor, ingresa tu pregunta para continuar.")
         else:
             st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
             relevant = get_relevant_info(db, user_input, selected_files)
@@ -457,36 +457,35 @@ def ideacion_mode(db, selected_files):
                 "- Incluye citas numeradas al estilo IEEE (por ejemplo, [1]).\n\n"
                 "Respuesta detallada:"
             )
-            resp = call_gemini_api(conv_prompt)
+            with st.spinner("Generando respuesta creativa..."):
+                resp = call_gemini_api(conv_prompt)
             if resp:
                 st.session_state.chat_history.append({"role": "Asistente", "message": resp})
-                log_query_event(user_input, mode="Conversación")
-                st.rerun() # Para mostrar el nuevo mensaje inmediatamente
+                log_query_event(user_input, mode="Conversación Creativa")
+                st.rerun()
             else:
                 st.error("Error al generar la respuesta.")
 
     if st.session_state.chat_history:
         pdf_bytes = generate_pdf_html(
             "\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history),
-            title="Historial de Chat",
+            title="Historial de Chat Creativo",
             banner_path=banner_file
         )
-        # === AJUSTE AÑADIDO ===
-        # Se verifica que el PDF se haya creado antes de mostrar el botón.
         if pdf_bytes:
-            st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat.pdf", mime="application/pdf")
+            st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat_creativo.pdf", mime="application/pdf")
         
         st.button("Nueva conversación", on_click=reset_chat_workflow, key="new_chat_btn")
 
 
 def report_mode(db, selected_files):
-    st.markdown("### Generar reporte")
-    question = st.text_area("Escribe tu consulta…", value=st.session_state.get("last_question", ""), height=150, key="report_question")
-    personalization = st.text_area("Personaliza el reporte…", value=st.session_state.get("personalization", ""), height=150, key="personalization")
+    st.markdown("### Generar Reporte Cruzado")
+    question = st.text_area("Escribe tu consulta para el reporte…", value=st.session_state.get("last_question", ""), height=150, key="report_question")
+    personalization = st.text_area("Opcional: Añade notas o personaliza la conclusión del reporte…", value=st.session_state.get("personalization", ""), height=100, key="personalization")
 
     if st.button("Generar Reporte"):
         if not question.strip():
-            st.warning("Ingrese una consulta.")
+            st.warning("Por favor, ingresa una consulta para generar el reporte.")
         else:
             if question != st.session_state.get("last_question"):
                 st.session_state.pop("report", None)
@@ -499,10 +498,11 @@ def report_mode(db, selected_files):
                     st.error("No se pudo generar el informe.")
                     return
                 st.session_state["report"] = report
+                st.rerun()
 
     if "report" in st.session_state:
-        st.markdown("### Informe Final")
-        edited = st.text_area("Informe generado (puedes editar el texto aquí antes de descargar):", value=st.session_state["report"], height=400, key="report_edit")
+        st.markdown("### Previsualización del Informe")
+        edited = st.text_area("Puedes editar el texto aquí antes de descargar:", value=st.session_state["report"], height=400, key="report_edit")
         
         final_content = edited
         if personalization.strip():
@@ -510,17 +510,14 @@ def report_mode(db, selected_files):
 
         pdf_bytes = generate_pdf_html(final_content, title="Informe Final", banner_path=banner_file)
         
-        # === AJUSTE AÑADIDO ===
-        # Se verifica que el PDF se haya creado antes de mostrar el botón.
         if pdf_bytes:
             st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="Informe_AtelierIA.pdf", mime="application/pdf")
         
         st.button("Nueva consulta", on_click=reset_report_workflow, key="new_report_query_btn")
         
         rating = st.session_state.get("rating", None)
-        log_query_event(question, mode="Generación", rating=rating)
+        log_query_event(question, mode="Generación de Reporte", rating=rating)
 
-# === NUEVA FUNCIÓN ===
 def concept_generation_mode(db, selected_files):
     """
     Modo de Generación de Conceptos:
@@ -528,7 +525,7 @@ def concept_generation_mode(db, selected_files):
     y los hallazgos de los estudios seleccionados.
     """
     st.subheader("Modo Generación de Conceptos")
-    st.markdown("A partir de una idea inicial y los hallazgos de los estudios seleccionados, generaremos un concepto de producto o servicio sólido y estructurado.")
+    st.markdown("A partir de una idea inicial y los hallazgos de los estudios, generaremos un concepto de producto o servicio sólido y estructurado.")
 
     product_idea = st.text_area(
         "Describe tu idea de producto o servicio:",
@@ -541,10 +538,8 @@ def concept_generation_mode(db, selected_files):
             st.warning("Por favor, describe tu idea de producto para continuar.")
         else:
             with st.spinner("Analizando hallazgos y generando el concepto..."):
-                # 1. Obtener contexto relevante de los documentos seleccionados
                 context_info = get_relevant_info(db, product_idea, selected_files)
                 
-                # 2. Crear el prompt específico para la generación de conceptos
                 prompt = f"""
                 **Tarea:** Eres un estratega de innovación y marketing. A partir de una idea de producto y un contexto de estudios de mercado, debes desarrollar un concepto de producto o servicio estructurado.
 
@@ -572,16 +567,103 @@ def concept_generation_mode(db, selected_files):
                 * Entrega dos opciones de concepto resumido. Estos deben ser memorables y para su redacción se deben considerar tres frases o párrafos: Insight (primero decir el dolor del consumidor y luego especificar lo que le gustaría tener como resultado), What (Caracteristicas y beneficios del producto o servicio), Reason To Belive (por qué el producto puede resolver la tensión). Cierra el resumen con un claim, este debe captar la esencia del producto o servidio y se debe redactar de manera sucinta: corto pero con con mucho significado.
                 """
 
-                # 3. Llamar a la API y mostrar la respuesta
                 response = call_gemini_api(prompt)
 
                 if response:
-                    st.markdown("---")
-                    st.markdown("### Concepto Generado")
-                    st.markdown(response)
+                    st.session_state.generated_concept = response # Guardar en session_state
                     log_query_event(product_idea, mode="Generación de Conceptos")
                 else:
                     st.error("No se pudo generar el concepto. Inténtalo de nuevo.")
+    
+    # Mostrar el concepto si existe en el estado de la sesión
+    if "generated_concept" in st.session_state:
+        st.markdown("---")
+        st.markdown("### Concepto Generado")
+        st.markdown(st.session_state.generated_concept)
+        if st.button("Generar un nuevo concepto"):
+            st.session_state.pop("generated_concept")
+            st.rerun()
+
+
+# ==================================
+# === ¡NUEVA FUNCIÓN AÑADIDA! ===
+# ==================================
+def grounded_chat_mode(db, selected_files):
+    """
+    Modo de Chat de Consulta Directa:
+    Permite una conversación con el usuario donde las respuestas se basan
+    estrictamente en la información de los reportes seleccionados.
+    """
+    st.subheader("Modo Chat de Consulta Directa")
+    st.markdown(
+        "Realiza preguntas específicas y obtén respuestas concretas basadas "
+        "únicamente en los hallazgos de los informes seleccionados. "
+        "El asistente no utilizará conocimiento externo."
+    )
+
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    # Muestra el historial del chat
+    for msg in st.session_state.chat_history:
+        st.markdown(f"**{msg['role'].capitalize()}:** {msg['message']}")
+
+    # Input del usuario
+    user_input = st.text_area("Escribe tu pregunta...", height=150)
+
+    if st.button("Enviar Pregunta"):
+        if not user_input.strip():
+            st.warning("Por favor, ingresa una pregunta para continuar.")
+        else:
+            st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
+            
+            # Obtener contexto relevante
+            relevant_info = get_relevant_info(db, user_input, selected_files)
+            
+            # Crear el historial de conversación para el prompt
+            conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history)
+
+            # Prompt estricto para respuestas basadas en datos
+            grounded_prompt = f"""
+            **Tarea:** Eres un asistente de IA especializado en análisis de datos de estudios de mercado. Tu única fuente de conocimiento es la 'Información de Contexto' proporcionada. Debes responder a la 'Última Pregunta del Usuario' de manera directa y fiel a los datos.
+
+            **Historial de la Conversación:**
+            {conversation_history}
+
+            **Información de Contexto (Única fuente de verdad):**
+            {relevant_info}
+
+            **Instrucciones Estrictas:**
+            1.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE en la 'Información de Contexto'. NO utilices conocimiento externo ni hagas suposiciones.
+            2.  **Respuesta Directa:** Responde la última pregunta del usuario de forma clara, concisa y sin redundancias.
+            3.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
+            4.  **Cita tus Fuentes:** Si es posible, menciona el título del estudio del cual extrajiste la información (ej: "Según el estudio 'Título del Estudio', se encontró que...").
+
+            **Respuesta:**
+            """
+
+            with st.spinner("Buscando en los reportes..."):
+                response = call_gemini_api(grounded_prompt)
+            
+            if response:
+                st.session_state.chat_history.append({"role": "Asistente", "message": response})
+                log_query_event(user_input, mode="Consulta Directa")
+                st.rerun()
+            else:
+                st.error("Error al generar la respuesta.")
+
+    # Opciones para el chat
+    if st.session_state.chat_history:
+        pdf_bytes = generate_pdf_html(
+            "\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history),
+            title="Historial de Consulta Directa",
+            banner_path=banner_file
+        )
+        if pdf_bytes:
+            st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat_consulta.pdf", mime="application/pdf")
+        
+        st.button("Nueva Conversación", on_click=reset_chat_workflow, key="new_grounded_chat_btn")
+
 
 def main():
     if not st.session_state.get("logged_in"):
@@ -602,11 +684,35 @@ def main():
         st.stop()
 
     # === MODIFICADO ===
-    # Se añade la nueva opción "Generación de conceptos"
+    # Se añade la nueva opción "Chat de Consulta Directa"
+    modos_disponibles = [
+        "Generar un reporte de reportes", 
+        "Conversaciones creativas", 
+        "Generación de conceptos",
+        "Chat de Consulta Directa"  # <-- NUEVA OPCIÓN
+    ]
     modo = st.sidebar.radio(
         "Seleccione el modo de uso:",
-        ["Generar un reporte de reportes", "Conversaciones creativas", "Generación de conceptos"]
+        modos_disponibles
     )
+
+    # === NUEVO ===
+    # Lógica para reiniciar el chat si se cambia de modo de conversación
+    if 'current_mode' not in st.session_state:
+        st.session_state.current_mode = modo
+    
+    if st.session_state.current_mode != modo:
+        # Si el modo anterior o el nuevo son conversacionales, reinicia el historial
+        if "conversaci" in st.session_state.current_mode.lower() or "chat" in st.session_state.current_mode.lower() \
+        or "conversaci" in modo.lower() or "chat" in modo.lower():
+            reset_chat_workflow()
+        
+        # También reinicia el estado de generación de conceptos si se sale de ese modo
+        if "generated_concept" in st.session_state:
+            del st.session_state["generated_concept"]
+            
+        st.session_state.current_mode = modo
+
 
     # Filtros en la sidebar
     filtros = sorted({doc.get("filtro", "") for doc in db if doc.get("filtro")})
@@ -644,8 +750,10 @@ def main():
         report_mode(db, selected_files)
     elif modo == "Conversaciones creativas":
         ideacion_mode(db, selected_files)
-    else: # Este es el nuevo modo
+    elif modo == "Generación de conceptos":
         concept_generation_mode(db, selected_files)
+    elif modo == "Chat de Consulta Directa": # <-- NUEVA LÓGICA
+        grounded_chat_mode(db, selected_files)
 
 if __name__ == "__main__":
     main()
