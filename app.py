@@ -635,7 +635,7 @@ def grounded_chat_mode(db, selected_files):
 
             **Instrucciones Estrictas:**
             1.  **Síntesis Integral (Instrucción Clave):** Tu objetivo principal es conectar y relacionar hallazgos de **TODOS los reportes relevantes** en el contexto para construir una respuesta completa. No te limites a un solo documento si hay información complementaria en otros.
-            2.  **Estructura de la Respuesta:** Comienza con un parrafo corto dando una respuesta clara y concreta a la solicitud realizada. Luego, amplia la información agrupando la información por temas. Dando 3-4 temas relevantes relacionados con la consulta realizada.
+            2.  **Estructura de la Respuesta:** Redacta un parrafo corto dando una respuesta clara y concreta a la solicitud realizada.
             3.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE en la 'Información documentada en los reportes'. NO utilices conocimiento externo ni hagas suposiciones.
             4.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
 
