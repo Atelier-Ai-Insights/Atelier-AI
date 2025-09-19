@@ -638,6 +638,7 @@ def grounded_chat_mode(db, selected_files):
             2.  **Estructura de la Respuesta:** Redacta un parrafo corto dando una respuesta clara y concreta a la solicitud realizada.
             3.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE en la 'Información documentada en los reportes'. NO utilices conocimiento externo ni hagas suposiciones.
             4.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
+            5.  **Especificación por marca:** Si te preguntan por una marca, identifica en la pregunta la marca exacta sobre el cual se hace la consulta. Sé muy específico y riguroso en referenciar información asociada a la marca consultada.
 
             **Respuesta:**
             """
