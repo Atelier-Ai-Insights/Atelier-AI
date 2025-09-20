@@ -263,7 +263,7 @@ def generate_final_report(question, db, selected_files):
     
     # Prompt 1: Extrae hallazgos clave y referencias.
     prompt1 = (
-        f"Pregunta del Cliente: ***{question}***\n\n"
+        
         "Instrucciones:\n"
         "1. Identifica en la pregunta la marca exacta y/o el producto exacto sobre el cual se hace la consulta. Sé muy específico y riguroso en referenciar información asociada a la marca y/o producto consultado.\n"
         "2. Reitera la pregunta del cliente: ***{question}***.\n"
