@@ -427,7 +427,7 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None, output
 
 
 def ideacion_mode(db, selected_files):
-    st.subheader("Modo Conversaciones Creativas")
+    st.subheader("Conversaciones Creativas")
     st.markdown(
         "Este es un espacio para explorar ideas novedosas. "
         "Basado en los hallazgos, el asistente te ayudará a generar conceptos creativos para productos, servicios o campañas."
@@ -520,11 +520,11 @@ def report_mode(db, selected_files):
 
 def concept_generation_mode(db, selected_files):
     """
-    Modo de Generación de Conceptos:
+    Generación de Conceptos:
     Crea un concepto de producto o servicio a partir de una idea inicial
     y los hallazgos de los estudios seleccionados.
     """
-    st.subheader("Modo Generación de Conceptos")
+    st.subheader("Generación de Conceptos")
     st.markdown("A partir de una idea inicial y los hallazgos de los estudios, generaremos un concepto de producto o servicio sólido y estructurado.")
 
     product_idea = st.text_area(
