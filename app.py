@@ -284,7 +284,8 @@ def generate_final_report(question, db, selected_files):
     result1 = call_gemini_api(prompt1)
     if result1 is None: return None
 
-    # Prompt 2: Redacta el informe principal en prosa utilizando el resumen anterior.
+    # === INICIO DE LA SECCIÓN AJUSTADA ===
+    # Prompt 2: Redacta el informe principal. Se eliminan los '##' para unificar el tamaño de la fuente.
     prompt2 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
         "Instrucciones Generales:\n"
@@ -293,21 +294,21 @@ def generate_final_report(question, db, selected_files):
         "3. Actúa como un analista experto en ciencias del comportamiento, en investigación de mercados, en marketing y en comunicación estratégica. Enfócate en claridad, síntesis poderosa y pensamiento estructurado.\n"
         "4. El estilo de redacción debe ser claro, directo, conciso y memorable (inspirado en “Ideas que pegan” de Chip Heath y Dan Heath). Evita lenguaje técnico innecesario; prioriza lo relevante y accionable.\n\n"
         "Estructura del Informe (sé breve y preciso en cada sección):\n\n"
-        "##1. **Introducción**:\n"
-        "   - Preserva esta sección. Plantea el contexto y la pregunta central. Usa un hallazgo inesperado (que provenga de los reportes realizados), para captar la atención.\n\n"
-        "##2. **Principales Hallazgos**:\n"
+        "**Introducción**:\n"
+        "   - Preserva esta sección. Plantea el contexto y la pregunta central. Usa un un dato inesperado (que provenga de los reportes realizados), para captar la atención.\n\n"
+        "**Principales Hallazgos**:\n"
         "   - Presenta de forma estructurada los hechos más relevantes descubiertos, directamente desde la sección de resultados de los diferentes reportes y la información de contexto.\n"
         "   - Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original y que sume valor para responder a la pregunta.\n"
         "   - Utiliza solo información relevante y que haga referencia a la marca y al producto citados. No utilices estudios de forma innecesaria.\n"
         "   - Referencia en formato IEEE (ej. [1]), usando el título del estudio o el producto del que se habla, más que el nombre del archivo.\n\n"
-        "##3. **Insights**:\n"
+        "**Insights**:\n"
         "   - Extrae aprendizajes y verdades profundas a partir de los hallazgos. Utiliza analogías y comparaciones que refuercen el mensaje y transformen la comprensión del problema. Sé conciso. Utiliza frases suscitantas, es decir, frase cortas con mucho significado\n\n"
-        "##4. **Conclusiones**:\n"
+        "**Conclusiones**:\n"
         "   - Sintetiza la información y ofrece una dirección clara basada en los insights. Evita repetir información.\n\n"
-        "##5. **Recomendaciones**:\n"
+        "**Recomendaciones**:\n"
         "   - Con base en el informe, proporciona 3-4 recomendaciones concretas, creativas, precisas y accionables que sirvan como inspiración para la toma de decisiones.\n"
         "   - Deben estar alineadas con los insights y conclusiones. Evita la extensión innecesaria.\n\n"
-        "##6. **Referencias**:\n"
+        "**Referencias**:\n"
         "   - Cita el título del estudio (no el nombre del archivo), utilizando la información de la primera diapositiva o metadatos disponibles.\n\n"
         "Utiliza el siguiente resumen (Hallazgos Clave y Referencias) y la Información de Contexto para elaborar el informe:\n\n"
         "5. MUY IMPORTANTE: Asegúrate de que los nombres de marcas y productos estén correctamente espaciados del texto circundante. Por ejemplo, escribe 'la marca Crem Helado debe...' en lugar de 'lamarcaCrem Heladodebe...'. Presta especial atención a este detalle de formato para asegurar la legibilidad.\n\n"
@@ -315,13 +316,12 @@ def generate_final_report(question, db, selected_files):
         f"Información de Contexto Adicional (si es necesaria para complementar el resumen):\n{relevant_info}\n\n"
         "Por favor, redacta el informe completo respetando la estructura y las instrucciones, en un estilo profesional, claro, conciso y coherente, utilizando Markdown."
     )
+    # === FIN DE LA SECCIÓN AJUSTADA ===
     result2 = call_gemini_api(prompt2)
     if result2 is None: return None
     
-    # === INICIO DE LA SECCIÓN AJUSTADA ===
     # Se elimina el encabezado con "Preparado por", etc. El informe comienza con el título.
     informe_completo = f"# {question}\n\n" + result2
-    # === FIN DE LA SECCIÓN AJUSTADA ===
     return informe_completo
 
 def clean_text(text):
@@ -349,27 +349,27 @@ class PDFReport:
             parent=self.styles['Heading1'], 
             alignment=1, 
             spaceAfter=12,
-            fontSize=14,  # Tamaño de fuente para títulos principales
-            leading=18))
+            fontSize=12,
+            leading=16))
         self.styles.add(ParagraphStyle(
             name='CustomHeading', 
             parent=self.styles['Heading2'], 
             spaceBefore=10, 
             spaceAfter=6,
-            fontSize=14,  # Mismo tamaño que el título principal para consistencia
-            leading=18))
+            fontSize=12,
+            leading=16))
         self.styles.add(ParagraphStyle(
             name='CustomBodyText', 
             parent=self.styles['Normal'], 
             leading=14, 
             alignment=4, 
-            fontSize=10)) # Tamaño de fuente para el cuerpo del texto
+            fontSize=12))
         self.styles.add(ParagraphStyle(
             name='CustomFooter', 
             parent=self.styles['Normal'], 
             alignment=2, 
             textColor=colors.grey,
-            fontSize=8)) # Tamaño de fuente para el pie de página
+            fontSize=8)) # Se mantiene pequeño para el pie de página
             
         for style_name in ['CustomTitle','CustomHeading','CustomBodyText','CustomFooter']:
             self.styles[style_name].fontName = 'DejaVuSans'
@@ -417,7 +417,8 @@ class PDFReport:
         self.elements += [p, Spacer(1, 6)]
 
     def add_title(self, text, level=1):
-        style = 'CustomTitle' if level==1 else 'CustomHeading'
+        # Se usa un solo estilo de título para unificar el tamaño
+        style = 'CustomHeading'
         p = Paragraph(clean_text(text), self.styles[style])
         self.elements += [p, Spacer(1, 12)]
 
@@ -430,6 +431,7 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None, output
         output_filename = tmp.name
         tmp.close()
     pdf = PDFReport(output_filename, banner_path=banner_path)
+    # El título principal del PDF también usará el estilo unificado
     pdf.add_title(title, level=1)
     add_markdown_content(pdf, content)
     pdf.build_pdf()
@@ -494,7 +496,6 @@ def ideacion_mode(db, selected_files):
 def report_mode(db, selected_files):
     st.markdown("### Generar Reporte de Reportes")
 
-    # === INICIO DE LA SECCIÓN AJUSTADA ===
     # Muestra el informe generado en la parte superior si existe.
     if "report" in st.session_state and st.session_state["report"]:
         st.markdown("---")
@@ -539,7 +540,6 @@ def report_mode(db, selected_files):
                 st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="Informe_AtelierIA.pdf", mime="application/pdf", use_container_width=True)
         with col2:
             st.button("Nueva consulta", on_click=reset_report_workflow, key="new_report_query_btn", use_container_width=True)
-    # === FIN DE LA SECCIÓN AJUSTADA ===
 
 def concept_generation_mode(db, selected_files):
     """
@@ -699,7 +699,7 @@ def main():
     st.markdown(
         "Atelier Data Studio es una herramienta impulsada por modelos "
         "lingüísticos para realizar consultas y conversar con datos "
-        "arrojados por los distintos estudios de mercados realizados "
+        "arojados por los distintos estudios de mercados realizados "
         "para el entendimiento del consumidor y del mercado.\n\n"
     )
 
