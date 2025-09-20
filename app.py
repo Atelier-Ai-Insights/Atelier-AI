@@ -479,7 +479,7 @@ def ideacion_mode(db, selected_files):
 
 
 def report_mode(db, selected_files):
-    st.markdown("### Generar Reporte Cruzado")
+    st.markdown("### Generar Reporte de Reportes")
     question = st.text_area("Escribe tu consulta para el reporte…", value=st.session_state.get("last_question", ""), height=150, key="report_question")
     personalization = st.text_area("Opcional: Añade notas o personaliza la conclusión del reporte…", value=st.session_state.get("personalization", ""), height=100, key="personalization")
 
