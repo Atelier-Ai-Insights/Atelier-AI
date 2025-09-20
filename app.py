@@ -318,15 +318,10 @@ def generate_final_report(question, db, selected_files):
     result2 = call_gemini_api(prompt2)
     if result2 is None: return None
     
-    fecha_actual = datetime.datetime.now().strftime("%d/%m/%Y")
-    cliente_nombre = st.session_state.get('cliente', 'Cliente Confidencial').capitalize()
-    encabezado = (
-        f"# {question}\n\n"
-        f"**Preparado por:**\n\nAtelier Data Studio\n\n"
-        f"**Preparado para:**\n\n{cliente_nombre}\n\n"
-        f"**Fecha de elaboración:**\n\n{fecha_actual}\n\n"
-    )
-    informe_completo = encabezado + result2
+    # === INICIO DE LA SECCIÓN AJUSTADA ===
+    # Se elimina el encabezado con "Preparado por", etc. El informe comienza con el título.
+    informe_completo = f"# {question}\n\n" + result2
+    # === FIN DE LA SECCIÓN AJUSTADA ===
     return informe_completo
 
 def clean_text(text):
@@ -348,7 +343,6 @@ class PDFReport:
             topMargin   = 45 * mm,
             bottomMargin= 18 * mm
         )
-        # === INICIO DE LA SECCIÓN AJUSTADA ===
         # Estilos personalizados con tamaños de fuente unificados
         self.styles.add(ParagraphStyle(
             name='CustomTitle', 
@@ -376,7 +370,6 @@ class PDFReport:
             alignment=2, 
             textColor=colors.grey,
             fontSize=8)) # Tamaño de fuente para el pie de página
-        # === FIN DE LA SECCIÓN AJUSTADA ===
             
         for style_name in ['CustomTitle','CustomHeading','CustomBodyText','CustomFooter']:
             self.styles[style_name].fontName = 'DejaVuSans'
@@ -501,26 +494,18 @@ def ideacion_mode(db, selected_files):
 def report_mode(db, selected_files):
     st.markdown("### Generar Reporte de Reportes")
 
+    # === INICIO DE LA SECCIÓN AJUSTADA ===
     # Muestra el informe generado en la parte superior si existe.
     if "report" in st.session_state and st.session_state["report"]:
         st.markdown("---")
         st.markdown("### Informe Generado")
-        
         st.markdown(st.session_state["report"])
-        
-        final_content = st.session_state["report"]
-        pdf_bytes = generate_pdf_html(final_content, title="Informe Final", banner_path=banner_file)
-        
-        if pdf_bytes:
-            st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="Informe_AtelierIA.pdf", mime="application/pdf")
-        
-        st.button("Nueva consulta", on_click=reset_report_workflow, key="new_report_query_btn")
         st.markdown("---")
 
-    # Muestra la caja de texto para la nueva consulta en la parte inferior.
+    # Muestra la caja de texto para la consulta.
     question = st.text_area(
         "Escribe tu consulta para el reporte…", 
-        value="", # El valor se deja vacío para incitar una nueva pregunta.
+        value="", 
         height=150, 
         key="report_question"
     )
@@ -541,7 +526,20 @@ def report_mode(db, selected_files):
                 rating = st.session_state.get("rating", None)
                 log_query_event(question, mode="Generación de Reporte", rating=rating)
             
-            st.rerun() # Se necesita un rerun para mostrar el nuevo informe en la parte superior.
+            st.rerun()
+
+    # Muestra los botones de acción al final si hay un informe.
+    if "report" in st.session_state and st.session_state["report"]:
+        final_content = st.session_state["report"]
+        pdf_bytes = generate_pdf_html(final_content, title="Informe Final", banner_path=banner_file)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if pdf_bytes:
+                st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="Informe_AtelierIA.pdf", mime="application/pdf", use_container_width=True)
+        with col2:
+            st.button("Nueva consulta", on_click=reset_report_workflow, key="new_report_query_btn", use_container_width=True)
+    # === FIN DE LA SECCIÓN AJUSTADA ===
 
 def concept_generation_mode(db, selected_files):
     """
