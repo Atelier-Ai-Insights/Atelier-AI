@@ -619,8 +619,7 @@ def grounded_chat_mode(db, selected_files):
     """
     st.subheader("Chat de Consulta Directa")
     st.markdown(
-        "Realiza preguntas específicas y obtén respuestas concretas basadas "
-        "únicamente en los hallazgos de los informes seleccionados. "
+        "Realiza preguntas específicas y obtén respuestas concretas."
         "El asistente no utilizará conocimiento externo."
     )
 
@@ -657,7 +656,7 @@ def grounded_chat_mode(db, selected_files):
             {relevant_info}
 
             **Instrucciones Estrictas:**
-            1.  **Síntesis Integral (Instrucción Clave):** Tu objetivo principal es conectar y relacionar hallazgos de **TODOS los reportes relevantes** en el contexto para construir una respuesta completa. Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original y que sume valor para responder a la pregunta.
+            1.  **Síntesis Integral (Instrucción Clave):** Tu objetivo principal es conectar y relacionar ÚNICAMNETE los hallazgos de **TODOS los reportes relevantes** en el contexto para construir una respuesta completa. Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original y que sume valor para responder a la pregunta.
             2.  **Estructura de la Respuesta:** Redacta un parrafo corto dando una respuesta corta clara y concreta a la solicitud realizada incluyendo principalmente información asociada a la pregunta.
             3.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE en la 'Información documentada en los reportes'. NO utilices conocimiento externo ni hagas suposiciones.
             4.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
