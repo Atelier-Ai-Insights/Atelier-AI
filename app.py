@@ -476,7 +476,6 @@ def ideacion_mode(db, selected_files):
 def report_mode(db, selected_files):
     st.markdown("### Generar Reporte de Reportes")
     question = st.text_area("Escribe tu consulta para el reporte…", value=st.session_state.get("last_question", ""), height=150, key="report_question")
-    personalization = st.text_area("Opcional: Añade notas o personaliza la conclusión del reporte…", value=st.session_state.get("personalization", ""), height=100, key="personalization")
 
     if st.button("Generar Reporte"):
         if not question.strip():
@@ -500,8 +499,6 @@ def report_mode(db, selected_files):
         edited = st.text_area("Puedes editar el texto aquí antes de descargar:", value=st.session_state["report"], height=400, key="report_edit")
         
         final_content = edited
-        if personalization.strip():
-            final_content += "\n\n---\n\n## Notas Adicionales\n\n" + personalization
 
         pdf_bytes = generate_pdf_html(final_content, title="Informe Final", banner_path=banner_file)
         
