@@ -285,7 +285,7 @@ def generate_final_report(question, db, selected_files):
     if result1 is None: return None
 
     # === INICIO DE LA SECCIÓN AJUSTADA ===
-    # Prompt 2: Redacta el informe principal. Se eliminan los '**' y '##' de los títulos para unificar el tamaño de la fuente en la página.
+    # Prompt 2: Redacta el informe principal. Se eliminan los '##' de los títulos para unificar el tamaño de la fuente en la página.
     prompt2 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
         "Instrucciones Generales:\n"
