@@ -348,11 +348,36 @@ class PDFReport:
             topMargin   = 45 * mm,
             bottomMargin= 18 * mm
         )
-        # Estilos personalizados
-        self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], alignment=1, spaceAfter=12))
-        self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['Heading2'], spaceBefore=10, spaceAfter=6))
-        self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], leading=12, alignment=4))
-        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], alignment=2, textColor=colors.grey))
+        # === INICIO DE LA SECCIÓN AJUSTADA ===
+        # Estilos personalizados con tamaños de fuente unificados
+        self.styles.add(ParagraphStyle(
+            name='CustomTitle', 
+            parent=self.styles['Heading1'], 
+            alignment=1, 
+            spaceAfter=12,
+            fontSize=14,  # Tamaño de fuente para títulos principales
+            leading=18))
+        self.styles.add(ParagraphStyle(
+            name='CustomHeading', 
+            parent=self.styles['Heading2'], 
+            spaceBefore=10, 
+            spaceAfter=6,
+            fontSize=14,  # Mismo tamaño que el título principal para consistencia
+            leading=18))
+        self.styles.add(ParagraphStyle(
+            name='CustomBodyText', 
+            parent=self.styles['Normal'], 
+            leading=14, 
+            alignment=4, 
+            fontSize=10)) # Tamaño de fuente para el cuerpo del texto
+        self.styles.add(ParagraphStyle(
+            name='CustomFooter', 
+            parent=self.styles['Normal'], 
+            alignment=2, 
+            textColor=colors.grey,
+            fontSize=8)) # Tamaño de fuente para el pie de página
+        # === FIN DE LA SECCIÓN AJUSTADA ===
+            
         for style_name in ['CustomTitle','CustomHeading','CustomBodyText','CustomFooter']:
             self.styles[style_name].fontName = 'DejaVuSans'
 
