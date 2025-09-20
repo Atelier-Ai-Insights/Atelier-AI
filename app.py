@@ -295,7 +295,7 @@ def generate_final_report(question, db, selected_files):
         "4. El estilo de redacción debe ser claro, directo, conciso y memorable (inspirado en “Ideas que pegan” de Chip Heath y Dan Heath). Evita lenguaje técnico innecesario; prioriza lo relevante y accionable.\n\n"
         "Estructura del Informe (sé breve y preciso en cada sección):\n\n"
         "Introducción:\n"
-        "   - Preserva esta sección. Plantea el contexto y la pregunta central. Usa un aprendizaje o hallazgo inesperado (de tipo cualitativo que provenga ÚNICAMENTE de los reportes seleccionados), para captar la atención.\n\n"
+        "   - Preserva esta sección. Plantea el contexto y la pregunta central. Usa un hallazgo inesperado (de tipo cualitativo que provenga de los reportes realizados), para captar la atención.\n\n"
         "Principales Hallazgos:\n"
         "   - Presenta de forma estructurada los hechos más relevantes descubiertos, directamente desde la sección de resultados de los diferentes reportes y la información de contexto.\n"
         "   - Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original y que sume valor para responder a la pregunta.\n"
@@ -494,7 +494,7 @@ def ideacion_mode(db, selected_files):
 
 
 def report_mode(db, selected_files):
-    st.markdown("### Reporte de Reportes")
+    st.markdown("### Generar Reporte de Reportes")
 
     # Muestra el informe generado en la parte superior si existe.
     if "report" in st.session_state and st.session_state["report"]:
@@ -619,7 +619,8 @@ def grounded_chat_mode(db, selected_files):
     """
     st.subheader("Chat de Consulta Directa")
     st.markdown(
-        "Realiza preguntas específicas y obtén respuestas concretas."
+        "Realiza preguntas específicas y obtén respuestas concretas basadas "
+        "únicamente en los hallazgos de los informes seleccionados. "
         "El asistente no utilizará conocimiento externo."
     )
 
@@ -656,7 +657,7 @@ def grounded_chat_mode(db, selected_files):
             {relevant_info}
 
             **Instrucciones Estrictas:**
-            1.  **Síntesis Integral (Instrucción Clave):** Tu objetivo principal es conectar y relacionar ÚNICAMNETE los hallazgos de **TODOS los reportes relevantes** en el contexto para construir una respuesta completa. Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original y que sume valor para responder a la pregunta.
+            1.  **Síntesis Integral (Instrucción Clave):** Tu objetivo principal es conectar y relacionar hallazgos de **TODOS los reportes relevantes** en el contexto para construir una respuesta completa. Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original y que sume valor para responder a la pregunta.
             2.  **Estructura de la Respuesta:** Redacta un parrafo corto dando una respuesta corta clara y concreta a la solicitud realizada incluyendo principalmente información asociada a la pregunta.
             3.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE en la 'Información documentada en los reportes'. NO utilices conocimiento externo ni hagas suposiciones.
             4.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
@@ -712,9 +713,9 @@ def main():
     # === MODIFICADO ===
     # Se añade la nueva opción "Chat de Consulta Directa"
     modos_disponibles = [
-        "Reporte de Reportes", 
-        "Conversaciones Creativas", 
-        "Generación de Conceptos",
+        "Generar un reporte de reportes", 
+        "Conversaciones creativas", 
+        "Generación de conceptos",
         "Chat de Consulta Directa"  # <-- NUEVA OPCIÓN
     ]
     modo = st.sidebar.radio(
@@ -765,7 +766,7 @@ def main():
 
 
     # Calificación (solo en modo reporte)
-    if modo == "Reporte de reportes":
+    if modo == "Generar un reporte de reportes":
         st.sidebar.radio("Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating")
 
     # Botón Cerrar Sesión
@@ -778,7 +779,7 @@ def main():
 
     # === MODIFICADO ===
     # Lógica para llamar a la función del modo seleccionado
-    if modo == "Reporte de reportes":
+    if modo == "Generar un reporte de reportes":
         report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas":
         ideacion_mode(db_filtered, selected_files)
