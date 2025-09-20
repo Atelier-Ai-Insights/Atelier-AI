@@ -295,7 +295,7 @@ def generate_final_report(question, db, selected_files):
         "4. El estilo de redacción debe ser claro, directo, conciso y memorable (inspirado en “Ideas que pegan” de Chip Heath y Dan Heath). Evita lenguaje técnico innecesario; prioriza lo relevante y accionable.\n\n"
         "Estructura del Informe (sé breve y preciso en cada sección):\n\n"
         "Introducción:\n"
-        "   - Preserva esta sección. Plantea el contexto y la pregunta central. Usa un hallazgo inesperado (de tipo cualitativo que provenga de los reportes realizados), para captar la atención.\n\n"
+        "   - Preserva esta sección. Plantea el contexto y la pregunta central. Usa un hallazgo inesperado (de tipo cualitativo que provenga de los reportes seleccionados), para captar la atención.\n\n"
         "Principales Hallazgos:\n"
         "   - Presenta de forma estructurada los hechos más relevantes descubiertos, directamente desde la sección de resultados de los diferentes reportes y la información de contexto.\n"
         "   - Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original y que sume valor para responder a la pregunta.\n"
@@ -658,7 +658,7 @@ def grounded_chat_mode(db, selected_files):
 
             **Instrucciones Estrictas:**
             1.  **Síntesis Integral (Instrucción Clave):** Tu objetivo principal es conectar y relacionar hallazgos de **TODOS los reportes relevantes** en el contexto para construir una respuesta completa. Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original y que sume valor para responder a la pregunta.
-            2.  **Estructura de la Respuesta:** Redacta un parrafo corto dando una respuesta corta clara y concreta a la solicitud realizada incluyendo principalmente información asociada a la pregunta.
+            2.  **Estructura de la Respuesta:** Redacta un parrafo corto dando una respuesta corta clara y concreta a la solicitud realizada incluyendo principalmente información asociada a la pregunta. Utiliza solo información relevante. No utilices estudios de forma innecesaria.
             3.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE en la 'Información documentada en los reportes'. NO utilices conocimiento externo ni hagas suposiciones.
             4.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
             5.  **Identificación de la marca y el producto EXACTO:** Cuando se pregunte por una marca (ejemplo: oreo) o por una categoría (ejemplo: galletas saladas) siempre traer información ÚNICAMENTE de los reportes relacionados. Identifica en la pregunta la marca y/o el producto exacto sobre el cual se hace la consulta y sé muy específico y riguroso al incluir y referenciar la información asociada a la marca y/o producto mencionado en la consulta (por ejemplo: diferenciar galletas dulces de galletas saladas).
