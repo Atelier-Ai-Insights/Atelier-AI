@@ -500,12 +500,34 @@ def ideacion_mode(db, selected_files):
 
 def report_mode(db, selected_files):
     st.markdown("### Generar Reporte de Reportes")
-    question = st.text_area("Escribe tu consulta para el reporte…", value=st.session_state.get("last_question", ""), height=150, key="report_question")
+
+    # Muestra el informe generado en la parte superior si existe.
+    if "report" in st.session_state and st.session_state["report"]:
+        st.markdown("---")
+        st.markdown("### Informe Generado")
+        
+        st.markdown(st.session_state["report"])
+        
+        final_content = st.session_state["report"]
+        pdf_bytes = generate_pdf_html(final_content, title="Informe Final", banner_path=banner_file)
+        
+        if pdf_bytes:
+            st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="Informe_AtelierIA.pdf", mime="application/pdf")
+        
+        st.button("Nueva consulta", on_click=reset_report_workflow, key="new_report_query_btn")
+        st.markdown("---")
+
+    # Muestra la caja de texto para la nueva consulta en la parte inferior.
+    question = st.text_area(
+        "Escribe tu consulta para el reporte…", 
+        value="", # El valor se deja vacío para incitar una nueva pregunta.
+        height=150, 
+        key="report_question"
+    )
 
     if st.button("Generar Reporte"):
         if not question.strip():
             st.warning("Por favor, ingresa una consulta para generar el reporte.")
-            st.session_state.pop("report", None) # Limpia el reporte anterior si la consulta está vacía
         else:
             st.session_state["last_question"] = question
             with st.spinner("Generando informe... Este proceso puede tardar un momento."):
@@ -518,22 +540,8 @@ def report_mode(db, selected_files):
                 st.session_state["report"] = report
                 rating = st.session_state.get("rating", None)
                 log_query_event(question, mode="Generación de Reporte", rating=rating)
-
-    if "report" in st.session_state and st.session_state["report"]:
-        st.markdown("---")
-        st.markdown("### Informe Generado")
-        
-        # Muestra el reporte directamente, sin la opción de editarlo en un text_area.
-        st.markdown(st.session_state["report"])
-        
-        final_content = st.session_state["report"]
-
-        pdf_bytes = generate_pdf_html(final_content, title="Informe Final", banner_path=banner_file)
-        
-        if pdf_bytes:
-            st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="Informe_AtelierIA.pdf", mime="application/pdf")
-        
-        st.button("Nueva consulta", on_click=reset_report_workflow, key="new_report_query_btn")
+            
+            st.rerun() # Se necesita un rerun para mostrar el nuevo informe en la parte superior.
 
 def concept_generation_mode(db, selected_files):
     """
