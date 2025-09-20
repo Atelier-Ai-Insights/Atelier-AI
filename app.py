@@ -233,11 +233,6 @@ def extract_brand(filename):
         return ""
     return filename.split("In-ATL_")[1].rsplit(".", 1)[0]
 
-def apply_filter_criteria(db, selected_filter):
-    if not selected_filter or selected_filter == "Todos":
-        return db
-    return [doc for doc in db if doc.get("filtro") == selected_filter]
-
 # =====================================================
 # FUNCIONES DE GENERACIÓN DE INFORMES Y PDF
 # =====================================================
@@ -638,7 +633,7 @@ def grounded_chat_mode(db, selected_files):
             2.  **Estructura de la Respuesta:** Redacta un parrafo corto dando una respuesta corta clara y concreta a la solicitud realizada incluyendo principalmente información asociada a la pregunta.
             3.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE en la 'Información documentada en los reportes'. NO utilices conocimiento externo ni hagas suposiciones.
             4.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
-            5.  **Identificación de la marca y el producto EXACTO:**  Cuando se pregunte por una marca (ejemplo: oreo) o por una categoría (ejemplo: galletas saladas) siempre traer información ÚNICAMENTE de los reportes relacionados. Identifica en la pregunta la marca y/o el producto exacto sobre el cual se hace la consulta y sé muy específico y riguroso al incluir y referenciar la información asociada a la marca y/o producto mencionado en la consulta (por ejemplo: diferenciar galletas dulces de galletas saladas).
+            5.  **Identificación de la marca y el producto EXACTO:** Cuando se pregunte por una marca (ejemplo: oreo) o por una categoría (ejemplo: galletas saladas) siempre traer información ÚNICAMENTE de los reportes relacionados. Identifica en la pregunta la marca y/o el producto exacto sobre el cual se hace la consulta y sé muy específico y riguroso al incluir y referenciar la información asociada a la marca y/o producto mencionado en la consulta (por ejemplo: diferenciar galletas dulces de galletas saladas).
             6.  **Referencias:** NO es necesario citar las fuentes, esto para garantizar que la lectura sea fuída.
             
             **Respuesta:**
@@ -760,3 +755,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
