@@ -590,11 +590,11 @@ def concept_generation_mode(db, selected_files):
 # ==================================
 def grounded_chat_mode(db, selected_files):
     """
-    Modo de Chat de Consulta Directa:
+    Chat de Consulta Directa:
     Permite una conversación con el usuario donde las respuestas se basan
     estrictamente en la información de los reportes seleccionados.
     """
-    st.subheader("Modo Chat de Consulta Directa")
+    st.subheader("Chat de Consulta Directa")
     st.markdown(
         "Realiza preguntas específicas y obtén respuestas concretas basadas "
         "únicamente en los hallazgos de los informes seleccionados. "
@@ -625,7 +625,7 @@ def grounded_chat_mode(db, selected_files):
 
             # Prompt estricto para respuestas basadas en datos
             grounded_prompt = f"""
-            **Tarea:** Eres un **asistente de Inteligencia Artificial**. Tu misión es **sintetizar** información proveniente de múltiples estudios de mercado para ofrecer una respuesta clara completa y bien articulada. Tu única fuente de conocimiento es la 'Información documentada en los reportes' proporcionada.
+            **Tarea:** Eres un **asistente de Inteligencia Artificial**. Tu misión es **sintetizar** y **articular** información proveniente de múltiples estudios de mercado para ofrecer una respuesta concreta, clara, completa y bien articulada. Tu única fuente de conocimiento es la 'Información documentada en los reportes' proporcionada.
 
             **Historial de la Conversación:**
             {conversation_history}
