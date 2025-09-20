@@ -648,7 +648,7 @@ def grounded_chat_mode(db, selected_files):
 
             # Prompt estricto para respuestas basadas en datos
             grounded_prompt = f"""
-            **Tarea:** Eres un **asistente de Inteligencia Artificial**. Tu misión es **sintetizar** y **articular** información proveniente de múltiples estudios de mercado para ofrecer una respuesta concreta, clara, completa y bien articulada. Tu única fuente de conocimiento es la 'Información documentada en los reportes' proporcionada.
+            **Tarea:** Eres un **asistente de Inteligencia Artificial**. Tu misión es **sintetizar** y **articular** información proveniente de múltiples estudios de mercado para ofrecer una respuesta concreta a la pregunta formulada, de manera clara, completa y bien articulada. Tu única fuente de conocimiento es la 'Información documentada en los reportes' proporcionada.
 
             **Historial de la Conversación:**
             {conversation_history}
@@ -657,8 +657,8 @@ def grounded_chat_mode(db, selected_files):
             {relevant_info}
 
             **Instrucciones Estrictas:**
-            1.  **Síntesis Integral (Instrucción Clave):** Tu objetivo principal es conectar y relacionar hallazgos de **TODOS los reportes relevantes** en el contexto para construir una respuesta completa. Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original y que sume valor para responder a la pregunta.
-            2.  **Estructura de la Respuesta:** Redacta un parrafo corto dando una respuesta corta clara y concreta a la solicitud realizada incluyendo principalmente hallazgos que sustenten la respuesta que se da para responder la pregunta. Utiliza solo información relevante asociada a los hallazgos. No utilices información de la metodología ni de los objetivos.
+            1.  **Síntesis Integral (Instrucción Clave):** Tu objetivo principal es conectar y relacionar hallazgos de **TODOS los reportes relevantes** para construir una respuesta completa. Asegúrate de agrupar los hallazgos por temas que respondan a la pregunta del cliente y que sume valor para responder a la pregunta.
+            2.  **Estructura de la Respuesta:** Redacta un parrafo corto dando una respuesta corta clara y concreta a la solicitud realizada incluyendo principalmente hallazgos que sustenten la respuesta que se da para responder la pregunta. Utiliza solo información relevante asociada a los hallazgos. NO utilices información de la metodología ni de los objetivos, solo utiliza información relacionada en los hallazgos.
             3.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE en la 'Información documentada en los reportes'. NO utilices conocimiento externo ni hagas suposiciones.
             4.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
             5.  **Identificación de la marca y el producto EXACTO:** Cuando se pregunte por una marca (ejemplo: oreo) o por una categoría (ejemplo: galletas saladas) siempre traer información ÚNICAMENTE de los reportes relacionados. Identifica en la pregunta la marca y/o el producto exacto sobre el cual se hace la consulta y sé muy específico y riguroso al incluir y referenciar la información asociada a la marca y/o producto mencionado en la consulta (por ejemplo: diferenciar galletas dulces de galletas saladas).
