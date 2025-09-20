@@ -285,7 +285,7 @@ def generate_final_report(question, db, selected_files):
     if result1 is None: return None
 
     # === INICIO DE LA SECCIÓN AJUSTADA ===
-    # Prompt 2: Redacta el informe principal. Se eliminan los '##' para unificar el tamaño de la fuente.
+    # Prompt 2: Redacta el informe principal. Se eliminan los '**' y '##' de los títulos para unificar el tamaño de la fuente en la página.
     prompt2 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
         "Instrucciones Generales:\n"
@@ -294,34 +294,34 @@ def generate_final_report(question, db, selected_files):
         "3. Actúa como un analista experto en ciencias del comportamiento, en investigación de mercados, en marketing y en comunicación estratégica. Enfócate en claridad, síntesis poderosa y pensamiento estructurado.\n"
         "4. El estilo de redacción debe ser claro, directo, conciso y memorable (inspirado en “Ideas que pegan” de Chip Heath y Dan Heath). Evita lenguaje técnico innecesario; prioriza lo relevante y accionable.\n\n"
         "Estructura del Informe (sé breve y preciso en cada sección):\n\n"
-        "**Introducción**:\n"
+        "Introducción:\n"
         "   - Preserva esta sección. Plantea el contexto y la pregunta central. Usa un un dato inesperado (que provenga de los reportes realizados), para captar la atención.\n\n"
-        "**Principales Hallazgos**:\n"
+        "Principales Hallazgos:\n"
         "   - Presenta de forma estructurada los hechos más relevantes descubiertos, directamente desde la sección de resultados de los diferentes reportes y la información de contexto.\n"
         "   - Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original y que sume valor para responder a la pregunta.\n"
         "   - Utiliza solo información relevante y que haga referencia a la marca y al producto citados. No utilices estudios de forma innecesaria.\n"
         "   - Referencia en formato IEEE (ej. [1]), usando el título del estudio o el producto del que se habla, más que el nombre del archivo.\n\n"
-        "**Insights**:\n"
+        "Insights:\n"
         "   - Extrae aprendizajes y verdades profundas a partir de los hallazgos. Utiliza analogías y comparaciones que refuercen el mensaje y transformen la comprensión del problema. Sé conciso. Utiliza frases suscitantas, es decir, frase cortas con mucho significado\n\n"
-        "**Conclusiones**:\n"
+        "Conclusiones:\n"
         "   - Sintetiza la información y ofrece una dirección clara basada en los insights. Evita repetir información.\n\n"
-        "**Recomendaciones**:\n"
+        "Recomendaciones:\n"
         "   - Con base en el informe, proporciona 3-4 recomendaciones concretas, creativas, precisas y accionables que sirvan como inspiración para la toma de decisiones.\n"
         "   - Deben estar alineadas con los insights y conclusiones. Evita la extensión innecesaria.\n\n"
-        "**Referencias**:\n"
+        "Referencias:\n"
         "   - Cita el título del estudio (no el nombre del archivo), utilizando la información de la primera diapositiva o metadatos disponibles.\n\n"
         "Utiliza el siguiente resumen (Hallazgos Clave y Referencias) y la Información de Contexto para elaborar el informe:\n\n"
         "5. MUY IMPORTANTE: Asegúrate de que los nombres de marcas y productos estén correctamente espaciados del texto circundante. Por ejemplo, escribe 'la marca Crem Helado debe...' en lugar de 'lamarcaCrem Heladodebe...'. Presta especial atención a este detalle de formato para asegurar la legibilidad.\n\n"
         f"Resumen de Hallazgos Clave y Referencias:\n{result1}\n\n"
         f"Información de Contexto Adicional (si es necesaria para complementar el resumen):\n{relevant_info}\n\n"
-        "Por favor, redacta el informe completo respetando la estructura y las instrucciones, en un estilo profesional, claro, conciso y coherente, utilizando Markdown."
+        "Por favor, redacta el informe completo respetando la estructura y las instrucciones, en un estilo profesional, claro, conciso y coherente."
     )
-    # === FIN DE LA SECCIÓN AJUSTADA ===
     result2 = call_gemini_api(prompt2)
     if result2 is None: return None
     
-    # Se elimina el encabezado con "Preparado por", etc. El informe comienza con el título.
-    informe_completo = f"# {question}\n\n" + result2
+    # El título del informe se deja sin formato de encabezado para mantener un tamaño de letra uniforme en la página.
+    informe_completo = f"{question}\n\n" + result2
+    # === FIN DE LA SECCIÓN AJUSTADA ===
     return informe_completo
 
 def clean_text(text):
