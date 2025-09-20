@@ -480,25 +480,28 @@ def report_mode(db, selected_files):
     if st.button("Generar Reporte"):
         if not question.strip():
             st.warning("Por favor, ingresa una consulta para generar el reporte.")
+            st.session_state.pop("report", None) # Limpia el reporte anterior si la consulta está vacía
         else:
-            if question != st.session_state.get("last_question"):
+            st.session_state["last_question"] = question
+            with st.spinner("Generando informe... Este proceso puede tardar un momento."):
+                report = generate_final_report(question, db, selected_files)
+            
+            if report is None:
+                st.error("No se pudo generar el informe.")
                 st.session_state.pop("report", None)
-                st.session_state["last_question"] = question
-
-            if "report" not in st.session_state:
-                with st.spinner("Generando informe... Este proceso puede tardar un momento."):
-                    report = generate_final_report(question, db, selected_files)
-                if report is None:
-                    st.error("No se pudo generar el informe.")
-                    return
+            else:
                 st.session_state["report"] = report
-                st.rerun()
+                rating = st.session_state.get("rating", None)
+                log_query_event(question, mode="Generación de Reporte", rating=rating)
 
-    if "report" in st.session_state:
-        st.markdown("### Previsualización del Informe")
-        edited = st.text_area("Puedes editar el texto aquí antes de descargar:", value=st.session_state["report"], height=400, key="report_edit")
+    if "report" in st.session_state and st.session_state["report"]:
+        st.markdown("---")
+        st.markdown("### Informe Generado")
         
-        final_content = edited
+        # Muestra el reporte directamente, sin la opción de editarlo en un text_area.
+        st.markdown(st.session_state["report"])
+        
+        final_content = st.session_state["report"]
 
         pdf_bytes = generate_pdf_html(final_content, title="Informe Final", banner_path=banner_file)
         
@@ -506,9 +509,6 @@ def report_mode(db, selected_files):
             st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="Informe_AtelierIA.pdf", mime="application/pdf")
         
         st.button("Nueva consulta", on_click=reset_report_workflow, key="new_report_query_btn")
-        
-        rating = st.session_state.get("rating", None)
-        log_query_event(question, mode="Generación de Reporte", rating=rating)
 
 def concept_generation_mode(db, selected_files):
     """
