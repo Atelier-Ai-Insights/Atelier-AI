@@ -494,7 +494,7 @@ def ideacion_mode(db, selected_files):
 
 
 def report_mode(db, selected_files):
-    st.markdown("### Generar Reporte de Reportes")
+    st.markdown("### Reporte de Reportes")
 
     # Muestra el informe generado en la parte superior si existe.
     if "report" in st.session_state and st.session_state["report"]:
@@ -712,9 +712,9 @@ def main():
     # === MODIFICADO ===
     # Se añade la nueva opción "Chat de Consulta Directa"
     modos_disponibles = [
-        "Generar un reporte de reportes", 
-        "Conversaciones creativas", 
-        "Generación de conceptos",
+        "Reporte de Reportes", 
+        "Conversaciones Creativas", 
+        "Generación de Conceptos",
         "Chat de Consulta Directa"  # <-- NUEVA OPCIÓN
     ]
     modo = st.sidebar.radio(
@@ -765,7 +765,7 @@ def main():
 
 
     # Calificación (solo en modo reporte)
-    if modo == "Generar un reporte de reportes":
+    if modo == "Reporte de reportes":
         st.sidebar.radio("Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating")
 
     # Botón Cerrar Sesión
@@ -778,7 +778,7 @@ def main():
 
     # === MODIFICADO ===
     # Lógica para llamar a la función del modo seleccionado
-    if modo == "Generar un reporte de reportes":
+    if modo == "Reporte de reportes":
         report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas":
         ideacion_mode(db_filtered, selected_files)
