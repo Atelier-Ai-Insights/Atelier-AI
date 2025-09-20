@@ -634,12 +634,12 @@ def grounded_chat_mode(db, selected_files):
             {relevant_info}
 
             **Instrucciones Estrictas:**
-            1.  **Síntesis Integral (Instrucción Clave):** Tu objetivo principal es conectar y relacionar hallazgos de **TODOS los reportes relevantes** en el contexto para construir una respuesta completa. No te limites a un solo documento si hay información complementaria en otros.
-            2.  **Estructura de la Respuesta:** Redacta un parrafo corto dando una respuesta corta clara y concreta a la solicitud realizada incluyendo principalmente información asociada a los hallazgos de los reportes.
+            1.  **Síntesis Integral (Instrucción Clave):** Tu objetivo principal es conectar y relacionar hallazgos de **TODOS los reportes relevantes** en el contexto para construir una respuesta completa. No te limites a un solo documento si hay información relacionada con la pregunta en otros documentos.
+            2.  **Estructura de la Respuesta:** Redacta un parrafo corto dando una respuesta corta clara y concreta a la solicitud realizada incluyendo principalmente información asociada a la pregunta.
             3.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE en la 'Información documentada en los reportes'. NO utilices conocimiento externo ni hagas suposiciones.
             4.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
-            5.  **Identificación de la marca y el producto EXACTO:** Si te preguntan por una marca puntual (por ejemplo: Manzana Postobón) o producto en específico (galletas saladas, galletas dulces, chicles, etc), identifica en la pregunta la marca y el producto exacto sobre el cual se hace la consulta y sé muy específico y riguroso al incluir y referenciar la información asociada a la marca y al producto mencionado en la consulta (por ejemplo: diferenciar galletas dulces de galletas saladas). Para garantizar que estas referenciando estudios de la marca y producto apoyate de la 'Información de Contexto'.
-            6.  **Referencias:** En esta seccion no es necesario citar las fuentes.
+            5.  **Identificación de la marca y el producto EXACTO:**  Cuando se pregunte por una marca (ejemplo: oreo) o por una categoría (ejemplo: galletas saladas) siempre traer información ÚNICAMENTE de los reportes relacionados. Identifica en la pregunta la marca y/o el producto exacto sobre el cual se hace la consulta y sé muy específico y riguroso al incluir y referenciar la información asociada a la marca y/o producto mencionado en la consulta (por ejemplo: diferenciar galletas dulces de galletas saladas).
+            6.  **Referencias:** En esta seccion NO es necesario citar las fuentes.
             
             **Respuesta:**
             """
