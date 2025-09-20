@@ -676,7 +676,8 @@ def main():
     )
 
     try:
-        db = load_database(st.session_state.cliente)
+        db_full = load_database(st.session_state.cliente)
+        db_filtered = db_full[:]
     except Exception as e:
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
@@ -711,24 +712,30 @@ def main():
             
         st.session_state.current_mode = modo
 
+    # ==================================
+    # === SECCIÓN DE FILTROS AJUSTADA ===
+    # ==================================
+    st.sidebar.header("Filtros de Búsqueda")
 
-    # Filtros en la sidebar
-    filtros = sorted({doc.get("filtro", "") for doc in db if doc.get("filtro")})
-    filtros.insert(0, "Todos")
-    selected_filter = st.sidebar.selectbox("Seleccione la marca:", filtros)
-    db = apply_filter_criteria(db, selected_filter)
-    
-    years = sorted({doc.get("marca", "") for doc in db if doc.get("marca")})
-    years.insert(0, "Todos")
-    selected_year = st.sidebar.selectbox("Seleccione el año:", years)
-    if selected_year != "Todos":
-        db = [d for d in db if d.get("marca") == selected_year]
+    # Filtro de Marcas (Multiselect)
+    marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
+    selected_marcas = st.sidebar.multiselect("Seleccione la(s) marca(s):", marcas_options)
+    if selected_marcas:
+        db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
 
-    brands = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db})
-    brands.insert(0, "Todas")
-    selected_brand = st.sidebar.selectbox("Seleccione el proyecto:", brands)
-    if selected_brand != "Todas":
-        db = [d for d in db if extract_brand(d.get("nombre_archivo", "")) == selected_brand]
+    # Filtro de Años (Multiselect)
+    years_options = sorted({doc.get("marca", "") for doc in db_full if doc.get("marca")})
+    selected_years = st.sidebar.multiselect("Seleccione el/los año(s):", years_options)
+    if selected_years:
+        db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
+
+    # Filtro de Proyectos (Multiselect)
+    # Las opciones de proyectos se basan en la base de datos ya filtrada por marca y año
+    brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered})
+    selected_brands = st.sidebar.multiselect("Seleccione el/los proyecto(s):", brands_options)
+    if selected_brands:
+        db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
+
 
     # Calificación (solo en modo reporte)
     if modo == "Generar un reporte de reportes":
@@ -740,18 +747,18 @@ def main():
         st.cache_data.clear()
         st.rerun()
 
-    selected_files = [d.get("nombre_archivo") for d in db]
+    selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
     # === MODIFICADO ===
     # Lógica para llamar a la función del modo seleccionado
     if modo == "Generar un reporte de reportes":
-        report_mode(db, selected_files)
+        report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas":
-        ideacion_mode(db, selected_files)
+        ideacion_mode(db_filtered, selected_files)
     elif modo == "Generación de conceptos":
-        concept_generation_mode(db, selected_files)
+        concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa": # <-- NUEVA LÓGICA
-        grounded_chat_mode(db, selected_files)
+        grounded_chat_mode(db_filtered, selected_files)
 
 if __name__ == "__main__":
     main()
