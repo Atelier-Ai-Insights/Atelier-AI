@@ -737,7 +737,7 @@ def idea_evaluator_mode(db, selected_files):
                     * Resume en una frase el potencial de la idea (ej: "Potencial Alto", "Potencial Moderado con Desafíos", "Bajo Potencial").
 
                     ### 2. Sustento de la Valoración
-                    * Justifica tu valoración conectando la idea con las necesidades, tensiones o deseos clave encontrados en los reportes. Detalla los hallazgos específicos (positivos y negativos) que sustentan tu conclusión.
+                    * Justifica tu valoración conectando la idea con las necesidades, tensiones o deseos clave encontrados en los reportes. Detalla los hallazgos específicos (positivos y negativos) que sustentan tu conclusión. Incluye citas numeradas.
 
                     ### 3. Sugerencias para la Evaluación con Consumidor
                     * Basado en los hallazgos y en los posibles vacíos de información, proporciona una lista de 3 a 4 preguntas o hipótesis clave que se deberían validar al momento de evaluar la idea directamente con los consumidores.
