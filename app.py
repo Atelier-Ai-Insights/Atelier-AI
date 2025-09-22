@@ -284,8 +284,7 @@ def generate_final_report(question, db, selected_files):
     result1 = call_gemini_api(prompt1)
     if result1 is None: return None
 
-    # === INICIO DE LA SECCIÓN AJUSTADA ===
-    # Prompt 2: Redacta el informe principal. Se eliminan los '##' de los títulos para unificar el tamaño de la fuente en la página.
+    # Prompt 2: Redacta el informe principal. Se eliminan los '**' y '##' de los títulos para unificar el tamaño de la fuente en la página.
     prompt2 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
         "Instrucciones Generales:\n"
@@ -321,7 +320,6 @@ def generate_final_report(question, db, selected_files):
     
     # El título del informe se deja sin formato de encabezado para mantener un tamaño de letra uniforme en la página.
     informe_completo = f"{question}\n\n" + result2
-    # === FIN DE LA SECCIÓN AJUSTADA ===
     return informe_completo
 
 def clean_text(text):
