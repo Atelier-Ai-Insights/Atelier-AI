@@ -605,10 +605,6 @@ def concept_generation_mode(db, selected_files):
             st.session_state.pop("generated_concept")
             st.rerun()
 
-
-# ==================================
-# === ¡NUEVA FUNCIÓN AÑADIDA! ===
-# ==================================
 def grounded_chat_mode(db, selected_files):
     """
     Chat de Consulta Directa:
@@ -688,6 +684,73 @@ def grounded_chat_mode(db, selected_files):
         st.button("Nueva Conversación", on_click=reset_chat_workflow, key="new_grounded_chat_btn")
 
 
+# === ¡NUEVA FUNCIÓN AÑADIDA! ===
+def idea_evaluator_mode(db, selected_files):
+    """
+    Evaluador de Ideas:
+    Analiza una idea de producto o servicio contra los hallazgos de los
+    estudios y proporciona una evaluación de su potencial.
+    """
+    st.subheader("Evaluador de Ideas")
+    st.markdown(
+        "Presenta una idea de producto o servicio y el asistente la evaluará "
+        "contra los hallazgos de los estudios seleccionados, indicando su "
+        "potencial, fortalezas, debilidades y una recomendación estratégica."
+    )
+
+    if "evaluation_result" in st.session_state:
+        st.markdown("---")
+        st.markdown("### Evaluación de la Idea")
+        st.markdown(st.session_state.evaluation_result)
+        if st.button("Evaluar otra idea"):
+            del st.session_state["evaluation_result"]
+            st.rerun()
+    else:
+        idea_input = st.text_area(
+            "Describe la idea que quieres evaluar:",
+            height=150,
+            placeholder="Ej: Una línea de yogures con probióticos enfocada en mejorar la salud digestiva de los adultos mayores."
+        )
+
+        if st.button("Evaluar Idea"):
+            if not idea_input.strip():
+                st.warning("Por favor, describe una idea para continuar.")
+            else:
+                with st.spinner("Evaluando el potencial de la idea..."):
+                    context_info = get_relevant_info(db, idea_input, selected_files)
+                    
+                    prompt = f"""
+                    **Tarea:** Eres un estratega de mercado y analista de innovación. Tu objetivo es evaluar el potencial de una idea de producto o servicio, basándote exclusivamente en los hallazgos de un conjunto de estudios de mercado.
+
+                    **Idea a Evaluar:**
+                    "{idea_input}"
+
+                    **Contexto (Hallazgos de Estudios de Mercado):**
+                    "{context_info}"
+
+                    **Instrucciones:**
+                    Genera una evaluación estructurada y razonada en formato Markdown. Sigue esta estructura exacta y basa cada punto en la información del 'Contexto'.
+
+                    ---
+
+                    ### 1. Valoración del Potencial
+                    * Resume en una frase el potencial de la idea (ej: "Potencial Alto", "Potencial Moderado con Desafíos", "Bajo Potencial").
+
+                    ### 2. Sustento de la Valoración
+                    * Justifica tu valoración conectando la idea con las necesidades, tensiones o deseos clave encontrados en los reportes. Detalla los hallazgos específicos (positivos y negativos) que sustentan tu conclusión.
+
+                    ### 3. Sugerencias para la Evaluación con Consumidor
+                    * Basado en los hallazgos y en los posibles vacíos de información, proporciona una lista de 3 a 4 preguntas o hipótesis clave que se deberían validar al momento de evaluar la idea directamente con los consumidores.
+                    """
+
+                    response = call_gemini_api(prompt)
+
+                    if response:
+                        st.session_state.evaluation_result = response
+                        log_query_event(idea_input, mode="Evaluación de Idea")
+                        st.rerun()
+                    else:
+                        st.error("No se pudo generar la evaluación. Inténtalo de nuevo.")
 
 def main():
     if not st.session_state.get("logged_in"):
@@ -709,12 +772,13 @@ def main():
         st.stop()
 
     # === MODIFICADO ===
-    # Se añade la nueva opción "Chat de Consulta Directa"
+    # Se añade la nueva opción "Evaluar una idea"
     modos_disponibles = [
         "Generar un reporte de reportes", 
         "Conversaciones creativas", 
         "Generación de conceptos",
-        "Chat de Consulta Directa"  # <-- NUEVA OPCIÓN
+        "Chat de Consulta Directa",
+        "Evaluar una idea"  # <-- NUEVA OPCIÓN
     ]
     modo = st.sidebar.radio(
         "Seleccione el modo de uso:",
@@ -722,7 +786,7 @@ def main():
     )
 
     # === NUEVO ===
-    # Lógica para reiniciar el chat si se cambia de modo de conversación
+    # Lógica para reiniciar el estado de la UI si se cambia de modo
     if 'current_mode' not in st.session_state:
         st.session_state.current_mode = modo
     
@@ -732,9 +796,9 @@ def main():
         or "conversaci" in modo.lower() or "chat" in modo.lower():
             reset_chat_workflow()
         
-        # También reinicia el estado de generación de conceptos si se sale de ese modo
-        if "generated_concept" in st.session_state:
-            del st.session_state["generated_concept"]
+        # Limpia otros estados específicos de los modos
+        st.session_state.pop("generated_concept", None)
+        st.session_state.pop("evaluation_result", None)
             
         st.session_state.current_mode = modo
 
@@ -783,8 +847,10 @@ def main():
         ideacion_mode(db_filtered, selected_files)
     elif modo == "Generación de conceptos":
         concept_generation_mode(db_filtered, selected_files)
-    elif modo == "Chat de Consulta Directa": # <-- NUEVA LÓGICA
+    elif modo == "Chat de Consulta Directa":
         grounded_chat_mode(db_filtered, selected_files)
+    elif modo == "Evaluar una idea": # <-- NUEVA LÓGICA
+        idea_evaluator_mode(db_filtered, selected_files)
 
 if __name__ == "__main__":
     main()
