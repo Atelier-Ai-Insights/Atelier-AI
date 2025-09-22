@@ -740,7 +740,7 @@ def idea_evaluator_mode(db, selected_files):
                     * Justifica tu valoración conectando la idea con las necesidades, tensiones o deseos clave encontrados en los reportes. Detalla los hallazgos específicos (positivos y negativos) que sustentan tu conclusión. NO es necesario citar las fuentes, esto para garantizar que la lectura sea fuída.
 
                     ### 3. Sugerencias para la Evaluación con Consumidor
-                    * Basado en los hallazgos y en los posibles vacíos de información, proporciona una lista de 3 a 4 preguntas o hipótesis clave que se deberían validar al momento de evaluar la idea directamente con los consumidores.
+                    * Basado en los hallazgos y en los posibles vacíos de información, proporciona una lista de 3 a 4 hipótesis y preguntas clave que se deberían validar al momento de evaluar la idea directamente con los consumidores, y decir en qué aportan esas preguntas.
                     """
 
                     response = call_gemini_api(prompt)
