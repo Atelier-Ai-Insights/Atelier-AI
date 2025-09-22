@@ -295,7 +295,7 @@ def generate_final_report(question, db, selected_files):
         "4. El estilo de redacción debe ser claro, directo, conciso y memorable (inspirado en “Ideas que pegan” de Chip Heath y Dan Heath). Evita lenguaje técnico innecesario; prioriza lo relevante y accionable.\n\n"
         "Estructura del Informe (sé breve y preciso en cada sección):\n\n"
         "Introducción:\n"
-        "   - Preserva esta sección. Plantea el contexto y la pregunta central. Usa un hallazgo inesperado (de tipo cualitativo que provenga de los reportes seleccionados), para captar la atención.\n\n"
+        "   - Preserva esta sección. Plantea el contexto y la pregunta central. Usa un hallazgo relevante (de tipo cualitativo que provenga de los reportes seleccionados), para captar la atención y despierte interés por querer leer el informe.\n\n"
         "Principales Hallazgos:\n"
         "   - Presenta de forma estructurada los hechos más relevantes descubiertos, directamente desde la sección de resultados de los diferentes reportes y la información de contexto.\n"
         "   - Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original y que sume valor para responder a la pregunta.\n"
