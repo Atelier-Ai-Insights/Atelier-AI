@@ -756,6 +756,9 @@ def main():
     if not st.session_state.get("logged_in"):
         show_login()
 
+# Cargar el logo desde un archivo local
+    st.image("LogoDataStudio.png", width=250) # Ajusta el ancho según sea necesario
+
     st.title("Atelier Data Studio")
     st.markdown(
         "Atelier Data Studio es una herramienta impulsada por modelos "
