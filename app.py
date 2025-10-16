@@ -58,7 +58,7 @@ def show_login():
                 st.rerun()
             else:
                 st.error("Credenciales incorrectas")
-
+    
     st.stop()
 
 
@@ -67,7 +67,7 @@ def logout():
         st.session_state.clear()
         st.cache_data.clear()
         st.rerun()
-
+        
 # ====== Helper para reiniciar el flujo de reportes ======
 def reset_report_workflow():
     for k in ["report", "last_question", "report_question", "personalization", "rating"]:
@@ -210,7 +210,7 @@ def load_database(cliente: str):
         )
         response = s3.get_object(Bucket=bucket_name, Key=object_key)
         data = json.loads(response["Body"].read().decode("utf-8"))
-
+        
         cliente_norm = normalize_text(cliente or "")
 
         if cliente_norm != "insights-atelier":
@@ -260,7 +260,7 @@ def get_relevant_info(db, question, selected_files):
 
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
-
+    
     # Prompt 1: Extrae hallazgos clave y referencias.
     prompt1 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
@@ -317,7 +317,7 @@ def generate_final_report(question, db, selected_files):
     )
     result2 = call_gemini_api(prompt2)
     if result2 is None: return None
-
+    
     # El título del informe se deja sin formato de encabezado para mantener un tamaño de letra uniforme en la página.
     informe_completo = f"{question}\n\n" + result2
     return informe_completo
@@ -343,32 +343,32 @@ class PDFReport:
         )
         # Estilos personalizados con tamaños de fuente unificados
         self.styles.add(ParagraphStyle(
-            name='CustomTitle',
-            parent=self.styles['Heading1'],
-            alignment=1,
+            name='CustomTitle', 
+            parent=self.styles['Heading1'], 
+            alignment=1, 
             spaceAfter=12,
             fontSize=12,
             leading=16))
         self.styles.add(ParagraphStyle(
-            name='CustomHeading',
-            parent=self.styles['Heading2'],
-            spaceBefore=10,
+            name='CustomHeading', 
+            parent=self.styles['Heading2'], 
+            spaceBefore=10, 
             spaceAfter=6,
             fontSize=12,
             leading=16))
         self.styles.add(ParagraphStyle(
-            name='CustomBodyText',
-            parent=self.styles['Normal'],
-            leading=14,
-            alignment=4,
+            name='CustomBodyText', 
+            parent=self.styles['Normal'], 
+            leading=14, 
+            alignment=4, 
             fontSize=12))
         self.styles.add(ParagraphStyle(
-            name='CustomFooter',
-            parent=self.styles['Normal'],
-            alignment=2,
+            name='CustomFooter', 
+            parent=self.styles['Normal'], 
+            alignment=2, 
             textColor=colors.grey,
             fontSize=8)) # Se mantiene pequeño para el pie de página
-
+            
         for style_name in ['CustomTitle','CustomHeading','CustomBodyText','CustomFooter']:
             self.styles[style_name].fontName = 'DejaVuSans'
 
@@ -487,7 +487,7 @@ def ideacion_mode(db, selected_files):
         )
         if pdf_bytes:
             st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat_creativo.pdf", mime="application/pdf")
-
+        
         st.button("Nueva conversación", on_click=reset_chat_workflow, key="new_chat_btn")
 
 
@@ -503,9 +503,9 @@ def report_mode(db, selected_files):
 
     # Muestra la caja de texto para la consulta.
     question = st.text_area(
-        "Escribe tu consulta para el reporte…",
-        value="",
-        height=150,
+        "Escribe tu consulta para el reporte…", 
+        value="", 
+        height=150, 
         key="report_question"
     )
 
@@ -516,7 +516,7 @@ def report_mode(db, selected_files):
             st.session_state["last_question"] = question
             with st.spinner("Generando informe... Este proceso puede tardar un momento."):
                 report = generate_final_report(question, db, selected_files)
-
+            
             if report is None:
                 st.error("No se pudo generar el informe.")
                 st.session_state.pop("report", None)
@@ -524,14 +524,14 @@ def report_mode(db, selected_files):
                 st.session_state["report"] = report
                 rating = st.session_state.get("rating", None)
                 log_query_event(question, mode="Generación de Reporte", rating=rating)
-
+            
             st.rerun()
 
     # Muestra los botones de acción al final si hay un informe.
     if "report" in st.session_state and st.session_state["report"]:
         final_content = st.session_state["report"]
         pdf_bytes = generate_pdf_html(final_content, title="Informe Final", banner_path=banner_file)
-
+        
         col1, col2 = st.columns(2)
         with col1:
             if pdf_bytes:
@@ -560,7 +560,7 @@ def concept_generation_mode(db, selected_files):
         else:
             with st.spinner("Analizando hallazgos y generando el concepto..."):
                 context_info = get_relevant_info(db, product_idea, selected_files)
-
+                
                 prompt = f"""
                 **Tarea:** Eres un estratega de innovación y marketing. A partir de una idea de producto y un contexto de estudios de mercado, debes desarrollar un concepto de producto o servicio estructurado.
 
@@ -582,7 +582,7 @@ def concept_generation_mode(db, selected_files):
                 * Basado en la **Idea del Usuario**, describe el producto o servicio propuesto. Detalla sus características principales y cómo funcionaría. Sé creativo pero mantente anclado en la necesidad insatisfecha detectada.
 
                 ### 3. Beneficios Clave
-                * Enumera 3-4 beneficios principales del producto. Cada beneficio debe responder directamente a una de las necesidades del consumidor identificadas en el punto 1 y estar sustentado por la evidencia del **Contexto**. Los beneficios pueden ser funcionales, racionales o emocionales.
+                * Enumera 3-4 beneficios principales del producto. Cada beneficio debe responder directamente a una de las necesidades del consumidor identificadas en el punto 1 y estar sustentado por la evidencia del **Contexto**. Los beneficios pueden ser funcionales, racionales o emocionales. 
 
                 ### 4. Conceptos para evaluar
                 * Entrega dos opciones de concepto resumido. Estos deben ser memorables y para su redacción se deben considerar tres frases o párrafos: Insight (primero decir el dolor del consumidor y luego especificar lo que le gustaría tener como resultado), What (Caracteristicas y beneficios del producto o servicio), Reason To Belive (por qué el producto puede resolver la tensión). Cierra el resumen con un claim, este debe captar la esencia del producto o servidio y se debe redactar de manera sucinta: corto pero con con mucho significado.
@@ -595,7 +595,7 @@ def concept_generation_mode(db, selected_files):
                     log_query_event(product_idea, mode="Generación de Conceptos")
                 else:
                     st.error("No se pudo generar el concepto. Inténtalo de nuevo.")
-
+    
     # Mostrar el concepto si existe en el estado de la sesión
     if "generated_concept" in st.session_state:
         st.markdown("---")
@@ -633,10 +633,10 @@ def grounded_chat_mode(db, selected_files):
             st.warning("Por favor, ingresa una pregunta para continuar.")
         else:
             st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
-
+            
             # Obtener contexto relevante
             relevant_info = get_relevant_info(db, user_input, selected_files)
-
+            
             # Crear el historial de conversación para el prompt
             conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history)
 
@@ -657,13 +657,13 @@ def grounded_chat_mode(db, selected_files):
             4.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: "La información solicitada no se encuentra disponible en los documentos analizados." No intentes inventar una respuesta.
             5.  **Identificación de la marca y el producto EXACTO:** Cuando se pregunte por una marca (ejemplo: oreo) o por una categoría (ejemplo: galletas saladas) siempre traer información ÚNICAMENTE de los reportes relacionados. Identifica en la pregunta la marca y/o el producto exacto sobre el cual se hace la consulta y sé muy específico y riguroso al incluir y referenciar la información asociada a la marca y/o producto mencionado en la consulta (por ejemplo: diferenciar galletas dulces de galletas saladas).
             6.  **Referencias:** NO es necesario citar las fuentes, esto para garantizar que la lectura sea fuída.
-
+            
             **Respuesta:**
             """
 
             with st.spinner("Buscando en los reportes..."):
                 response = call_gemini_api(grounded_prompt)
-
+            
             if response:
                 st.session_state.chat_history.append({"role": "Asistente", "message": response})
                 log_query_event(user_input, mode="Consulta Directa")
@@ -680,7 +680,7 @@ def grounded_chat_mode(db, selected_files):
         )
         if pdf_bytes:
             st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat_consulta.pdf", mime="application/pdf")
-
+        
         st.button("Nueva Conversación", on_click=reset_chat_workflow, key="new_grounded_chat_btn")
 
 
@@ -718,7 +718,7 @@ def idea_evaluator_mode(db, selected_files):
             else:
                 with st.spinner("Evaluando el potencial de la idea..."):
                     context_info = get_relevant_info(db, idea_input, selected_files)
-
+                    
                     prompt = f"""
                     **Tarea:** Eres un estratega de mercado y analista de innovación. Tu objetivo es evaluar el potencial de una idea de producto o servicio, basándote exclusivamente en los hallazgos de un conjunto de estudios de mercado.
 
@@ -734,7 +734,7 @@ def idea_evaluator_mode(db, selected_files):
                     ---
 
                     ### 1. Valoración del Potencial
-                    * Resume en una frase el potencial de la idea (ej: "Potencial Alto", "Potencial Moderado con Desafíos", "Bajo Potencial").
+                    * Resume en una frase el potencial de la idea (ej: "Potencial Alto", "Potencial Moderado con Desafíos", "Bajo Potencial"). 
 
                     ### 2. Sustento de la Valoración
                     * Justifica tu valoración conectando la idea con las necesidades, tensiones o deseos clave encontrados en los reportes. Detalla los hallazgos específicos (positivos y negativos) que sustentan tu conclusión. NO es necesario citar las fuentes, esto para garantizar que la lectura sea fuída.
@@ -756,24 +756,9 @@ def main():
     if not st.session_state.get("logged_in"):
         show_login()
 
-    # ===== CÓDIGO CSS PARA LOGO STICKY AÑADIDO AQUÍ =====
-    st.markdown(
-        """
-        <style>
-        /* Selecciona el contenedor del primer elemento en la barra lateral */
-        [data-testid="stSidebar"] > div:nth-child(1) {
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            background-color: #f0f2f6; /* Color de fondo del sidebar por defecto */
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-    # =======================================================
-
+    # ===== CÓDIGO DEL LOGO AÑADIDO AQUÍ =====
     st.sidebar.image("LogoDataStudio.png")
+    # ========================================
 
     st.title("Atelier Data Studio")
     st.markdown(
@@ -793,8 +778,8 @@ def main():
     # === MODIFICADO ===
     # Se añade la nueva opción "Evaluar una idea"
     modos_disponibles = [
-        "Generar un reporte de reportes",
-        "Conversaciones creativas",
+        "Generar un reporte de reportes", 
+        "Conversaciones creativas", 
         "Generación de conceptos",
         "Chat de Consulta Directa",
         "Evaluar una idea"  # <-- NUEVA OPCIÓN
@@ -808,17 +793,17 @@ def main():
     # Lógica para reiniciar el estado de la UI si se cambia de modo
     if 'current_mode' not in st.session_state:
         st.session_state.current_mode = modo
-
+    
     if st.session_state.current_mode != modo:
         # Si el modo anterior o el nuevo son conversacionales, reinicia el historial
         if "conversaci" in st.session_state.current_mode.lower() or "chat" in st.session_state.current_mode.lower() \
         or "conversaci" in modo.lower() or "chat" in modo.lower():
             reset_chat_workflow()
-
+        
         # Limpia otros estados específicos de los modos
         st.session_state.pop("generated_concept", None)
         st.session_state.pop("evaluation_result", None)
-
+            
         st.session_state.current_mode = modo
 
     # ==================================
@@ -855,12 +840,6 @@ def main():
         st.session_state.clear()
         st.cache_data.clear()
         st.rerun()
-
-    # ===== GUÍA INICIAL PARA EL USUARIO (LÓGICA CORREGIDA) =====
-    if not selected_marcas and not selected_years and not selected_brands:
-        st.info("👋 ¡Bienvenido! Para comenzar, selecciona una marca, año o proyecto en los filtros de la izquierda.")
-        st.stop()
-    # ==========================================================
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
