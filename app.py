@@ -101,12 +101,9 @@ safety_settings = [
     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
 ]
 
-# ===================================================================
-# === ¡FUNCIÓN CORREGIDA! Se actualizó el nombre del modelo. ===
-# ===================================================================
 def create_model():
     return genai.GenerativeModel(
-        model_name="gemini-1.5-flash-latest", # <-- AJUSTE APLICADO
+        model_name="gemini-2.5-flash",
         generation_config=generation_config,
         safety_settings=safety_settings,
     )
@@ -119,32 +116,23 @@ def switch_api_key():
     configure_api()
     model = create_model()
 
-# ===================================================================
-# === ¡FUNCIÓN MEJORADA! Robustez y eficiencia en la llamada a la API ===
-# ===================================================================
 def call_gemini_api(prompt):
-    """
-    Intenta llamar a la API de Gemini, rotando las claves si falla.
-    """
-    initial_key_index = current_api_key_index
-    for i in range(len(api_keys)):
+    try:
+        response = model.generate_content([prompt])
+        text = response.text
+        text = html.unescape(text)
+        return text
+    except Exception as e:
+        st.error(f"Error en la llamada a Gemini: {e}. Intentando cambiar API Key.")
+        switch_api_key()
         try:
-            # Llama a la API con la clave actual
             response = model.generate_content([prompt])
-            text = html.unescape(response.text)
+            text = response.text
+            text = html.unescape(text)
             return text
-        except Exception as e:
-            st.warning(f"Error con la API Key #{current_api_key_index + 1}: {e}. Intentando con la siguiente...")
-            # Si falla, cambia a la siguiente clave y reintenta
-            switch_api_key()
-            
-            # Si hemos probado todas las claves y vuelto al inicio, paramos.
-            if current_api_key_index == initial_key_index:
-                break
-    
-    # Si el bucle termina sin éxito, muestra un error final.
-    st.error("Error GRAVE: Todas las API Keys han fallado. No se pudo conectar con el servicio de Gemini.")
-    return None
+        except Exception as e2:
+            st.error(f"Error GRAVE en la llamada a Gemini: {e2}")
+            return None
 
 # ==============================
 # CONEXIÓN A SUPABASE PARA GUARDAR CONSULTAS
@@ -768,9 +756,6 @@ def main():
     if not st.session_state.get("logged_in"):
         show_login()
 
-    # ===== CÓDIGO DEL LOGO AÑADIDO AQUÍ =====
-    st.sidebar.image("LogoDataStudio.png")
-    # ========================================
 
     st.title("Atelier Data Studio")
     st.markdown(
