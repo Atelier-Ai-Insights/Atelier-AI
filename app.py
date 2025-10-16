@@ -367,7 +367,7 @@ class PDFReport:
             parent=self.styles['Normal'], 
             alignment=2, 
             textColor=colors.grey,
-            fontSize=7)) # Se mantiene pequeño para el pie de página
+            fontSize=6)) # Se mantiene pequeño para el pie de página
             
         for style_name in ['CustomTitle','CustomHeading','CustomBodyText','CustomFooter']:
             self.styles[style_name].fontName = 'DejaVuSans'
