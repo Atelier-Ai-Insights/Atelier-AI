@@ -1,11 +1,12 @@
 [theme]
+# Color principal para botones y elementos interactivos
 primaryColor="#395caa"
-backgroundColor="#395caa"
-secondaryBackgroundColor="#6291f9"
-textColor="#fafafa"
 
-#[theme]
-#primaryColor="#395caa"
-#backgroundColor="#fafafa"
-#secondaryBackgroundColor="#e0e8f8"
-#textColor="#000000"
+# Color de fondo del área principal (blanco)
+backgroundColor="#FFFFFF"
+
+# Color de fondo de la barra lateral y otros elementos (gris claro)
+secondaryBackgroundColor="#F0F2F6"
+
+# Color del texto (negro)
+textColor="#262730"
