@@ -755,7 +755,10 @@ def idea_evaluator_mode(db, selected_files):
 def main():
     if not st.session_state.get("logged_in"):
         show_login()
-    
+
+# Cargar el logo desde un archivo local
+    st.image("LogoDataStudio.png", width=250) # Ajusta el ancho según sea necesario
+
     st.title("Atelier Data Studio")
     st.markdown(
         "Atelier Data Studio es una herramienta impulsada por modelos "
@@ -763,21 +766,6 @@ def main():
         "arojados por los distintos estudios de mercados realizados "
         "para el entendimiento del consumidor y del mercado.\n\n"
     )
-
-# 1. Construye la ruta al logo de forma segura.
-    try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        logo_path = os.path.join(script_dir, "LogoDataStudio.png")
-        
-        # 2. Muestra la imagen en la barra lateral (sidebar).
-        if os.path.exists(logo_path):
-            st.sidebar.image(logo_path, width=200) # Ajusta el ancho para la barra lateral
-        else:
-            # Si no se encuentra, muestra una advertencia en la barra lateral.
-            st.sidebar.warning("Logo no encontrado.")
-            
-    except Exception as e:
-        st.sidebar.error("Error al cargar el logo.")
 
     try:
         db_full = load_database(st.session_state.cliente)
@@ -795,11 +783,10 @@ def main():
         "Chat de Consulta Directa",
         "Evaluar una idea"  # <-- NUEVA OPCIÓN
     ]
- 
-modo = st.sidebar.radio(
-    "Seleccione el modo de uso:",
-    modos_disponibles
-)
+    modo = st.sidebar.radio(
+        "Seleccione el modo de uso:",
+        modos_disponibles
+    )
 
     # === NUEVO ===
     # Lógica para reiniciar el estado de la UI si se cambia de modo
