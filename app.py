@@ -19,6 +19,7 @@ from reportlab.lib import colors
 from supabase import create_client
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
+from PIL import Image # Importar Image para manejar el logo
 
 # Registrar fuente Unicode para tildes/ñ
 # Asegúrate de que el archivo 'DejaVuSans.ttf' esté en el mismo directorio.
@@ -329,11 +330,11 @@ def clean_text(text):
 
 class PDFReport:
     def __init__(self, filename, banner_path=None):
-        self.filename   = filename
-        self.banner_path= banner_path
-        self.elements   = []
-        self.styles     = getSampleStyleSheet()
-        self.doc        = SimpleDocTemplate(
+        self.filename    = filename
+        self.banner_path = banner_path
+        self.elements    = []
+        self.styles      = getSampleStyleSheet()
+        self.doc         = SimpleDocTemplate(
             self.filename,
             pagesize=A4,
             rightMargin = 12 * mm,
@@ -756,8 +757,15 @@ def main():
     if not st.session_state.get("logged_in"):
         show_login()
 
+    # --- MODIFICACIÓN AQUÍ: Reemplazar st.title por st.image ---
+    logo_path = "LogoDataStudio.png"
+    try:
+        logo = Image.open(logo_path)
+        st.image(logo, width=200) # Ajusta el ancho según sea necesario
+    except FileNotFoundError:
+        st.warning(f"Advertencia: No se encontró el archivo del logo en '{logo_path}'. Se mostrará el título de texto.")
+        st.title("Atelier Data Studio") # Fallback por si el logo no existe
 
-    st.title("Atelier Data Studio")
     st.markdown(
         "Atelier Data Studio es una herramienta impulsada por modelos "
         "lingüísticos para realizar consultas y conversar con datos "
