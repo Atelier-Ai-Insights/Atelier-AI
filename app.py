@@ -367,11 +367,12 @@ class PDFReport:
             parent=self.styles['Normal'], 
             alignment=2, 
             textColor=colors.grey,
-            fontSize=6)) # Se mantiene pequeño para el pie de página
+            fontSize=8)) # Se mantiene pequeño para el pie de página
             
         for style_name in ['CustomTitle','CustomHeading','CustomBodyText','CustomFooter']:
             self.styles[style_name].fontName = 'DejaVuSans'
 
+    # --- MÉTODO MODIFICADO ---
     def header(self, canvas, doc):
         canvas.saveState()
         if self.banner_path and os.path.isfile(self.banner_path):
@@ -379,28 +380,28 @@ class PDFReport:
                 img_w, img_h = 210*mm, 35*mm
                 y_pos = A4[1] - img_h
                 canvas.drawImage(self.banner_path, 0, y_pos, width=img_w, height=img_h,
-                                  preserveAspectRatio=True, anchor='n')
-                line_y = y_pos - 5
-                canvas.setStrokeColor(colors.lightgrey)
-                canvas.line(12*mm, line_y, A4[0]-12*mm, line_y)
+                                 preserveAspectRatio=True, anchor='n')
+                # line_y = y_pos - 5
+                # canvas.setStrokeColor(colors.lightgrey)
+                # canvas.line(12*mm, line_y, A4[0]-12*mm, line_y) # <-- LÍNEA DESACTIVADA
             except:
                 pass
-        else:
-            canvas.setStrokeColor(colors.lightgrey)
-            canvas.line(12*mm, A4[1]-40*mm, A4[0]-12*mm, A4[1]-40*mm)
+        # else:
+            # canvas.setStrokeColor(colors.lightgrey)
+            # canvas.line(12*mm, A4[1]-40*mm, A4[0]-12*mm, A4[1]-40*mm) # <-- LÍNEA DESACTIVADA
         canvas.restoreState()
+    # --- FIN DE LA MODIFICACIÓN ---
 
     def footer(self, canvas, doc):
             canvas.saveState()
             footer_text = (
                 "El uso de esta información está sujeto a términos y condiciones "
                 "que rigen su suscripción a los servicios prestados por Atelier Data Studio.<br/>"
-                "Es posible que Atelier Data Studio muestre información imprecisa. Verifica las respuestas."
+                "Es su responsabilidad asegurarse que el uso de esta información "
+                "no infrinja los derechos de propiedad intelectual."
             )
             p = Paragraph(footer_text, self.styles['CustomFooter'])
-            # Primero hacemos wrap para asignar blPara y medir altura
             w, h = p.wrap(doc.width, doc.bottomMargin)
-            # Dibujamos a 3 mm del pie
             y_position = 3 * mm
             p.drawOn(canvas, doc.leftMargin, y_position)
             canvas.restoreState()
@@ -414,14 +415,12 @@ class PDFReport:
         self.elements += [p, Spacer(1, 6)]
 
     def add_title(self, text, level=1):
-        # Se usa un solo estilo de título para unificar el tamaño
         style = 'CustomHeading'
         p = Paragraph(clean_text(text), self.styles[style])
         self.elements += [p, Spacer(1, 12)]
 
     def build_pdf(self):
         self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
-
 def generate_pdf_html(content, title="Documento Final", banner_path=None, output_filename=None):
     if output_filename is None:
         tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
@@ -436,7 +435,6 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None, output
         data = f.read()
     os.remove(output_filename)
     return data
-
 
 def ideacion_mode(db, selected_files):
     st.subheader("Conversaciones Creativas")
