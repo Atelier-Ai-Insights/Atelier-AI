@@ -841,7 +841,7 @@ def main():
         
     # ===== GUÍA INICIAL PARA EL USUARIO (LÓGICA CORREGIDA) =====
     if not selected_marcas and not selected_years and not selected_brands:
-        st.info("👋 ¡Bienvenido! Para comenzar, selecciona un modo de uso, y aplica los filtros de la izquierda: selecciona marca(s), año(s) y proyecto(s).")
+        st.info("👋 ¡Bienvenido! Para comenzar, selecciona un MODO DE USO; y luego, aplica los filtros de la izquierda: selecciona marca(s), año(s) y proyecto(s).")
         st.stop()
     # ==========================================================
 
