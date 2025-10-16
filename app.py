@@ -31,28 +31,16 @@ except Exception as e:
 # ==============================
 PLAN_FEATURES = {
     "Explorer": {
-        "reports_per_month": 2,
-        "chat_queries_per_day": 4,
-        "projects_per_year": 2,
-        "has_creative_conversation": False,
-        "has_concept_generation": False,
-        "has_idea_evaluation": False,
+        "reports_per_month": 2, "chat_queries_per_day": 4, "projects_per_year": 2,
+        "has_creative_conversation": False, "has_concept_generation": False, "has_idea_evaluation": False,
     },
     "Strategist": {
-        "reports_per_month": 25,
-        "chat_queries_per_day": float('inf'),
-        "projects_per_year": 10,
-        "has_creative_conversation": True,
-        "has_concept_generation": True,
-        "has_idea_evaluation": False,
+        "reports_per_month": 25, "chat_queries_per_day": float('inf'), "projects_per_year": 10,
+        "has_creative_conversation": True, "has_concept_generation": True, "has_idea_evaluation": False,
     },
     "Enterprise": {
-        "reports_per_month": float('inf'),
-        "chat_queries_per_day": float('inf'),
-        "projects_per_year": float('inf'),
-        "has_creative_conversation": True,
-        "has_concept_generation": True,
-        "has_idea_evaluation": True,
+        "reports_per_month": float('inf'), "chat_queries_per_day": float('inf'), "projects_per_year": float('inf'),
+        "has_creative_conversation": True, "has_concept_generation": True, "has_idea_evaluation": True,
     }
 }
 
@@ -61,15 +49,12 @@ PLAN_FEATURES = {
 # ==============================
 def show_login():
     col1, col2, col3 = st.columns([1, 2, 1])
-
     with col2:
         st.header("Iniciar Sesión")
         username = st.text_input("Usuario", placeholder="Apple")
         password = st.text_input("Contraseña", type="password", placeholder="****")
-
         if st.button("Ingresar"):
             response = supabase.table("users").select("*").eq("username", username).eq("password", password).execute()
-
             if response.data:
                 user_data = response.data[0]
                 st.session_state.logged_in = True
@@ -82,12 +67,6 @@ def show_login():
             else:
                 st.error("Credenciales incorrectas")
     st.stop()
-
-def logout():
-    if st.sidebar.button("Cerrar Sesión"):
-        st.session_state.clear()
-        st.cache_data.clear()
-        st.rerun()
 
 def reset_report_workflow():
     for k in ["report", "last_question", "report_question", "personalization", "rating"]:
@@ -108,44 +87,24 @@ def configure_api():
 
 configure_api()
 
-generation_config = {
-    "temperature": 0.5, "top_p": 0.8, "top_k": 32, "max_output_tokens": 8192,
-}
+generation_config = {"temperature": 0.5, "top_p": 0.8, "top_k": 32, "max_output_tokens": 8192}
 safety_settings = [
-    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
-    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
-    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
-    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
+    {"category": c, "threshold": "BLOCK_ONLY_HIGH"} for c in
+    ["HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT"]
 ]
 
 def create_model():
-    return genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        generation_config=generation_config,
-        safety_settings=safety_settings,
-    )
+    return genai.GenerativeModel(model_name="gemini-1.5-flash", generation_config=generation_config, safety_settings=safety_settings)
 
 model = create_model()
-
-def switch_api_key():
-    global current_api_key_index, model
-    current_api_key_index = (current_api_key_index + 1) % len(api_keys)
-    configure_api()
-    model = create_model()
 
 def call_gemini_api(prompt):
     try:
         response = model.generate_content([prompt])
         return html.unescape(response.text)
     except Exception as e:
-        st.error(f"Error en la llamada a Gemini: {e}. Intentando cambiar API Key.")
-        switch_api_key()
-        try:
-            response = model.generate_content([prompt])
-            return html.unescape(response.text)
-        except Exception as e2:
-            st.error(f"Error GRAVE en la llamada a Gemini: {e2}")
-            return None
+        st.error(f"Error en la llamada a Gemini: {e}.")
+        return None
 
 # ==============================
 # CONEXIÓN A SUPABASE Y RASTREO
@@ -153,12 +112,7 @@ def call_gemini_api(prompt):
 supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
 def log_query_event(query_text, mode, rating=None):
-    data = {
-        "id": datetime.datetime.now().strftime("%Y%m%d%H%M%S"),
-        "user_name": st.session_state.user,
-        "timestamp": datetime.datetime.now().isoformat(),
-        "mode": mode, "query": query_text, "rating": rating,
-    }
+    data = {"id": datetime.datetime.now().strftime("%Y%m%d%H%M%S"), "user_name": st.session_state.user, "timestamp": datetime.datetime.now().isoformat(), "mode": mode, "query": query_text, "rating": rating}
     supabase.table("queries").insert(data).execute()
 
 def get_monthly_usage(username, action_type):
@@ -212,11 +166,6 @@ def extract_brand(filename):
     if not filename or "In-ATL_" not in filename: return ""
     return filename.split("In-ATL_")[1].rsplit(".", 1)[0]
 
-# =====================================================
-# CLASE PDF Y GENERACIÓN DE REPORTES
-# =====================================================
-banner_file = "Banner (2).jpg"
-
 def get_relevant_info(db, question, selected_files):
     all_text = ""
     for pres in db:
@@ -229,6 +178,85 @@ def get_relevant_info(db, question, selected_files):
             all_text += "\n---\n\n"
     return all_text
 
+# =====================================================
+# LÓGICA DE GENERACIÓN DE PDF (CON CORRECCIÓN)
+# =====================================================
+banner_file = "Banner (2).jpg"
+
+def clean_text(text):
+    if not isinstance(text, str):
+        text = str(text)
+    return text.replace('&', '&amp;')
+
+class PDFReport:
+    ### MODIFICADO ### - Acepta un buffer en memoria además de un nombre de archivo
+    def __init__(self, buffer_or_filename, banner_path=None):
+        self.banner_path = banner_path
+        self.elements = []
+        self.styles = getSampleStyleSheet()
+        self.doc = SimpleDocTemplate(
+            buffer_or_filename,
+            pagesize=A4, rightMargin=12*mm, leftMargin=12*mm, topMargin=45*mm, bottomMargin=18*mm
+        )
+        # Estilos personalizados
+        self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], alignment=1, spaceAfter=12, fontSize=12, leading=16))
+        self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['Heading2'], spaceBefore=10, spaceAfter=6, fontSize=12, leading=16))
+        self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], leading=14, alignment=4, fontSize=12))
+        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], alignment=2, textColor=colors.grey, fontSize=6))
+        for style_name in ['CustomTitle', 'CustomHeading', 'CustomBodyText', 'CustomFooter']:
+            self.styles[style_name].fontName = 'DejaVuSans'
+
+    def header(self, canvas, doc):
+        canvas.saveState()
+        if self.banner_path and os.path.isfile(self.banner_path):
+            try:
+                img_w, img_h = 210*mm, 35*mm
+                y_pos = A4[1] - img_h
+                canvas.drawImage(self.banner_path, 0, y_pos, width=img_w, height=img_h, preserveAspectRatio=True, anchor='n')
+            except: pass
+        canvas.restoreState()
+
+    def footer(self, canvas, doc):
+        canvas.saveState()
+        footer_text = "El uso de esta información está sujeto a términos y condiciones... Verifica las respuestas."
+        p = Paragraph(footer_text, self.styles['CustomFooter'])
+        w, h = p.wrap(doc.width, doc.bottomMargin)
+        p.drawOn(canvas, doc.leftMargin, 3 * mm)
+        canvas.restoreState()
+
+    def header_footer(self, canvas, doc):
+        self.header(canvas, doc)
+        self.footer(canvas, doc)
+
+    def add_paragraph(self, text, style='CustomBodyText'):
+        p = Paragraph(clean_text(text), self.styles[style])
+        self.elements += [p, Spacer(1, 6)]
+
+    def add_title(self, text, level=1):
+        p = Paragraph(clean_text(text), self.styles['CustomHeading'])
+        self.elements += [p, Spacer(1, 12)]
+
+    def build_pdf(self):
+        self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
+
+### MODIFICADO ### - Usa un buffer en memoria (BytesIO) para evitar problemas con archivos temporales
+def generate_pdf_html(content, title="Documento Final", banner_path=None):
+    try:
+        buffer = BytesIO()
+        pdf = PDFReport(buffer, banner_path=banner_path)
+        pdf.add_title(title, level=1)
+        add_markdown_content(pdf, content)
+        pdf.build_pdf()
+        pdf_data = buffer.getvalue()
+        buffer.close()
+        return pdf_data
+    except Exception as e:
+        st.error(f"Error al generar el PDF: {e}")
+        return None
+
+# =====================================================
+# LÓGICA DE REPORTES Y MODOS
+# =====================================================
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
     prompt1 = f"Pregunta del Cliente: ***{question}***\n\nInstrucciones:\n1. Identifica en la pregunta la marca exacta...\nInformación de Contexto:\n{relevant_info}\n\nRespuesta (Hallazgos Clave y Referencias):..."
@@ -238,18 +266,6 @@ def generate_final_report(question, db, selected_files):
     result2 = call_gemini_api(prompt2)
     if result2 is None: return None
     return f"{question}\n\n" + result2
-
-class PDFReport:
-    # ... (El código de la clase PDFReport va aquí, sin cambios)
-    pass
-
-def generate_pdf_html(content, title="Documento Final", banner_path=None, output_filename=None):
-    # ... (El código de la función generate_pdf_html va aquí, sin cambios)
-    pass
-
-# =====================================================
-# MODOS DE LA APLICACIÓN
-# =====================================================
 
 def report_mode(db, selected_files):
     st.markdown("### Generar Reporte de Reportes")
@@ -401,7 +417,6 @@ def idea_evaluator_mode(db, selected_files):
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
-
 def main():
     if not st.session_state.get("logged_in"):
         show_login()
