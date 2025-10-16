@@ -329,11 +329,11 @@ def clean_text(text):
 
 class PDFReport:
     def __init__(self, filename, banner_path=None):
-        self.filename   = filename
+        self.filename    = filename
         self.banner_path= banner_path
-        self.elements   = []
-        self.styles     = getSampleStyleSheet()
-        self.doc        = SimpleDocTemplate(
+        self.elements    = []
+        self.styles      = getSampleStyleSheet()
+        self.doc         = SimpleDocTemplate(
             self.filename,
             pagesize=A4,
             rightMargin = 12 * mm,
@@ -756,6 +756,28 @@ def main():
     if not st.session_state.get("logged_in"):
         show_login()
 
+    # --- INICIO DEL CÓDIGO AÑADIDO ---
+    # Se inyecta CSS para hacer que el contenedor del logo sea 'sticky' (fijo)
+    # en la parte superior de la barra lateral.
+    st.markdown(
+        """
+        <style>
+            /* Apunta al contenedor del primer elemento en el sidebar */
+            [data-testid="stSidebar"] > div:first-child {
+                position: -webkit-sticky; /* Para compatibilidad con Safari */
+                position: sticky;
+                top: 0; /* Lo fija en la parte superior */
+                z-index: 1000; /* Asegura que esté por encima de otros elementos */
+                background-color: #FFFFFF; /* Fondo blanco para que los filtros no se vean por detrás al hacer scroll */
+            }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    # Se añade el logo en la barra lateral. Al ser el primer elemento,
+    # el CSS anterior lo afectará.
+    st.sidebar.image("LogoDataStudio.png")
+    # --- FIN DEL CÓDIGO AÑADIDO ---
 
     st.title("Atelier Data Studio")
     st.markdown(
