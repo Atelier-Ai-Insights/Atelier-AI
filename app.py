@@ -795,7 +795,7 @@ def main():
         "Chat de Consulta Directa",
         "Evaluar una idea"  # <-- NUEVA OPCIÓN
     ]
- modo = st.sidebar.radio(
+     modo = st.sidebar.radio(
         "Seleccione el modo de uso:",
         modos_disponibles
     )
