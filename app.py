@@ -795,16 +795,12 @@ def main():
         "Chat de Consulta Directa",
         "Evaluar una idea"  # <-- NUEVA OPCIÓN
     ]
-  st.sidebar.markdown("### Seleccione el modo de uso:") # Título más grande
+ 
 modo = st.sidebar.radio(
     "Seleccione el modo de uso:",
-    modos_disponibles,
-    label_visibility="collapsed" # Oculta la etiqueta original
+    modos_disponibles
 )
-
-st.sidebar.markdown("---") # Añade una línea divisoria
-
-st.sidebar.markdown("### Filtros de Búsqueda")
+st.sidebar.header("Filtros de Búsqueda")
 
     # === NUEVO ===
     # Lógica para reiniciar el estado de la UI si se cambia de modo
