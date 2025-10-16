@@ -6,6 +6,7 @@ from io import BytesIO
 import os
 import tempfile
 from bs4 import BeautifulSoup
+import base64 # <--- Importar la librería para codificar
 
 import boto3
 import google.generativeai as genai
@@ -19,7 +20,17 @@ from reportlab.lib import colors
 from supabase import create_client
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
-from PIL import Image # Importar Image para manejar el logo
+from PIL import Image
+
+# --- NUEVA FUNCIÓN DE AYUDA ---
+# Función para convertir una imagen a Base64
+def get_image_as_base64(file):
+    try:
+        with open(file, "rb") as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    except FileNotFoundError:
+        return None
 
 # Registrar fuente Unicode para tildes/ñ
 # Asegúrate de que el archivo 'DejaVuSans.ttf' esté en el mismo directorio.
@@ -753,18 +764,52 @@ def idea_evaluator_mode(db, selected_files):
                     else:
                         st.error("No se pudo generar la evaluación. Inténtalo de nuevo.")
 
+# --- INICIO DE LA FUNCIÓN PRINCIPAL MODIFICADA ---
 def main():
     if not st.session_state.get("logged_in"):
         show_login()
 
-    # --- MODIFICACIÓN AQUÍ: Reemplazar st.title por st.image ---
+    # --- Implementación del logo fijo ---
     logo_path = "LogoDataStudio.png"
-    try:
-        logo = Image.open(logo_path)
-        st.image(logo, width=200) # Ajusta el ancho según sea necesario
-    except FileNotFoundError:
-        st.warning(f"Advertencia: No se encontró el archivo del logo en '{logo_path}'. Se mostrará el título de texto.")
-        st.title("Atelier Data Studio") # Fallback por si el logo no existe
+    base64_logo = get_image_as_base64(logo_path)
+
+    if base64_logo:
+        # Estilos CSS para el contenedor del logo
+        # - position: fixed -> Fija el elemento en la pantalla
+        # - top: 0; left: 0 -> Lo posiciona en la esquina superior izquierda
+        # - z-index: 999 -> Asegura que esté por encima de otros elementos
+        # - background-color -> Evita que el texto de abajo se vea a través
+        # - padding y border-bottom -> Para un mejor aspecto visual
+        st.markdown(
+            f"""
+            <style>
+                #logo-container {{
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    padding: 10px 0 10px 40px; /* Ajusta el padding izquierdo */
+                    background-color: #FFFFFF; /* O el color de fondo de tu app */
+                    border-bottom: 1px solid #e6e6e6;
+                    z-index: 999;
+                }}
+            </style>
+            
+            <div id="logo-container">
+                <img src="data:image/png;base64,{base64_logo}" width="200">
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        # Añadimos espacio vertical para que el contenido principal no quede oculto
+        st.markdown("<br><br><br><br>", unsafe_allow_html=True)
+    else:
+        # Si el logo no se encuentra, mostramos el título como antes
+        st.title("Atelier Data Studio")
+        st.warning(f"Advertencia: No se encontró el archivo del logo en '{logo_path}'.")
+
+    # --- Fin de la implementación del logo fijo ---
+
 
     st.markdown(
         "Atelier Data Studio es una herramienta impulsada por modelos "
