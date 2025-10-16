@@ -756,20 +756,6 @@ def main():
     if not st.session_state.get("logged_in"):
         show_login()
 
-try:
-        # 1. Construye la ruta al logo de forma segura
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        logo_path = os.path.join(script_dir, "LogoDataStudio.png")
-        
-        # 2. Muestra la imagen en la barra lateral (sidebar)
-        if os.path.exists(logo_path):
-            st.sidebar.image(logo_path, width=200) # Ancho ajustado para el sidebar
-        else:
-            st.sidebar.warning("Logo no encontrado.")
-            
-    except Exception as e:
-        # Este mensaje aparecerá si hay un error al intentar cargar el logo
-        st.sidebar.error(f"Error al cargar el logo: {e}")
 
     st.title("Atelier Data Studio")
     st.markdown(
