@@ -796,12 +796,14 @@ def main():
         "Evaluar una idea"  # <-- NUEVA OPCIÓN
     ]
  
+st.sidebar.markdown("### Seleccione el modo de uso:") # Título más grande
 modo = st.sidebar.radio(
     "Seleccione el modo de uso:",
-    modos_disponibles
+    modos_disponibles,
+    label_visibility="collapsed" # Oculta la etiqueta original
 )
-st.sidebar.header("Filtros de Búsqueda")
 
+st.sidebar.markdown("---") # Añade una línea divisoria
     # === NUEVO ===
     # Lógica para reiniciar el estado de la UI si se cambia de modo
     if 'current_mode' not in st.session_state:
