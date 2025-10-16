@@ -103,7 +103,7 @@ safety_settings = [
 
 def create_model():
     return genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
+        model_name="gemini-1.5-flash",
         generation_config=generation_config,
         safety_settings=safety_settings,
     )
@@ -379,7 +379,7 @@ class PDFReport:
                 img_w, img_h = 210*mm, 35*mm
                 y_pos = A4[1] - img_h
                 canvas.drawImage(self.banner_path, 0, y_pos, width=img_w, height=img_h,
-                                 preserveAspectRatio=True, anchor='n')
+                                  preserveAspectRatio=True, anchor='n')
                 line_y = y_pos - 5
                 canvas.setStrokeColor(colors.lightgrey)
                 canvas.line(12*mm, line_y, A4[0]-12*mm, line_y)
@@ -755,6 +755,21 @@ def idea_evaluator_mode(db, selected_files):
 def main():
     if not st.session_state.get("logged_in"):
         show_login()
+    
+    # --- INICIO DEL CÓDIGO AÑADIDO PARA BORDES ---
+    # Se inyecta CSS para agregar un borde a los filtros multiselect en la barra lateral.
+    st.markdown("""
+    <style>
+    /* Apunta al contenedor del widget multiselect en la barra lateral */
+    [data-testid="stSidebar"] [data-testid="stMultiSelect"] {
+        border: 1px solid #CCCCCC;  /* Color del borde: gris claro */
+        border-radius: 5px;         /* Bordes redondeados para un look más suave */
+        padding: 8px;               /* Espaciado interno para que no se vea apretado */
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    # --- FIN DEL CÓDIGO AÑADIDO ---
+
 
     # --- INICIO DEL CÓDIGO AÑADIDO ---
     # Se inyecta CSS para hacer que el contenedor del logo sea 'sticky' (fijo)
@@ -782,10 +797,10 @@ def main():
     # --- INICIO DEL AJUSTE: TEXTOS ELIMINADOS ---
     # st.title("Atelier Data Studio")
     # st.markdown(
-    #     "Atelier Data Studio es una herramienta impulsada por modelos "
-    #     "lingüísticos para realizar consultas y conversar con datos "
-    #     "arojados por los distintos estudios de mercados realizados "
-    #     "para el entendimiento del consumidor y del mercado.\n\n"
+    #      "Atelier Data Studio es una herramienta impulsada por modelos "
+    #      "lingüísticos para realizar consultas y conversar con datos "
+    #      "arojados por los distintos estudios de mercados realizados "
+    #      "para el entendimiento del consumidor y del mercado.\n\n"
     # )
     # --- FIN DEL AJUSTE ---
 
