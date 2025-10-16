@@ -103,7 +103,7 @@ safety_settings = [
 
 def create_model():
     return genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
+        model_name="gemini-2.5-flash",
         generation_config=generation_config,
         safety_settings=safety_settings,
     )
@@ -756,9 +756,6 @@ def main():
     if not st.session_state.get("logged_in"):
         show_login()
 
-    # ===== CÓDIGO DEL LOGO AÑADIDO AQUÍ =====
-    st.sidebar.image("LogoDataStudio.png")
-    # ========================================
 
     st.title("Atelier Data Studio")
     st.markdown(
