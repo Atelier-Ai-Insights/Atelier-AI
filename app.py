@@ -755,19 +755,6 @@ def idea_evaluator_mode(db, selected_files):
 def main():
     if not st.session_state.get("logged_in"):
         show_login()
-
-# 1. Obtiene la ruta del directorio donde se encuentra este script de Python.
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    # 2. Une la ruta del directorio con el nombre del archivo del logo para crear una ruta completa.
-    logo_path = os.path.join(script_dir, "LogoDataStudio.png")
-
-    # 3. Muestra la imagen usando la ruta completa y verifica si existe primero.
-    if os.path.exists(logo_path):
-        st.image(logo_path, width=250)
-    else:
-        # Esto te avisará si el archivo sigue sin encontrarse por alguna razón.
-        st.error(f"Error: No se pudo encontrar el logo en la ruta: {logo_path}")
     
     st.title("Atelier Data Studio")
     st.markdown(
@@ -776,6 +763,21 @@ def main():
         "arojados por los distintos estudios de mercados realizados "
         "para el entendimiento del consumidor y del mercado.\n\n"
     )
+
+# 1. Construye la ruta al logo de forma segura.
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        logo_path = os.path.join(script_dir, "LogoDataStudio.png")
+        
+        # 2. Muestra la imagen en la barra lateral (sidebar).
+        if os.path.exists(logo_path):
+            st.sidebar.image(logo_path, width=200) # Ajusta el ancho para la barra lateral
+        else:
+            # Si no se encuentra, muestra una advertencia en la barra lateral.
+            st.sidebar.warning("Logo no encontrado.")
+            
+    except Exception as e:
+        st.sidebar.error("Error al cargar el logo.")
 
     try:
         db_full = load_database(st.session_state.cliente)
