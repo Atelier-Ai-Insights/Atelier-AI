@@ -765,6 +765,45 @@ def main():
         "para el entendimiento del consumidor y del mercado.\n\n"
     )
 
+    # 1. Construye la ruta al logo de forma segura.
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        logo_path = os.path.join(script_dir, "LogoDataStudio.png")
+        
+        # 2. Muestra la imagen en la barra lateral (sidebar).
+        if os.path.exists(logo_path):
+            st.sidebar.image(logo_path, width=200) # Ajusta el ancho para la barra lateral
+        else:
+            # Si no se encuentra, muestra una advertencia en la barra lateral.
+            st.sidebar.warning("Logo no encontrado.")
+            
+    except Exception as e:
+        st.sidebar.error("Error al cargar el logo.")
+    # --- FIN DEL BLOQUE DEL LOGO ---
+
+    # El resto de tu función 'main' continúa aquí...
+    try:
+        db_full = load_database(st.session_state.cliente)
+        db_filtered = db_full[:]
+    except Exception as e:
+        st.error(f"Error al cargar la base de datos: {e}")
+        st.stop()
+
+    # Se añade la nueva opción "Evaluar una idea"
+    modos_disponibles = [
+        "Generar un reporte de reportes", 
+        "Conversaciones creativas", 
+        "Generación de conceptos",
+        "Chat de Consulta Directa",
+        "Evaluar una idea"  # <-- NUEVA OPCIÓN
+    ]
+    
+    # El resto de los elementos de la barra lateral irán debajo del logo
+    modo = st.sidebar.radio(
+        "Seleccione el modo de uso:",
+        modos_disponibles
+    )
+
     try:
         db_full = load_database(st.session_state.cliente)
         db_filtered = db_full[:]
