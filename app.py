@@ -367,7 +367,7 @@ class PDFReport:
             parent=self.styles['Normal'], 
             alignment=2, 
             textColor=colors.grey,
-            fontSize=8)) # Se mantiene pequeño para el pie de página
+            fontSize=7)) # Se mantiene pequeño para el pie de página
             
         for style_name in ['CustomTitle','CustomHeading','CustomBodyText','CustomFooter']:
             self.styles[style_name].fontName = 'DejaVuSans'
@@ -395,8 +395,7 @@ class PDFReport:
             footer_text = (
                 "El uso de esta información está sujeto a términos y condiciones "
                 "que rigen su suscripción a los servicios prestados por Atelier Data Studio.<br/>"
-                "Es su responsabilidad asegurarse que el uso de esta información "
-                "no infrinja los derechos de propiedad intelectual."
+                "Es posible que Atelier Data Studio muestre información imprecisa. Verifica las respuestas."
             )
             p = Paragraph(footer_text, self.styles['CustomFooter'])
             # Primero hacemos wrap para asignar blPara y medir altura
