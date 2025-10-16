@@ -6,7 +6,6 @@ from io import BytesIO
 import os
 import tempfile
 from bs4 import BeautifulSoup
-import base64 # Requerido para codificar la imagen
 
 import boto3
 import google.generativeai as genai
@@ -20,17 +19,6 @@ from reportlab.lib import colors
 from supabase import create_client
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
-from PIL import Image
-
-# --- FUNCIÓN DE AYUDA MEJORADA ---
-# Convierte una imagen a Base64 usando una ruta de archivo completa
-def get_image_as_base64(path):
-    try:
-        with open(path, "rb") as f:
-            data = f.read()
-        return base64.b64encode(data).decode()
-    except FileNotFoundError:
-        return None
 
 # Registrar fuente Unicode para tildes/ñ
 # Asegúrate de que el archivo 'DejaVuSans.ttf' esté en el mismo directorio.
@@ -341,11 +329,11 @@ def clean_text(text):
 
 class PDFReport:
     def __init__(self, filename, banner_path=None):
-        self.filename    = filename
-        self.banner_path = banner_path
-        self.elements    = []
-        self.styles      = getSampleStyleSheet()
-        self.doc         = SimpleDocTemplate(
+        self.filename   = filename
+        self.banner_path= banner_path
+        self.elements   = []
+        self.styles     = getSampleStyleSheet()
+        self.doc        = SimpleDocTemplate(
             self.filename,
             pagesize=A4,
             rightMargin = 12 * mm,
@@ -696,6 +684,7 @@ def grounded_chat_mode(db, selected_files):
         st.button("Nueva Conversación", on_click=reset_chat_workflow, key="new_grounded_chat_btn")
 
 
+# === ¡NUEVA FUNCIÓN AÑADIDA! ===
 def idea_evaluator_mode(db, selected_files):
     """
     Evaluador de Ideas:
@@ -763,59 +752,12 @@ def idea_evaluator_mode(db, selected_files):
                     else:
                         st.error("No se pudo generar la evaluación. Inténtalo de nuevo.")
 
-# --- FUNCIÓN PRINCIPAL (main) CON TODAS LAS MEJORAS ---
 def main():
     if not st.session_state.get("logged_in"):
         show_login()
 
-    # --- Implementación robusta del logo fijo ---
-    try:
-        # 1. Obtenemos la ruta del directorio donde se encuentra el script
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        # 2. Construimos la ruta completa y segura hacia el logo
-        logo_path = os.path.join(script_dir, "LogoDataStudio.png")
-        # 3. Codificamos el logo usando la ruta completa
-        base64_logo = get_image_as_base64(logo_path)
-    except NameError:
-        # Fallback para entornos donde __file__ no está definido
-        base64_logo = get_image_as_base64("LogoDataStudio.png")
 
-
-    if base64_logo:
-        # Inyecta CSS y HTML para el logo fijo, centrado y con más espacio
-        st.markdown(
-            f"""
-            <style>
-                #logo-container {{
-                    position: fixed;
-                    top: 0;
-                    left: 305px;      
-                    right: 0;
-                    display: flex; /* Usamos flexbox para centrar verticalmente */
-                    justify-content: center; /* Centrado horizontal */
-                    align-items: center; /* Centrado vertical */
-                    height: 80px; /* Altura fija para la franja */
-                    background-color: #FFFFFF;
-                    border-bottom: 1px solid #e6e6e6;
-                    z-index: 999;
-                }}
-            </style>
-            
-            <div id="logo-container">
-                <img src="data:image/png;base64,{base64_logo}" width="200">
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        # Añade espacio para que el contenido no quede oculto tras el logo
-        st.markdown("<br><br><br><br>", unsafe_allow_html=True)
-    else:
-        # Si el logo no se encuentra, muestra el título como antes
-        st.title("Atelier Data Studio")
-        st.warning(f"Advertencia: No se encontró el logo. Asegúrese de que 'LogoDataStudio.png' esté en la misma carpeta que el script.")
-    
-    # --- El resto de la aplicación continúa aquí ---
-
+    st.title("Atelier Data Studio")
     st.markdown(
         "Atelier Data Studio es una herramienta impulsada por modelos "
         "lingüísticos para realizar consultas y conversar con datos "
@@ -830,52 +772,67 @@ def main():
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
 
+    # === MODIFICADO ===
+    # Se añade la nueva opción "Evaluar una idea"
     modos_disponibles = [
         "Generar un reporte de reportes", 
         "Conversaciones creativas", 
         "Generación de conceptos",
         "Chat de Consulta Directa",
-        "Evaluar una idea"
+        "Evaluar una idea"  # <-- NUEVA OPCIÓN
     ]
     modo = st.sidebar.radio(
         "Seleccione el modo de uso:",
         modos_disponibles
     )
 
+    # === NUEVO ===
+    # Lógica para reiniciar el estado de la UI si se cambia de modo
     if 'current_mode' not in st.session_state:
         st.session_state.current_mode = modo
     
     if st.session_state.current_mode != modo:
+        # Si el modo anterior o el nuevo son conversacionales, reinicia el historial
         if "conversaci" in st.session_state.current_mode.lower() or "chat" in st.session_state.current_mode.lower() \
         or "conversaci" in modo.lower() or "chat" in modo.lower():
             reset_chat_workflow()
         
+        # Limpia otros estados específicos de los modos
         st.session_state.pop("generated_concept", None)
         st.session_state.pop("evaluation_result", None)
             
         st.session_state.current_mode = modo
 
+    # ==================================
+    # === SECCIÓN DE FILTROS AJUSTADA ===
+    # ==================================
     st.sidebar.header("Filtros de Búsqueda")
 
+    # Filtro de Marcas (Multiselect)
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
     selected_marcas = st.sidebar.multiselect("Seleccione la(s) marca(s):", marcas_options)
     if selected_marcas:
         db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
 
+    # Filtro de Años (Multiselect)
     years_options = sorted({doc.get("marca", "") for doc in db_full if doc.get("marca")})
     selected_years = st.sidebar.multiselect("Seleccione el/los año(s):", years_options)
     if selected_years:
         db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
+    # Filtro de Proyectos (Multiselect)
+    # Las opciones de proyectos se basan en la base de datos ya filtrada por marca y año
     brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered})
     selected_brands = st.sidebar.multiselect("Seleccione el/los proyecto(s):", brands_options)
     if selected_brands:
         db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
 
+    # Calificación (solo en modo reporte)
     if modo == "Generar un reporte de reportes":
         st.sidebar.radio("Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating")
 
+    # Botón Cerrar Sesión
     if st.sidebar.button("Cerrar Sesión", key="logout_main"):
         st.session_state.clear()
         st.cache_data.clear()
@@ -883,6 +840,8 @@ def main():
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
+    # === MODIFICADO ===
+    # Lógica para llamar a la función del modo seleccionado
     if modo == "Generar un reporte de reportes":
         report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas":
@@ -891,7 +850,7 @@ def main():
         concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa":
         grounded_chat_mode(db_filtered, selected_files)
-    elif modo == "Evaluar una idea":
+    elif modo == "Evaluar una idea": # <-- NUEVA LÓGICA
         idea_evaluator_mode(db_filtered, selected_files)
 
 if __name__ == "__main__":
