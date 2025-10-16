@@ -756,8 +756,18 @@ def main():
     if not st.session_state.get("logged_in"):
         show_login()
 
-# Cargar el logo desde un archivo local
-    st.image("LogoDataStudio.png", width=250) # Ajusta el ancho según sea necesario
+# 1. Obtiene la ruta del directorio donde se encuentra este script de Python.
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # 2. Une la ruta del directorio con el nombre del archivo del logo para crear una ruta completa.
+    logo_path = os.path.join(script_dir, "LogoDataStudio.png")
+
+    # 3. Muestra la imagen usando la ruta completa y verifica si existe primero.
+    if os.path.exists(logo_path):
+        st.image(logo_path, width=250)
+    else:
+        # Esto te avisará si el archivo sigue sin encontrarse por alguna razón.
+        st.error(f"Error: No se pudo encontrar el logo en la ruta: {logo_path}")
     
     st.title("Atelier Data Studio")
     st.markdown(
