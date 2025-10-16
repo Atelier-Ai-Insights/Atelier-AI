@@ -779,13 +779,15 @@ def main():
     st.sidebar.image("LogoDataStudio.png")
     # --- FIN DEL CÓDIGO AÑADIDO ---
 
-    st.title("Atelier Data Studio")
-    st.markdown(
-        "Atelier Data Studio es una herramienta impulsada por modelos "
-        "lingüísticos para realizar consultas y conversar con datos "
-        "arojados por los distintos estudios de mercados realizados "
-        "para el entendimiento del consumidor y del mercado.\n\n"
-    )
+    # --- INICIO DEL AJUSTE: TEXTOS ELIMINADOS ---
+    # st.title("Atelier Data Studio")
+    # st.markdown(
+    #     "Atelier Data Studio es una herramienta impulsada por modelos "
+    #     "lingüísticos para realizar consultas y conversar con datos "
+    #     "arojados por los distintos estudios de mercados realizados "
+    #     "para el entendimiento del consumidor y del mercado.\n\n"
+    # )
+    # --- FIN DEL AJUSTE ---
 
     try:
         db_full = load_database(st.session_state.cliente)
