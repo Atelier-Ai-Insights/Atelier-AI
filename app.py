@@ -800,7 +800,7 @@ modo = st.sidebar.radio(
     "Seleccione el modo de uso:",
     modos_disponibles
 )
-st.sidebar.markdown("---") # Añade una línea divisoria
+
     # === NUEVO ===
     # Lógica para reiniciar el estado de la UI si se cambia de modo
     if 'current_mode' not in st.session_state:
