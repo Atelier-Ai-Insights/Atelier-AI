@@ -840,7 +840,7 @@ def main():
         st.rerun()
         
     # ===== GUÍA INICIAL PARA EL USUARIO (LÓGICA CORREGIDA) =====
-    if not selected_uso:
+    if not selected_"Seleccione el modo de uso:"
         st.info("👋 ¡Bienvenido! Para comenzar, selecciona un MODO DE USO; y luego, aplica los filtros de la izquierda: selecciona marca(s), año(s) y proyecto(s).")
         st.stop()
     # ==========================================================
