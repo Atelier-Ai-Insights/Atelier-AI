@@ -687,11 +687,11 @@ def grounded_chat_mode(db, selected_files):
 # === ¡NUEVA FUNCIÓN AÑADIDA! ===
 def idea_evaluator_mode(db, selected_files):
     """
-    Evaluador de Ideas:
+    Evaluación de Pre-Ideas:
     Analiza una idea de producto o servicio contra los hallazgos de los
     estudios y proporciona una evaluación de su potencial.
     """
-    st.subheader("Evaluador de Ideas")
+    st.subheader("Evaluación de Pre-Ideas")
     st.markdown(
         "Presenta una idea de producto o servicio y el asistente la evaluará "
         "contra los hallazgos de los estudios seleccionados, indicando su "
