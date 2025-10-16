@@ -756,7 +756,9 @@ def main():
     if not st.session_state.get("logged_in"):
         show_login()
 
+    # ===== CÓDIGO DEL LOGO AÑADIDO AQUÍ =====
     st.sidebar.image("LogoDataStudio.png")
+    # ========================================
 
     st.title("Atelier Data Studio")
     st.markdown(
@@ -838,12 +840,6 @@ def main():
         st.session_state.clear()
         st.cache_data.clear()
         st.rerun()
-        
-    # ===== GUÍA INICIAL PARA EL USUARIO (LÓGICA CORREGIDA) =====
-    if not selected_"Seleccione el modo de uso:"
-        st.info("👋 ¡Bienvenido! Para comenzar, selecciona un MODO DE USO; y luego, aplica los filtros de la izquierda: selecciona marca(s), año(s) y proyecto(s).")
-        st.stop()
-    # ==========================================================
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
