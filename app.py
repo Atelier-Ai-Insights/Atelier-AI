@@ -777,7 +777,7 @@ def main():
         # 3. Codificamos el logo usando la ruta completa
         base64_logo = get_image_as_base64(logo_path)
     except NameError:
-        # Fallback para entornos donde __file__ no está definido (ej. algunos notebooks)
+        # Fallback para entornos donde __file__ no está definido
         base64_logo = get_image_as_base64("LogoDataStudio.png")
 
 
@@ -789,13 +789,15 @@ def main():
                 #logo-container {{
                     position: fixed;
                     top: 0;
-                    left: 305px;      /* Desplazado para no quedar tras la barra lateral */
+                    left: 305px;      
                     right: 0;
-                    padding: 20px 0;  /* Franja más alta (más espacio vertical) */
+                    display: flex; /* Usamos flexbox para centrar verticalmente */
+                    justify-content: center; /* Centrado horizontal */
+                    align-items: center; /* Centrado vertical */
+                    height: 80px; /* Altura fija para la franja */
                     background-color: #FFFFFF;
                     border-bottom: 1px solid #e6e6e6;
                     z-index: 999;
-                    text-align: center; /* Logo centrado dentro de la franja */
                 }}
             </style>
             
@@ -805,8 +807,8 @@ def main():
             """,
             unsafe_allow_html=True
         )
-        # Añade más espacio para que el contenido no quede oculto tras el logo
-        st.markdown("<br><br><br><br><br><br>", unsafe_allow_html=True)
+        # Añade espacio para que el contenido no quede oculto tras el logo
+        st.markdown("<br><br><br><br>", unsafe_allow_html=True)
     else:
         # Si el logo no se encuentra, muestra el título como antes
         st.title("Atelier Data Studio")
