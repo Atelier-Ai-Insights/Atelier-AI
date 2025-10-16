@@ -755,23 +755,25 @@ def idea_evaluator_mode(db, selected_files):
 def main():
     if not st.session_state.get("logged_in"):
         show_login()
-    
-    # --- INICIO DEL CÓDIGO AÑADIDO PARA BORDES ---
-    # Se inyecta CSS para agregar un borde a los filtros multiselect en la barra lateral.
+
+    # --- INICIO DEL CÓDIGO CSS MODIFICADO ---
+    # Se inyecta CSS para agregar un borde a los filtros y al selector de modo.
     st.markdown("""
     <style>
     /* Apunta al contenedor del widget multiselect en la barra lateral */
-    [data-testid="stSidebar"] [data-testid="stMultiSelect"] {
+    [data-testid="stSidebar"] [data-testid="stMultiSelect"],
+    /* Apunta al contenedor del widget radio en la barra lateral */
+    [data-testid="stSidebar"] [data-testid="stRadio"] {
         border: 1px solid #CCCCCC;  /* Color del borde: gris claro */
         border-radius: 5px;         /* Bordes redondeados para un look más suave */
-        padding: 8px;               /* Espaciado interno para que no se vea apretado */
+        padding: 10px;              /* Espaciado interno para que no se vea apretado */
+        margin-bottom: 10px;        /* Añade un espacio debajo de cada caja */
     }
     </style>
     """, unsafe_allow_html=True)
-    # --- FIN DEL CÓDIGO AÑADIDO ---
+    # --- FIN DEL CÓDIGO CSS MODIFICADO ---
 
 
-    # --- INICIO DEL CÓDIGO AÑADIDO ---
     # Se inyecta CSS para hacer que el contenedor del logo sea 'sticky' (fijo)
     # en la parte superior de la barra lateral.
     st.markdown(
@@ -784,6 +786,7 @@ def main():
                 top: 0; /* Lo fija en la parte superior */
                 z-index: 1000; /* Asegura que esté por encima de otros elementos */
                 background-color: #FFFFFF; /* Fondo blanco para que los filtros no se vean por detrás al hacer scroll */
+                padding-bottom: 10px; /* Pequeño espacio para separar del contenido de abajo */
             }
         </style>
         """,
@@ -792,17 +795,6 @@ def main():
     # Se añade el logo en la barra lateral. Al ser el primer elemento,
     # el CSS anterior lo afectará.
     st.sidebar.image("LogoDataStudio.png")
-    # --- FIN DEL CÓDIGO AÑADIDO ---
-
-    # --- INICIO DEL AJUSTE: TEXTOS ELIMINADOS ---
-    # st.title("Atelier Data Studio")
-    # st.markdown(
-    #      "Atelier Data Studio es una herramienta impulsada por modelos "
-    #      "lingüísticos para realizar consultas y conversar con datos "
-    #      "arojados por los distintos estudios de mercados realizados "
-    #      "para el entendimiento del consumidor y del mercado.\n\n"
-    # )
-    # --- FIN DEL AJUSTE ---
 
     try:
         db_full = load_database(st.session_state.cliente)
@@ -811,40 +803,34 @@ def main():
         st.error(f"Error al cargar la base de datos: {e}")
         st.stop()
 
-    # === MODIFICADO ===
-    # Se añade la nueva opción "Evaluar una idea"
     modos_disponibles = [
         "Generar un reporte de reportes", 
         "Conversaciones creativas", 
         "Generación de conceptos",
         "Chat de Consulta Directa",
-        "Evaluar una idea"  # <-- NUEVA OPCIÓN
+        "Evaluar una idea"
     ]
+
+    # Se añade un header y se oculta la etiqueta del radio button
+    st.sidebar.header("Seleccione el modo de uso")
     modo = st.sidebar.radio(
         "Seleccione el modo de uso:",
-        modos_disponibles
+        modos_disponibles,
+        label_visibility="collapsed"
     )
-
-    # === NUEVO ===
-    # Lógica para reiniciar el estado de la UI si se cambia de modo
+    
     if 'current_mode' not in st.session_state:
         st.session_state.current_mode = modo
     
     if st.session_state.current_mode != modo:
-        # Si el modo anterior o el nuevo son conversacionales, reinicia el historial
         if "conversaci" in st.session_state.current_mode.lower() or "chat" in st.session_state.current_mode.lower() \
         or "conversaci" in modo.lower() or "chat" in modo.lower():
             reset_chat_workflow()
         
-        # Limpia otros estados específicos de los modos
         st.session_state.pop("generated_concept", None)
         st.session_state.pop("evaluation_result", None)
-            
         st.session_state.current_mode = modo
 
-    # ==================================
-    # === SECCIÓN DE FILTROS AJUSTADA ===
-    # ==================================
     st.sidebar.header("Filtros de Búsqueda")
 
     # Filtro de Marcas (Multiselect)
@@ -860,18 +846,14 @@ def main():
         db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
     # Filtro de Proyectos (Multiselect)
-    # Las opciones de proyectos se basan en la base de datos ya filtrada por marca y año
     brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered})
     selected_brands = st.sidebar.multiselect("Seleccione el/los proyecto(s):", brands_options)
     if selected_brands:
         db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
-
-    # Calificación (solo en modo reporte)
     if modo == "Generar un reporte de reportes":
         st.sidebar.radio("Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating")
 
-    # Botón Cerrar Sesión
     if st.sidebar.button("Cerrar Sesión", key="logout_main"):
         st.session_state.clear()
         st.cache_data.clear()
@@ -879,8 +861,6 @@ def main():
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
-    # === MODIFICADO ===
-    # Lógica para llamar a la función del modo seleccionado
     if modo == "Generar un reporte de reportes":
         report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas":
@@ -889,7 +869,7 @@ def main():
         concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa":
         grounded_chat_mode(db_filtered, selected_files)
-    elif modo == "Evaluar una idea": # <-- NUEVA LÓGICA
+    elif modo == "Evaluar una idea":
         idea_evaluator_mode(db_filtered, selected_files)
 
 if __name__ == "__main__":
