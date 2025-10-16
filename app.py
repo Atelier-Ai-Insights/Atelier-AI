@@ -795,10 +795,11 @@ def main():
         "Chat de Consulta Directa",
         "Evaluar una idea"  # <-- NUEVA OPCIÓN
     ]
-     modo = st.sidebar.radio(
-        "Seleccione el modo de uso:",
-        modos_disponibles
-    )
+ 
+modo = st.sidebar.radio(
+    "Seleccione el modo de uso:",
+    modos_disponibles
+)
 
     # === NUEVO ===
     # Lógica para reiniciar el estado de la UI si se cambia de modo
