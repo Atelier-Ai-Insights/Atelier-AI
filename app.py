@@ -869,7 +869,7 @@ def main():
         concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa":
         grounded_chat_mode(db_filtered, selected_files)
-    elif modo == "Evaluar una Pre-Idea":
+    elif modo == "Evaluar una idea":
         idea_evaluator_mode(db_filtered, selected_files)
 
 if __name__ == "__main__":
