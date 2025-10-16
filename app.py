@@ -115,7 +115,7 @@ safety_settings = [
 
 def create_model():
     return genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
+        model_name="gemini-1.5-flash",
         generation_config=generation_config,
         safety_settings=safety_settings,
     )
@@ -782,19 +782,20 @@ def main():
 
 
     if base64_logo:
-        # Inyecta CSS y HTML para el logo fijo
+        # Inyecta CSS y HTML para el logo fijo, centrado y con más espacio
         st.markdown(
             f"""
             <style>
                 #logo-container {{
                     position: fixed;
                     top: 0;
-                    left: 0;
-                    width: 100%;
-                    padding: 10px 0 10px 40px;
+                    left: 305px;      /* Desplazado para no quedar tras la barra lateral */
+                    right: 0;
+                    padding: 20px 0;  /* Franja más alta (más espacio vertical) */
                     background-color: #FFFFFF;
                     border-bottom: 1px solid #e6e6e6;
                     z-index: 999;
+                    text-align: center; /* Logo centrado dentro de la franja */
                 }}
             </style>
             
@@ -804,8 +805,8 @@ def main():
             """,
             unsafe_allow_html=True
         )
-        # Añade espacio para que el contenido no quede oculto tras el logo
-        st.markdown("<br><br><br><br>", unsafe_allow_html=True)
+        # Añade más espacio para que el contenido no quede oculto tras el logo
+        st.markdown("<br><br><br><br><br><br>", unsafe_allow_html=True)
     else:
         # Si el logo no se encuentra, muestra el título como antes
         st.title("Atelier Data Studio")
