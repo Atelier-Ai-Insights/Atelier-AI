@@ -46,16 +46,13 @@ PLAN_FEATURES = {
 # ==============================
 # Autenticación Personalizada
 # ==============================
-### MODIFICADO ### - Lógica de login para manejar usuarios y clientes por separado
 def show_login():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.header("Iniciar Sesión")
-        # Ahora pedimos el correo electrónico en lugar del nombre de usuario
         email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
         password = st.text_input("Contraseña", type="password", placeholder="****")
         if st.button("Ingresar"):
-            # Hacemos una consulta que une la tabla de usuarios con la de clientes
             response = supabase.table("users").select("*, clients(client_name, plan)").eq("email", email).eq("password", password).execute()
 
             if response.data:
@@ -66,11 +63,8 @@ def show_login():
                     st.error("Error: Usuario no está asociado a ningún cliente.")
                     return
 
-                # Guardamos la información en el estado de la sesión
                 st.session_state.logged_in = True
-                st.session_state.user = user_data['email'] # El 'user' ahora es el email
-                
-                # ¡Esta es la parte clave! El "cliente" para los filtros viene de la tabla de clientes
+                st.session_state.user = user_data['email']
                 st.session_state.cliente = client_info['client_name'].lower()
                 
                 user_plan = client_info.get('plan', 'Explorer')
@@ -141,7 +135,6 @@ def get_daily_usage(username, action_type):
 
 # ==============================
 # FUNCIONES AUXILIARES Y DE PDF
-# (Sin cambios en esta sección)
 # ==============================
 def normalize_text(text):
     if not text: return ""
@@ -255,7 +248,6 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None):
 
 # =====================================================
 # MODOS DE LA APLICACIÓN
-# (Sin cambios en las funciones de modo: report_mode, grounded_chat_mode, etc.)
 # =====================================================
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
@@ -268,20 +260,152 @@ def generate_final_report(question, db, selected_files):
     return f"{question}\n\n" + result2
     
 def report_mode(db, selected_files):
-    #...código de la función...
-    pass
+    st.markdown("### Generar Reporte de Reportes")
+    if "report" in st.session_state and st.session_state["report"]:
+        st.markdown("---")
+        st.markdown("### Informe Generado")
+        st.markdown(st.session_state["report"])
+        st.markdown("---")
+    question = st.text_area("Escribe tu consulta para el reporte…", value="", height=150, key="report_question")
+    if st.button("Generar Reporte"):
+        report_limit = st.session_state.plan_features['reports_per_month']
+        current_reports = get_monthly_usage(st.session_state.user, "Generar un reporte de reportes")
+        if current_reports >= report_limit:
+            st.error(f"Has alcanzado tu límite de {int(report_limit)} reportes este mes.")
+            st.warning("🚀 ¡Actualiza tu plan para generar más reportes!")
+            return
+        if not question.strip():
+            st.warning("Por favor, ingresa una consulta para generar el reporte.")
+        else:
+            st.session_state["last_question"] = question
+            with st.spinner("Generando informe..."):
+                report = generate_final_report(question, db, selected_files)
+            if report is None:
+                st.error("No se pudo generar el informe.")
+                st.session_state.pop("report", None)
+            else:
+                st.session_state["report"] = report
+                log_query_event(question, mode="Generar un reporte de reportes")
+            st.rerun()
+    if "report" in st.session_state and st.session_state["report"]:
+        pdf_bytes = generate_pdf_html(st.session_state["report"], title="Informe Final", banner_path=banner_file)
+        col1, col2 = st.columns(2)
+        with col1:
+            if pdf_bytes: st.download_button("Descargar Informe en PDF", data=pdf_bytes, file_name="Informe_AtelierIA.pdf", mime="application/pdf", use_container_width=True)
+        with col2:
+            st.button("Nueva consulta", on_click=reset_report_workflow, key="new_report_query_btn", use_container_width=True)
+
 def grounded_chat_mode(db, selected_files):
-    #...código de la función...
-    pass
+    st.subheader("Chat de Consulta Directa")
+    st.markdown("Realiza preguntas específicas y obtén respuestas concretas basadas únicamente en los hallazgos de los informes seleccionados.")
+    if "chat_history" not in st.session_state: st.session_state.chat_history = []
+    for msg in st.session_state.chat_history: st.markdown(f"**{msg['role'].capitalize()}:** {msg['message']}")
+    user_input = st.text_area("Escribe tu pregunta...", height=150)
+    if st.button("Enviar Pregunta"):
+        query_limit = st.session_state.plan_features['chat_queries_per_day']
+        current_queries = get_daily_usage(st.session_state.user, "Chat de Consulta Directa")
+        if current_queries >= query_limit:
+            st.error(f"Has alcanzado tu límite de {int(query_limit)} consultas diarias.")
+            st.warning("🚀 ¡Actualiza tu plan para tener consultas ilimitadas!")
+            return
+        if not user_input.strip():
+            st.warning("Por favor, ingresa una pregunta para continuar.")
+        else:
+            st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
+            relevant_info = get_relevant_info(db, user_input, selected_files)
+            conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history)
+            grounded_prompt = f"**Tarea:** Eres un **asistente de Inteligencia Artificial**...\n**Historial de la Conversación:**\n{conversation_history}\n**Información documentada en los reportes:**\n{relevant_info}\n**Instrucciones Estrictas:**..."
+            with st.spinner("Buscando en los reportes..."):
+                response = call_gemini_api(grounded_prompt)
+            if response:
+                st.session_state.chat_history.append({"role": "Asistente", "message": response})
+                log_query_event(user_input, mode="Chat de Consulta Directa")
+                st.rerun()
+            else:
+                st.error("Error al generar la respuesta.")
+    if st.session_state.chat_history:
+        pdf_bytes = generate_pdf_html("\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history), title="Historial de Consulta Directa", banner_path=banner_file)
+        if pdf_bytes: st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat_consulta.pdf", mime="application/pdf")
+        st.button("Nueva Conversación", on_click=reset_chat_workflow, key="new_grounded_chat_btn")
+
 def ideacion_mode(db, selected_files):
-    #...código de la función...
-    pass
+    st.subheader("Conversaciones Creativas")
+    st.markdown("Este es un espacio para explorar ideas novedosas. Basado en los hallazgos, el asistente te ayudará a generar conceptos creativos.")
+    if "chat_history" not in st.session_state: st.session_state.chat_history = []
+    for msg in st.session_state.chat_history: st.markdown(f"**{msg['role'].capitalize()}:** {msg['message']}")
+    user_input = st.text_area("Lanza una idea o pregunta para iniciar la conversación...", height=150)
+    if st.button("Enviar"):
+        if not user_input.strip():
+            st.warning("Por favor, ingresa tu pregunta para continuar.")
+        else:
+            st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
+            relevant = get_relevant_info(db, user_input, selected_files)
+            conv_prompt = f"Historial de conversación:\n" + "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history) + f"\n\nInformación de contexto:\n{relevant}\n\nInstrucciones:\n- Responde de forma creativa..."
+            with st.spinner("Generando respuesta creativa..."):
+                resp = call_gemini_api(conv_prompt)
+            if resp:
+                st.session_state.chat_history.append({"role": "Asistente", "message": resp})
+                log_query_event(user_input, mode="Conversaciones creativas")
+                st.rerun()
+            else:
+                st.error("Error al generar la respuesta.")
+    if st.session_state.chat_history:
+        pdf_bytes = generate_pdf_html("\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history), title="Historial de Chat Creativo", banner_path=banner_file)
+        if pdf_bytes: st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat_creativo.pdf", mime="application/pdf")
+        st.button("Nueva conversación", on_click=reset_chat_workflow, key="new_chat_btn")
+
 def concept_generation_mode(db, selected_files):
-    #...código de la función...
-    pass
+    st.subheader("Generación de Conceptos")
+    st.markdown("A partir de una idea inicial y los hallazgos, generaremos un concepto de producto o servicio.")
+    product_idea = st.text_area("Describe tu idea de producto o servicio:", height=150, placeholder="Ej: Un snack saludable para niños...")
+    if st.button("Generar Concepto"):
+        if not product_idea.strip():
+            st.warning("Por favor, describe tu idea para continuar.")
+        else:
+            with st.spinner("Analizando hallazgos y generando el concepto..."):
+                context_info = get_relevant_info(db, product_idea, selected_files)
+                prompt = f"**Tarea:** Eres un estratega de innovación...\n**Idea de Producto del Usuario:**\n\"{product_idea}\"\n**Contexto:**\n\"{context_info}\"\n**Instrucciones:**..."
+                response = call_gemini_api(prompt)
+                if response:
+                    st.session_state.generated_concept = response
+                    log_query_event(product_idea, mode="Generación de conceptos")
+                else:
+                    st.error("No se pudo generar el concepto.")
+    if "generated_concept" in st.session_state:
+        st.markdown("---")
+        st.markdown("### Concepto Generado")
+        st.markdown(st.session_state.generated_concept)
+        if st.button("Generar un nuevo concepto"):
+            st.session_state.pop("generated_concept")
+            st.rerun()
+
 def idea_evaluator_mode(db, selected_files):
-    #...código de la función...
-    pass
+    st.subheader("Evaluación de Pre-Ideas")
+    st.markdown("Presenta una idea y el asistente la evaluará contra los hallazgos, indicando su potencial.")
+    if "evaluation_result" in st.session_state:
+        st.markdown("---")
+        st.markdown("### Evaluación de la Idea")
+        st.markdown(st.session_state.evaluation_result)
+        if st.button("Evaluar otra idea"):
+            del st.session_state["evaluation_result"]
+            st.rerun()
+    else:
+        idea_input = st.text_area("Describe la idea que quieres evaluar:", height=150, placeholder="Ej: Una línea de yogures con probióticos...")
+        if st.button("Evaluar Idea"):
+            if not idea_input.strip():
+                st.warning("Por favor, describe una idea para continuar.")
+            else:
+                with st.spinner("Evaluando el potencial de la idea..."):
+                    context_info = get_relevant_info(db, idea_input, selected_files)
+                    prompt = f"**Tarea:** Eres un estratega de mercado...\n**Idea a Evaluar:**\n\"{idea_input}\"\n**Contexto:**\n\"{context_info}\"\n**Instrucciones:**..."
+                    response = call_gemini_api(prompt)
+                    if response:
+                        st.session_state.evaluation_result = response
+                        log_query_event(idea_input, mode="Evaluación de Idea")
+                        st.rerun()
+                    else:
+                        st.error("No se pudo generar la evaluación.")
+
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
@@ -292,9 +416,6 @@ def main():
     st.sidebar.image("LogoDataStudio.png")
     
     try:
-        # ¡IMPORTANTE! Esta función ahora usa st.session_state.cliente,
-        # que es establecido correctamente por la nueva función de login.
-        # No se necesita ningún cambio aquí.
         db_full = load_database(st.session_state.cliente)
     except Exception as e:
         st.error(f"Error crítico al cargar la base de datos: {e}")
