@@ -111,7 +111,6 @@ def call_gemini_api(prompt):
         response = model.generate_content([prompt])
         return html.unescape(response.text)
     except Exception as e:
-        # Esto imprimirá el error detallado en la ventana de la terminal
         print("----------- ERROR DETALLADO DE GEMINI -----------")
         print(e)
         print("-----------------------------------------------")
@@ -257,9 +256,6 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None):
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
     
-    # Imprimimos el tamaño de la información de contexto para ver si es demasiado grande
-    print(f"DIAGNÓSTICO: El tamaño de 'relevant_info' es de {len(relevant_info)} caracteres.")
-
     # Prompt 1: Extrae hallazgos clave y referencias.
     prompt1 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
@@ -280,12 +276,8 @@ def generate_final_report(question, db, selected_files):
         "- [1] [Referencia completa]\n"
         "- [2] [Referencia completa]\n"
     )
-    print("DIAGNÓSTICO: Intentando llamar a la API con prompt1.")
     result1 = call_gemini_api(prompt1)
-    if result1 is None: 
-        print("DIAGNÓSTICO: La llamada con prompt1 falló.")
-        return None
-    print("DIAGNÓSTICO: La llamada con prompt1 fue exitosa.")
+    if result1 is None: return None
 
     # Prompt 2: Redacta el informe principal.
     prompt2 = (
@@ -318,12 +310,8 @@ def generate_final_report(question, db, selected_files):
         f"Información de Contexto Adicional (si es necesaria para complementar el resumen):\n{relevant_info}\n\n"
         "Por favor, redacta el informe completo respetando la estructura y las instrucciones, en un estilo profesional, claro, conciso y coherente."
     )
-    print("DIAGNÓSTICO: Intentando llamar a la API con prompt2.")
     result2 = call_gemini_api(prompt2)
-    if result2 is None:
-        print("DIAGNÓSTICO: La llamada con prompt2 falló.")
-        return None
-    print("DIAGNÓSTICO: La llamada con prompt2 fue exitosa.")
+    if result2 is None: return None
     
     informe_completo = f"{question}\n\n" + result2
     return informe_completo
@@ -350,16 +338,13 @@ def report_mode(db, selected_files):
             with st.spinner("Generando informe..."):
                 report = generate_final_report(question, db, selected_files)
             
-            ### CORRECCIÓN CLAVE AQUÍ ###
             if report is None:
-                # Si falla, muestra el error y NO recargues la página.
                 st.error("No se pudo generar el informe. Revisa la terminal para ver el error detallado.")
                 st.session_state.pop("report", None)
             else:
-                # Si tiene éxito, guarda el reporte y AHORA SÍ recarga la página.
                 st.session_state["report"] = report
                 log_query_event(question, mode="Generar un reporte de reportes")
-                st.rerun() # <-- st.rerun() se movió aquí adentro.
+                st.rerun()
 
     if "report" in st.session_state and st.session_state["report"]:
         pdf_bytes = generate_pdf_html(st.session_state["report"], title="Informe Final", banner_path=banner_file)
@@ -388,7 +373,19 @@ def grounded_chat_mode(db, selected_files):
             st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
             relevant_info = get_relevant_info(db, user_input, selected_files)
             conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history)
-            grounded_prompt = f"**Tarea:** Eres un **asistente de Inteligencia Artificial**...\n**Historial de la Conversación:**\n{conversation_history}\n**Información documentada en los reportes:**\n{relevant_info}\n**Instrucciones Estrictas:**..."
+            grounded_prompt = (
+                f"**Tarea:** Eres un **asistente de Inteligencia Artificial**. Tu misión es **sintetizar** y **articular** información proveniente de múltiples estudios de mercado para ofrecer una respuesta concreta a la pregunta formulada, de manera clara, completa y bien articulada. Tu única fuente de conocimiento es la 'Información documentada en los reportes' proporcionada.\n\n"
+                f"**Historial de la Conversación:**\n{conversation_history}\n\n"
+                f"**Información documentada en los reportes (Única fuente de verdad):**\n{relevant_info}\n\n"
+                "**Instrucciones Estrictas:**\n"
+                "1.  **Síntesis Integral (Instrucción Clave):** Tu objetivo principal es conectar y relacionar hallazgos de **TODOS los reportes relevantes** para construir una respuesta completa. Asegúrate de agrupar los hallazgos por temas que respondan a la pregunta del cliente y que sume valor para responder a la pregunta.\n"
+                "2.  **Estructura de la Respuesta:** Redacta un parrafo corto dando una respuesta corta clara y concreta a la solicitud realizada incluyendo principalmente hallazgos que sustenten la respuesta que se da para responder la pregunta. Utiliza solo información relevante asociada a los hallazgos. NO utilices información de la metodología ni de los objetivos, solo utiliza información relacionada en los hallazgos.\n"
+                "3.  **Fidelidad Absoluta:** Basa tu respuesta EXCLUSIVAMENTE en la 'Información documentada en los reportes'. NO utilices conocimiento externo ni hagas suposiciones.\n"
+                "4.  **Manejo de Información Faltante:** Si la respuesta no se encuentra en el contexto, indica claramente: \"La información solicitada no se encuentra disponible en los documentos analizados.\" No intentes inventar una respuesta.\n"
+                "5.  **Identificación de la marca y el producto EXACTO:** Cuando se pregunte por una marca (ejemplo: oreo) o por una categoría (ejemplo: galletas saladas) siempre traer información ÚNICAMENTE de los reportes relacionados. Identifica en la pregunta la marca y/o el producto exacto sobre el cual se hace la consulta y sé muy específico y riguroso al incluir y referenciar la información asociada a la marca y/o producto mencionado en la consulta (por ejemplo: diferenciar galletas dulces de galletas saladas).\n"
+                "6.  **Referencias:** NO es necesario citar las fuentes, esto para garantizar que la lectura sea fuída.\n\n"
+                "**Respuesta:**"
+            )
             with st.spinner("Buscando en los reportes..."):
                 response = call_gemini_api(grounded_prompt)
             if response:
@@ -414,7 +411,17 @@ def ideacion_mode(db, selected_files):
         else:
             st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
             relevant = get_relevant_info(db, user_input, selected_files)
-            conv_prompt = f"Historial de conversación:\n" + "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history) + f"\n\nInformación de contexto:\n{relevant}\n\nInstrucciones:\n- Responde de forma creativa..."
+            conv_prompt = (
+                "Historial de conversación:\n"
+                + "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history)
+                + "\n\nInformación de contexto:\n" + relevant
+                + "\n\nInstrucciones:\n"
+                "- Responde usando únicamente la sección de resultados de los reportes.\n"
+                "- Responde de forma creativa, eres un experto en marketing, así que ayudarás al usuario que esta hablando contigo a conversar con sus datos para ofrecerle una solución creativa a su problema o situación, esto lo harás basado en la información y en los datos que hay sobre la temática que te está solicitando. comienza siempre dando un breve resumen de los proyectos relacionados con la solicitud\n"
+                "- Escribe de forma clara, sintética y concreta\n"
+                "- Incluye citas numeradas al estilo IEEE (por ejemplo, [1]).\n\n"
+                "Respuesta detallada:"
+            )
             with st.spinner("Generando respuesta creativa..."):
                 resp = call_gemini_api(conv_prompt)
             if resp:
@@ -438,7 +445,22 @@ def concept_generation_mode(db, selected_files):
         else:
             with st.spinner("Analizando hallazgos y generando el concepto..."):
                 context_info = get_relevant_info(db, product_idea, selected_files)
-                prompt = f"**Tarea:** Eres un estratega de innovación...\n**Idea de Producto del Usuario:**\n\"{product_idea}\"\n**Contexto:**\n\"{context_info}\"\n**Instrucciones:**..."
+                prompt = (
+                    f"**Tarea:** Eres un estratega de innovación y marketing. A partir de una idea de producto y un contexto de estudios de mercado, debes desarrollar un concepto de producto o servicio estructurado.\n\n"
+                    f'**Idea de Producto del Usuario:**\n"{product_idea}"\n\n'
+                    f'**Contexto (Hallazgos de Estudios de Mercado):**\n"{context_info}"\n\n'
+                    "**Instrucciones:**\n"
+                    "Genera una respuesta en formato Markdown con la siguiente estructura exacta. Basa tus respuestas en los hallazgos relevantes del contexto proporcionado. Sé claro, conciso y accionable.\n\n"
+                    "---\n\n"
+                    "### 1. Definición de la Necesidad del Consumidor\n"
+                    "* Identifica y describe las tensiones, deseos o problemas clave de los consumidores que se encuentran en el **Contexto de los estudios**. Conecta estos hallazgos con la oportunidad para la idea de producto o servicio.\n\n"
+                    "### 2. Descripción del Producto\n"
+                    "* Basado en la **Idea del Usuario**, describe el producto o servicio propuesto. Detalla sus características principales y cómo funcionaría. Sé creativo pero mantente anclado en la necesidad insatisfecha detectada.\n\n"
+                    "### 3. Beneficios Clave\n"
+                    "* Enumera 3-4 beneficios principales del producto. Cada beneficio debe responder directamente a una de las necesidades del consumidor identificadas en el punto 1 y estar sustentado por la evidencia del **Contexto**. Los beneficios pueden ser funcionales, racionales o emocionales.\n\n"
+                    "### 4. Conceptos para evaluar\n"
+                    "* Entrega dos opciones de concepto resumido. Estos deben ser memorables y para su redacción se deben considerar tres frases o párrafos: Insight (primero decir el dolor del consumidor y luego especificar lo que le gustaría tener como resultado), What (Caracteristicas y beneficios del producto o servicio), Reason To Belive (por qué el producto puede resolver la tensión). Cierra el resumen con un claim, este debe captar la esencia del producto o servidio y se debe redactar de manera sucinta: corto pero con con mucho significado."
+                )
                 response = call_gemini_api(prompt)
                 if response:
                     st.session_state.generated_concept = response
@@ -471,7 +493,20 @@ def idea_evaluator_mode(db, selected_files):
             else:
                 with st.spinner("Evaluando el potencial de la idea..."):
                     context_info = get_relevant_info(db, idea_input, selected_files)
-                    prompt = f"**Tarea:** Eres un estratega de mercado...\n**Idea a Evaluar:**\n\"{idea_input}\"\n**Contexto:**\n\"{context_info}\"\n**Instrucciones:**..."
+                    prompt = (
+                        f"**Tarea:** Eres un estratega de mercado y analista de innovación. Tu objetivo es evaluar el potencial de una idea de producto o servicio, basándote exclusivamente en los hallazgos de un conjunto de estudios de mercado.\n\n"
+                        f'**Idea a Evaluar:**\n"{idea_input}"\n\n'
+                        f'**Contexto (Hallazgos de Estudios de Mercado):**\n"{context_info}"\n\n'
+                        "**Instrucciones:**\n"
+                        "Genera una evaluación estructurada y razonada en formato Markdown. Sigue esta estructura exacta y basa cada punto en la información del 'Contexto'. Mencionar de manera general que la evaluación se estructura a través de estudios realizados por Atelier, no es necesario incluir citas.\n\n"
+                        "---\n\n"
+                        "### 1. Valoración del Potencial\n"
+                        "* Resume en una frase el potencial de la idea (ej: \"Potencial Alto\", \"Potencial Moderado con Desafíos\", \"Bajo Potencial\").\n\n"
+                        "### 2. Sustento de la Valoración\n"
+                        "* Justifica tu valoración conectando la idea con las necesidades, tensiones o deseos clave encontrados en los reportes. Detalla los hallazgos específicos (positivos y negativos) que sustentan tu conclusión. NO es necesario citar las fuentes, esto para garantizar que la lectura sea fuída.\n\n"
+                        "### 3. Sugerencias para la Evaluación con Consumidor\n"
+                        "* Basado en los hallazgos y en los posibles vacíos de información, proporciona una lista de 3 a 4 hipótesis, acompañadas de una pregunta clave que se deberían validar al momento de evaluar la idea directamente con los consumidores, y luego decir en qué aporta esa pregunta."
+                    )
                     response = call_gemini_api(prompt)
                     if response:
                         st.session_state.evaluation_result = response
