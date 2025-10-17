@@ -250,10 +250,10 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None):
 # MODOS DE LA APLICACIÓN
 # =====================================================
 
-### MODIFICADO ### - Se restauraron los prompts completos en esta función.
+### CORREGIDO ### - Se restauraron los prompts completos en esta función.
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
-    
+
     # Prompt 1: Extrae hallazgos clave y referencias.
     prompt1 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
@@ -310,7 +310,7 @@ def generate_final_report(question, db, selected_files):
     )
     result2 = call_gemini_api(prompt2)
     if result2 is None: return None
-    
+
     informe_completo = f"{question}\n\n" + result2
     return informe_completo
     
