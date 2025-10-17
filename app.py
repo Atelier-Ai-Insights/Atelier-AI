@@ -249,15 +249,70 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None):
 # =====================================================
 # MODOS DE LA APLICACIÓN
 # =====================================================
+
+### MODIFICADO ### - Se restauraron los prompts completos en esta función.
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
-    prompt1 = f"Pregunta del Cliente: ***{question}***\n\nInstrucciones:\n1. Identifica en la pregunta la marca exacta...\nInformación de Contexto:\n{relevant_info}\n\nRespuesta (Hallazgos Clave y Referencias):..."
+    
+    # Prompt 1: Extrae hallazgos clave y referencias.
+    prompt1 = (
+        f"Pregunta del Cliente: ***{question}***\n\n"
+        "Instrucciones:\n"
+        "1. Identifica en la pregunta la marca exacta y/o el producto exacto sobre el cual se hace la consulta. Sé muy específico y riguroso en referenciar información asociada a la marca y/o producto consultado.\n"
+        f"2. Reitera la pregunta del cliente: ***{question}***.\n"
+        "3. Utiliza la 'Información de Contexto' (únicamente extractos de documentos de investigación) para extraer los hallazgos más relevantes que respondan directamente a la pregunta. Cuando se pregunte por una marca (ejemplo: oreo) siempre traer información de todos los reportes relacionados.\n"
+        "4. No incluyas el texto completo de las citas, sino extractos breves que permitan identificar la fuente.\n"
+        "5. Incluye metadatos relevantes (documentos, grupos, etc.) e indica en cada hallazgo si la cita sigue el estilo IEEE (ejemplo: [1]).\n"
+        "6. En la sección 'Referencias', asocia cada número a la referencia completa, no escribas el nombre del archivo, sino el título del proyecto (ejemplo: [1] 'Título del Proyecto', año, etc.). Siempre provee las referencias citadas.\n"
+        "7. Enfócate en los resultados y hallazgos positivos de los estudios, asumiendo que todos son estudios realizados.\n\n"
+        f"Información de Contexto:\n{relevant_info}\n\n"
+        "Respuesta (Hallazgos Clave y Referencias):\n"
+        "## Hallazgos Clave:\n"
+        "- [Hallazgo 1 con cita IEEE]\n"
+        "- [Hallazgo 2 con cita IEEE]\n"
+        "## Referencias:\n"
+        "- [1] [Referencia completa]\n"
+        "- [2] [Referencia completa]\n"
+    )
     result1 = call_gemini_api(prompt1)
     if result1 is None: return None
-    prompt2 = f"Pregunta del Cliente: ***{question}***\n\nInstrucciones Generales:\n1. Identifica en la pregunta la marca...\nResumen de Hallazgos Clave y Referencias:\n{result1}\n\nInformación de Contexto Adicional:\n{relevant_info}\n\nPor favor, redacta el informe completo..."
+
+    # Prompt 2: Redacta el informe principal.
+    prompt2 = (
+        f"Pregunta del Cliente: ***{question}***\n\n"
+        "Instrucciones Generales:\n"
+        "1. Identifica en la pregunta la marca y/o el producto exacto. Responde de manera específica y rigurosa a lo que el cliente pregunta.\n"
+        "2. Recuerda que todos los estudios en la base de datos fueron realizados por Atelier. Menciónalo si es relevante, especialmente en 'Principales Hallazgos'.\n"
+        "3. Actúa como un analista experto en ciencias del comportamiento, en investigación de mercados, en marketing y en comunicación estratégica. Enfócate en claridad, síntesis poderosa y pensamiento estructurado.\n"
+        "4. El estilo de redacción debe ser claro, directo, conciso y memorable (inspirado en “Ideas que pegan” de Chip Heath y Dan Heath). Evita lenguaje técnico innecesario; prioriza lo relevante y accionable.\n\n"
+        "Estructura del Informe (sé breve y preciso en cada sección):\n\n"
+        "Introducción:\n"
+        "   - Preserva esta sección. Plantea el contexto y la pregunta central. Usa un hallazgo relevante (de tipo cualitativo que provenga de los reportes seleccionados), para captar la atención y despierte interés por querer leer el informe.\n\n"
+        "Principales Hallazgos:\n"
+        "   - Presenta de forma estructurada los hechos más relevantes descubiertos, directamente desde la sección de resultados de los diferentes reportes y la información de contexto.\n"
+        "   - Asegúrate de que cada hallazgo responda a la pregunta del cliente y ofrezca valor original y que sume valor para responder a la pregunta.\n"
+        "   - Utiliza solo información relevante y que haga referencia a la marca y al producto citados. No utilices estudios de forma innecesaria.\n"
+        "   - Referencia en formato IEEE (ej. [1]), usando el título del estudio o el producto del que se habla, más que el nombre del archivo.\n\n"
+        "Insights:\n"
+        "   - Extrae aprendizajes y verdades profundas a partir de los hallazgos. Utiliza analogías y comparaciones que refuercen el mensaje y transformen la comprensión del problema. Sé conciso. Utiliza frases suscitantas, es decir, frase cortas con mucho significado\n\n"
+        "Conclusiones:\n"
+        "   - Sintetiza la información y ofrece una dirección clara basada en los insights. Evita repetir información.\n\n"
+        "Recomendaciones:\n"
+        "   - Con base en el informe, proporciona 3-4 recomendaciones concretas, creativas, precisas y accionables que sirvan como inspiración para la toma de decisiones.\n"
+        "   - Deben estar alineadas con los insights y conclusiones. Evita la extensión innecesaria.\n\n"
+        "Referencias:\n"
+        "   - Cita el título del estudio (no el nombre del archivo), utilizando la información de la primera diapositiva o metadatos disponibles.\n\n"
+        "Utiliza el siguiente resumen (Hallazgos Clave y Referencias) y la Información de Contexto para elaborar el informe:\n\n"
+        "5. MUY IMPORTANTE: Asegúrate de que los nombres de marcas y productos estén correctamente espaciados del texto circundante. Por ejemplo, escribe 'la marca Crem Helado debe...' en lugar de 'lamarcaCrem Heladodebe...'. Presta especial atención a este detalle de formato para asegurar la legibilidad.\n\n"
+        f"Resumen de Hallazgos Clave y Referencias:\n{result1}\n\n"
+        f"Información de Contexto Adicional (si es necesaria para complementar el resumen):\n{relevant_info}\n\n"
+        "Por favor, redacta el informe completo respetando la estructura y las instrucciones, en un estilo profesional, claro, conciso y coherente."
+    )
     result2 = call_gemini_api(prompt2)
     if result2 is None: return None
-    return f"{question}\n\n" + result2
+    
+    informe_completo = f"{question}\n\n" + result2
+    return informe_completo
     
 def report_mode(db, selected_files):
     st.markdown("### Generar Reporte de Reportes")
