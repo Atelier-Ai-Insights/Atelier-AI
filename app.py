@@ -57,6 +57,7 @@ def show_signup_page():
     email = st.text_input("Tu Correo Electrónico")
     password = st.text_input("Crea una Contraseña", type="password")
 
+    # Obtener la lista de clientes para el dropdown
     clients_response = supabase.table("clients").select("id, client_name").execute()
     clients_data = clients_response.data
     client_options = {client['client_name']: client['id'] for client in clients_data}
@@ -69,11 +70,13 @@ def show_signup_page():
             return
         
         try:
+            # 1. Registra al usuario en el sistema de autenticación de Supabase
             auth_response = supabase.auth.sign_up({
                 "email": email,
                 "password": password,
             })
             
+            # 2. Inserta el perfil del usuario en tu tabla 'users'
             new_user_id = auth_response.user.id
             selected_client_id = client_options[selected_client_name]
 
@@ -96,6 +99,7 @@ def show_login_page():
 
     if st.button("Ingresar"):
         try:
+            # 1. Autentica al usuario con Supabase Auth
             response = supabase.auth.sign_in_with_password({
                 "email": email,
                 "password": password
@@ -103,6 +107,7 @@ def show_login_page():
             
             user_id = response.user.id
 
+            # 2. Busca el perfil del usuario para obtener el cliente
             user_profile = supabase.table("users").select("*, clients(client_name, plan)").eq("id", user_id).single().execute()
             
             if user_profile.data and user_profile.data.get('clients'):
@@ -296,7 +301,6 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None):
 # =====================================================
 # MODOS DE LA APLICACIÓN
 # =====================================================
-
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
     prompt1 = (
