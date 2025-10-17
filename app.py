@@ -66,6 +66,7 @@ def show_signup_page():
             st.error("Por favor, completa todos los campos.")
             return
         
+        # --- INICIO DEL CÓDIGO ACTUALIZADO ---
         try:
             # 1. Busca el cliente que corresponde al código de invitación
             client_response = supabase.table("clients").select("id").eq("invite_code", invite_code).single().execute()
@@ -76,7 +77,7 @@ def show_signup_page():
 
             selected_client_id = client_response.data['id']
 
-            # 2. Registra al usuario pasándole el client_id en los metadatos para el trigger
+            # 2. Registra al usuario
             auth_response = supabase.auth.sign_up({
                 "email": email,
                 "password": password,
@@ -89,8 +90,26 @@ def show_signup_page():
             
             st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
 
+        # --- MEJORA ---
+        # Captura la excepción específica de la API de Supabase si la tienes, 
+        # o inspecciona el error general.
         except Exception as e:
-            st.error(f"Error en el registro: Es posible que el correo ya esté en uso.")
+            # Imprime el error real en tu terminal para que puedas depurarlo
+            print(f"Error detallado de Supabase Auth: {e}")
+            
+            error_message = str(e)
+
+            # Da un feedback más específico al usuario
+            if "User already registered" in error_message:
+                st.error("Error: Este correo electrónico ya está registrado. Por favor, inicia sesión.")
+            elif "Password should be at least 6 characters" in error_message:
+                st.error("Error: La contraseña debe tener al menos 6 caracteres.")
+            elif "invite_code" in error_message: # Si fallara la búsqueda del código
+                st.error("Error: El código de invitación no es válido.")
+            else:
+                # Un error genérico si no lo identificamos
+                st.error("Error en el registro. Por favor, inténtalo de nuevo o contacta al administrador.")
+        # --- FIN DEL CÓDIGO ACTUALIZADO ---
 
 ### ¡MODIFICADO! ### - Lógica de login usando Supabase Auth
 def show_login_page():
@@ -475,166 +494,4 @@ def ideacion_mode(db, selected_files):
             else:
                 st.error("Error al generar la respuesta.")
     if st.session_state.chat_history:
-        pdf_bytes = generate_pdf_html("\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history), title="Historial de Chat Creativo", banner_path=banner_file)
-        if pdf_bytes: st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat_creativo.pdf", mime="application/pdf")
-        st.button("Nueva conversación", on_click=reset_chat_workflow, key="new_chat_btn")
-
-def concept_generation_mode(db, selected_files):
-    st.subheader("Generación de Conceptos")
-    st.markdown("A partir de una idea inicial y los hallazgos, generaremos un concepto de producto o servicio.")
-    product_idea = st.text_area("Describe tu idea de producto o servicio:", height=150, placeholder="Ej: Un snack saludable para niños...")
-    if st.button("Generar Concepto"):
-        if not product_idea.strip():
-            st.warning("Por favor, describe tu idea para continuar.")
-        else:
-            with st.spinner("Analizando hallazgos y generando el concepto..."):
-                context_info = get_relevant_info(db, product_idea, selected_files)
-                prompt = (
-                    f"**Tarea:** Eres un estratega de innovación y marketing. A partir de una idea de producto y un contexto de estudios de mercado, debes desarrollar un concepto de producto o servicio estructurado.\n\n"
-                    f'**Idea de Producto del Usuario:**\n"{product_idea}"\n\n'
-                    f'**Contexto (Hallazgos de Estudios de Mercado):**\n"{context_info}"\n\n'
-                    "**Instrucciones:**\n"
-                    "Genera una respuesta en formato Markdown con la siguiente estructura exacta. Basa tus respuestas en los hallazgos relevantes del contexto proporcionado. Sé claro, conciso y accionable.\n\n"
-                    "---\n\n"
-                    "### 1. Definición de la Necesidad del Consumidor\n"
-                    "* Identifica y describe las tensiones, deseos o problemas clave de los consumidores que se encuentran en el **Contexto de los estudios**. Conecta estos hallazgos con la oportunidad para la idea de producto o servicio.\n\n"
-                    "### 2. Descripción del Producto\n"
-                    "* Basado en la **Idea del Usuario**, describe el producto o servicio propuesto. Detalla sus características principales y cómo funcionaría. Sé creativo pero mantente anclado en la necesidad insatisfecha detectada.\n\n"
-                    "### 3. Beneficios Clave\n"
-                    "* Enumera 3-4 beneficios principales del producto. Cada beneficio debe responder directamente a una de las necesidades del consumidor identificadas en el punto 1 y estar sustentado por la evidencia del **Contexto**. Los beneficios pueden ser funcionales, racionales o emocionales.\n\n"
-                    "### 4. Conceptos para evaluar\n"
-                    "* Entrega dos opciones de concepto resumido. Estos deben ser memorables y para su redacción se deben considerar tres frases o párrafos: Insight (primero decir el dolor del consumidor y luego especificar lo que le gustaría tener como resultado), What (Caracteristicas y beneficios del producto o servicio), Reason To Belive (por qué el producto puede resolver la tensión). Cierra el resumen con un claim, este debe captar la esencia del producto o servidio y se debe redactar de manera sucinta: corto pero con con mucho significado."
-                )
-                response = call_gemini_api(prompt)
-                if response:
-                    st.session_state.generated_concept = response
-                    log_query_event(product_idea, mode="Generación de conceptos")
-                else:
-                    st.error("No se pudo generar el concepto.")
-    if "generated_concept" in st.session_state:
-        st.markdown("---")
-        st.markdown("### Concepto Generado")
-        st.markdown(st.session_state.generated_concept)
-        if st.button("Generar un nuevo concepto"):
-            st.session_state.pop("generated_concept")
-            st.rerun()
-
-def idea_evaluator_mode(db, selected_files):
-    st.subheader("Evaluación de Pre-Ideas")
-    st.markdown("Presenta una idea y el asistente la evaluará contra los hallazgos, indicando su potencial.")
-    if "evaluation_result" in st.session_state:
-        st.markdown("---")
-        st.markdown("### Evaluación de la Idea")
-        st.markdown(st.session_state.evaluation_result)
-        if st.button("Evaluar otra idea"):
-            del st.session_state["evaluation_result"]
-            st.rerun()
-    else:
-        idea_input = st.text_area("Describe la idea que quieres evaluar:", height=150, placeholder="Ej: Una línea de yogures con probióticos...")
-        if st.button("Evaluar Idea"):
-            if not idea_input.strip():
-                st.warning("Por favor, describe una idea para continuar.")
-            else:
-                with st.spinner("Evaluando el potencial de la idea..."):
-                    context_info = get_relevant_info(db, idea_input, selected_files)
-                    prompt = (
-                        f"**Tarea:** Eres un estratega de mercado y analista de innovación. Tu objetivo es evaluar el potencial de una idea de producto o servicio, basándote exclusivamente en los hallazgos de un conjunto de estudios de mercado.\n\n"
-                        f'**Idea a Evaluar:**\n"{idea_input}"\n\n'
-                        f'**Contexto (Hallazgos de Estudios de Mercado):**\n"{context_info}"\n\n'
-                        "**Instrucciones:**\n"
-                        "Genera una evaluación estructurada y razonada en formato Markdown. Sigue esta estructura exacta y basa cada punto en la información del 'Contexto'. Mencionar de manera general que la evaluación se estructura a través de estudios realizados por Atelier, no es necesario incluir citas.\n\n"
-                        "---\n\n"
-                        "### 1. Valoración del Potencial\n"
-                        "* Resume en una frase el potencial de la idea (ej: \"Potencial Alto\", \"Potencial Moderado con Desafíos\", \"Bajo Potencial\").\n\n"
-                        "### 2. Sustento de la Valoración\n"
-                        "* Justifica tu valoración conectando la idea con las necesidades, tensiones o deseos clave encontrados en los reportes. Detalla los hallazgos específicos (positivos y negativos) que sustentan tu conclusión. NO es necesario citar las fuentes, esto para garantizar que la lectura sea fuída.\n\n"
-                        "### 3. Sugerencias para la Evaluación con Consumidor\n"
-                        "* Basado en los hallazgos y en los posibles vacíos de información, proporciona una lista de 3 a 4 hipótesis, acompañadas de una pregunta clave que se deberían validar al momento de evaluar la idea directamente con los consumidores, y luego decir en qué aporta esa pregunta."
-                    )
-                    response = call_gemini_api(prompt)
-                    if response:
-                        st.session_state.evaluation_result = response
-                        log_query_event(idea_input, mode="Evaluación de Idea")
-                        st.rerun()
-                    else:
-                        st.error("No se pudo generar la evaluación.")
-
-# =====================================================
-# FUNCIÓN PRINCIPAL DE LA APLICACIÓN
-# =====================================================
-def main():
-    if 'page' not in st.session_state:
-        st.session_state.page = "login"
-
-    if not st.session_state.get("logged_in"):
-        col1, col2, col3 = st.columns([1,2,1])
-        with col2:
-            if st.session_state.page == "login":
-                show_login_page()
-            elif st.session_state.page == "signup":
-                show_signup_page()
-                if st.button("¿Ya tienes cuenta? Inicia Sesión"):
-                    st.session_state.page = "login"
-                    st.rerun()
-        st.stop()
-
-    st.sidebar.image("LogoDataStudio.png")
-    st.sidebar.write(f"Usuario: {st.session_state.user}")
-    st.sidebar.divider()
-    
-    try:
-        db_full = load_database(st.session_state.cliente)
-    except Exception as e:
-        st.error(f"Error crítico al cargar la base de datos: {e}")
-        st.stop()
-    
-    db_filtered = db_full[:]
-    user_features = st.session_state.plan_features
-    
-    modos_disponibles = ["Chat de Consulta Directa"]
-    if user_features.get("has_report_generation"): modos_disponibles.insert(0, "Generar un reporte de reportes")
-    if user_features.get("has_creative_conversation"): modos_disponibles.append("Conversaciones creativas")
-    if user_features.get("has_concept_generation"): modos_disponibles.append("Generación de conceptos")
-    if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
-
-    st.sidebar.header("Seleccione el modo de uso")
-    modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed")
-
-    if st.session_state.get('current_mode') != modo:
-        st.session_state.current_mode = modo
-        reset_chat_workflow()
-        st.session_state.pop("generated_concept", None)
-        st.session_state.pop("evaluation_result", None)
-
-    st.sidebar.header("Filtros de Búsqueda")
-    marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
-    selected_marcas = st.sidebar.multiselect("Seleccione la(s) marca(s):", marcas_options)
-    if selected_marcas: db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
-
-    years_options = sorted({doc.get("marca", "") for doc in db_full if doc.get("marca")})
-    selected_years = st.sidebar.multiselect("Seleccione el/los año(s):", years_options)
-    if selected_years: db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
-
-    brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered})
-    selected_brands = st.sidebar.multiselect("Seleccione el/los proyecto(s):", brands_options)
-    if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
-
-    # ### AJUSTE 2: Se elimina la opción de calificar el informe ###
-    # if modo == "Generar un reporte de reportes":
-    #     st.sidebar.radio("Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating")
-
-    if st.sidebar.button("Cerrar Sesión", key="logout_main"):
-        supabase.auth.sign_out()
-        st.session_state.clear()
-        st.rerun()
-
-    selected_files = [d.get("nombre_archivo") for d in db_filtered]
-
-    if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
-    elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
-    elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
-    elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
-    elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
-
-if __name__ == "__main__":
-    main()
+        pdf_bytes = generate_pdf_html("\n".join(f"**{
