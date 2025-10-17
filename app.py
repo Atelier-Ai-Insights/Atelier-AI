@@ -52,6 +52,7 @@ supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABAS
 # Autenticación con Supabase Auth
 # ==============================
 
+# --- INICIO DEL CÓDIGO NUEVO ---
 ### ¡NUEVO! ### - Página de Registro con Código de Invitación
 def show_signup_page():
     st.header("Crear Nueva Cuenta")
@@ -66,16 +67,19 @@ def show_signup_page():
             st.error("Por favor, completa todos los campos.")
             return
         
-        # --- INICIO DEL CÓDIGO ACTUALIZADO ---
         try:
             # 1. Busca el cliente que corresponde al código de invitación
-            client_response = supabase.table("clients").select("id").eq("invite_code", invite_code).single().execute()
+            # --- MEJORA ---
+            # Quitamos .single() para que no falle si no encuentra resultados
+            client_response = supabase.table("clients").select("id").eq("invite_code", invite_code).execute()
             
-            if not client_response.data:
+            # Verificamos si la lista 'data' está vacía
+            if not client_response.data or len(client_response.data) == 0:
                 st.error("El código de invitación no es válido.")
                 return
-
-            selected_client_id = client_response.data['id']
+            
+            # Si se encuentra, tomamos el id del primer resultado
+            selected_client_id = client_response.data[0]['id']
 
             # 2. Registra al usuario
             auth_response = supabase.auth.sign_up({
@@ -90,9 +94,6 @@ def show_signup_page():
             
             st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
 
-        # --- MEJORA ---
-        # Captura la excepción específica de la API de Supabase si la tienes, 
-        # o inspecciona el error general.
         except Exception as e:
             # Imprime el error real en tu terminal para que puedas depurarlo
             print(f"Error detallado de Supabase Auth: {e}")
@@ -104,12 +105,14 @@ def show_signup_page():
                 st.error("Error: Este correo electrónico ya está registrado. Por favor, inicia sesión.")
             elif "Password should be at least 6 characters" in error_message:
                 st.error("Error: La contraseña debe tener al menos 6 caracteres.")
-            elif "invite_code" in error_message: # Si fallara la búsqueda del código
+            # Añadimos un chequeo genérico para el código de invitación por si algo más falla
+            elif "invite_code" in error_message or "invalid" in error_message:
                 st.error("Error: El código de invitación no es válido.")
             else:
                 # Un error genérico si no lo identificamos
                 st.error("Error en el registro. Por favor, inténtalo de nuevo o contacta al administrador.")
-        # --- FIN DEL CÓDIGO ACTUALIZADO ---
+# --- FIN DEL CÓDIGO NUEVO ---
+
 
 ### ¡MODIFICADO! ### - Lógica de login usando Supabase Auth
 def show_login_page():
@@ -173,8 +176,8 @@ safety_settings = [
 ]
 
 def create_model():
-    # Asegúrate de usar un nombre de modelo válido, por ejemplo "gemini-2.5-flash"
-    return genai.GenerativeModel(model_name="gemini-2.5-flash", generation_config=generation_config, safety_settings=safety_settings)
+    # *** CORRECCIÓN CRÍTICA ***: El modelo se llama 'gemini-2.5-flash'
+    return genai.GenerativeModel(model_name="gemini-1.5-flash", generation_config=generation_config, safety_settings=safety_settings)
 
 model = create_model()
 
