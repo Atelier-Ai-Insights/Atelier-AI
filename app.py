@@ -565,9 +565,13 @@ def idea_evaluator_mode(db, selected_files):
 # =====================================================
 def main():
     if not st.session_state.get("logged_in"):
-        show_login_page()
+        # Se renombra 'show_login' a 'show_login_page' para consistencia
+        show_login_page() 
 
+    # --- Lógica de la aplicación principal cuando el usuario está logueado ---
     st.sidebar.image("LogoDataStudio.png")
+    st.sidebar.write(f"Usuario: {st.session_state.user}")
+    st.sidebar.divider()
     
     try:
         db_full = load_database(st.session_state.cliente)
@@ -610,8 +614,8 @@ def main():
         st.sidebar.radio("Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating")
 
     if st.sidebar.button("Cerrar Sesión", key="logout_main"):
+        supabase.auth.sign_out() # Se añade el logout de Supabase
         st.session_state.clear()
-        st.cache_data.clear()
         st.rerun()
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
