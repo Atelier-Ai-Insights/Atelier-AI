@@ -52,13 +52,11 @@ supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABAS
 # Autenticación con Supabase Auth
 # ==============================
 
-### ¡NUEVO! ### - Página de Registro
 def show_signup_page():
     st.header("Crear Nueva Cuenta")
     email = st.text_input("Tu Correo Electrónico")
     password = st.text_input("Crea una Contraseña", type="password")
 
-    # Obtener la lista de clientes para el dropdown
     clients_response = supabase.table("clients").select("id, client_name").execute()
     clients_data = clients_response.data
     client_options = {client['client_name']: client['id'] for client in clients_data}
@@ -71,13 +69,11 @@ def show_signup_page():
             return
         
         try:
-            # 1. Registra al usuario en el sistema de autenticación de Supabase
             auth_response = supabase.auth.sign_up({
                 "email": email,
                 "password": password,
             })
             
-            # 2. Inserta el perfil del usuario en tu tabla 'users'
             new_user_id = auth_response.user.id
             selected_client_id = client_options[selected_client_name]
 
@@ -93,7 +89,6 @@ def show_signup_page():
         except Exception as e:
             st.error(f"Error en el registro: Es posible que el correo ya esté en uso.")
 
-### ¡MODIFICADO! ### - Lógica de login usando Supabase Auth
 def show_login_page():
     st.header("Iniciar Sesión")
     email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
@@ -101,7 +96,6 @@ def show_login_page():
 
     if st.button("Ingresar"):
         try:
-            # 1. Autentica al usuario con Supabase Auth
             response = supabase.auth.sign_in_with_password({
                 "email": email,
                 "password": password
@@ -109,7 +103,6 @@ def show_login_page():
             
             user_id = response.user.id
 
-            # 2. Busca el perfil del usuario para obtener el cliente
             user_profile = supabase.table("users").select("*, clients(client_name, plan)").eq("id", user_id).single().execute()
             
             if user_profile.data and user_profile.data.get('clients'):
@@ -564,9 +557,22 @@ def idea_evaluator_mode(db, selected_files):
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
 def main():
+    # Inicializa el estado de la página si no existe
+    if 'page' not in st.session_state:
+        st.session_state.page = "login"
+
+    # Lógica para mostrar la página de login o registro si no se ha iniciado sesión
     if not st.session_state.get("logged_in"):
-        # Se renombra 'show_login' a 'show_login_page' para consistencia
-        show_login_page() 
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            if st.session_state.page == "login":
+                show_login_page()
+            elif st.session_state.page == "signup":
+                show_signup_page()
+                if st.button("¿Ya tienes cuenta? Inicia Sesión"):
+                    st.session_state.page = "login"
+                    st.rerun()
+        st.stop()
 
     # --- Lógica de la aplicación principal cuando el usuario está logueado ---
     st.sidebar.image("LogoDataStudio.png")
@@ -614,7 +620,7 @@ def main():
         st.sidebar.radio("Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating")
 
     if st.sidebar.button("Cerrar Sesión", key="logout_main"):
-        supabase.auth.sign_out() # Se añade el logout de Supabase
+        supabase.auth.sign_out()
         st.session_state.clear()
         st.rerun()
 
