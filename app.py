@@ -15,7 +15,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from supabase import create_client
+from supabase import create_client, Client
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 
@@ -44,37 +44,90 @@ PLAN_FEATURES = {
 }
 
 # ==============================
-# Autenticación Personalizada
+# CONEXIÓN A SUPABASE
 # ==============================
-def show_login():
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.header("Iniciar Sesión")
-        email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
-        password = st.text_input("Contraseña", type="password", placeholder="****")
-        if st.button("Ingresar"):
-            response = supabase.table("users").select("*, clients(client_name, plan)").eq("email", email).eq("password", password).execute()
+supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
-            if response.data:
-                user_data = response.data[0]
-                client_info = user_data.get('clients')
+# ==============================
+# Autenticación con Supabase Auth
+# ==============================
 
-                if not client_info:
-                    st.error("Error: Usuario no está asociado a ningún cliente.")
-                    return
+### ¡NUEVO! ### - Página de Registro
+def show_signup_page():
+    st.header("Crear Nueva Cuenta")
+    email = st.text_input("Tu Correo Electrónico")
+    password = st.text_input("Crea una Contraseña", type="password")
 
+    # Obtener la lista de clientes para el dropdown
+    clients_response = supabase.table("clients").select("id, client_name").execute()
+    clients_data = clients_response.data
+    client_options = {client['client_name']: client['id'] for client in clients_data}
+    
+    selected_client_name = st.selectbox("Selecciona tu empresa", options=client_options.keys())
+
+    if st.button("Registrarse"):
+        if not email or not password or not selected_client_name:
+            st.error("Por favor, completa todos los campos.")
+            return
+        
+        try:
+            # 1. Registra al usuario en el sistema de autenticación de Supabase
+            auth_response = supabase.auth.sign_up({
+                "email": email,
+                "password": password,
+            })
+            
+            # 2. Inserta el perfil del usuario en tu tabla 'users'
+            new_user_id = auth_response.user.id
+            selected_client_id = client_options[selected_client_name]
+
+            supabase.table("users").insert({
+                "id": new_user_id,
+                "email": email,
+                "client_id": selected_client_id
+            }).execute()
+
+            st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
+            st.info("Una vez confirmada, podrás iniciar sesión.")
+
+        except Exception as e:
+            st.error(f"Error en el registro: Es posible que el correo ya esté en uso.")
+
+### ¡MODIFICADO! ### - Lógica de login usando Supabase Auth
+def show_login_page():
+    st.header("Iniciar Sesión")
+    email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
+    password = st.text_input("Contraseña", type="password", placeholder="****")
+
+    if st.button("Ingresar"):
+        try:
+            # 1. Autentica al usuario con Supabase Auth
+            response = supabase.auth.sign_in_with_password({
+                "email": email,
+                "password": password
+            })
+            
+            user_id = response.user.id
+
+            # 2. Busca el perfil del usuario para obtener el cliente
+            user_profile = supabase.table("users").select("*, clients(client_name, plan)").eq("id", user_id).single().execute()
+            
+            if user_profile.data and user_profile.data.get('clients'):
+                client_info = user_profile.data['clients']
                 st.session_state.logged_in = True
-                st.session_state.user = user_data['email']
+                st.session_state.user = user_profile.data['email']
                 st.session_state.cliente = client_info['client_name'].lower()
-                
-                user_plan = client_info.get('plan', 'Explorer')
-                st.session_state.plan = user_plan
-                st.session_state.plan_features = PLAN_FEATURES.get(user_plan, PLAN_FEATURES['Explorer'])
+                st.session_state.plan = client_info.get('plan', 'Explorer')
+                st.session_state.plan_features = PLAN_FEATURES.get(st.session_state.plan, PLAN_FEATURES['Explorer'])
                 st.rerun()
             else:
-                st.error("Credenciales incorrectas")
-    st.stop()
-
+                st.error("Perfil de usuario no encontrado. Contacta al administrador.")
+        except Exception as e:
+            st.error("Credenciales incorrectas o cuenta no confirmada.")
+    
+    if st.button("¿No tienes cuenta? Regístrate", type="secondary"):
+        st.session_state.page = "signup"
+        st.rerun()
 
 def reset_report_workflow():
     for k in ["report", "last_question", "report_question", "personalization", "rating"]:
@@ -118,10 +171,8 @@ def call_gemini_api(prompt):
         return None
 
 # ==============================
-# CONEXIÓN A SUPABASE Y RASTREO
+# RASTREO DE USO
 # ==============================
-supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
-
 def log_query_event(query_text, mode, rating=None):
     data = {"id": datetime.datetime.now().strftime("%Y%m%d%H%M%S"), "user_name": st.session_state.user, "timestamp": datetime.datetime.now().isoformat(), "mode": mode, "query": query_text, "rating": rating}
     supabase.table("queries").insert(data).execute()
@@ -255,8 +306,6 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None):
 
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
-    
-    # Prompt 1: Extrae hallazgos clave y referencias.
     prompt1 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
         "Instrucciones:\n"
@@ -278,8 +327,6 @@ def generate_final_report(question, db, selected_files):
     )
     result1 = call_gemini_api(prompt1)
     if result1 is None: return None
-
-    # Prompt 2: Redacta el informe principal.
     prompt2 = (
         f"Pregunta del Cliente: ***{question}***\n\n"
         "Instrucciones Generales:\n"
@@ -312,9 +359,7 @@ def generate_final_report(question, db, selected_files):
     )
     result2 = call_gemini_api(prompt2)
     if result2 is None: return None
-    
-    informe_completo = f"{question}\n\n" + result2
-    return informe_completo
+    return f"{question}\n\n" + result2
     
 def report_mode(db, selected_files):
     st.markdown("### Generar Reporte de Reportes")
