@@ -29,18 +29,34 @@ except Exception as e:
 # ==============================
 # DEFINICIÓN DE PLANES Y PERMISOS
 # ==============================
+### MODIFICADO ### - "Generar Reporte" ahora es exclusivo de Enterprise
 PLAN_FEATURES = {
     "Explorer": {
-        "reports_per_month": 2, "chat_queries_per_day": 4, "projects_per_year": 2,
-        "has_creative_conversation": False, "has_concept_generation": False, "has_idea_evaluation": False,
+        "reports_per_month": 0, # Ya no puede generar reportes
+        "chat_queries_per_day": 4,
+        "projects_per_year": 2,
+        "has_report_generation": False, # Permiso desactivado
+        "has_creative_conversation": False,
+        "has_concept_generation": False,
+        "has_idea_evaluation": False,
     },
     "Strategist": {
-        "reports_per_month": 25, "chat_queries_per_day": float('inf'), "projects_per_year": 10,
-        "has_creative_conversation": True, "has_concept_generation": True, "has_idea_evaluation": False,
+        "reports_per_month": 0, # Ya no puede generar reportes
+        "chat_queries_per_day": float('inf'),
+        "projects_per_year": 10,
+        "has_report_generation": False, # Permiso desactivado
+        "has_creative_conversation": True,
+        "has_concept_generation": True,
+        "has_idea_evaluation": False,
     },
     "Enterprise": {
-        "reports_per_month": float('inf'), "chat_queries_per_day": float('inf'), "projects_per_year": float('inf'),
-        "has_creative_conversation": True, "has_concept_generation": True, "has_idea_evaluation": True,
+        "reports_per_month": float('inf'), # Puede generar reportes ilimitados
+        "chat_queries_per_day": float('inf'),
+        "projects_per_year": float('inf'),
+        "has_report_generation": True, # Permiso activado
+        "has_creative_conversation": True,
+        "has_concept_generation": True,
+        "has_idea_evaluation": True,
     }
 }
 
@@ -179,7 +195,7 @@ def get_relevant_info(db, question, selected_files):
     return all_text
 
 # =====================================================
-# LÓGICA DE GENERACIÓN DE PDF (CON CORRECCIÓN)
+# LÓGICA DE GENERACIÓN DE PDF
 # =====================================================
 banner_file = "Banner (2).jpg"
 
@@ -189,7 +205,6 @@ def clean_text(text):
     return text.replace('&', '&amp;')
 
 class PDFReport:
-    ### MODIFICADO ### - Acepta un buffer en memoria además de un nombre de archivo
     def __init__(self, buffer_or_filename, banner_path=None):
         self.banner_path = banner_path
         self.elements = []
@@ -198,7 +213,6 @@ class PDFReport:
             buffer_or_filename,
             pagesize=A4, rightMargin=12*mm, leftMargin=12*mm, topMargin=45*mm, bottomMargin=18*mm
         )
-        # Estilos personalizados
         self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], alignment=1, spaceAfter=12, fontSize=12, leading=16))
         self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['Heading2'], spaceBefore=10, spaceAfter=6, fontSize=12, leading=16))
         self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], leading=14, alignment=4, fontSize=12))
@@ -239,7 +253,6 @@ class PDFReport:
     def build_pdf(self):
         self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
 
-### MODIFICADO ### - Usa un buffer en memoria (BytesIO) para evitar problemas con archivos temporales
 def generate_pdf_html(content, title="Documento Final", banner_path=None):
     try:
         buffer = BytesIO()
@@ -432,10 +445,16 @@ def main():
     db_filtered = db_full[:]
     user_features = st.session_state.plan_features
     
-    modos_disponibles = ["Generar un reporte de reportes", "Chat de Consulta Directa"]
-    if user_features.get("has_creative_conversation"): modos_disponibles.append("Conversaciones creativas")
-    if user_features.get("has_concept_generation"): modos_disponibles.append("Generación de conceptos")
-    if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
+    ### MODIFICADO ### - Se construye la lista de modos dinámicamente según el plan
+    modos_disponibles = ["Chat de Consulta Directa"] # Todos los planes tienen acceso a este modo
+    if user_features.get("has_report_generation"):
+        modos_disponibles.insert(0, "Generar un reporte de reportes") # Lo pone al principio si tiene permiso
+    if user_features.get("has_creative_conversation"):
+        modos_disponibles.append("Conversaciones creativas")
+    if user_features.get("has_concept_generation"):
+        modos_disponibles.append("Generación de conceptos")
+    if user_features.get("has_idea_evaluation"):
+        modos_disponibles.append("Evaluar una idea")
 
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed")
