@@ -565,7 +565,7 @@ def idea_evaluator_mode(db, selected_files):
 # =====================================================
 def main():
     if not st.session_state.get("logged_in"):
-        show_login()
+        show_login_page()
 
     st.sidebar.image("LogoDataStudio.png")
     
