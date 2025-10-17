@@ -154,7 +154,6 @@ safety_settings = [
 ]
 
 def create_model():
-    # Asegúrate de usar un nombre de modelo válido, por ejemplo "gemini-1.5-flash"
     return genai.GenerativeModel(model_name="gemini-2.5-flash", generation_config=generation_config, safety_settings=safety_settings)
 
 model = create_model()
@@ -619,9 +618,8 @@ def main():
     selected_brands = st.sidebar.multiselect("Seleccione el/los proyecto(s):", brands_options)
     if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
-    # ### AJUSTE 2: Se elimina la opción de calificar el informe ###
-    # if modo == "Generar un reporte de reportes":
-    #     st.sidebar.radio("Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating")
+    if modo == "Generar un reporte de reportes":
+        st.sidebar.radio("Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating")
 
     if st.sidebar.button("Cerrar Sesión", key="logout_main"):
         supabase.auth.sign_out()
