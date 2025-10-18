@@ -361,6 +361,10 @@ def generate_final_report(question, db, selected_files):
     
 def report_mode(db, selected_files):
     st.markdown("### Generar Reporte de Reportes")
+    ### AJUSTE 1: Se añade la descripción de la solución ###
+    st.markdown(
+        "Esta es la herramienta más potente para la síntesis. A partir de una pregunta, el asistente analizará **todos los estudios seleccionados** y generará un único informe consolidado con introducción, hallazgos, insights, conclusiones y recomendaciones."
+    )
     if "report" in st.session_state and st.session_state["report"]:
         st.markdown("---")
         st.markdown("### Informe Generado")
