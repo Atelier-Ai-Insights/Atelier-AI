@@ -52,7 +52,6 @@ supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABAS
 # Autenticación con Supabase Auth
 # ==============================
 
-### ¡NUEVO! ### - Página de Registro con Código de Invitación
 def show_signup_page():
     st.header("Crear Nueva Cuenta")
     email = st.text_input("Tu Correo Electrónico")
@@ -90,9 +89,14 @@ def show_signup_page():
             st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
 
         except Exception as e:
-            st.error(f"Error en el registro: Es posible que el correo ya esté en uso.")
+            ### ¡MODIFICACIÓN CLAVE! ###
+            # Imprimimos el error real en la terminal para un diagnóstico preciso
+            print("----------- ERROR DETALLADO DE REGISTRO -----------")
+            print(e)
+            print("-------------------------------------------------")
+            # Mostramos el error real 'e' al usuario, en lugar del mensaje engañoso.
+            st.error(f"Error en el registro: {e}")
 
-### ¡MODIFICADO! ### - Lógica de login usando Supabase Auth
 def show_login_page():
     st.header("Iniciar Sesión")
     email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
@@ -154,7 +158,7 @@ safety_settings = [
 ]
 
 def create_model():
-    return genai.GenerativeModel(model_name="gemini-2.5-flash", generation_config=generation_config, safety_settings=safety_settings)
+    return genai.GenerativeModel(model_name="gemini-1.5-flash", generation_config=generation_config, safety_settings=safety_settings)
 
 model = create_model()
 
@@ -618,6 +622,7 @@ def main():
     selected_years = st.sidebar.multiselect("Seleccione el/los año(s):", years_options)
     if selected_years: db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
+    ### AJUSTE DE ERROR DE SINTAXIS ###
     brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_full if d.get("nombre_archivo", "")})
     selected_brands = st.sidebar.multiselect("Seleccione el/los proyecto(s):", brands_options)
     if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
