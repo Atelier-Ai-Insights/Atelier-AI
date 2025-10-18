@@ -52,7 +52,6 @@ supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABAS
 # Autenticación con Supabase Auth
 # ==============================
 
-# --- INICIO DEL CÓDIGO NUEVO ---
 ### ¡NUEVO! ### - Página de Registro con Código de Invitación
 def show_signup_page():
     st.header("Crear Nueva Cuenta")
@@ -69,19 +68,15 @@ def show_signup_page():
         
         try:
             # 1. Busca el cliente que corresponde al código de invitación
-            # --- MEJORA ---
-            # Quitamos .single() para que no falle si no encuentra resultados
-            client_response = supabase.table("clients").select("id").eq("invite_code", invite_code).execute()
+            client_response = supabase.table("clients").select("id").eq("invite_code", invite_code).single().execute()
             
-            # Verificamos si la lista 'data' está vacía
-            if not client_response.data or len(client_response.data) == 0:
+            if not client_response.data:
                 st.error("El código de invitación no es válido.")
                 return
-            
-            # Si se encuentra, tomamos el id del primer resultado
-            selected_client_id = client_response.data[0]['id']
 
-            # 2. Registra al usuario
+            selected_client_id = client_response.data['id']
+
+            # 2. Registra al usuario pasándole el client_id en los metadatos para el trigger
             auth_response = supabase.auth.sign_up({
                 "email": email,
                 "password": password,
@@ -95,24 +90,7 @@ def show_signup_page():
             st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
 
         except Exception as e:
-            # Imprime el error real en tu terminal para que puedas depurarlo
-            print(f"Error detallado de Supabase Auth: {e}")
-            
-            error_message = str(e)
-
-            # Da un feedback más específico al usuario
-            if "User already registered" in error_message:
-                st.error("Error: Este correo electrónico ya está registrado. Por favor, inicia sesión.")
-            elif "Password should be at least 6 characters" in error_message:
-                st.error("Error: La contraseña debe tener al menos 6 caracteres.")
-            # Añadimos un chequeo genérico para el código de invitación por si algo más falla
-            elif "invite_code" in error_message or "invalid" in error_message:
-                st.error("Error: El código de invitación no es válido.")
-            else:
-                # Un error genérico si no lo identificamos
-                st.error("Error en el registro. Por favor, inténtalo de nuevo o contacta al administrador.")
-# --- FIN DEL CÓDIGO NUEVO ---
-
+            st.error(f"Error en el registro: Es posible que el correo ya esté en uso.")
 
 ### ¡MODIFICADO! ### - Lógica de login usando Supabase Auth
 def show_login_page():
@@ -176,8 +154,7 @@ safety_settings = [
 ]
 
 def create_model():
-    # *** CORRECCIÓN CRÍTICA ***: El modelo se llama 'gemini-2.5-flash'
-    return genai.GenerativeModel(model_name="gemini-1.5-flash", generation_config=generation_config, safety_settings=safety_settings)
+    return genai.GenerativeModel(model_name="gemini-2.5-flash", generation_config=generation_config, safety_settings=safety_settings)
 
 model = create_model()
 
@@ -641,9 +618,8 @@ def main():
     selected_brands = st.sidebar.multiselect("Seleccione el/los proyecto(s):", brands_options)
     if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
-    # ### AJUSTE 2: Se elimina la opción de calificar el informe ###
-    # if modo == "Generar un reporte de reportes":
-    #     st.sidebar.radio("Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating")
+    if modo == "Generar un reporte de reportes":
+        st.sidebar.radio("Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating")
 
     if st.sidebar.button("Cerrar Sesión", key="logout_main"):
         supabase.auth.sign_out()
