@@ -52,11 +52,12 @@ supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABAS
 # Autenticación con Supabase Auth
 # ==============================
 
+### ¡NUEVO! ### - Página de Registro con Código de Invitación
 def show_signup_page():
     st.header("Crear Nueva Cuenta")
     email = st.text_input("Tu Correo Electrónico")
     password = st.text_input("Crea una Contraseña", type="password")
-
+    
     # Se reemplaza el desplegable por un campo de texto para el código
     invite_code = st.text_input("Código de Invitación de tu Empresa")
 
@@ -91,6 +92,7 @@ def show_signup_page():
         except Exception as e:
             st.error(f"Error en el registro: Es posible que el correo ya esté en uso.")
 
+### ¡MODIFICADO! ### - Lógica de login usando Supabase Auth
 def show_login_page():
     st.header("Iniciar Sesión")
     email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
@@ -616,8 +618,7 @@ def main():
     selected_years = st.sidebar.multiselect("Seleccione el/los año(s):", years_options)
     if selected_years: db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
-    ### AJUSTE DE ERROR DE SINTAXIS ###
-    brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_full if doc.get("nombre_archivo", "")})
+    brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_full if d.get("nombre_archivo", "")})
     selected_brands = st.sidebar.multiselect("Seleccione el/los proyecto(s):", brands_options)
     if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
