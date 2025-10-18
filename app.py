@@ -56,7 +56,7 @@ def show_signup_page():
     st.header("Crear Nueva Cuenta")
     email = st.text_input("Tu Correo Electrónico")
     password = st.text_input("Crea una Contraseña", type="password")
-    
+
     # Se reemplaza el desplegable por un campo de texto para el código
     invite_code = st.text_input("Código de Invitación de tu Empresa")
 
@@ -89,13 +89,7 @@ def show_signup_page():
             st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
 
         except Exception as e:
-            ### ¡MODIFICACIÓN CLAVE! ###
-            # Imprimimos el error real en la terminal para un diagnóstico preciso
-            print("----------- ERROR DETALLADO DE REGISTRO -----------")
-            print(e)
-            print("-------------------------------------------------")
-            # Mostramos el error real 'e' al usuario, en lugar del mensaje engañoso.
-            st.error(f"Error en el registro: {e}")
+            st.error(f"Error en el registro: Es posible que el correo ya esté en uso.")
 
 def show_login_page():
     st.header("Iniciar Sesión")
@@ -622,12 +616,12 @@ def main():
     selected_years = st.sidebar.multiselect("Seleccione el/los año(s):", years_options)
     if selected_years: db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
-    brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_full if doc.get("nombre_archivo", ""))})
+    ### AJUSTE DE ERROR DE SINTAXIS ###
+    brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_full if doc.get("nombre_archivo", "")})
     selected_brands = st.sidebar.multiselect("Seleccione el/los proyecto(s):", brands_options)
     if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
     ### AJUSTE 2: Se elimina la opción de calificar el informe ###
-    # Se ha comentado la siguiente línea para eliminar la opción de calificación
     # if modo == "Generar un reporte de reportes":
     #     st.sidebar.radio("Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating")
 
