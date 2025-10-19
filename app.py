@@ -606,13 +606,27 @@ def main():
         with col2:
             if st.session_state.page == "login":
                 show_login_page()
+            
             elif st.session_state.page == "signup":
                 show_signup_page()
                 if st.button("¿Ya tienes cuenta? Inicia Sesión"):
                     st.session_state.page = "login"
                     st.rerun()
-        st.stop()
+            
+            ### ¡CORRECCIÓN AÑADIDA AQUÍ! ###
+            # Añadimos la condición para mostrar la página de reseteo
+            elif st.session_state.page == "reset_password":
+                show_reset_password_page()
+                # Añadimos un botón para volver al login
+                if st.button("Volver a Iniciar Sesión"):
+                    st.session_state.page = "login"
+                    st.rerun()
 
+        st.stop() # Detiene la ejecución para usuarios no logueados
+
+    # --- El resto de tu código para usuarios logueados ---
+    # (Este código solo se ejecuta si "logged_in" es True)
+    
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     st.sidebar.divider()
@@ -650,10 +664,12 @@ def main():
     selected_years = st.sidebar.multiselect("Seleccione el/los año(s):", years_options)
     if selected_years: db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
+    ### AJUSTE DE ERROR DE SINTAXIS ###
     brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_full if d.get("nombre_archivo", "")})
     selected_brands = st.sidebar.multiselect("Seleccione el/los proyecto(s):", brands_options)
     if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
+    ### AJUSTE 2: Se elimina la opción de calificar el informe ###
     if modo == "Generar un reporte de reportes":
         # st.sidebar.radio("Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating")
         pass # Se deja vacío para eliminar la opción
@@ -670,6 +686,6 @@ def main():
     elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
-
+        
 if __name__ == "__main__":
     main()
