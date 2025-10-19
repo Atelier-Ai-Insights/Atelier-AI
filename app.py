@@ -300,7 +300,7 @@ class PDFReport:
         canvas.restoreState()
     def footer(self, canvas, doc):
         canvas.saveState()
-        footer_text = "El uso de esta información está sujeto a términos y condiciones... Verifica las respuestas."
+        footer_text = "Es posible que se muestre información imprecisa. Verifica las respuestas."
         p = Paragraph(footer_text, self.styles['CustomFooter'])
         w, h = p.wrap(doc.width, doc.bottomMargin)
         p.drawOn(canvas, doc.leftMargin, 3 * mm)
