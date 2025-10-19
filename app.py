@@ -66,6 +66,7 @@ def show_signup_page():
             return
         
         try:
+            # 1. Busca el cliente que corresponde al código de invitación
             client_response = supabase.table("clients").select("id").eq("invite_code", invite_code).single().execute()
             
             if not client_response.data:
@@ -74,6 +75,7 @@ def show_signup_page():
 
             selected_client_id = client_response.data['id']
 
+            # 2. Registra al usuario pasándole el client_id en los metadatos para el trigger
             auth_response = supabase.auth.sign_up({
                 "email": email,
                 "password": password,
@@ -87,6 +89,12 @@ def show_signup_page():
             st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
 
         except Exception as e:
+            ### ¡MODIFICACIÓN CLAVE! ###
+            # Imprimimos el error real en la terminal para un diagnóstico preciso
+            print("----------- ERROR DETALLADO DE REGISTRO -----------")
+            print(e)
+            print("-------------------------------------------------")
+            # Mostramos el error real 'e' al usuario, en lugar del mensaje engañoso.
             st.error(f"Error en el registro: {e}")
 
 ### ¡MODIFICADO! ### - Se añade el botón de Olvidé Contraseña
@@ -97,12 +105,15 @@ def show_login_page():
 
     if st.button("Ingresar"):
         try:
+            # 1. Autentica al usuario con Supabase Auth
             response = supabase.auth.sign_in_with_password({
                 "email": email,
                 "password": password
             })
             
             user_id = response.user.id
+
+            # 2. Busca el perfil del usuario para obtener el cliente
             user_profile = supabase.table("users").select("*, clients(client_name, plan)").eq("id", user_id).single().execute()
             
             if user_profile.data and user_profile.data.get('clients'):
@@ -149,9 +160,6 @@ def show_reset_password_page():
             st.info("Sigue las instrucciones del correo para crear una nueva contraseña. Una vez creada, podrás iniciar sesión.")
         except Exception as e:
             st.error(f"Error al enviar el correo: {e}")
-
-# (El resto de tus funciones: reset_report_workflow, reset_chat_workflow, configure_api, call_gemini_api, etc.
-# ... permanecen exactamente igual que en tu código funcional. Las incluyo aquí para que el código esté completo.)
 
 def reset_report_workflow():
     for k in ["report", "last_question", "report_question", "personalization", "rating"]:
