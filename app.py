@@ -89,12 +89,14 @@ def show_signup_page():
             st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
 
         except Exception as e:
+            ### ¡MODIFICACIÓN CLAVE! ###
+            # Imprimimos el error real en la terminal para un diagnóstico preciso
             print("----------- ERROR DETALLADO DE REGISTRO -----------")
             print(e)
             print("-------------------------------------------------")
+            # Mostramos el error real 'e' al usuario, en lugar del mensaje engañoso.
             st.error(f"Error en el registro: {e}")
 
-### ¡MODIFICADO! ### - Se añade el botón de Olvidé Contraseña
 def show_login_page():
     st.header("Iniciar Sesión")
     email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
@@ -648,12 +650,10 @@ def main():
     selected_years = st.sidebar.multiselect("Seleccione el/los año(s):", years_options)
     if selected_years: db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
-    ### AJUSTE DE ERROR DE SINTAXIS ###
     brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_full if d.get("nombre_archivo", "")})
     selected_brands = st.sidebar.multiselect("Seleccione el/los proyecto(s):", brands_options)
     if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
-    ### AJUSTE 2: Se elimina la opción de calificar el informe ###
     if modo == "Generar un reporte de reportes":
         # st.sidebar.radio("Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating")
         pass # Se deja vacío para eliminar la opción
