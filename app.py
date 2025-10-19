@@ -655,19 +655,29 @@ def main():
         st.session_state.pop("generated_concept", None)
         st.session_state.pop("evaluation_result", None)
 
+    # ==================================
+    # === SECCIÓN DE FILTROS AJUSTADA ===
+    # ==================================
     st.sidebar.header("Filtros de Búsqueda")
+
+    # Filtro de Marcas (Multiselect)
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
     selected_marcas = st.sidebar.multiselect("Seleccione la(s) marca(s):", marcas_options)
-    if selected_marcas: db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
+    if selected_marcas:
+        db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
 
+    # Filtro de Años (Multiselect)
     years_options = sorted({doc.get("marca", "") for doc in db_full if doc.get("marca")})
     selected_years = st.sidebar.multiselect("Seleccione el/los año(s):", years_options)
-    if selected_years: db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
+    if selected_years:
+        db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
-    ### AJUSTE DE ERROR DE SINTAXIS ###
-    brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_full if d.get("nombre_archivo", "")})
+    # Filtro de Proyectos (Multiselect)
+    # Las opciones de proyectos se basan en la base de datos ya filtrada por marca y año
+    brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered})
     selected_brands = st.sidebar.multiselect("Seleccione el/los proyecto(s):", brands_options)
-    if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
+    if selected_brands:
+        db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
     ### AJUSTE 2: Se elimina la opción de calificar el informe ###
     if modo == "Generar un reporte de reportes":
