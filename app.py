@@ -178,7 +178,7 @@ def call_gemini_api(prompt):
 # ==============================
 def log_query_event(query_text, mode, rating=None):
     data = {"id": datetime.datetime.now().strftime("%Y%m%d%H%M%S"), "user_name": st.session_state.user, "timestamp": datetime.datetime.now().isoformat(), "mode": mode, "query": query_text, "rating": rating, "additional_info": "N/A"}
-    supabase.table("queries").insert(data).execute()
+    supabase.table("queries").insert(data).execute(returning='minimal')
 
 def get_monthly_usage(username, action_type):
     first_day_of_month = datetime.date.today().replace(day=1)
