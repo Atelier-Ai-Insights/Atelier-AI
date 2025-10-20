@@ -608,6 +608,7 @@ def main():
     if not st.session_state.get("logged_in"):
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
+            st.image("LogoDataStudio.png")
             if st.session_state.page == "login":
                 show_login_page()
             
