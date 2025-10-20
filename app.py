@@ -601,6 +601,10 @@ def main():
     if 'page' not in st.session_state:
         st.session_state.page = "login"
 
+    # --- Define el texto del footer ---
+    footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
+    footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
+
     if not st.session_state.get("logged_in"):
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
@@ -621,6 +625,10 @@ def main():
                 if st.button("Volver a Iniciar Sesión"):
                     st.session_state.page = "login"
                     st.rerun()
+        ### ¡NUEVO! - Footer para páginas de login/signup/reset ###
+        st.divider()
+        st.markdown(footer_html, unsafe_allow_html=True)
+        ### --- Fin del Footer ---
 
         st.stop() # Detiene la ejecución para usuarios no logueados
 
