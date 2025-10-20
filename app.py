@@ -601,7 +601,7 @@ def main():
     if 'page' not in st.session_state:
         st.session_state.page = "login"
 
-    # --- Define el texto del footer ---
+    # --- Define el texto del footer (lo usaremos en ambos sitios) ---
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
@@ -696,6 +696,11 @@ def main():
         supabase.auth.sign_out()
         st.session_state.clear()
         st.rerun()
+
+    ### ¡NUEVO! - Footer añadido al final del SIDEBAR ###
+    st.sidebar.divider()
+    st.sidebar.markdown(footer_html, unsafe_allow_html=True)
+    ### --- Fin del Footer del Sidebar ---
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
