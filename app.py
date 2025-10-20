@@ -100,7 +100,7 @@ def show_signup_page():
 def show_login_page():
     st.header("Iniciar Sesión")
     email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
-    password = st.text_input("Contraseña", type="password", placeholder="******")
+    password = st.text_input("Contraseña", type="password", placeholder="password")
 
     if st.button("Ingresar"):
         try:
