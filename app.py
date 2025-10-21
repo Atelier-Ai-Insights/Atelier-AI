@@ -29,7 +29,10 @@ hide_st_style = """
     /* Oculta el encabezado de la app */
     header {visibility: hidden;}
     
-    /* Oculta la barra de estado inferior completa (ambos iconos) */
+    /* Oculta el "Made with Streamlit" footer */
+    footer {visibility: hidden;}
+    
+    /* Oculta la barra de estado inferior (iconos) */
     [data-testid="stStatusWidget"] {visibility: hidden;}
     </style>
 """
