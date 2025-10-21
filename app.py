@@ -691,43 +691,57 @@ def show_admin_dashboard():
 
 
 # =====================================================
-# FUNCIÓN PRINCIPAL DE LA APLICACIÓN (CON SIDEBAR REESTRUCTURADO)
+# FUNCIÓN PRINCIPAL DE LA APLICACIÓN (CON CALLBACKS PARA RADIOS)
 # =====================================================
 def main():
+    # --- Callback Functions ---
+    def update_mode():
+        # Esta función se llama CADA VEZ que CUALQUIER radio cambia.
+        # Leemos los valores de ambos radios desde el session_state (usando sus keys).
+        admin_selection = st.session_state.get("admin_mode_radio") 
+        regular_selection = st.session_state.get("regular_mode_radio")
+
+        # Determinamos cuál fue el último radio seleccionado
+        # Si el usuario hace clic en el radio regular, regular_selection tendrá valor
+        if regular_selection is not None:
+             st.session_state.current_mode = regular_selection
+        # Si el usuario hace clic en el radio admin, admin_selection tendrá valor
+        elif admin_selection is not None:
+             st.session_state.current_mode = admin_selection
+        # Si no hay nada seleccionado (inicio), establecemos un default
+        elif 'current_mode' not in st.session_state:
+             # Necesitamos definir regular_modes antes para este fallback
+             temp_regular_modes = ["Chat de Consulta Directa"] # Define una lista temporal
+             if PLAN_FEATURES.get("Enterprise", {}).get("has_report_generation"): temp_regular_modes.insert(0, "Generar un reporte de reportes")
+             st.session_state.current_mode = temp_regular_modes[0] 
+
+    # --- Código Inicial ---
     if 'page' not in st.session_state:
         st.session_state.page = "login"
 
-    # --- Define el texto del footer (lo usaremos en ambos sitios) ---
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
     if not st.session_state.get("logged_in"):
+        # ... (código de login/signup/reset - sin cambios) ...
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
             st.image("LogoDataStudio.png")
             if st.session_state.page == "login":
                 show_login_page()
-            
             elif st.session_state.page == "signup":
                 show_signup_page()
                 if st.button("¿Ya tienes cuenta? Inicia Sesión"):
-                    st.session_state.page = "login"
-                    st.rerun()
-            
+                    st.session_state.page = "login"; st.rerun()
             elif st.session_state.page == "reset_password":
                 show_reset_password_page()
                 if st.button("Volver a Iniciar Sesión"):
-                    st.session_state.page = "login"
-                    st.rerun()
-        
+                    st.session_state.page = "login"; st.rerun()
         st.divider()
         st.markdown(footer_html, unsafe_allow_html=True)
+        st.stop()
 
-        st.stop() # Detiene la ejecución para usuarios no logueados
-
-    # --- El resto de tu código para usuarios logueados ---
-    
-    # --- Sidebar: Sección Superior (Logo, Usuario) ---
+    # --- Usuario Logueado ---
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     st.sidebar.divider()
@@ -735,77 +749,65 @@ def main():
     try:
         db_full = load_database(st.session_state.cliente)
     except Exception as e:
-        st.error(f"Error crítico al cargar la base de datos: {e}")
-        st.stop()
+        st.error(f"Error crítico al cargar la base de datos: {e}"); st.stop()
     
     db_filtered = db_full[:]
     user_features = st.session_state.plan_features
     
-    # --- Sidebar: Secciones de Modos (Admin y Regular) ---
-    admin_mode_selected = None
-    regular_mode_selected = None
-    
-    # Prepara la lista base de modos regulares disponibles según el plan
+    # --- Listas de Modos ---
+    # Define regular_modes aquí para que esté disponible para el fallback del callback
     regular_modes = ["Chat de Consulta Directa"]
     if user_features.get("has_report_generation"): regular_modes.insert(0, "Generar un reporte de reportes")
     if user_features.get("has_creative_conversation"): regular_modes.append("Conversaciones creativas")
     if user_features.get("has_concept_generation"): regular_modes.append("Generación de conceptos")
     if user_features.get("has_idea_evaluation"): regular_modes.append("Evaluar una idea")
-
-    # Verifica si el usuario es admin (usando 'rol')
+    
+    admin_option = "Panel de Administrador"
     is_admin = st.session_state.get("role") == "admin"
 
+    # Inicializa current_mode si no existe, usando la lista ya definida
+    if 'current_mode' not in st.session_state:
+         st.session_state.current_mode = regular_modes[0]
+
+    # --- Renderizado de Radios con Callbacks ---
     if is_admin:
         st.sidebar.header("Módulo Administrativo")
-        admin_option = "Panel de Administrador"
-        admin_modes_list = [admin_option] 
-        # Si el modo actual guardado es el admin, lo seleccionamos por defecto
-        default_admin_index = 0 if st.session_state.get('current_mode') == admin_option else None
-        admin_mode_selected = st.sidebar.radio(
+        admin_modes_list = [admin_option]
+        # Determina el índice basado en el estado actual
+        admin_index = 0 if st.session_state.current_mode == admin_option else None
+        st.sidebar.radio(
             "Admin:", 
             admin_modes_list, 
-            key="admin_mode_radio", 
+            key="admin_mode_radio", # Key para leer en el callback
             label_visibility="collapsed",
-            index=default_admin_index
+            index=admin_index,
+            on_change=update_mode # Llama a update_mode cuando cambia
         )
-        st.sidebar.divider() # Separador visual
+        st.sidebar.divider()
 
     st.sidebar.header("Seleccione el modo de uso")
-    # Calcula el índice por defecto para los modos regulares
-    current_regular_mode = st.session_state.get('current_mode')
-    default_regular_index = None
-    if not admin_mode_selected and current_regular_mode in regular_modes:
-         default_regular_index = regular_modes.index(current_regular_mode)
-    elif not admin_mode_selected: # Si no hay modo guardado o no es regular, selecciona el primero
-         default_regular_index = 0
-
-    regular_mode_selected = st.sidebar.radio(
+    # Determina el índice basado en el estado actual
+    regular_index = None
+    if st.session_state.current_mode in regular_modes:
+        regular_index = regular_modes.index(st.session_state.current_mode)
+        
+    st.sidebar.radio(
         "Modos:", 
         regular_modes, 
-        key="regular_mode_radio", 
+        key="regular_mode_radio", # Key para leer en el callback
         label_visibility="collapsed",
-        index=default_regular_index
+        index=regular_index,
+        on_change=update_mode # Llama a update_mode cuando cambia
     )
 
-    # Determina cuál modo está activo realmente
-    if admin_mode_selected and is_admin:
-        modo = admin_mode_selected
-    elif regular_mode_selected:
-        modo = regular_mode_selected
-    else: # Fallback por si acaso
-        modo = regular_modes[0] 
+    # El modo activo AHORA se lee directamente del session_state
+    modo = st.session_state.current_mode 
 
-    # Actualiza el modo actual si cambió
-    if st.session_state.get('current_mode') != modo:
-        st.session_state.current_mode = modo
-        # Resetea flujos si es necesario (excepto si entramos al admin panel)
-        if modo != "Panel de Administrador":
-             reset_chat_workflow()
-             st.session_state.pop("generated_concept", None)
-             st.session_state.pop("evaluation_result", None)
-             reset_report_workflow() 
+    # --- Resto del Sidebar y Lógica Principal ---
+    # (El código de Filtros, Logout, Footer y renderizado de página 
+    #  permanece igual, ya que usa la variable 'modo' que ahora se 
+    #  actualiza correctamente mediante el callback)
 
-    # --- Sidebar: Sección de Filtros ---
     st.sidebar.header("Filtros de Búsqueda")
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
     selected_marcas = st.sidebar.multiselect("Seleccione la(s) marca(s):", marcas_options)
@@ -823,7 +825,6 @@ def main():
     if selected_brands:
         db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
-    # --- Sidebar: Sección Inferior (Logout, Footer) ---
     if st.sidebar.button("Cerrar Sesión", key="logout_main"):
         supabase.auth.sign_out()
         st.session_state.clear()
@@ -832,16 +833,38 @@ def main():
     st.sidebar.divider()
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
 
-    # --- Lógica Principal de Renderizado de Página ---
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
+
+    # --- Lógica de Renderizado ---
+    # Limpia flujos si el modo cambió (movido aquí para asegurar que 'modo' esté definido)
+    # Comparamos con un valor previo para evitar reseteos innecesarios en cada recarga
+    if 'last_rendered_mode' not in st.session_state: st.session_state.last_rendered_mode = None
+    if st.session_state.last_rendered_mode != modo:
+        if modo != "Panel de Administrador": # No resetees si vas al panel admin
+            reset_chat_workflow()
+            st.session_state.pop("generated_concept", None)
+            st.session_state.pop("evaluation_result", None)
+            reset_report_workflow()
+        st.session_state.last_rendered_mode = modo # Actualiza el último modo renderizado
+        # Puede ser necesario un rerun aquí si los reseteos no se reflejan inmediatamente
+        # st.rerun() 
+
 
     if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
     elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
-    elif modo == "Panel de Administrador" and is_admin: # Doble chequeo por seguridad
+    elif modo == "Panel de Administrador" and is_admin: 
         show_admin_dashboard()
-        
+    # Añadimos un else por si acaso el modo no coincide con nada (útil para depurar)
+    # else:
+    #      # Si current_mode está vacío o es inválido, selecciona el default
+    #      if not modo and regular_modes: 
+    #          st.session_state.current_mode = regular_modes[0]
+    #          st.rerun()
+    #      elif modo:
+    #          st.warning(f"Modo '{modo}' no reconocido.") 
+
 if __name__ == "__main__":
     main()
