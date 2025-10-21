@@ -74,7 +74,6 @@ try:
         st.secrets["SUPABASE_SERVICE_KEY"]
     )
 except KeyError:
-    # Este error solo se mostrará si la clave NO está en los secrets
     st.error("Error: SUPABASE_SERVICE_KEY no encontrada en los secrets de Streamlit.")
     # Si la app ya arrancó, es probable que solo el admin vea este error al cargar su panel
     # st.stop() # Lo dejamos comentado para que la app no se detenga para usuarios normales
@@ -621,7 +620,7 @@ def idea_evaluator_mode(db, selected_files):
                     else:
                         st.error("No se pudo generar la evaluación.")
 
-### ¡NUEVA FUNCIÓN REESTRUCTURADA PARA EL PANEL DE ADMIN! ###
+### ¡NUEVAS FUNCIONES PARA EL PANEL DE ADMIN! ###
 
 @st.cache_data(ttl=600)
 def get_all_clients():
@@ -692,7 +691,7 @@ def show_admin_dashboard():
 
 
 # =====================================================
-# FUNCIÓN PRINCIPAL DE LA APLICACIÓN
+# FUNCIÓN PRINCIPAL DE LA APLICACIÓN (CON SIDEBAR REESTRUCTURADO)
 # =====================================================
 def main():
     if 'page' not in st.session_state:
@@ -728,6 +727,7 @@ def main():
 
     # --- El resto de tu código para usuarios logueados ---
     
+    # --- Sidebar: Sección Superior (Logo, Usuario) ---
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     st.sidebar.divider()
@@ -741,25 +741,71 @@ def main():
     db_filtered = db_full[:]
     user_features = st.session_state.plan_features
     
-    modos_disponibles = ["Chat de Consulta Directa"]
-    if user_features.get("has_report_generation"): modos_disponibles.insert(0, "Generar un reporte de reportes")
-    if user_features.get("has_creative_conversation"): modos_disponibles.append("Conversaciones creativas")
-    if user_features.get("has_concept_generation"): modos_disponibles.append("Generación de conceptos")
-    if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
+    # --- Sidebar: Secciones de Modos (Admin y Regular) ---
+    admin_mode_selected = None
+    regular_mode_selected = None
+    
+    # Prepara la lista base de modos regulares disponibles según el plan
+    regular_modes = ["Chat de Consulta Directa"]
+    if user_features.get("has_report_generation"): regular_modes.insert(0, "Generar un reporte de reportes")
+    if user_features.get("has_creative_conversation"): regular_modes.append("Conversaciones creativas")
+    if user_features.get("has_concept_generation"): regular_modes.append("Generación de conceptos")
+    if user_features.get("has_idea_evaluation"): regular_modes.append("Evaluar una idea")
 
-    # Comprobación de rol para modo Admin (CORREGIDO A 'rol')
-    if st.session_state.get("role") == "admin":
-        modos_disponibles.append("Panel de Administrador") # <-- MODIFICADO: Nombre del modo
+    # Verifica si el usuario es admin (usando 'rol')
+    is_admin = st.session_state.get("role") == "admin"
+
+    if is_admin:
+        st.sidebar.header("Módulo Administrativo")
+        admin_option = "Panel de Administrador"
+        admin_modes_list = [admin_option] 
+        # Si el modo actual guardado es el admin, lo seleccionamos por defecto
+        default_admin_index = 0 if st.session_state.get('current_mode') == admin_option else None
+        admin_mode_selected = st.sidebar.radio(
+            "Admin:", 
+            admin_modes_list, 
+            key="admin_mode_radio", 
+            label_visibility="collapsed",
+            index=default_admin_index
+        )
+        st.sidebar.divider() # Separador visual
 
     st.sidebar.header("Seleccione el modo de uso")
-    modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed")
+    # Calcula el índice por defecto para los modos regulares
+    current_regular_mode = st.session_state.get('current_mode')
+    default_regular_index = None
+    if not admin_mode_selected and current_regular_mode in regular_modes:
+         default_regular_index = regular_modes.index(current_regular_mode)
+    elif not admin_mode_selected: # Si no hay modo guardado o no es regular, selecciona el primero
+         default_regular_index = 0
 
+    regular_mode_selected = st.sidebar.radio(
+        "Modos:", 
+        regular_modes, 
+        key="regular_mode_radio", 
+        label_visibility="collapsed",
+        index=default_regular_index
+    )
+
+    # Determina cuál modo está activo realmente
+    if admin_mode_selected and is_admin:
+        modo = admin_mode_selected
+    elif regular_mode_selected:
+        modo = regular_mode_selected
+    else: # Fallback por si acaso
+        modo = regular_modes[0] 
+
+    # Actualiza el modo actual si cambió
     if st.session_state.get('current_mode') != modo:
         st.session_state.current_mode = modo
-        reset_chat_workflow()
-        st.session_state.pop("generated_concept", None)
-        st.session_state.pop("evaluation_result", None)
+        # Resetea flujos si es necesario (excepto si entramos al admin panel)
+        if modo != "Panel de Administrador":
+             reset_chat_workflow()
+             st.session_state.pop("generated_concept", None)
+             st.session_state.pop("evaluation_result", None)
+             reset_report_workflow() 
 
+    # --- Sidebar: Sección de Filtros ---
     st.sidebar.header("Filtros de Búsqueda")
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
     selected_marcas = st.sidebar.multiselect("Seleccione la(s) marca(s):", marcas_options)
@@ -771,14 +817,13 @@ def main():
     if selected_years:
         db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
-    brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered})
+    # Usamos db_filtered aquí para que las opciones se actualicen dinámicamente
+    brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered if d.get("nombre_archivo")})
     selected_brands = st.sidebar.multiselect("Seleccione el/los proyecto(s):", brands_options)
     if selected_brands:
         db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
-    if modo == "Generar un reporte de reportes":
-        pass 
-
+    # --- Sidebar: Sección Inferior (Logout, Footer) ---
     if st.sidebar.button("Cerrar Sesión", key="logout_main"):
         supabase.auth.sign_out()
         st.session_state.clear()
@@ -787,17 +832,15 @@ def main():
     st.sidebar.divider()
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
 
+    # --- Lógica Principal de Renderizado de Página ---
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
-    
     if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
     elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
-    
-    # Condición para renderizar el nuevo panel (MODIFICADO)
-    elif modo == "Panel de Administrador":
+    elif modo == "Panel de Administrador" and is_admin: # Doble chequeo por seguridad
         show_admin_dashboard()
         
 if __name__ == "__main__":
