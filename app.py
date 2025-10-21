@@ -74,6 +74,7 @@ try:
         st.secrets["SUPABASE_SERVICE_KEY"]
     )
 except KeyError:
+    # Este error solo se mostrará si la clave NO está en los secrets
     st.error("Error: SUPABASE_SERVICE_KEY no encontrada en los secrets de Streamlit.")
     # Si la app ya arrancó, es probable que solo el admin vea este error al cargar su panel
     # st.stop() # Lo dejamos comentado para que la app no se detenga para usuarios normales
@@ -138,8 +139,8 @@ def show_login_page():
             
             user_id = response.user.id
 
-            # 2. Busca el perfil del usuario para obtener el cliente Y EL ROL
-            user_profile = supabase.table("users").select("*, clients(client_name, plan), role").eq("id", user_id).single().execute()
+            # 2. Busca el perfil del usuario para obtener el cliente Y EL ROL (CORREGIDO A 'rol')
+            user_profile = supabase.table("users").select("*, clients(client_name, plan), rol").eq("id", user_id).single().execute()
             
             if user_profile.data and user_profile.data.get('clients'):
                 client_info = user_profile.data['clients']
@@ -149,7 +150,8 @@ def show_login_page():
                 st.session_state.plan = client_info.get('plan', 'Explorer')
                 st.session_state.plan_features = PLAN_FEATURES.get(st.session_state.plan, PLAN_FEATURES['Explorer'])
                 
-                st.session_state.role = user_profile.data.get('role', 'user') 
+                # Guardamos el rol del usuario (CORREGIDO A 'rol')
+                st.session_state.role = user_profile.data.get('rol', 'user') 
                 
                 st.rerun()
             else:
@@ -619,9 +621,8 @@ def idea_evaluator_mode(db, selected_files):
                     else:
                         st.error("No se pudo generar la evaluación.")
 
-### ¡NUEVAS FUNCIONES PARA EL PANEL DE ADMIN! ###
+### ¡NUEVA FUNCIÓN REESTRUCTURADA PARA EL PANEL DE ADMIN! ###
 
-# Función auxiliar para cargar clientes (con caché)
 @st.cache_data(ttl=600)
 def get_all_clients():
     """Obtiene todos los clientes de la base de datos."""
@@ -632,64 +633,68 @@ def get_all_clients():
         st.error(f"Error al cargar clientes: {e}")
         return []
 
-# Página del panel de administrador
-def show_admin_invite_page():
+def show_admin_dashboard():
     st.header("Panel de Administrador")
-    st.subheader("Invitar Nuevo Usuario")
 
-    # 1. Cargar la lista de clientes
-    clients = get_all_clients()
-    if not clients:
-        st.warning("No se encontraron clientes para asignar.")
-        return
+    # Usamos pestañas para organizar las funciones de admin
+    tab1, tab2 = st.tabs(["✉️ Invitar Nuevo Usuario", "📊 Estadísticas (Próximamente)"])
 
-    # Creamos un diccionario para el selectbox: {NombreVisible: id_interno}
-    client_map = {client['client_name']: client['id'] for client in clients}
-    
-    # 2. Formulario de invitación
-    with st.form("invite_form"):
-        email_to_invite = st.text_input("Correo Electrónico del Invitado")
-        selected_client_name = st.selectbox("Asignar al Cliente:", client_map.keys())
+    with tab1:
+        st.subheader("Invitar Nuevo Usuario")
+
+        # 1. Cargar la lista de clientes
+        clients = get_all_clients()
+        if not clients:
+            st.warning("No se encontraron clientes para asignar.")
+            return # Cambiado de st.stop() a return para no detener toda la app
+
+        # Creamos un diccionario para el selectbox: {NombreVisible: id_interno}
+        client_map = {client['client_name']: client['id'] for client in clients}
         
-        submitted = st.form_submit_button("Enviar Invitación")
-
-    if submitted:
-        if not email_to_invite or not selected_client_name:
-            st.warning("Por favor, completa todos los campos.")
-            return
-
-        selected_client_id = client_map[selected_client_name]
-        
-        try:
-            st.write(f"Enviando invitación a {email_to_invite} para el cliente {selected_client_name}...")
+        # 2. Formulario de invitación
+        with st.form("invite_form"):
+            email_to_invite = st.text_input("Correo Electrónico del Invitado")
+            selected_client_name = st.selectbox("Asignar al Cliente:", client_map.keys())
             
-            # 3. Llamada a la API de Admin
-            # Usamos el cliente 'supabase_admin'
-            supabase_admin.auth.admin.invite_user_by_email(
-                email_to_invite,
-                options={
-                    "data": {
-                        # Esto es CRUCIAL. Pasa el client_id en los metadatos
-                        # para que tu Trigger de base de datos lo pueda leer.
-                        'client_id': selected_client_id
+            submitted = st.form_submit_button("Enviar Invitación")
+
+        if submitted:
+            if not email_to_invite or not selected_client_name:
+                st.warning("Por favor, completa todos los campos.")
+                return # Se detiene aquí si faltan datos
+
+            selected_client_id = client_map[selected_client_name]
+            
+            try:
+                st.write(f"Enviando invitación a {email_to_invite} para el cliente {selected_client_name}...")
+                
+                # 3. Llamada a la API de Admin
+                supabase_admin.auth.admin.invite_user_by_email(
+                    email_to_invite,
+                    options={
+                        "data": {
+                            'client_id': selected_client_id
+                        }
                     }
-                }
-            )
-            
-            st.success(f"¡Invitación enviada exitosamente a {email_to_invite}!")
-            st.info("El usuario recibirá un correo para establecer su contraseña. Su perfil ya está vinculado al cliente correcto.")
+                )
+                
+                st.success(f"¡Invitación enviada exitosamente a {email_to_invite}!")
+                st.info("El usuario recibirá un correo para establecer su contraseña.")
 
-        except Exception as e:
-            st.error(f"Error al enviar la invitación: {e}")
-            st.error("Verifica que el usuario no exista ya o que tu clave de servicio (service_key) sea correcta.")
+            except Exception as e:
+                st.error(f"Error al enviar la invitación: {e}")
+                st.error("Verifica que el usuario no exista ya o que tu clave de servicio (service_key) sea correcta.")
+
+    with tab2:
+        st.subheader("Estadísticas de Uso")
+        st.info("Esta sección está en desarrollo.")
+        st.write("Aquí podrás ver gráficos sobre el uso de la plataforma por cliente.")
 
 
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
 def main():
-    # El código de diagnóstico ya fue eliminado.
-
     if 'page' not in st.session_state:
         st.session_state.page = "login"
 
@@ -742,8 +747,9 @@ def main():
     if user_features.get("has_concept_generation"): modos_disponibles.append("Generación de conceptos")
     if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
 
+    # Comprobación de rol para modo Admin (CORREGIDO A 'rol')
     if st.session_state.get("role") == "admin":
-        modos_disponibles.append("Admin - Invitar Usuario") 
+        modos_disponibles.append("Panel de Administrador") # <-- MODIFICADO: Nombre del modo
 
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed")
@@ -789,8 +795,10 @@ def main():
     elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
-    elif modo == "Admin - Invitar Usuario":
-        show_admin_invite_page()
+    
+    # Condición para renderizar el nuevo panel (MODIFICADO)
+    elif modo == "Panel de Administrador":
+        show_admin_dashboard()
         
 if __name__ == "__main__":
     main()
