@@ -74,10 +74,9 @@ try:
         st.secrets["SUPABASE_SERVICE_KEY"]
     )
 except KeyError:
-    # Este error solo se mostrará si la clave NO está en los secrets
     st.error("Error: SUPABASE_SERVICE_KEY no encontrada en los secrets de Streamlit.")
-    # El st.stop() aquí es opcional, pero útil si la clave es 100% necesaria
-    # st.stop() 
+    # Si la app ya arrancó, es probable que solo el admin vea este error al cargar su panel
+    # st.stop() # Lo dejamos comentado para que la app no se detenga para usuarios normales
 
 
 # ==============================
@@ -689,23 +688,7 @@ def show_admin_invite_page():
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
 def main():
-    ### --- CÓDIGO DE DIAGNÓSTICO INSERTADO --- ###
-    st.header("Diagnóstico de Secretos")
-    st.write("Verificando SUPABASE_SERVICE_KEY...")
-    
-    # Usamos st.secrets.get() que es más seguro y no lanza error si no existe
-    if st.secrets.get("SUPABASE_SERVICE_KEY"):
-        st.success("¡ÉXITO! La clave SUPABASE_SERVICE_KEY SÍ fue encontrada.")
-    else:
-        st.error("¡FALLA! La clave SUPABASE_SERVICE_KEY NO fue encontrada.")
-    
-    st.subheader("Todos los nombres de secretos que la app puede ver:")
-    # Esto es seguro, solo imprime los NOMBRES (las "keys"), no los valores.
-    st.write(list(st.secrets.keys()))
-    
-    st.divider()
-    ### --- FIN DEL CÓDIGO DE DIAGNÓSTICO --- ###
-
+    # El código de diagnóstico ya fue eliminado.
 
     if 'page' not in st.session_state:
         st.session_state.page = "login"
