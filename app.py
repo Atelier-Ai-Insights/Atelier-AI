@@ -67,7 +67,16 @@ PLAN_FEATURES = {
 # ==============================
 supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
-### ¡NUEVO! - Cliente con permisos de administrador ### try: supabase_admin: Client = create_client( st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"] ) except KeyError: st.error("Error: SUPABASE_SERVICE_KEY no encontrada en los secrets.") st.stop()
+### ¡NUEVO! - Cliente con permisos de administrador ###
+try:
+    supabase_admin: Client = create_client(
+        st.secrets["SUPABASE_URL"], 
+        st.secrets["SUPABASE_SERVICE_KEY"]
+    )
+except KeyError:
+    st.error("Error: SUPABASE_SERVICE_KEY no encontrada en los secrets de Streamlit.")
+    st.stop()
+
 
 # ==============================
 # Autenticación con Supabase Auth
@@ -108,12 +117,9 @@ def show_signup_page():
             st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
 
         except Exception as e:
-            ### ¡MODIFICACIÓN CLAVE! ###
-            # Imprimimos el error real en la terminal para un diagnóstico preciso
             print("----------- ERROR DETALLADO DE REGISTRO -----------")
             print(e)
             print("-------------------------------------------------")
-            # Mostramos el error real 'e' al usuario, en lugar del mensaje engañoso.
             st.error(f"Error en el registro: {e}")
 
 def show_login_page():
@@ -132,7 +138,7 @@ def show_login_page():
             user_id = response.user.id
 
             # 2. Busca el perfil del usuario para obtener el cliente Y EL ROL
-            # ¡MODIFICADO! - Añadimos 'role' a la consulta
+            ### ¡MODIFICADO! - Añadimos 'role' a la consulta ###
             user_profile = supabase.table("users").select("*, clients(client_name, plan), role").eq("id", user_id).single().execute()
             
             if user_profile.data and user_profile.data.get('clients'):
@@ -152,11 +158,6 @@ def show_login_page():
         except Exception as e:
             st.error("Credenciales incorrectas o cuenta no confirmada.")
     
-    # ... (El resto de la función sigue igual) ...
-    st.divider()
-    col1, col2 = st.columns(2)
-    # ... (etc) ...
-    
     st.divider()
     
     col1, col2 = st.columns(2)
@@ -165,12 +166,10 @@ def show_login_page():
             st.session_state.page = "signup"
             st.rerun()
     with col2:
-        ### ¡NUEVO! ### - Botón para ir a la página de reseteo
         if st.button("¿Olvidaste tu contraseña?", type="secondary"):
             st.session_state.page = "reset_password"
             st.rerun()
 
-### ¡NUEVO! ### - Página para solicitar el reseteo de contraseña
 def show_reset_password_page():
     st.header("Restablecer Contraseña")
     st.write("Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.")
@@ -411,7 +410,7 @@ def generate_final_report(question, db, selected_files):
         "Referencias:\n"
         "   - Cita el título del estudio (no el nombre del archivo), utilizando la información de la primera diapositiva o metadatos disponibles.\n\n"
         "Utiliza el siguiente resumen (Hallazgos Clave y Referencias) y la Información de Contexto para elaborar el informe:\n\n"
-        "5. MUY IMPORTANTE: Asegúrate de que los nombres de marcas y productos estén correctamente espaciados del texto circundante. Por ejemplo, escribe 'la marca Crem Helado debe...' en lugar de 'lamarcaCrem Heladodebe...'. Presta especial atención a este detalle de formato para asegurar la legibilidad.\n\n"
+        "5. MUY IMPORTANTE: Asegúrate de que los nombres de marcas y productos estén correctamente espaciados del texto circundan. Por ejemplo, escribe 'la marca Crem Helado debe...' en lugar de 'lamarcaCrem Heladodebe...'. Presta especial atención a este detalle de formato para asegurar la legibilidad.\n\n"
         f"Resumen de Hallazgos Clave y Referencias:\n{result1}\n\n"
         f"Información de Contexto Adicional (si es necesaria para complementar el resumen):\n{relevant_info}\n\n"
         "Por favor, redacta el informe completo respetando la estructura y las instrucciones, en un estilo profesional, claro, conciso y coherente."
@@ -422,7 +421,6 @@ def generate_final_report(question, db, selected_files):
     
 def report_mode(db, selected_files):
     st.markdown("### Generar Reporte de Reportes")
-    ### AJUSTE 1: Se añade la descripción de la solución ###
     st.markdown(
         "Esta es la herramienta más potente para la síntesis. A partir de una pregunta, el asistente analizará **todos los estudios seleccionados** y generará un único informe consolidado con introducción, hallazgos, insights, conclusiones y recomendaciones."
     )
@@ -506,71 +504,6 @@ def grounded_chat_mode(db, selected_files):
         pdf_bytes = generate_pdf_html("\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history), title="Historial de Consulta Directa", banner_path=banner_file)
         if pdf_bytes: st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat_consulta.pdf", mime="application/pdf")
         st.button("Nueva Conversación", on_click=reset_chat_workflow, key="new_grounded_chat_btn")
-
-
-# Función auxiliar para cargar clientes (con caché)
-@st.cache_data(ttl=600)
-def get_all_clients():
-    """Obtiene todos los clientes de la base de datos."""
-    try:
-        response = supabase.table("clients").select("id, client_name").execute()
-        return response.data
-    except Exception as e:
-        st.error(f"Error al cargar clientes: {e}")
-        return []
-
-# Página del panel de administrador
-def show_admin_invite_page():
-    st.header("Panel de Administrador")
-    st.subheader("Invitar Nuevo Usuario")
-
-    # 1. Cargar la lista de clientes
-    clients = get_all_clients()
-    if not clients:
-        st.warning("No se encontraron clientes para asignar.")
-        return
-
-    # Creamos un diccionario para el selectbox: {NombreVisible: id_interno}
-    client_map = {client['client_name']: client['id'] for client in clients}
-    
-    # 2. Formulario de invitación
-    with st.form("invite_form"):
-        email_to_invite = st.text_input("Correo Electrónico del Invitado")
-        selected_client_name = st.selectbox("Asignar al Cliente:", client_map.keys())
-        
-        submitted = st.form_submit_button("Enviar Invitación")
-
-    if submitted:
-        if not email_to_invite or not selected_client_name:
-            st.warning("Por favor, completa todos los campos.")
-            return
-
-        selected_client_id = client_map[selected_client_name]
-        
-        try:
-            st.write(f"Enviando invitación a {email_to_invite} para el cliente {selected_client_name}...")
-            
-            # 3. Llamada a la API de Admin
-            # Usamos el cliente 'supabase_admin'
-            supabase_admin.auth.admin.invite_user_by_email(
-                email_to_invite,
-                options={
-                    "data": {
-                        # Esto es CRUCIAL. Pasa el client_id en los metadatos
-                        # para que tu Trigger de base de datos lo pueda leer.
-                        'client_id': selected_client_id
-                    }
-                }
-            )
-            
-            st.success(f"¡Invitación enviada exitosamente a {email_to_invite}!")
-            st.info("El usuario recibirá un correo para establecer su contraseña. Su perfil ya está vinculado al cliente correcto.")
-
-        except Exception as e:
-            st.error(f"Error al enviar la invitación: {e}")
-            st.error("Verifica que el usuario no exista ya o que tu clave de servicio (service_key) sea correcta.")
-
-
 
 def ideacion_mode(db, selected_files):
     st.subheader("Conversaciones Creativas")
@@ -688,6 +621,71 @@ def idea_evaluator_mode(db, selected_files):
                     else:
                         st.error("No se pudo generar la evaluación.")
 
+### ¡NUEVAS FUNCIONES PARA EL PANEL DE ADMIN! ###
+
+# Función auxiliar para cargar clientes (con caché)
+@st.cache_data(ttl=600)
+def get_all_clients():
+    """Obtiene todos los clientes de la base de datos."""
+    try:
+        response = supabase.table("clients").select("id, client_name").execute()
+        return response.data
+    except Exception as e:
+        st.error(f"Error al cargar clientes: {e}")
+        return []
+
+# Página del panel de administrador
+def show_admin_invite_page():
+    st.header("Panel de Administrador")
+    st.subheader("Invitar Nuevo Usuario")
+
+    # 1. Cargar la lista de clientes
+    clients = get_all_clients()
+    if not clients:
+        st.warning("No se encontraron clientes para asignar.")
+        return
+
+    # Creamos un diccionario para el selectbox: {NombreVisible: id_interno}
+    client_map = {client['client_name']: client['id'] for client in clients}
+    
+    # 2. Formulario de invitación
+    with st.form("invite_form"):
+        email_to_invite = st.text_input("Correo Electrónico del Invitado")
+        selected_client_name = st.selectbox("Asignar al Cliente:", client_map.keys())
+        
+        submitted = st.form_submit_button("Enviar Invitación")
+
+    if submitted:
+        if not email_to_invite or not selected_client_name:
+            st.warning("Por favor, completa todos los campos.")
+            return
+
+        selected_client_id = client_map[selected_client_name]
+        
+        try:
+            st.write(f"Enviando invitación a {email_to_invite} para el cliente {selected_client_name}...")
+            
+            # 3. Llamada a la API de Admin
+            # Usamos el cliente 'supabase_admin'
+            supabase_admin.auth.admin.invite_user_by_email(
+                email_to_invite,
+                options={
+                    "data": {
+                        # Esto es CRUCIAL. Pasa el client_id en los metadatos
+                        # para que tu Trigger de base de datos lo pueda leer.
+                        'client_id': selected_client_id
+                    }
+                }
+            )
+            
+            st.success(f"¡Invitación enviada exitosamente a {email_to_invite}!")
+            st.info("El usuario recibirá un correo para establecer su contraseña. Su perfil ya está vinculado al cliente correcto.")
+
+        except Exception as e:
+            st.error(f"Error al enviar la invitación: {e}")
+            st.error("Verifica que el usuario no exista ya o que tu clave de servicio (service_key) sea correcta.")
+
+
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
@@ -712,27 +710,28 @@ def main():
                     st.session_state.page = "login"
                     st.rerun()
             
-            ### ¡CORRECCIÓN AÑADIDA AQUÍ! ###
-            # Añadimos la condición para mostrar la página de reseteo
             elif st.session_state.page == "reset_password":
                 show_reset_password_page()
-                # Añadimos un botón para volver al login
                 if st.button("Volver a Iniciar Sesión"):
                     st.session_state.page = "login"
                     st.rerun()
-        ### ¡NUEVO! - Footer para páginas de login/signup/reset ###
+        
         st.divider()
         st.markdown(footer_html, unsafe_allow_html=True)
-        ### --- Fin del Footer ---
 
         st.stop() # Detiene la ejecución para usuarios no logueados
 
     # --- El resto de tu código para usuarios logueados ---
+    
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     st.sidebar.divider()
     
-    # ... (try: db_full = load_database...) ...
+    try:
+        db_full = load_database(st.session_state.cliente)
+    except Exception as e:
+        st.error(f"Error crítico al cargar la base de datos: {e}")
+        st.stop()
     
     db_filtered = db_full[:]
     user_features = st.session_state.plan_features
@@ -756,48 +755,40 @@ def main():
         st.session_state.pop("generated_concept", None)
         st.session_state.pop("evaluation_result", None)
 
-    # ==================================
-    # === SECCIÓN DE FILTROS AJUSTADA ===
-    # ==================================
     st.sidebar.header("Filtros de Búsqueda")
-
-    # Filtro de Marcas (Multiselect)
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
     selected_marcas = st.sidebar.multiselect("Seleccione la(s) marca(s):", marcas_options)
     if selected_marcas:
         db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
 
-    # Filtro de Años (Multiselect)
     years_options = sorted({doc.get("marca", "") for doc in db_full if doc.get("marca")})
     selected_years = st.sidebar.multiselect("Seleccione el/los año(s):", years_options)
     if selected_years:
         db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
-    # Filtro de Proyectos (Multiselect)
-    # Las opciones de proyectos se basan en la base de datos ya filtrada por marca y año
     brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered})
     selected_brands = st.sidebar.multiselect("Seleccione el/los proyecto(s):", brands_options)
     if selected_brands:
         db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
-    ### AJUSTE 2: Se elimina la opción de calificar el informe ###
     if modo == "Generar un reporte de reportes":
-        # st.sidebar.radio("Califique el informe:", [1, 2, 3, 4, 5], horizontal=True, key="rating")
-        pass # Se deja vacío para eliminar la opción
+        pass 
 
     if st.sidebar.button("Cerrar Sesión", key="logout_main"):
         supabase.auth.sign_out()
         st.session_state.clear()
         st.rerun()
 
-    ### ¡NUEVO! - Footer añadido al final del SIDEBAR ###
     st.sidebar.divider()
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
-    ### --- Fin del Footer del Sidebar ---
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
-if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
+
+    ### ¡AQUÍ ESTÁ LA CORRECCIÓN DE INDENTACIÓN! ###
+    # Todas estas líneas (if/elif) deben estar al mismo nivel.
+    
+    if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
     elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
@@ -806,7 +797,6 @@ if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_f
     ### ¡NUEVO! - Condición para renderizar la página de admin ###
     elif modo == "Admin - Invitar Usuario":
         show_admin_invite_page()
-
         
 if __name__ == "__main__":
     main()
