@@ -98,52 +98,11 @@ def show_signup_page():
             st.error(f"Error en el registro: {e}")
 
 def show_login_page():
-    
-    # --- PASO 1: Inyectar CSS para reducir espacios ---
-    # Este CSS "aprieta" los márgenes y rellenos de los elementos
-    # solo dentro del bloque que lo contiene.
-    st.markdown("""
-    <style>
-        /* Reduce el padding (relleno) alrededor de cada widget */
-        div[data-testid="stVerticalBlock"] div[data-testid="stBlock"] {
-            padding-top: 0.25rem;
-            padding-bottom: 0.25rem;
-        }
-        /* Reduce el margen inferior del título "Iniciar Sesión" */
-        h1 {
-            margin-bottom: 0.5rem;
-        }
-        /* Reduce el espacio alrededor de la línea divisoria */
-        hr {
-            margin-top: 0.5rem;
-            margin-bottom: 1rem;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
     st.header("Iniciar Sesión")
+    email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
+    password = st.text_input("Contraseña", type="password", placeholder="password")
 
-    # --- PASO 2: Usar st.form y colapsar etiquetas ---
-    # st.form agrupa los inputs y el botón de "Ingresar"
-    with st.form(key="login_form"):
-        email = st.text_input(
-            "Correo Electrónico", 
-            placeholder="usuario@empresa.com", 
-            label_visibility="collapsed"  # <-- Oculta la etiqueta "Correo Electrónico"
-        )
-        
-        password = st.text_input(
-            "Contraseña", 
-            type="password", 
-            placeholder="Contraseña",     # <-- Usamos el placeholder como etiqueta
-            label_visibility="collapsed"  # <-- Oculta la etiqueta "Contraseña"
-        )
-
-        # El botón de submit para el formulario
-        submitted = st.form_submit_button("Ingresar", use_container_width=True)
-
-    # La lógica de login ahora se activa cuando el formulario es enviado
-    if submitted:
+    if st.button("Ingresar"):
         try:
             # 1. Autentica al usuario con Supabase Auth
             response = supabase.auth.sign_in_with_password({
@@ -173,12 +132,12 @@ def show_login_page():
     
     col1, col2 = st.columns(2)
     with col1:
-        # Usamos use_container_width para que los botones se vean mejor
-        if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
+        if st.button("¿No tienes cuenta? Regístrate", type="secondary"):
             st.session_state.page = "signup"
             st.rerun()
     with col2:
-        if st.button("¿Olvidaste tu contraseña?", type="secondary", use_container_width=True):
+        ### ¡NUEVO! ### - Botón para ir a la página de reseteo
+        if st.button("¿Olvidaste tu contraseña?", type="secondary"):
             st.session_state.page = "reset_password"
             st.rerun()
 
