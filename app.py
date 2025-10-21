@@ -23,9 +23,14 @@ import streamlit as st
 
 hide_st_style = """
     <style>
+    /* Oculta el menú de hamburguesa */
     #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+    
+    /* Oculta el encabezado de la app */
     header {visibility: hidden;}
+    
+    /* Oculta la barra de estado inferior completa (ambos iconos) */
+    [data-testid="stStatusWidget"] {visibility: hidden;}
     </style>
 """
 st.markdown(hide_st_style, unsafe_allow_html=True)
