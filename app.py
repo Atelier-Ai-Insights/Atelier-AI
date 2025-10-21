@@ -56,8 +56,6 @@ def show_signup_page():
     st.header("Crear Nueva Cuenta")
     email = st.text_input("Tu Correo Electrónico")
     password = st.text_input("Crea una Contraseña", type="password")
-    
-    # Se reemplaza el desplegable por un campo de texto para el código
     invite_code = st.text_input("Código de Invitación de tu Empresa")
 
     if st.button("Registrarse"):
