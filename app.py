@@ -74,8 +74,10 @@ try:
         st.secrets["SUPABASE_SERVICE_KEY"]
     )
 except KeyError:
+    # Este error solo se mostrará si la clave NO está en los secrets
     st.error("Error: SUPABASE_SERVICE_KEY no encontrada en los secrets de Streamlit.")
-    st.stop()
+    # El st.stop() aquí es opcional, pero útil si la clave es 100% necesaria
+    # st.stop() 
 
 
 # ==============================
@@ -138,7 +140,6 @@ def show_login_page():
             user_id = response.user.id
 
             # 2. Busca el perfil del usuario para obtener el cliente Y EL ROL
-            ### ¡MODIFICADO! - Añadimos 'role' a la consulta ###
             user_profile = supabase.table("users").select("*, clients(client_name, plan), role").eq("id", user_id).single().execute()
             
             if user_profile.data and user_profile.data.get('clients'):
@@ -149,7 +150,6 @@ def show_login_page():
                 st.session_state.plan = client_info.get('plan', 'Explorer')
                 st.session_state.plan_features = PLAN_FEATURES.get(st.session_state.plan, PLAN_FEATURES['Explorer'])
                 
-                ### ¡NUEVO! - Guardamos el rol del usuario ###
                 st.session_state.role = user_profile.data.get('role', 'user') 
                 
                 st.rerun()
@@ -181,7 +181,6 @@ def show_reset_password_page():
             return
         
         try:
-            # Esta función le pide a Supabase que envíe el correo de reseteo
             supabase.auth.reset_password_for_email(email)
             st.success("¡Correo enviado! Revisa tu bandeja de entrada.")
             st.info("Sigue las instrucciones del correo para crear una nueva contraseña. Una vez creada, podrás iniciar sesión.")
@@ -690,6 +689,24 @@ def show_admin_invite_page():
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
 def main():
+    ### --- CÓDIGO DE DIAGNÓSTICO INSERTADO --- ###
+    st.header("Diagnóstico de Secretos")
+    st.write("Verificando SUPABASE_SERVICE_KEY...")
+    
+    # Usamos st.secrets.get() que es más seguro y no lanza error si no existe
+    if st.secrets.get("SUPABASE_SERVICE_KEY"):
+        st.success("¡ÉXITO! La clave SUPABASE_SERVICE_KEY SÍ fue encontrada.")
+    else:
+        st.error("¡FALLA! La clave SUPABASE_SERVICE_KEY NO fue encontrada.")
+    
+    st.subheader("Todos los nombres de secretos que la app puede ver:")
+    # Esto es seguro, solo imprime los NOMBRES (las "keys"), no los valores.
+    st.write(list(st.secrets.keys()))
+    
+    st.divider()
+    ### --- FIN DEL CÓDIGO DE DIAGNÓSTICO --- ###
+
+
     if 'page' not in st.session_state:
         st.session_state.page = "login"
 
@@ -742,9 +759,8 @@ def main():
     if user_features.get("has_concept_generation"): modos_disponibles.append("Generación de conceptos")
     if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
 
-    ### ¡NUEVO! - Comprobación de rol para modo Admin ###
     if st.session_state.get("role") == "admin":
-        modos_disponibles.append("Admin - Invitar Usuario") # Añade el modo a la lista
+        modos_disponibles.append("Admin - Invitar Usuario") 
 
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed")
@@ -784,17 +800,12 @@ def main():
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
-
-    ### ¡AQUÍ ESTÁ LA CORRECCIÓN DE INDENTACIÓN! ###
-    # Todas estas líneas (if/elif) deben estar al mismo nivel.
     
     if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
     elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
-    
-    ### ¡NUEVO! - Condición para renderizar la página de admin ###
     elif modo == "Admin - Invitar Usuario":
         show_admin_invite_page()
         
