@@ -67,6 +67,8 @@ PLAN_FEATURES = {
 # ==============================
 supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
+### ¡NUEVO! - Cliente con permisos de administrador ### try: supabase_admin: Client = create_client( st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"] ) except KeyError: st.error("Error: SUPABASE_SERVICE_KEY no encontrada en los secrets.") st.stop()
+
 # ==============================
 # Autenticación con Supabase Auth
 # ==============================
@@ -129,8 +131,9 @@ def show_login_page():
             
             user_id = response.user.id
 
-            # 2. Busca el perfil del usuario para obtener el cliente
-            user_profile = supabase.table("users").select("*, clients(client_name, plan)").eq("id", user_id).single().execute()
+            # 2. Busca el perfil del usuario para obtener el cliente Y EL ROL
+            # ¡MODIFICADO! - Añadimos 'role' a la consulta
+            user_profile = supabase.table("users").select("*, clients(client_name, plan), role").eq("id", user_id).single().execute()
             
             if user_profile.data and user_profile.data.get('clients'):
                 client_info = user_profile.data['clients']
@@ -139,11 +142,20 @@ def show_login_page():
                 st.session_state.cliente = client_info['client_name'].lower()
                 st.session_state.plan = client_info.get('plan', 'Explorer')
                 st.session_state.plan_features = PLAN_FEATURES.get(st.session_state.plan, PLAN_FEATURES['Explorer'])
+                
+                ### ¡NUEVO! - Guardamos el rol del usuario ###
+                st.session_state.role = user_profile.data.get('role', 'user') 
+                
                 st.rerun()
             else:
                 st.error("Perfil de usuario no encontrado. Contacta al administrador.")
         except Exception as e:
             st.error("Credenciales incorrectas o cuenta no confirmada.")
+    
+    # ... (El resto de la función sigue igual) ...
+    st.divider()
+    col1, col2 = st.columns(2)
+    # ... (etc) ...
     
     st.divider()
     
@@ -495,6 +507,71 @@ def grounded_chat_mode(db, selected_files):
         if pdf_bytes: st.download_button("Descargar Chat en PDF", data=pdf_bytes, file_name="chat_consulta.pdf", mime="application/pdf")
         st.button("Nueva Conversación", on_click=reset_chat_workflow, key="new_grounded_chat_btn")
 
+
+# Función auxiliar para cargar clientes (con caché)
+@st.cache_data(ttl=600)
+def get_all_clients():
+    """Obtiene todos los clientes de la base de datos."""
+    try:
+        response = supabase.table("clients").select("id, client_name").execute()
+        return response.data
+    except Exception as e:
+        st.error(f"Error al cargar clientes: {e}")
+        return []
+
+# Página del panel de administrador
+def show_admin_invite_page():
+    st.header("Panel de Administrador")
+    st.subheader("Invitar Nuevo Usuario")
+
+    # 1. Cargar la lista de clientes
+    clients = get_all_clients()
+    if not clients:
+        st.warning("No se encontraron clientes para asignar.")
+        return
+
+    # Creamos un diccionario para el selectbox: {NombreVisible: id_interno}
+    client_map = {client['client_name']: client['id'] for client in clients}
+    
+    # 2. Formulario de invitación
+    with st.form("invite_form"):
+        email_to_invite = st.text_input("Correo Electrónico del Invitado")
+        selected_client_name = st.selectbox("Asignar al Cliente:", client_map.keys())
+        
+        submitted = st.form_submit_button("Enviar Invitación")
+
+    if submitted:
+        if not email_to_invite or not selected_client_name:
+            st.warning("Por favor, completa todos los campos.")
+            return
+
+        selected_client_id = client_map[selected_client_name]
+        
+        try:
+            st.write(f"Enviando invitación a {email_to_invite} para el cliente {selected_client_name}...")
+            
+            # 3. Llamada a la API de Admin
+            # Usamos el cliente 'supabase_admin'
+            supabase_admin.auth.admin.invite_user_by_email(
+                email_to_invite,
+                options={
+                    "data": {
+                        # Esto es CRUCIAL. Pasa el client_id en los metadatos
+                        # para que tu Trigger de base de datos lo pueda leer.
+                        'client_id': selected_client_id
+                    }
+                }
+            )
+            
+            st.success(f"¡Invitación enviada exitosamente a {email_to_invite}!")
+            st.info("El usuario recibirá un correo para establecer su contraseña. Su perfil ya está vinculado al cliente correcto.")
+
+        except Exception as e:
+            st.error(f"Error al enviar la invitación: {e}")
+            st.error("Verifica que el usuario no exista ya o que tu clave de servicio (service_key) sea correcta.")
+
+
+
 def ideacion_mode(db, selected_files):
     st.subheader("Conversaciones Creativas")
     st.markdown("Este es un espacio para explorar ideas novedosas. Basado en los hallazgos, el asistente te ayudará a generar conceptos creativos.")
@@ -651,17 +728,11 @@ def main():
         st.stop() # Detiene la ejecución para usuarios no logueados
 
     # --- El resto de tu código para usuarios logueados ---
-    # (Este código solo se ejecuta si "logged_in" es True)
-    
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     st.sidebar.divider()
     
-    try:
-        db_full = load_database(st.session_state.cliente)
-    except Exception as e:
-        st.error(f"Error crítico al cargar la base de datos: {e}")
-        st.stop()
+    # ... (try: db_full = load_database...) ...
     
     db_filtered = db_full[:]
     user_features = st.session_state.plan_features
@@ -671,6 +742,10 @@ def main():
     if user_features.get("has_creative_conversation"): modos_disponibles.append("Conversaciones creativas")
     if user_features.get("has_concept_generation"): modos_disponibles.append("Generación de conceptos")
     if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
+
+    ### ¡NUEVO! - Comprobación de rol para modo Admin ###
+    if st.session_state.get("role") == "admin":
+        modos_disponibles.append("Admin - Invitar Usuario") # Añade el modo a la lista
 
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed")
@@ -722,11 +797,16 @@ def main():
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
-    if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
+if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
     elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
+    
+    ### ¡NUEVO! - Condición para renderizar la página de admin ###
+    elif modo == "Admin - Invitar Usuario":
+        show_admin_invite_page()
+
         
 if __name__ == "__main__":
     main()
