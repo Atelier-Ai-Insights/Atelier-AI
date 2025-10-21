@@ -131,9 +131,9 @@ def show_login_page():
             user_id = response.user.id
 
             # 2. Busca el perfil del usuario para obtener el cliente Y EL ROL DE ADMIN
-            ### ¡MODIFICACIÓN ADMIN (1/2)! ###
-            # Se añade "admin" al select
-            user_profile = supabase.table("users").select("*, admin, clients(client_name, plan)").eq("id", user_id).single().execute()
+            ### ¡MODIFICACIÓN ROL (1/2)! ###
+            # Se cambia "admin" por "rol"
+            user_profile = supabase.table("users").select("*, rol, clients(client_name, plan)").eq("id", user_id).single().execute()
             
             if user_profile.data and user_profile.data.get('clients'):
                 client_info = user_profile.data['clients']
@@ -143,9 +143,10 @@ def show_login_page():
                 st.session_state.plan = client_info.get('plan', 'Explorer')
                 st.session_state.plan_features = PLAN_FEATURES.get(st.session_state.plan, PLAN_FEATURES['Explorer'])
                 
-                ### ¡MODIFICACIÓN ADMIN (2/2)! ###
-                # Se guarda el estado de admin en la sesión
-                st.session_state.is_admin = user_profile.data.get('admin', False) 
+                ### ¡MODIFICACIÓN ROL (2/2)! ###
+                # Se cambia 'admin' por 'rol'
+                # Asumimos que el rol de admin se llama 'admin' dentro de la columna 'rol'
+                st.session_state.is_admin = (user_profile.data.get('rol', '') == 'admin')
                 
                 st.rerun()
             else:
@@ -690,7 +691,8 @@ def show_admin_dashboard():
     st.subheader("👥 Gestión de Usuarios", divider="rainbow")
     try:
         # Fetch users and their client info
-        users_response = supabase.table("users").select("email, created_at, admin, client_id, clients(client_name, plan)").order("created_at", desc=True).execute()
+        # AJUSTE: Se cambia "admin" por "rol" en el select
+        users_response = supabase.table("users").select("email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute()
         if users_response.data:
             st.write("**Usuarios Registrados**")
             # Flatten the data for easier display in dataframe
@@ -700,7 +702,8 @@ def show_admin_dashboard():
                 user_list.append({
                     "email": user.get('email'),
                     "creado_el": user.get('created_at'),
-                    "es_admin": user.get('admin', False),
+                    "rol": user.get('rol', 'user'), # Se muestra el rol
+                    "es_admin": (user.get('rol', '') == 'admin'), # Se calcula si es admin
                     "cliente": client_info.get('client_name') if client_info else "N/A",
                     "plan": client_info.get('plan') if client_info else "N/A"
                 })
