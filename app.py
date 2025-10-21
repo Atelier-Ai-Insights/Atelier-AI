@@ -10,6 +10,7 @@ import boto3
 import google.generativeai as genai
 import markdown2
 import streamlit as st
+import pandas as pd  # <-- IMPORTACIÓN AÑADIDA
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -129,8 +130,10 @@ def show_login_page():
             
             user_id = response.user.id
 
-            # 2. Busca el perfil del usuario para obtener el cliente
-            user_profile = supabase.table("users").select("*, clients(client_name, plan)").eq("id", user_id).single().execute()
+            # 2. Busca el perfil del usuario para obtener el cliente Y EL ROL DE ADMIN
+            ### ¡MODIFICACIÓN ADMIN (1/2)! ###
+            # Se añade "admin" al select
+            user_profile = supabase.table("users").select("*, admin, clients(client_name, plan)").eq("id", user_id).single().execute()
             
             if user_profile.data and user_profile.data.get('clients'):
                 client_info = user_profile.data['clients']
@@ -139,6 +142,11 @@ def show_login_page():
                 st.session_state.cliente = client_info['client_name'].lower()
                 st.session_state.plan = client_info.get('plan', 'Explorer')
                 st.session_state.plan_features = PLAN_FEATURES.get(st.session_state.plan, PLAN_FEATURES['Explorer'])
+                
+                ### ¡MODIFICACIÓN ADMIN (2/2)! ###
+                # Se guarda el estado de admin en la sesión
+                st.session_state.is_admin = user_profile.data.get('admin', False) 
+                
                 st.rerun()
             else:
                 st.error("Perfil de usuario no encontrado. Contacta al administrador.")
@@ -612,59 +620,110 @@ def idea_evaluator_mode(db, selected_files):
                         st.error("No se pudo generar la evaluación.")
 
 # =====================================================
-# FUNCIÓN PRINCIPAL DE LA APLICACIÓN
+# ¡NUEVO! PANEL DE ADMINISTRACIÓN
 # =====================================================
-def main():
-    if 'page' not in st.session_state:
-        st.session_state.page = "login"
+def show_admin_dashboard():
+    """
+    Muestra el panel de control para administradores.
+    """
+    
+    st.subheader("📊 Estadísticas de Uso", divider="rainbow")
+    with st.spinner("Cargando estadísticas..."):
+        try:
+            stats_response = supabase.table("queries").select("user_name, mode, timestamp").execute()
+            if stats_response.data:
+                df = pd.DataFrame(stats_response.data)
+                df['timestamp'] = pd.to_datetime(df['timestamp'])
+                df['date'] = df['timestamp'].dt.date
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write("**Consultas por Usuario (Total)**")
+                    user_counts = df.groupby('user_name')['mode'].count().reset_name(name='Total Consultas').sort_values(by="Total Consultas", ascending=False)
+                    st.dataframe(user_counts, use_container_width=True)
+                with col2:
+                    st.write("**Consultas por Modo de Uso (Total)**")
+                    mode_counts = df.groupby('mode')['user_name'].count().reset_name(name='Total Consultas').sort_values(by="Total Consultas", ascending=False)
+                    st.dataframe(mode_counts, use_container_width=True)
 
-    # --- Define el texto del footer (lo usaremos en ambos sitios) ---
-    footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
-    footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
+                st.write("**Actividad Reciente (Últimas 50 consultas)**")
+                st.dataframe(df.sort_values(by="timestamp", ascending=False).head(50), use_container_width=True)
 
-    if not st.session_state.get("logged_in"):
-        col1, col2, col3 = st.columns([1,2,1])
-        with col2:
-            st.image("LogoDataStudio.png")
-            if st.session_state.page == "login":
-                show_login_page()
+            else:
+                st.info("Aún no hay datos de uso registrados.")
+        except Exception as e:
+            st.error(f"Error al cargar estadísticas: {e}")
+
+    st.subheader("🔑 Gestión de Clientes (Invitaciones)", divider="rainbow")
+    try:
+        clients_response = supabase.table("clients").select("client_name, plan, invite_code, created_at").order("created_at", desc=True).execute()
+        if clients_response.data:
+            st.write("**Clientes Actuales**")
+            st.dataframe(clients_response.data, use_container_width=True)
+        else:
+            st.info("No hay clientes registrados.")
+    except Exception as e:
+        st.error(f"Error al cargar clientes: {e}")
+
+    with st.expander("➕ Crear Nuevo Cliente y Código de Invitación"):
+        with st.form("new_client_form"):
+            new_client_name = st.text_input("Nombre del Nuevo Cliente")
+            new_plan = st.selectbox("Plan Asignado", options=list(PLAN_FEATURES.keys()), index=0)
+            new_invite_code = st.text_input("Nuevo Código de Invitación (Ej: CLIENTE2025)")
             
-            elif st.session_state.page == "signup":
-                show_signup_page()
-                if st.button("¿Ya tienes cuenta? Inicia Sesión"):
-                    st.session_state.page = "login"
-                    st.rerun()
-            
-            ### ¡CORRECCIÓN AÑADIDA AQUÍ! ###
-            # Añadimos la condición para mostrar la página de reseteo
-            elif st.session_state.page == "reset_password":
-                show_reset_password_page()
-                # Añadimos un botón para volver al login
-                if st.button("Volver a Iniciar Sesión"):
-                    st.session_state.page = "login"
-                    st.rerun()
-        ### ¡NUEVO! - Footer para páginas de login/signup/reset ###
-        st.divider()
-        st.markdown(footer_html, unsafe_allow_html=True)
-        ### --- Fin del Footer ---
+            submitted = st.form_submit_button("Crear Cliente")
+            if submitted:
+                if not new_client_name or not new_plan or not new_invite_code:
+                    st.warning("Por favor, completa todos los campos.")
+                else:
+                    try:
+                        supabase.table("clients").insert({
+                            "client_name": new_client_name,
+                            "plan": new_plan,
+                            "invite_code": new_invite_code
+                        }).execute()
+                        st.success(f"Cliente '{new_client_name}' creado con éxito. Ya pueden registrarse con el código: {new_invite_code}")
+                        st.rerun() # Refresca la lista de clientes
+                    except Exception as e:
+                        st.error(f"Error al crear cliente: {e} (¿Quizás el código de invitación ya existe?)")
 
-        st.stop() # Detiene la ejecución para usuarios no logueados
+    st.subheader("👥 Gestión de Usuarios", divider="rainbow")
+    try:
+        # Fetch users and their client info
+        users_response = supabase.table("users").select("email, created_at, admin, client_id, clients(client_name, plan)").order("created_at", desc=True).execute()
+        if users_response.data:
+            st.write("**Usuarios Registrados**")
+            # Flatten the data for easier display in dataframe
+            user_list = []
+            for user in users_response.data:
+                client_info = user.get('clients')
+                user_list.append({
+                    "email": user.get('email'),
+                    "creado_el": user.get('created_at'),
+                    "es_admin": user.get('admin', False),
+                    "cliente": client_info.get('client_name') if client_info else "N/A",
+                    "plan": client_info.get('plan') if client_info else "N/A"
+                })
+            st.dataframe(user_list, use_container_width=True)
+        else:
+            st.info("No hay usuarios registrados.")
+    except Exception as e:
+        st.error(f"Error al cargar usuarios: {e}")
 
-    # --- El resto de tu código para usuarios logueados ---
-    # (Este código solo se ejecuta si "logged_in" es True)
+
+# =====================================================
+# ¡NUEVO! FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA)
+# =====================================================
+def run_user_mode(db_full, user_features, footer_html):
+    """
+    Ejecuta toda la lógica de la aplicación para el modo de usuario estándar.
+    """
     
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     st.sidebar.divider()
     
-    try:
-        db_full = load_database(st.session_state.cliente)
-    except Exception as e:
-        st.error(f"Error crítico al cargar la base de datos: {e}")
-        st.stop()
-    
     db_filtered = db_full[:]
-    user_features = st.session_state.plan_features
     
     modos_disponibles = ["Chat de Consulta Directa"]
     if user_features.get("has_report_generation"): modos_disponibles.insert(0, "Generar un reporte de reportes")
@@ -727,6 +786,90 @@ def main():
     elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
+
+
+# =====================================================
+# FUNCIÓN PRINCIPAL DE LA APLICACIÓN (MODIFICADA)
+# =====================================================
+def main():
+    if 'page' not in st.session_state:
+        st.session_state.page = "login"
+
+    # --- Define el texto del footer (lo usaremos en ambos sitios) ---
+    footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
+    footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
+
+    if not st.session_state.get("logged_in"):
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            st.image("LogoDataStudio.png")
+            if st.session_state.page == "login":
+                show_login_page()
+            
+            elif st.session_state.page == "signup":
+                show_signup_page()
+                if st.button("¿Ya tienes cuenta? Inicia Sesión"):
+                    st.session_state.page = "login"
+                    st.rerun()
+            
+            ### ¡CORRECCIÓN AÑADIDA AQUÍ! ###
+            # Añadimos la condición para mostrar la página de reseteo
+            elif st.session_state.page == "reset_password":
+                show_reset_password_page()
+                # Añadimos un botón para volver al login
+                if st.button("Volver a Iniciar Sesión"):
+                    st.session_state.page = "login"
+                    st.rerun()
+        ### ¡NUEVO! - Footer para páginas de login/signup/reset ###
+        st.divider()
+        st.markdown(footer_html, unsafe_allow_html=True)
+        ### --- Fin del Footer ---
+
+        st.stop() # Detiene la ejecución para usuarios no logueados
+
+    # --- El resto de tu código para usuarios logueados ---
+    
+    # Cargamos la base de datos UNA VEZ
+    try:
+        db_full = load_database(st.session_state.cliente)
+    except Exception as e:
+        st.error(f"Error crítico al cargar la base de datos: {e}")
+        st.stop()
+    
+    user_features = st.session_state.plan_features
+    
+    # --- ¡NUEVO! SELECCIÓN DE VISTA ADMIN/USUARIO ---
+    
+    if st.session_state.get("is_admin", False):
+        # El administrador ve PESTAÑAS para cambiar de modo
+        tab_user, tab_admin = st.tabs(["[ 👤 Modo Usuario ]", "[ 👑 Modo Administrador ]"])
+        
+        with tab_user:
+            # Ejecuta la aplicación normal en modo usuario
+            run_user_mode(db_full, user_features, footer_html)
+
+        with tab_admin:
+            # Muestra el panel de administración
+            st.title("Panel de Administración 👑")
+            st.write(f"Bienvenido, {st.session_state.user}. Aquí puedes gestionar la plataforma.")
+            
+            show_admin_dashboard()
+            
+            # Sidebar específico para el modo admin (solo para cerrar sesión)
+            st.sidebar.image("LogoDataStudio.png")
+            st.sidebar.write(f"Usuario (Admin): {st.session_state.user}")
+            st.sidebar.divider()
+            if st.sidebar.button("Cerrar Sesión", key="logout_admin"):
+                supabase.auth.sign_out()
+                st.session_state.clear()
+                st.rerun()
+            st.sidebar.divider()
+            st.sidebar.markdown(footer_html, unsafe_allow_html=True)
+            
+    else:
+        # El usuario normal solo ve la aplicación de usuario
+        run_user_mode(db_full, user_features, footer_html)
+
         
 if __name__ == "__main__":
     main()
