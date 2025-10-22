@@ -383,7 +383,7 @@ class PDFReport:
         canvas.restoreState()
     def footer(self, canvas, doc):
         canvas.saveState()
-        footer_text = "Generado por Atelier Data Studio IA. Es posible que se muestre información imprecisa. Verifica las respuestas."
+        footer_text = "Generado por Atelier Data Studio. Es posible que se muestre información imprecisa. Verifica las respuestas."
         p = Paragraph(footer_text, self.styles['CustomFooter']); w, h = p.wrap(doc.width, doc.bottomMargin); p.drawOn(canvas, doc.leftMargin, 5 * mm)
         page_num = canvas.getPageNumber(); page_text = f"Página {page_num}"; p_page = Paragraph(page_text, self.styles['CustomFooter'])
         w_page, h_page = p_page.wrap(doc.width, doc.bottomMargin); p_page.drawOn(canvas, doc.width + doc.leftMargin - w_page, 5 * mm)
