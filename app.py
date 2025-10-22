@@ -22,6 +22,62 @@ from reportlab.pdfbase import pdfmetrics
 
 import streamlit as st
 
+# --- CSS PARA ESTILO DE PESTAÑAS TIPO NAVEGADOR ---
+st.markdown("""
+<style>
+    /* Contenedor principal de las pestañas */
+    div[data-testid="stTabs"] > div[role="tablist"] {
+        border-bottom: 1px solid #e0e0e0; /* Línea base */
+        gap: 5px; /* Espacio entre pestañas */
+        padding-bottom: 0px; /* Eliminar padding inferior si existe */
+    }
+
+    /* Botones individuales de las pestañas (inactivas) */
+    button[data-baseweb="tab"] {
+        border: 1px solid #e0e0e0;
+        border-bottom: none; /* Sin borde inferior para conectar */
+        border-radius: 8px 8px 0 0; /* Bordes redondeados arriba */
+        padding: 10px 18px !important;
+        margin: 0px; /* Resetear margen */
+        background-color: #f0f0f0; /* Fondo gris claro inactivo */
+        color: #555; /* Texto gris oscuro */
+        transition: background-color 0.2s ease, color 0.2s ease;
+        position: relative; /* Para el posicionamiento del :after */
+        bottom: -1px; /* Bajar 1px para alinearse con la línea base */
+    }
+
+     /* Efecto hover en pestañas inactivas */
+    button[data-baseweb="tab"]:not([aria-selected="true"]):hover {
+        background-color: #e5e5e5;
+        color: #333;
+    }
+
+    /* Pestaña activa */
+    button[data-baseweb="tab"][aria-selected="true"] {
+        background-color: white; /* Fondo blanco (color del contenido) */
+        border-color: #e0e0e0; /* Mismo color de borde */
+        color: #0068c9; /* Color de texto principal */
+        font-weight: 600; /* Un poco más grueso */
+        /* La clave: el borde inferior es blanco para 'ocultar' la línea base */
+        border-bottom-color: white !important;
+        z-index: 1; /* Ponerla por encima de la línea base */
+    }
+
+    /* Ocultar la línea azul indicadora por defecto */
+     div[data-baseweb="tab-highlight"] {
+        display: none;
+    }
+
+    /* Contenido debajo de las pestañas (asegurar que no haya espacio extra arriba) */
+    div[data-testid="stTabContent"] {
+        padding-top: 20px; /* Ajustar según sea necesario */
+        border-top: none; /* Asegurar que no haya doble borde */
+    }
+</style>
+""", unsafe_allow_html=True)
+# --- FIN CSS PESTAÑAS ---
+
+
 hide_st_style = """
     <style>
     /* Oculta el menú de hamburguesa */
@@ -39,74 +95,18 @@ hide_st_style = """
 """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
-# --- CSS PARA ESTILO DE PESTAÑAS TIPO NAVEGADOR ---
-browser_tab_style = """
-    <style>
-        /* Contenedor principal de las pestañas - añade borde inferior */
-        [data-testid="stTabs"] {
-            border-bottom: 1px solid #cccccc;
-            padding-bottom: 0px; /* Ajustar si es necesario */
-        }
-
-        /* Botones individuales de las pestañas */
-        [data-baseweb="tab"] {
-            border: 1px solid #cccccc; /* Borde gris */
-            border-bottom: none; /* Sin borde inferior inicial */
-            border-radius: 6px 6px 0 0; /* Esquinas superiores redondeadas */
-            padding: 10px 18px !important; /* Ajustar padding */
-            margin-right: 3px; /* Espacio entre pestañas */
-            margin-bottom: -1px; /* Para solapar el borde inferior del contenedor */
-            background-color: #e0e0e0; /* Fondo gris claro (inactiva) */
-            position: relative; /* Necesario para el solapamiento */
-            transition: background-color 0.2s ease;
-            font-size: 14px; /* Tamaño de fuente opcional */
-        }
-
-        /* Efecto hover en pestañas inactivas */
-        [data-baseweb="tab"]:not([aria-selected="true"]):hover {
-            background-color: #d0d0d0;
-        }
-
-        /* Pestaña activa */
-        [data-baseweb="tab"][aria-selected="true"] {
-            background-color: white; /* Fondo blanco (asume fondo de página blanco) */
-            border-color: #cccccc; /* Mismo color de borde */
-            /* La pestaña activa "cubre" el borde inferior del contenedor */
-            color: #0068c9; /* Color de texto para activa */
-            font-weight: 500; /* Un poco más de énfasis */
-            z-index: 1; /* Asegura que esté por encima del borde inferior */
-        }
-
-        /* Ocultar la línea azul por defecto de Streamlit */
-         [data-baseweb="tab-highlight"] {
-            display: none;
-        }
-
-         /* Contenedor del contenido debajo de las pestañas */
-         [data-testid="stTabContent"] {
-             /* Opcional: añade un borde alrededor del contenido que "conecte" con la pestaña */
-             /* border: 1px solid #cccccc; */
-             /* border-top: none; */
-             /* border-radius: 0 0 6px 6px; */
-             padding: 15px; /* Padding interno del contenido */
-             padding-top: 25px; /* Más espacio arriba debajo de la pestaña */
-         }
-    </style>
-"""
-st.markdown(browser_tab_style, unsafe_allow_html=True)
-# --- FIN CSS PESTAÑAS ---
-
 # Registrar fuente Unicode para tildes/ñ
 FONT_REGISTERED = False
 FONT_NAME = 'DejaVuSans'
-FALLBACK_FONT_NAME = 'Helvetica'
+FALLBACK_FONT_NAME = 'Helvetica' # Fuente por defecto de ReportLab
 try:
+    # Asegúrate que 'DejaVuSans.ttf' está en tu repositorio o es accesible
     pdfmetrics.registerFont(TTFont(FONT_NAME, 'DejaVuSans.ttf'))
     FONT_REGISTERED = True
     print(f"INFO: Fuente '{FONT_NAME}' registrada correctamente para PDF.")
 except Exception as e:
     st.sidebar.warning(f"Advertencia PDF: No se encontró '{FONT_NAME}.ttf'. Caracteres especiales podrían no mostrarse. Usando '{FALLBACK_FONT_NAME}'. Error: {e}")
-    FONT_NAME = FALLBACK_FONT_NAME
+    FONT_NAME = FALLBACK_FONT_NAME # Usar fallback si falla el registro
 
 # ==============================
 # DEFINICIÓN DE PLANES Y PERMISOS
@@ -420,7 +420,7 @@ class PDFReport:
                     if style_name == 'Code':
                         if pdf_font_name == FALLBACK_FONT_NAME or not FONT_REGISTERED: self.styles[style_name].fontName = 'Courier'
                         self.styles[style_name].fontSize = 9; self.styles[style_name].leading = 11; self.styles[style_name].leftIndent = 6*mm
-                except Exception as e: print(f"Warn: Cannot apply font '{pdf_font_name}' to base style '{style_name}'. {e}")
+                except Exception as e: print(f"Warn: Font '{pdf_font_name}' -> '{style_name}'. {e}")
         self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], fontName=pdf_font_name, alignment=1, spaceAfter=12, fontSize=14, leading=18))
         self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['Heading2'], fontName=pdf_font_name, spaceBefore=10, spaceAfter=6, fontSize=12, leading=16))
         self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], fontName=pdf_font_name, leading=14, alignment=4, fontSize=11))
@@ -430,35 +430,27 @@ class PDFReport:
         canvas.saveState()
         if self.banner_path and os.path.isfile(self.banner_path):
             try: img_w, img_h = 210*mm, 35*mm; y_pos = A4[1] - img_h; canvas.drawImage(self.banner_path, 0, y_pos, width=img_w, height=img_h, preserveAspectRatio=True, anchor='n')
-            except Exception as e: print(f"Error drawing PDF header: {e}")
+            except Exception as e: print(f"Error PDF header: {e}")
         canvas.restoreState()
     def footer(self, canvas, doc):
-        canvas.saveState()
-        footer_text = "Generado por Atelier Data Studio IA. Info imprecisa es posible. Verifica respuestas."
-        p = Paragraph(footer_text, self.styles['CustomFooter']); w, h = p.wrap(doc.width, doc.bottomMargin); p.drawOn(canvas, doc.leftMargin, 5 * mm)
-        canvas.restoreState()
+        canvas.saveState(); footer_text = "Generado por Atelier Data Studio IA..."; p = Paragraph(footer_text, self.styles['CustomFooter']); w, h = p.wrap(doc.width, doc.bottomMargin); p.drawOn(canvas, doc.leftMargin, 5 * mm); canvas.restoreState()
     def header_footer(self, canvas, doc): self.header(canvas, doc); self.footer(canvas, doc)
     def add_paragraph(self, text, style='CustomBodyText'):
-        try:
-            style_to_use = self.styles.get(style, self.styles.get('BodyText', self.styles['Normal']))
-            p = Paragraph(text, style_to_use); self.elements.append(p); self.elements.append(Spacer(1, 4))
-        except Exception as e: print(f"Error adding paragraph: {e}. Text: {text[:100]}..."); self.elements.append(Paragraph(f"Error: {text[:100]}...", self.styles['Code']))
+        try: style_to_use = self.styles.get(style, self.styles.get('BodyText', self.styles['Normal'])); p = Paragraph(text, style_to_use); self.elements.append(p); self.elements.append(Spacer(1, 4))
+        except Exception as e: print(f"Err add para: {e}. Text: {text[:100]}..."); self.elements.append(Paragraph(f"Err render: {text[:100]}...", self.styles['Code']))
     def add_title(self, text, level=1):
         if level == 1: style_name = 'CustomTitle'
         elif level == 2: style_name = 'CustomHeading'
         elif level >= 3: style_name = f'Heading{level}'
         else: style_name = 'CustomHeading'
-        style_to_use = self.styles.get(style_name, self.styles['CustomHeading'])
-        p = Paragraph(text, style_to_use); spacer_height = 10 if level == 1 else (6 if level == 2 else 4)
-        self.elements.append(p); self.elements.append(Spacer(1, spacer_height))
+        style_to_use = self.styles.get(style_name, self.styles['CustomHeading']); p = Paragraph(text, style_to_use); spacer_height = 10 if level == 1 else (6 if level == 2 else 4); self.elements.append(p); self.elements.append(Spacer(1, spacer_height))
     def build_pdf(self):
         try: self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
         except Exception as e: st.error(f"Error building PDF: {e}")
 
 def generate_pdf_html(content, title="Documento Final", banner_path=None):
     try:
-        buffer = BytesIO(); pdf = PDFReport(buffer, banner_path=banner_path); pdf.add_title(title, level=1)
-        add_markdown_content(pdf, content); pdf.build_pdf(); pdf_data = buffer.getvalue(); buffer.close()
+        buffer = BytesIO(); pdf = PDFReport(buffer, banner_path=banner_path); pdf.add_title(title, level=1); add_markdown_content(pdf, content); pdf.build_pdf(); pdf_data = buffer.getvalue(); buffer.close()
         if pdf_data: return pdf_data
         else: st.error("Error interno al construir PDF."); return None
     except Exception as e: st.error(f"Error crítico al generar PDF: {e}"); return None
@@ -582,7 +574,7 @@ def idea_evaluator_mode(db, selected_files):
 # PANEL DE ADMINISTRACIÓN (CON EDICIÓN DE USUARIOS)
 # =====================================================
 def show_admin_dashboard():
-    st.subheader("📊 Estadísticas de Uso", divider="rainbow")
+    st.subheader("Estadísticas de Uso", divider="grey")
     with st.spinner("Cargando estadísticas..."):
         try:
             stats_response = supabase.table("queries").select("user_name, mode, timestamp, query").execute()
@@ -595,7 +587,7 @@ def show_admin_dashboard():
             else: st.info("Aún no hay datos de uso.")
         except Exception as e: st.error(f"Error cargando estadísticas: {e}")
 
-    st.subheader("🔑 Gestión de Clientes (Invitaciones)", divider="rainbow")
+    st.subheader("Gestión de Clientes (Invitaciones)", divider="grey")
     try:
         clients_response = supabase.table("clients").select("client_name, plan, invite_code, created_at").order("created_at", desc=True).execute()
         if clients_response.data: st.write("**Clientes Actuales**"); df_clients = pd.DataFrame(clients_response.data); df_clients['created_at'] = pd.to_datetime(df_clients['created_at']).dt.strftime('%Y-%m-%d'); st.dataframe(df_clients, use_container_width=True, hide_index=True)
@@ -611,7 +603,7 @@ def show_admin_dashboard():
                 try: supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"]); supabase_admin_client.table("clients").insert({"client_name": new_client_name, "plan": new_plan, "invite_code": new_invite_code}).execute(); st.success(f"Cliente '{new_client_name}' creado. Código: {new_invite_code}")
                 except Exception as e: st.error(f"Error al crear: {e}")
 
-    st.subheader("👥 Gestión de Usuarios", divider="rainbow")
+    st.subheader("Gestión de Usuarios", divider="grey")
     try:
         if "SUPABASE_SERVICE_KEY" not in st.secrets: st.error("Falta 'SUPABASE_SERVICE_KEY'"); st.stop()
         supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
@@ -722,10 +714,11 @@ def main():
     user_features = st.session_state.plan_features
 
     if st.session_state.get("is_admin", False):
-        tab_user, tab_admin = st.tabs(["[ 👤 Modo Usuario ]", "[ 👑 Modo Administrador ]"])
+        # Usar emojis en las etiquetas para diferenciarlas visualmente
+        tab_user, tab_admin = st.tabs(["👤 Modo Usuario", "👑 Modo Administrador"])
         with tab_user: run_user_mode(db_full, user_features, footer_html)
         with tab_admin:
-            st.title("Panel de Administración 👑")
+            st.title("Panel de Administración 👑") # Añadir emoji al título también
             st.write(f"Gestionando como: {st.session_state.user}")
             show_admin_dashboard()
     else: run_user_mode(db_full, user_features, footer_html)
