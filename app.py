@@ -694,7 +694,7 @@ def show_admin_dashboard():
         if "SUPABASE_SERVICE_KEY" not in st.secrets: st.error("Falta 'SUPABASE_SERVICE_KEY'"); st.stop()
         supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
         users_response = supabase_admin_client.table("users").select("id, email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute()
-if users_response.data:
+        if users_response.data:
                 st.write("**Usuarios Registrados** (Puedes editar Rol)")
                 user_list = []
                 # --- INICIO SECCIÓN CORREGIDA ---
