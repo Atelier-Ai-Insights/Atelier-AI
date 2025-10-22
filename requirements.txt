@@ -106,3 +106,4 @@ virtualenv==20.30.0
 websockets==14.2
 yarl==1.18.3
 beautifulsoup4
+Pillow
