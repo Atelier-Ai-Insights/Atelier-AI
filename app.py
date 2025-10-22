@@ -22,62 +22,6 @@ from reportlab.pdfbase import pdfmetrics
 
 import streamlit as st
 
-# --- CSS PARA ESTILO DE PESTAÑAS TIPO NAVEGADOR ---
-st.markdown("""
-<style>
-    /* Contenedor principal de las pestañas */
-    div[data-testid="stTabs"] > div[role="tablist"] {
-        border-bottom: 1px solid #e0e0e0; /* Línea base */
-        gap: 5px; /* Espacio entre pestañas */
-        padding-bottom: 0px; /* Eliminar padding inferior si existe */
-    }
-
-    /* Botones individuales de las pestañas (inactivas) */
-    button[data-baseweb="tab"] {
-        border: 1px solid #e0e0e0;
-        border-bottom: none; /* Sin borde inferior para conectar */
-        border-radius: 8px 8px 0 0; /* Bordes redondeados arriba */
-        padding: 10px 18px !important;
-        margin: 0px; /* Resetear margen */
-        background-color: #f0f0f0; /* Fondo gris claro inactivo */
-        color: #555; /* Texto gris oscuro */
-        transition: background-color 0.2s ease, color 0.2s ease;
-        position: relative; /* Para el posicionamiento del :after */
-        bottom: -1px; /* Bajar 1px para alinearse con la línea base */
-    }
-
-     /* Efecto hover en pestañas inactivas */
-    button[data-baseweb="tab"]:not([aria-selected="true"]):hover {
-        background-color: #e5e5e5;
-        color: #333;
-    }
-
-    /* Pestaña activa */
-    button[data-baseweb="tab"][aria-selected="true"] {
-        background-color: white; /* Fondo blanco (color del contenido) */
-        border-color: #e0e0e0; /* Mismo color de borde */
-        color: #0068c9; /* Color de texto principal */
-        font-weight: 600; /* Un poco más grueso */
-        /* La clave: el borde inferior es blanco para 'ocultar' la línea base */
-        border-bottom-color: white !important;
-        z-index: 1; /* Ponerla por encima de la línea base */
-    }
-
-    /* Ocultar la línea azul indicadora por defecto */
-     div[data-baseweb="tab-highlight"] {
-        display: none;
-    }
-
-    /* Contenido debajo de las pestañas (asegurar que no haya espacio extra arriba) */
-    div[data-testid="stTabContent"] {
-        padding-top: 20px; /* Ajustar según sea necesario */
-        border-top: none; /* Asegurar que no haya doble borde */
-    }
-</style>
-""", unsafe_allow_html=True)
-# --- FIN CSS PESTAÑAS ---
-
-
 hide_st_style = """
     <style>
     /* Oculta el menú de hamburguesa */
@@ -265,6 +209,7 @@ def call_gemini_api(prompt):
     configure_api_dynamically()
     try:
         response = model.generate_content([prompt])
+        # Usar html.unescape para decodificar entidades HTML como &oacute;
         return html.unescape(response.text)
     except Exception as e:
         print(f"----------- ERROR DETALLADO DE GEMINI -----------\n{e}\n-----------------------------------------------")
@@ -323,6 +268,7 @@ def normalize_text(text):
 
 def add_markdown_content(pdf, markdown_text):
     try:
+        # Decodificar entidades HTML ANTES de pasar a markdown2/BeautifulSoup
         decoded_text = html.unescape(markdown_text)
         html_text = markdown2.markdown(decoded_text, extras=["fenced-code-blocks", "tables", "break-on-newline", "code-friendly"])
         soup = BeautifulSoup(html_text, "html.parser")
@@ -343,11 +289,11 @@ def add_markdown_content(pdf, markdown_text):
                 for li in elem.find_all("li", recursive=False): pdf.add_paragraph("• " + li.decode_contents(formatter="html"))
             elif tag_name == "ol":
                 for idx, li in enumerate(elem.find_all("li", recursive=False), 1): pdf.add_paragraph(f"{idx}. {li.decode_contents(formatter="html")}")
-            elif tag_name == "pre": pdf.add_paragraph(elem.get_text(), style='Code')
+            elif tag_name == "pre": pdf.add_paragraph(elem.get_text(), style='Code') # Usar estilo 'Code' existente
             elif tag_name == "blockquote": pdf.add_paragraph(">" + elem.decode_contents(formatter="html"))
             else:
                  try: pdf.add_paragraph(elem.decode_contents(formatter="html"))
-                 except: pdf.add_paragraph(elem.get_text(strip=True))
+                 except: pdf.add_paragraph(elem.get_text(strip=True)) # Fallback
     except Exception as e:
         print(f"Error adding markdown content to PDF: {e}")
         pdf.add_paragraph("--- Error parsing markdown ---"); pdf.add_paragraph(markdown_text); pdf.add_paragraph("--- End error ---")
@@ -403,24 +349,41 @@ banner_file = "Banner (2).jpg"
 
 def clean_text(text):
     if not isinstance(text, str): text = str(text)
-    return text
+    # Reemplazar solo ampersands que no forman parte de una entidad HTML conocida
+    # Esto es más seguro que un replace simple
+    # Usamos ReportLab Paragraph que ya maneja entidades HTML básicas
+    return text # Dejar que Paragraph maneje la codificación
 
+# --- AJUSTE CLASE PDFReport (Refuerzo Fuente Base y Estilo Code) ---
 class PDFReport:
     def __init__(self, buffer_or_filename, banner_path=None):
         self.banner_path = banner_path
         self.elements = []
         self.styles = getSampleStyleSheet()
         self.doc = SimpleDocTemplate(buffer_or_filename, pagesize=A4, rightMargin=12*mm, leftMargin=12*mm, topMargin=45*mm, bottomMargin=18*mm)
+
+        # Usar la fuente registrada globalmente (FONT_NAME)
         pdf_font_name = FONT_NAME
+
+        # Aplicar la fuente a los estilos base más comunes
         base_styles_to_update = ['Normal', 'BodyText', 'Italic', 'Bold', 'Heading1', 'Heading2', 'Heading3', 'Heading4', 'Heading5', 'Heading6', 'Code']
         for style_name in base_styles_to_update:
             if style_name in self.styles:
                 try:
                     self.styles[style_name].fontName = pdf_font_name
+                    # Ajustes específicos para estilos base si es necesario
                     if style_name == 'Code':
-                        if pdf_font_name == FALLBACK_FONT_NAME or not FONT_REGISTERED: self.styles[style_name].fontName = 'Courier'
-                        self.styles[style_name].fontSize = 9; self.styles[style_name].leading = 11; self.styles[style_name].leftIndent = 6*mm
-                except Exception as e: print(f"Warn: Font '{pdf_font_name}' -> '{style_name}'. {e}")
+                        # Usar Courier si la fuente principal no es monoespaciada (o si falló DejaVuSans)
+                        if pdf_font_name == FALLBACK_FONT_NAME or not FONT_REGISTERED:
+                             self.styles[style_name].fontName = 'Courier'
+                        self.styles[style_name].fontSize = 9
+                        self.styles[style_name].leading = 11
+                        self.styles[style_name].leftIndent = 6*mm
+                except Exception as e:
+                    print(f"Advertencia: No se pudo aplicar fuente '{pdf_font_name}' al estilo base '{style_name}'. {e}")
+
+
+        # Definir estilos personalizados asegurando que hereden la fuente correcta
         self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], fontName=pdf_font_name, alignment=1, spaceAfter=12, fontSize=14, leading=18))
         self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['Heading2'], fontName=pdf_font_name, spaceBefore=10, spaceAfter=6, fontSize=12, leading=16))
         self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], fontName=pdf_font_name, leading=14, alignment=4, fontSize=11))
@@ -429,28 +392,42 @@ class PDFReport:
     def header(self, canvas, doc):
         canvas.saveState()
         if self.banner_path and os.path.isfile(self.banner_path):
-            try: img_w, img_h = 210*mm, 35*mm; y_pos = A4[1] - img_h; canvas.drawImage(self.banner_path, 0, y_pos, width=img_w, height=img_h, preserveAspectRatio=True, anchor='n')
-            except Exception as e: print(f"Error PDF header: {e}")
+            try:
+                img_w, img_h = 210*mm, 35*mm; y_pos = A4[1] - img_h
+                canvas.drawImage(self.banner_path, 0, y_pos, width=img_w, height=img_h, preserveAspectRatio=True, anchor='n')
+            except Exception as e: print(f"Error drawing PDF header image: {e}")
         canvas.restoreState()
     def footer(self, canvas, doc):
-        canvas.saveState(); footer_text = "Generado por Atelier Data Studio IA..."; p = Paragraph(footer_text, self.styles['CustomFooter']); w, h = p.wrap(doc.width, doc.bottomMargin); p.drawOn(canvas, doc.leftMargin, 5 * mm); canvas.restoreState()
+        canvas.saveState()
+        footer_text = "Generado por Atelier Data Studio IA. Es posible que se muestre información imprecisa. Verifica las respuestas."
+        p = Paragraph(footer_text, self.styles['CustomFooter']); w, h = p.wrap(doc.width, doc.bottomMargin); p.drawOn(canvas, doc.leftMargin, 5 * mm)
+        canvas.restoreState()
     def header_footer(self, canvas, doc): self.header(canvas, doc); self.footer(canvas, doc)
     def add_paragraph(self, text, style='CustomBodyText'):
-        try: style_to_use = self.styles.get(style, self.styles.get('BodyText', self.styles['Normal'])); p = Paragraph(text, style_to_use); self.elements.append(p); self.elements.append(Spacer(1, 4))
-        except Exception as e: print(f"Err add para: {e}. Text: {text[:100]}..."); self.elements.append(Paragraph(f"Err render: {text[:100]}...", self.styles['Code']))
+        try:
+             style_to_use = self.styles.get(style, self.styles.get('BodyText', self.styles['Normal']))
+             # Dejar que Paragraph maneje las entidades HTML básicas
+             p = Paragraph(text, style_to_use); self.elements.append(p); self.elements.append(Spacer(1, 4))
+        except Exception as e: print(f"Error adding paragraph: {e}. Text was: {text[:100]}..."); self.elements.append(Paragraph(f"Error rendering: {text[:100]}...", self.styles['Code']))
     def add_title(self, text, level=1):
         if level == 1: style_name = 'CustomTitle'
         elif level == 2: style_name = 'CustomHeading'
         elif level >= 3: style_name = f'Heading{level}'
         else: style_name = 'CustomHeading'
-        style_to_use = self.styles.get(style_name, self.styles['CustomHeading']); p = Paragraph(text, style_to_use); spacer_height = 10 if level == 1 else (6 if level == 2 else 4); self.elements.append(p); self.elements.append(Spacer(1, spacer_height))
+        style_to_use = self.styles.get(style_name, self.styles['CustomHeading'])
+        # Dejar que Paragraph maneje las entidades HTML básicas
+        p = Paragraph(text, style_to_use); spacer_height = 10 if level == 1 else (6 if level == 2 else 4)
+        self.elements.append(p); self.elements.append(Spacer(1, spacer_height))
     def build_pdf(self):
         try: self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
         except Exception as e: st.error(f"Error building PDF: {e}")
+# --- FIN AJUSTE CLASE PDFReport ---
+
 
 def generate_pdf_html(content, title="Documento Final", banner_path=None):
     try:
-        buffer = BytesIO(); pdf = PDFReport(buffer, banner_path=banner_path); pdf.add_title(title, level=1); add_markdown_content(pdf, content); pdf.build_pdf(); pdf_data = buffer.getvalue(); buffer.close()
+        buffer = BytesIO(); pdf = PDFReport(buffer, banner_path=banner_path); pdf.add_title(title, level=1)
+        add_markdown_content(pdf, content); pdf.build_pdf(); pdf_data = buffer.getvalue(); buffer.close()
         if pdf_data: return pdf_data
         else: st.error("Error interno al construir PDF."); return None
     except Exception as e: st.error(f"Error crítico al generar PDF: {e}"); return None
@@ -714,11 +691,10 @@ def main():
     user_features = st.session_state.plan_features
 
     if st.session_state.get("is_admin", False):
-        # Usar emojis en las etiquetas para diferenciarlas visualmente
-        tab_user, tab_admin = st.tabs(["👤 Modo Usuario", "👑 Modo Administrador"])
+        tab_user, tab_admin = st.tabs(["[ Modo Usuario ]", "[ Modo Administrador ]"])
         with tab_user: run_user_mode(db_full, user_features, footer_html)
         with tab_admin:
-            st.title("Panel de Administración 👑") # Añadir emoji al título también
+            st.title("Panel de Administración")
             st.write(f"Gestionando como: {st.session_state.user}")
             show_admin_dashboard()
     else: run_user_mode(db_full, user_features, footer_html)
