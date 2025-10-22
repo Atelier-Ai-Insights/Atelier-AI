@@ -69,7 +69,7 @@ PLAN_FEATURES = {
 supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
 # ==============================
-# Autenticación con Supabase Auth
+# Autenticación con Supabase Auth (Botones ajustados)
 # ==============================
 
 def show_signup_page():
@@ -78,58 +78,44 @@ def show_signup_page():
     password = st.text_input("Crea una Contraseña", type="password")
     invite_code = st.text_input("Código de Invitación de tu Empresa")
 
-    if st.button("Registrarse"):
+    # --- AJUSTE AQUÍ ---
+    if st.button("Registrarse", use_container_width=True):
         if not email or not password or not invite_code:
             st.error("Por favor, completa todos los campos.")
             return
 
         try:
-            # 1. Busca el cliente que corresponde al código de invitación
             client_response = supabase.table("clients").select("id").eq("invite_code", invite_code).single().execute()
-
             if not client_response.data:
                 st.error("El código de invitación no es válido.")
                 return
-
             selected_client_id = client_response.data['id']
-
-            # 2. Registra al usuario pasándole el client_id en los metadatos para el trigger
             auth_response = supabase.auth.sign_up({
-                "email": email,
-                "password": password,
-                "options": {
-                    "data": {
-                        'client_id': selected_client_id
-                    }
-                }
+                "email": email, "password": password,
+                "options": { "data": { 'client_id': selected_client_id } }
             })
-
             st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
-
         except Exception as e:
-            print("----------- ERROR DETALLADO DE REGISTRO -----------")
-            print(e)
-            print("-------------------------------------------------")
+            print(f"----------- ERROR DETALLADO DE REGISTRO -----------\n{e}\n-------------------------------------------------")
             st.error(f"Error en el registro: {e}")
+
+    # --- AJUSTE AQUÍ ---
+    if st.button("¿Ya tienes cuenta? Inicia Sesión", type="secondary", use_container_width=True):
+         st.session_state.page = "login"
+         st.rerun()
+
 
 def show_login_page():
     st.header("Iniciar Sesión")
     email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
     password = st.text_input("Contraseña", type="password", placeholder="password")
 
-    if st.button("Ingresar"):
+    # --- AJUSTE AQUÍ ---
+    if st.button("Ingresar", use_container_width=True):
         try:
-            # 1. Autentica al usuario con Supabase Auth
-            response = supabase.auth.sign_in_with_password({
-                "email": email,
-                "password": password
-            })
-
+            response = supabase.auth.sign_in_with_password({"email": email, "password": password})
             user_id = response.user.id
-
-            # 2. Busca el perfil del usuario para obtener el cliente Y EL ROL DE ADMIN
             user_profile = supabase.table("users").select("*, rol, clients(client_name, plan)").eq("id", user_id).single().execute()
-
             if user_profile.data and user_profile.data.get('clients'):
                 client_info = user_profile.data['clients']
                 st.session_state.logged_in = True
@@ -148,20 +134,24 @@ def show_login_page():
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("¿No tienes cuenta? Regístrate", type="secondary"):
+        # --- AJUSTE AQUÍ ---
+        if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
             st.session_state.page = "signup"
             st.rerun()
     with col2:
-        if st.button("¿Olvidaste tu contraseña?", type="secondary"):
+        # --- AJUSTE AQUÍ ---
+        if st.button("¿Olvidaste tu contraseña?", type="secondary", use_container_width=True):
             st.session_state.page = "reset_password"
             st.rerun()
+
 
 def show_reset_password_page():
     st.header("Restablecer Contraseña")
     st.write("Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.")
     email = st.text_input("Tu Correo Electrónico")
 
-    if st.button("Enviar enlace de recuperación"):
+    # --- AJUSTE AQUÍ ---
+    if st.button("Enviar enlace de recuperación", use_container_width=True):
         if not email:
             st.warning("Por favor, ingresa tu correo electrónico.")
             return
@@ -173,6 +163,14 @@ def show_reset_password_page():
         except Exception as e:
             st.error(f"Error al enviar el correo: {e}")
 
+    # --- AJUSTE AQUÍ ---
+    if st.button("Volver a Iniciar Sesión", type="secondary", use_container_width=True):
+         st.session_state.page = "login"
+         st.rerun()
+
+# ==============================
+# Funciones de Reset
+# ==============================
 def reset_report_workflow():
     for k in ["report", "last_question", "report_question", "personalization", "rating"]:
         st.session_state.pop(k, None)
@@ -185,26 +183,22 @@ def reset_chat_workflow():
 # ==============================
 api_keys = [st.secrets["API_KEY_1"], st.secrets["API_KEY_2"], st.secrets["API_KEY_3"]]
 
-# --- IMPLEMENTACIÓN SUGERENCIA 3 (1/3): Inicializar índice en session_state ---
 if "api_key_index" not in st.session_state:
     st.session_state.api_key_index = 0
 
-# --- IMPLEMENTACIÓN SUGERENCIA 3 (2/3): Función de configuración y rotación ---
 def configure_api_dynamically():
     """Configura Gemini con la API key actual y rota el índice para la próxima llamada."""
-    global api_keys # Accede a la lista global de claves
+    global api_keys
     index = st.session_state.api_key_index
     try:
         api_key = api_keys[index]
         genai.configure(api_key=api_key)
-        # Rota el índice para la *próxima* llamada
         st.session_state.api_key_index = (index + 1) % len(api_keys)
-        print(f"INFO: Usando API Key #{index + 1}") # Bueno para debugging
+        print(f"INFO: Usando API Key #{index + 1}")
     except IndexError:
         st.error(f"Error: Índice de API Key ({index}) fuera de rango. Verifica tus secretos.")
     except Exception as e:
          st.error(f"Error configurando API Key #{index + 1}: {e}")
-
 
 generation_config = {"temperature": 0.5, "top_p": 0.8, "top_k": 32, "max_output_tokens": 8192}
 safety_settings = [
@@ -212,98 +206,186 @@ safety_settings = [
     ["HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT"]
 ]
 
-# Nota: El modelo se crea una vez, pero la API key se configura dinámicamente antes de cada llamada
 model = genai.GenerativeModel(model_name="gemini-2.5-flash", generation_config=generation_config, safety_settings=safety_settings)
 
-
 def call_gemini_api(prompt):
-    # --- IMPLEMENTACIÓN SUGERENCIA 3 (3/3): Llamar a la configuración dinámica ---
-    configure_api_dynamically() # Configura y rota la clave ANTES de la llamada
+    configure_api_dynamically()
     try:
         response = model.generate_content([prompt])
         return html.unescape(response.text)
     except Exception as e:
-        print("----------- ERROR DETALLADO DE GEMINI -----------")
-        print(e)
-        print("-----------------------------------------------")
-        st.error(f"Error en la llamada a Gemini (Key #{st.session_state.api_key_index}): {e}.") # Muestra qué clave falló
+        print(f"----------- ERROR DETALLADO DE GEMINI -----------\n{e}\n-----------------------------------------------")
+        st.error(f"Error en la llamada a Gemini (Key #{st.session_state.api_key_index}): {e}.")
         return None
 
 # ==============================
 # RASTREO DE USO
 # ==============================
 def log_query_event(query_text, mode, rating=None):
-    data = {"id": datetime.datetime.now().strftime("%Y%m%d%H%M%S"), "user_name": st.session_state.user, "timestamp": datetime.datetime.now().isoformat(), "mode": mode, "query": query_text, "rating": rating}
-    supabase.table("queries").insert(data).execute()
+    try: # Añadir try-except para evitar que falle la app si el log falla
+        data = {
+            "id": datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f"), # Usar UTC y microsegundos
+            "user_name": st.session_state.user,
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(), # Usar UTC
+            "mode": mode,
+            "query": query_text,
+            "rating": rating
+        }
+        supabase.table("queries").insert(data).execute()
+    except Exception as e:
+        print(f"Error logging query event: {e}") # Loggear el error sin detener la app
 
 def get_monthly_usage(username, action_type):
-    first_day_of_month = datetime.date.today().replace(day=1)
-    response = supabase.table("queries").select("id", count='exact').eq("user_name", username).eq("mode", action_type).gte("timestamp", str(first_day_of_month)).execute()
-    return response.count
+    try:
+        first_day_of_month = datetime.date.today().replace(day=1)
+        # Asegurar formato correcto para Supabase
+        first_day_iso = first_day_of_month.isoformat()
+        response = supabase.table("queries").select("id", count='exact').eq("user_name", username).eq("mode", action_type).gte("timestamp", first_day_iso).execute()
+        return response.count
+    except Exception as e:
+        print(f"Error getting monthly usage: {e}")
+        return 0 # Devolver 0 si hay error
 
 def get_daily_usage(username, action_type):
-    today_start = datetime.datetime.now().strftime("%Y-%m-%d 00:00:00")
-    response = supabase.table("queries").select("id", count='exact').eq("user_name", username).eq("mode", action_type).gte("timestamp", today_start).execute()
-    return response.count
+    try:
+        today_start_utc = datetime.datetime.now(datetime.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start_iso = today_start_utc.isoformat()
+        response = supabase.table("queries").select("id", count='exact').eq("user_name", username).eq("mode", action_type).gte("timestamp", today_start_iso).execute()
+        return response.count
+    except Exception as e:
+        print(f"Error getting daily usage: {e}")
+        return 0 # Devolver 0 si hay error
+
 
 # ==============================
 # FUNCIONES AUXILIARES Y DE PDF
 # ==============================
 def normalize_text(text):
     if not text: return ""
-    normalized = unicodedata.normalize("NFD", text)
-    return "".join(c for c in normalized if unicodedata.category(c) != "Mn").lower()
+    try:
+        normalized = unicodedata.normalize("NFD", str(text)) # Asegurar que sea string
+        return "".join(c for c in normalized if unicodedata.category(c) != "Mn").lower()
+    except Exception as e:
+        print(f"Error normalizing text '{text}': {e}")
+        return str(text).lower() # Fallback
 
 def add_markdown_content(pdf, markdown_text):
-    html_text = markdown2.markdown(markdown_text, extras=["fenced-code-blocks", "tables", "break-on-newline"])
-    soup = BeautifulSoup(html_text, "html.parser")
-    container = soup.body or soup
-    for elem in container.children:
-        if elem.name:
-            if elem.name.startswith("h"):
-                level = int(elem.name[1]) if len(elem.name) > 1 and elem.name[1].isdigit() else 1
+    try:
+        html_text = markdown2.markdown(markdown_text, extras=["fenced-code-blocks", "tables", "break-on-newline", "code-friendly"])
+        soup = BeautifulSoup(html_text, "html.parser")
+        container = soup.body if soup.body else soup # Handle cases where body might not exist
+
+        for elem in container.children:
+            if isinstance(elem, str): # Handle plain text nodes directly
+                text = elem.strip()
+                if text:
+                    pdf.add_paragraph(text)
+                continue
+
+            if not hasattr(elem, 'name') or not elem.name: # Skip if no tag name
+                 continue
+
+            tag_name = elem.name.lower()
+
+            if tag_name.startswith("h"):
+                level = int(tag_name[1]) if len(tag_name) > 1 and tag_name[1].isdigit() else 1
                 pdf.add_title(elem.get_text(strip=True), level=level)
-            elif elem.name == "p": pdf.add_paragraph(elem.decode_contents())
-            elif elem.name == "ul":
-                for li in elem.find_all("li"): pdf.add_paragraph("• " + li.decode_contents())
-            elif elem.name == "ol":
-                for idx, li in enumerate(elem.find_all("li"), 1): pdf.add_paragraph(f"{idx}. {li.decode_contents()}")
-            else: pdf.add_paragraph(elem.decode_contents())
-        else:
-            text = elem.string
-            if text and text.strip(): pdf.add_paragraph(text)
+            elif tag_name == "p":
+                 # Decode contents to handle nested tags like <strong> or <em>
+                 pdf.add_paragraph(elem.decode_contents(formatter="html"))
+            elif tag_name == "ul":
+                for li in elem.find_all("li", recursive=False): # Avoid nested lists confusion
+                     pdf.add_paragraph("• " + li.decode_contents(formatter="html"))
+            elif tag_name == "ol":
+                for idx, li in enumerate(elem.find_all("li", recursive=False), 1):
+                    pdf.add_paragraph(f"{idx}. {li.decode_contents(formatter="html")}")
+            elif tag_name == "pre": # Handle code blocks
+                 code_content = elem.get_text()
+                 # Consider using a Code paragraph style if defined in PDFReport
+                 pdf.add_paragraph(code_content, style='Code') # Assuming a 'Code' style exists
+            elif tag_name == "blockquote":
+                 pdf.add_paragraph(">" + elem.decode_contents(formatter="html")) # Basic blockquote
+            # Add more tags as needed (e.g., tables)
+            else:
+                 # Default: try decoding contents, might work for simple tags
+                 try:
+                     pdf.add_paragraph(elem.decode_contents(formatter="html"))
+                 except:
+                      pdf.add_paragraph(elem.get_text(strip=True)) # Fallback to plain text
+
+    except Exception as e:
+        print(f"Error adding markdown content to PDF: {e}")
+        # Add raw markdown as fallback
+        pdf.add_paragraph("--- Error parsing markdown ---")
+        pdf.add_paragraph(markdown_text)
+        pdf.add_paragraph("--- End error ---")
+
 
 @st.cache_data(show_spinner=False)
 def load_database(cliente: str):
-    s3 = boto3.client("s3", endpoint_url=st.secrets["S3_ENDPOINT_URL"], aws_access_key_id=st.secrets["S3_ACCESS_KEY"], aws_secret_access_key=st.secrets["S3_SECRET_KEY"])
-    response = s3.get_object(Bucket=st.secrets.get("S3_BUCKET"), Key="resultado_presentacion (1).json")
-    data = json.loads(response["Body"].read().decode("utf-8"))
-    cliente_norm = normalize_text(cliente or "")
-    if cliente_norm != "insights-atelier":
-        data = [doc for doc in data if "atelier" in normalize_text(doc.get("cliente", "")) or cliente_norm in normalize_text(doc.get("cliente", ""))]
-    return data
+    try:
+        s3 = boto3.client("s3", endpoint_url=st.secrets["S3_ENDPOINT_URL"], aws_access_key_id=st.secrets["S3_ACCESS_KEY"], aws_secret_access_key=st.secrets["S3_SECRET_KEY"])
+        response = s3.get_object(Bucket=st.secrets.get("S3_BUCKET"), Key="resultado_presentacion (1).json")
+        data = json.loads(response["Body"].read().decode("utf-8"))
+        cliente_norm = normalize_text(cliente or "")
+        # Always allow 'insights-atelier' to see everything
+        if cliente_norm != "insights-atelier":
+            # Filter based on 'cliente' field in the JSON documents
+            data = [doc for doc in data if cliente_norm in normalize_text(doc.get("cliente", ""))]
+        return data
+    except Exception as e:
+        st.error(f"Error crítico al cargar datos desde S3: {e}")
+        return [] # Return empty list on error
 
 def extract_brand(filename):
-    if not filename or "In-ATL_" not in filename: return ""
-    return filename.split("In-ATL_")[1].rsplit(".", 1)[0]
+    if not filename or not isinstance(filename, str) or "In-ATL_" not in filename: return ""
+    try:
+        # Split by the last occurrence of '/' or '\' to get filename
+        base_filename = filename.replace("\\", "/").split("/")[-1]
+        if "In-ATL_" in base_filename:
+             return base_filename.split("In-ATL_")[1].rsplit(".", 1)[0]
+        else:
+             return "" # Return empty if pattern not found after path separation
+    except Exception as e:
+        print(f"Error extracting brand from '{filename}': {e}")
+        return ""
+
 
 def get_relevant_info(db, question, selected_files):
     all_text = ""
+    # Ensure selected_files is a list or set for efficient lookup
+    if not isinstance(selected_files, (list, set)):
+        selected_files = [] # Or handle error appropriately
+
+    selected_files_set = set(selected_files) # Use set for O(1) lookups
+
     for pres in db:
-        if pres.get("nombre_archivo") in selected_files:
-            all_text += f"Documento: {pres.get('titulo_estudio', pres.get('nombre_archivo', 'Sin nombre'))}\n"
-            for grupo in pres.get("grupos", []):
-                all_text += f"Grupo {grupo.get('grupo_index')}: {grupo.get('contenido_texto', '')}\n"
-                if grupo.get("metadatos"): all_text += f"Metadatos: {json.dumps(grupo.get('metadatos'), ensure_ascii=False)}\n"
-                if grupo.get("hechos"): all_text += f"Hechos: {json.dumps(grupo.get('hechos'), ensure_ascii=False)}\n"
-            all_text += "\n---\n\n"
+        doc_name = pres.get('nombre_archivo')
+        if doc_name and doc_name in selected_files_set:
+            try:
+                title = pres.get('titulo_estudio', doc_name) # Use title if available
+                all_text += f"Documento: {title}\n"
+                for grupo in pres.get("grupos", []):
+                    # Combine relevant parts, ensuring they are strings
+                    grupo_index = grupo.get('grupo_index', 'N/A')
+                    contenido = str(grupo.get('contenido_texto', ''))
+                    metadatos = json.dumps(grupo.get('metadatos', {}), ensure_ascii=False) if grupo.get('metadatos') else ""
+                    hechos = json.dumps(grupo.get('hechos', []), ensure_ascii=False) if grupo.get('hechos') else ""
+
+                    all_text += f" Grupo {grupo_index}: {contenido}\n"
+                    if metadatos: all_text += f"  Metadatos: {metadatos}\n"
+                    if hechos: all_text += f"  Hechos: {hechos}\n"
+                all_text += "\n---\n\n"
+            except Exception as e:
+                 print(f"Error processing document '{doc_name}': {e}") # Log error for specific doc
     return all_text
 
-banner_file = "Banner (2).jpg"
+banner_file = "Banner (2).jpg" # Make sure this path is correct relative to your script
 
 def clean_text(text):
     if not isinstance(text, str):
         text = str(text)
+    # Be more selective about replacements if needed
     return text.replace('&', '&amp;')
 
 class PDFReport:
@@ -312,64 +394,97 @@ class PDFReport:
         self.elements = []
         self.styles = getSampleStyleSheet()
         self.doc = SimpleDocTemplate(buffer_or_filename, pagesize=A4, rightMargin=12*mm, leftMargin=12*mm, topMargin=45*mm, bottomMargin=18*mm)
-        self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], alignment=1, spaceAfter=12, fontSize=12, leading=16))
-        self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['Heading2'], spaceBefore=10, spaceAfter=6, fontSize=12, leading=16))
-        self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], leading=14, alignment=4, fontSize=12))
-        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], alignment=2, textColor=colors.grey, fontSize=6))
-        # Ensure font is applied to all custom styles
-        for style_name in ['CustomTitle', 'CustomHeading', 'CustomBodyText', 'CustomFooter']:
-             if 'DejaVuSans' in pdfmetrics.getRegisteredFontNames():
-                 self.styles[style_name].fontName = 'DejaVuSans'
-             # else: print(f"Warning: DejaVuSans font not registered for style {style_name}") # Optional warning
+
+        # Define custom styles with error handling for font registration
+        font_name = 'DejaVuSans' if 'DejaVuSans' in pdfmetrics.getRegisteredFontNames() else 'Helvetica'
+        # print(f"Using font: {font_name} for PDF report") # Debug font usage
+
+        self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], fontName=font_name, alignment=1, spaceAfter=12, fontSize=14, leading=18))
+        self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['Heading2'], fontName=font_name, spaceBefore=10, spaceAfter=6, fontSize=12, leading=16))
+        self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], fontName=font_name, leading=14, alignment=4, fontSize=11)) # Justification=4
+        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], fontName=font_name, alignment=2, textColor=colors.grey, fontSize=8))
+        # Add a Code style (optional, for code blocks)
+        self.styles.add(ParagraphStyle(name='Code', parent=self.styles['Code'], fontName='Courier', fontSize=9, leading=11, leftIndent=6*mm))
+
 
     def header(self, canvas, doc):
         canvas.saveState()
         if self.banner_path and os.path.isfile(self.banner_path):
             try:
                 img_w, img_h = 210*mm, 35*mm
-                y_pos = A4[1] - img_h
+                y_pos = A4[1] - img_h # Position from top
                 canvas.drawImage(self.banner_path, 0, y_pos, width=img_w, height=img_h, preserveAspectRatio=True, anchor='n')
             except Exception as e:
-                print(f"Error drawing PDF header image: {e}") # Log error if image fails
+                print(f"Error drawing PDF header image: {e}")
         canvas.restoreState()
     def footer(self, canvas, doc):
         canvas.saveState()
-        footer_text = "Es posible que se muestre información imprecisa. Verifica las respuestas."
+        footer_text = "Generado por Atelier Data Studio IA. Es posible que se muestre información imprecisa. Verifica las respuestas."
         p = Paragraph(footer_text, self.styles['CustomFooter'])
         w, h = p.wrap(doc.width, doc.bottomMargin)
-        p.drawOn(canvas, doc.leftMargin, 3 * mm)
+        p.drawOn(canvas, doc.leftMargin, 5 * mm) # Slightly higher position
+        # Page number
+        page_num = canvas.getPageNumber()
+        page_text = f"Página {page_num}"
+        p_page = Paragraph(page_text, self.styles['CustomFooter'])
+        w_page, h_page = p_page.wrap(doc.width, doc.bottomMargin)
+        p_page.drawOn(canvas, doc.width + doc.leftMargin - w_page, 5 * mm)
         canvas.restoreState()
     def header_footer(self, canvas, doc):
         self.header(canvas, doc)
         self.footer(canvas, doc)
     def add_paragraph(self, text, style='CustomBodyText'):
-        p = Paragraph(clean_text(text), self.styles[style])
-        self.elements += [p, Spacer(1, 6)]
+        try:
+             # Handle basic HTML tags commonly found in markdown output
+             cleaned_text = text.replace('<br>', '<br/>').replace('<br />', '<br/>') # Normalize breaks
+             # Add more replacements if needed (e.g., <strong> -> <b>, <em> -> <i>)
+             cleaned_text = cleaned_text.replace('<strong>', '<b>').replace('</strong>', '</b>')
+             cleaned_text = cleaned_text.replace('<em>', '<i>').replace('</em>', '</i>')
+
+             p = Paragraph(clean_text(cleaned_text), self.styles[style])
+             self.elements.append(p)
+             self.elements.append(Spacer(1, 4)) # Smaller spacer after paragraphs
+        except Exception as e:
+            print(f"Error adding paragraph: {e}. Text was: {text[:100]}...")
+            # Add raw text as fallback
+            self.elements.append(Paragraph(f"Error rendering: {text[:100]}...", self.styles['Code']))
     def add_title(self, text, level=1):
-        # Use CustomTitle for level 1, CustomHeading for others
-        style_name = 'CustomTitle' if level == 1 else 'CustomHeading'
+        style_name = 'CustomTitle' if level == 1 else ('CustomHeading' if level == 2 else 'h3') # Assuming h3 style exists or fallback
+        # Map levels to heading styles, e.g., H3, H4 if defined
+        if level > 2: style_name = self.styles.get(f'h{level}', self.styles['CustomHeading']).name # Use existing h styles or default
+
         p = Paragraph(clean_text(text), self.styles[style_name])
-        self.elements += [p, Spacer(1, 12 if level == 1 else 6)] # More space after main title
+        spacer_height = 10 if level == 1 else (6 if level == 2 else 4)
+        self.elements.append(p)
+        self.elements.append(Spacer(1, spacer_height))
     def build_pdf(self):
-        self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
+        try:
+            self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
+        except Exception as e:
+             st.error(f"Error building PDF: {e}")
+             # Optionally add error message to elements if build fails mid-way
+             self.elements.append(Paragraph(f"--- PDF BUILD ERROR: {e} ---", self.styles['Code']))
+             # Attempt to build again with error message? Risky. Better to just report.
+
 
 def generate_pdf_html(content, title="Documento Final", banner_path=None):
     try:
         buffer = BytesIO()
         pdf = PDFReport(buffer, banner_path=banner_path)
-        pdf.add_title(title, level=1) # Add main title
-        add_markdown_content(pdf, content)
+        pdf.add_title(title, level=1)
+        add_markdown_content(pdf, content) # This function now calls pdf.add_paragraph/add_title
         pdf.build_pdf()
         pdf_data = buffer.getvalue()
         buffer.close()
         return pdf_data
     except Exception as e:
-        st.error(f"Error al generar el PDF: {e}")
+        st.error(f"Error crítico al generar el PDF: {e}")
         return None
 
 # =====================================================
 # MODOS DE LA APLICACIÓN
 # =====================================================
+# (generate_final_report, report_mode, grounded_chat_mode, ideacion_mode, concept_generation_mode, idea_evaluator_mode - sin cambios respecto a la última versión)
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
     prompt1 = (
@@ -425,7 +540,6 @@ def generate_final_report(question, db, selected_files):
     )
     result2 = call_gemini_api(prompt2)
     if result2 is None: return None
-    # Asegurar que la pregunta original se incluya antes del reporte
     return f"**Consulta Original:** {question}\n\n---\n\n" + result2
 
 
@@ -437,15 +551,13 @@ def report_mode(db, selected_files):
     if "report" in st.session_state and st.session_state["report"]:
         st.markdown("---")
         st.markdown("### Informe Generado")
-        st.markdown(st.session_state["report"], unsafe_allow_html=True) # Permitir HTML básico si es necesario
+        st.markdown(st.session_state["report"], unsafe_allow_html=True)
         st.markdown("---")
     question = st.text_area("Escribe tu consulta para el reporte…", value=st.session_state.get("last_question", ""), height=150, key="report_question")
 
     if st.button("Generar Reporte"):
         report_limit = st.session_state.plan_features.get('reports_per_month', 0)
-        # Asegurar que el límite sea numérico para comparación
         if not isinstance(report_limit, (int, float)): report_limit = 0
-
         current_reports = get_monthly_usage(st.session_state.user, "Generar un reporte de reportes")
 
         if current_reports >= report_limit and report_limit != float('inf'):
@@ -461,11 +573,11 @@ def report_mode(db, selected_files):
 
             if report is None:
                 st.error("No se pudo generar el informe. Inténtalo de nuevo o revisa los logs si el problema persiste.")
-                st.session_state.pop("report", None) # Limpiar reporte fallido
+                st.session_state.pop("report", None)
             else:
                 st.session_state["report"] = report
                 log_query_event(question, mode="Generar un reporte de reportes")
-                st.rerun() # Mostrar el reporte generado
+                st.rerun()
 
     if "report" in st.session_state and st.session_state["report"]:
         pdf_bytes = generate_pdf_html(st.session_state["report"], title="Informe Final", banner_path=banner_file)
@@ -483,21 +595,17 @@ def grounded_chat_mode(db, selected_files):
     st.markdown("Realiza preguntas específicas y obtén respuestas concretas basadas únicamente en los hallazgos de los informes seleccionados.")
     if "chat_history" not in st.session_state: st.session_state.chat_history = []
 
-    # Mostrar historial
     for msg in st.session_state.chat_history:
-        with st.chat_message(msg['role']): # Usar chat_message para mejor UI
+        with st.chat_message(msg['role']):
             st.markdown(msg['message'])
 
-    # Input del usuario
-    user_input = st.chat_input("Escribe tu pregunta...") # Usar chat_input para mejor UI
+    user_input = st.chat_input("Escribe tu pregunta...")
 
-    if user_input: # Se ejecuta si el usuario envía algo
-        # Añadir mensaje de usuario al historial y mostrarlo
+    if user_input:
         st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
         with st.chat_message("Usuario"):
             st.markdown(user_input)
 
-        # Verificar límite de uso
         query_limit = st.session_state.plan_features.get('chat_queries_per_day', 0)
         if not isinstance(query_limit, (int, float)): query_limit = 0
         current_queries = get_daily_usage(st.session_state.user, "Chat de Consulta Directa")
@@ -505,15 +613,13 @@ def grounded_chat_mode(db, selected_files):
         if current_queries >= query_limit and query_limit != float('inf'):
             st.error(f"Has alcanzado tu límite de {int(query_limit)} consultas diarias.")
             st.warning("🚀 ¡Actualiza tu plan para tener consultas ilimitadas!")
-            return # Detener si se alcanza el límite
+            return
 
-        # Preparar y llamar a Gemini
         with st.chat_message("Asistente"):
             message_placeholder = st.empty()
             message_placeholder.markdown("Pensando...")
             relevant_info = get_relevant_info(db, user_input, selected_files)
-            # Construir historial para el prompt (solo últimos mensajes si es necesario)
-            conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history[-10:]) # Limitar historial si es muy largo
+            conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history[-10:])
 
             grounded_prompt = (
                 f"**Tarea:** Eres un **asistente de IA** experto en sintetizar estudios de mercado. Responde a la **última pregunta del Usuario** basándote **únicamente** en la 'Información documentada' y el 'Historial'.\n\n"
@@ -536,25 +642,15 @@ def grounded_chat_mode(db, selected_files):
                 message_placeholder.markdown(response)
                 st.session_state.chat_history.append({"role": "Asistente", "message": response})
                 log_query_event(user_input, mode="Chat de Consulta Directa")
-                # No se necesita st.rerun() con chat_input/chat_message
             else:
                  message_placeholder.error("Error al generar la respuesta. Inténtalo de nuevo.")
-                 # Opcional: eliminar el último mensaje de usuario si la respuesta falla
-                 # st.session_state.chat_history.pop()
 
-    # Botones de descarga y nueva conversación (solo si hay historial)
     if st.session_state.chat_history:
         col1, col2 = st.columns([1,1])
         with col1:
              pdf_bytes = generate_pdf_html("\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history), title="Historial de Consulta Directa", banner_path=banner_file)
              if pdf_bytes:
-                 st.download_button(
-                     "Descargar Chat en PDF",
-                     data=pdf_bytes,
-                     file_name="chat_consulta.pdf",
-                     mime="application/pdf",
-                     use_container_width=True
-                 )
+                 st.download_button( "Descargar Chat en PDF", data=pdf_bytes, file_name="chat_consulta.pdf", mime="application/pdf", use_container_width=True)
         with col2:
              st.button("Nueva Conversación", on_click=reset_chat_workflow, key="new_grounded_chat_btn", use_container_width=True)
 
@@ -564,12 +660,10 @@ def ideacion_mode(db, selected_files):
     st.markdown("Este es un espacio para explorar ideas novedosas. Basado en los hallazgos, el asistente te ayudará a generar conceptos creativos.")
     if "chat_history" not in st.session_state: st.session_state.chat_history = []
 
-    # Mostrar historial
     for msg in st.session_state.chat_history:
         with st.chat_message(msg['role']):
             st.markdown(msg['message'])
 
-    # Input del usuario
     user_input = st.chat_input("Lanza una idea o pregunta para iniciar la conversación...")
 
     if user_input:
@@ -581,7 +675,7 @@ def ideacion_mode(db, selected_files):
             message_placeholder = st.empty()
             message_placeholder.markdown("Generando ideas...")
             relevant = get_relevant_info(db, user_input, selected_files)
-            conv_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history[-10:]) # Limitar historial
+            conv_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history[-10:])
 
             conv_prompt = (
                 f"**Tarea:** Eres un **experto en marketing e innovación** muy creativo. Tu objetivo es tener una conversación inspiradora con el usuario, ayudándole a generar soluciones o ideas novedosas basadas en la 'Información de contexto' y el 'Historial'.\n\n"
@@ -604,9 +698,7 @@ def ideacion_mode(db, selected_files):
                 log_query_event(user_input, mode="Conversaciones creativas")
             else:
                 message_placeholder.error("Error al generar la respuesta creativa.")
-                # st.session_state.chat_history.pop()
 
-    # Botones de descarga y nueva conversación
     if st.session_state.chat_history:
         col1, col2 = st.columns([1,1])
         with col1:
@@ -621,7 +713,6 @@ def concept_generation_mode(db, selected_files):
     st.subheader("Generación de Conceptos")
     st.markdown("A partir de una idea inicial y los hallazgos, generaremos un concepto de producto o servicio.")
 
-    # Mostrar concepto si ya existe
     if "generated_concept" in st.session_state:
         st.markdown("---")
         st.markdown("### Concepto Generado")
@@ -630,7 +721,6 @@ def concept_generation_mode(db, selected_files):
             st.session_state.pop("generated_concept")
             st.rerun()
     else:
-        # Formulario para generar concepto
         product_idea = st.text_area("Describe tu idea de producto o servicio:", height=150, placeholder="Ej: Un snack saludable para niños basado en frutas deshidratadas...")
         if st.button("Generar Concepto"):
             if not product_idea.strip():
@@ -667,7 +757,7 @@ def concept_generation_mode(db, selected_files):
                     if response:
                         st.session_state.generated_concept = response
                         log_query_event(product_idea, mode="Generación de conceptos")
-                        st.rerun() # Mostrar el concepto generado
+                        st.rerun()
                     else:
                         st.error("No se pudo generar el concepto. Inténtalo de nuevo.")
 
@@ -714,7 +804,7 @@ def idea_evaluator_mode(db, selected_files):
                     if response:
                         st.session_state.evaluation_result = response
                         log_query_event(idea_input, mode="Evaluación de Idea")
-                        st.rerun() # Mostrar la evaluación
+                        st.rerun()
                     else:
                         st.error("No se pudo generar la evaluación. Inténtalo de nuevo.")
 
@@ -723,17 +813,13 @@ def idea_evaluator_mode(db, selected_files):
 # PANEL DE ADMINISTRACIÓN (CON EDICIÓN DE USUARIOS)
 # =====================================================
 def show_admin_dashboard():
-    """
-    Muestra el panel de control para administradores, permitiendo editar roles.
-    """
-
-    st.subheader("Estadísticas de Uso", divider="rainbow")
+    st.subheader("📊 Estadísticas de Uso", divider="rainbow")
     with st.spinner("Cargando estadísticas..."):
         try:
-            stats_response = supabase.table("queries").select("user_name, mode, timestamp, query").execute() # Añadir query
+            stats_response = supabase.table("queries").select("user_name, mode, timestamp, query").execute()
             if stats_response.data:
                 df_stats = pd.DataFrame(stats_response.data)
-                df_stats['timestamp'] = pd.to_datetime(df_stats['timestamp']).dt.tz_localize(None) # Asegurar timezone naive
+                df_stats['timestamp'] = pd.to_datetime(df_stats['timestamp']).dt.tz_localize(None)
                 df_stats['date'] = df_stats['timestamp'].dt.date
 
                 col1, col2 = st.columns(2)
@@ -746,18 +832,16 @@ def show_admin_dashboard():
                     mode_counts = df_stats.groupby('mode')['user_name'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False)
                     st.dataframe(mode_counts, use_container_width=True, hide_index=True)
 
-                st.write("**Actividad Reciente (Últimas 20 consultas)**")
-                # Mostrar columnas relevantes y formatear fecha
+                st.write("**Actividad Reciente (Últimas 50 consultas)**")
                 df_recent = df_stats[['timestamp', 'user_name', 'mode', 'query']].sort_values(by="timestamp", ascending=False).head(50)
                 df_recent['timestamp'] = df_recent['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
                 st.dataframe(df_recent, use_container_width=True, hide_index=True)
-
             else:
                 st.info("Aún no hay datos de uso registrados.")
         except Exception as e:
             st.error(f"Error al cargar estadísticas: {e}")
 
-    st.subheader("Gestión de Clientes (Invitaciones)", divider="rainbow")
+    st.subheader("🔑 Gestión de Clientes (Invitaciones)", divider="rainbow")
     try:
         clients_response = supabase.table("clients").select("client_name, plan, invite_code, created_at").order("created_at", desc=True).execute()
         if clients_response.data:
@@ -770,7 +854,7 @@ def show_admin_dashboard():
     except Exception as e:
         st.error(f"Error al cargar clientes: {e}")
 
-    with st.expander("Crear Nuevo Cliente y Código de Invitación"):
+    with st.expander("➕ Crear Nuevo Cliente y Código de Invitación"):
         with st.form("new_client_form"):
             new_client_name = st.text_input("Nombre del Nuevo Cliente")
             new_plan = st.selectbox("Plan Asignado", options=list(PLAN_FEATURES.keys()), index=0)
@@ -782,26 +866,22 @@ def show_admin_dashboard():
                     st.warning("Por favor, completa todos los campos.")
                 else:
                     try:
-                        # Usar cliente admin para asegurar permisos si RLS está activado en 'clients'
                         supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
                         supabase_admin_client.table("clients").insert({
-                            "client_name": new_client_name,
-                            "plan": new_plan,
-                            "invite_code": new_invite_code
+                            "client_name": new_client_name, "plan": new_plan, "invite_code": new_invite_code
                         }).execute()
                         st.success(f"Cliente '{new_client_name}' creado con éxito. Código: {new_invite_code}")
-                        # Considerar limpiar el formulario o usar st.experimental_rerun() si es necesario refrescar la tabla inmediatamente
                     except Exception as e:
                         st.error(f"Error al crear cliente: {e} (¿Código duplicado?)")
 
-    st.subheader("Gestión de Usuarios", divider="rainbow")
+    st.subheader("👥 Gestión de Usuarios", divider="rainbow")
     try:
         if "SUPABASE_SERVICE_KEY" not in st.secrets:
             st.error("Configuración requerida: Falta 'SUPABASE_SERVICE_KEY' en los secretos.")
             st.stop()
 
         supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
-        users_response = supabase_admin_client.table("users").select("id, email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute() # Seleccionar ID para updates
+        users_response = supabase_admin_client.table("users").select("id, email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute()
 
         if users_response.data:
             st.write("**Usuarios Registrados** (Puedes editar la columna 'Rol')")
@@ -809,59 +889,50 @@ def show_admin_dashboard():
             for user in users_response.data:
                 client_info = user.get('clients')
                 user_list.append({
-                    "id": user.get('id'), # Guardar ID para updates
-                    "email": user.get('email'),
-                    "creado_el": user.get('created_at'),
-                    "rol": user.get('rol', 'user'),
-                    "cliente": client_info.get('client_name') if client_info else "N/A",
+                    "id": user.get('id'), "email": user.get('email'), "creado_el": user.get('created_at'),
+                    "rol": user.get('rol', 'user'), "cliente": client_info.get('client_name') if client_info else "N/A",
                     "plan": client_info.get('plan') if client_info else "N/A"
                 })
 
             original_df = pd.DataFrame(user_list)
-            # Guardar una copia para comparar después de editar
             if 'original_users_df' not in st.session_state:
                  st.session_state.original_users_df = original_df.copy()
 
-            # Formatear fecha para visualización en el editor
             display_df = original_df.copy()
             display_df['creado_el'] = pd.to_datetime(display_df['creado_el']).dt.strftime('%Y-%m-%d %H:%M')
 
             edited_df = st.data_editor(
-                display_df, # Mostrar el DF con fecha formateada
-                key="user_editor",
+                display_df, key="user_editor",
                 column_config={
-                    "id": None, # Ocultar columna ID
-                    "rol": st.column_config.SelectboxColumn(
-                        "Rol", options=["user", "admin"], required=True,
-                    ),
+                    "id": None, "rol": st.column_config.SelectboxColumn("Rol", options=["user", "admin"], required=True),
                     "email": st.column_config.TextColumn("Email", disabled=True),
                     "creado_el": st.column_config.TextColumn("Creado El", disabled=True),
                     "cliente": st.column_config.TextColumn("Cliente", disabled=True),
                     "plan": st.column_config.TextColumn("Plan", disabled=True),
                 },
-                use_container_width=True,
-                hide_index=True,
-                num_rows="fixed" # Evitar añadir/borrar filas accidentalmente
+                use_container_width=True, hide_index=True, num_rows="fixed"
             )
 
-            # Botón para guardar cambios (fuera del try/except de carga inicial)
             if st.button("Guardar Cambios en Usuarios"):
                 updates_to_make = []
-                # DataFrame original (guardado antes del editor) vs DataFrame editado
-                # Importante: Comparar con el DF original, no con el display_df formateado
                 original_users = st.session_state.original_users_df
-                # Asegurarse que el edited_df tenga los IDs para comparar
-                edited_df_with_ids = original_df[['id']].join(edited_df.set_index(original_df.index)) # Reconstruir índice y añadir ID
+                # Reconstruir edited_df con IDs para una comparación segura
+                edited_df_indexed = edited_df.set_index(original_df.index) # Asegurar mismo índice
+                edited_df_with_ids = original_df[['id']].join(edited_df_indexed)
 
-                # Comparar fila por fila usando el ID como clave
                 for index, original_row in original_users.iterrows():
-                    edited_row = edited_df_with_ids[edited_df_with_ids['id'] == original_row['id']].iloc[0]
-                    if original_row['rol'] != edited_row['rol']:
-                        updates_to_make.append({
-                            "id": original_row['id'], # Usar ID para el update
-                            "email": original_row['email'], # Para mensajes de error
-                            "new_rol": edited_row['rol']
-                        })
+                    # Buscar la fila editada correspondiente por 'id' original
+                    edited_rows_match = edited_df_with_ids[edited_df_with_ids['id'] == original_row['id']]
+                    if not edited_rows_match.empty:
+                        edited_row = edited_rows_match.iloc[0]
+                        if original_row['rol'] != edited_row['rol']:
+                            updates_to_make.append({
+                                "id": original_row['id'], "email": original_row['email'], "new_rol": edited_row['rol']
+                            })
+                    else:
+                        # Log si una fila original no se encuentra en la editada (no debería pasar con num_rows="fixed")
+                        print(f"Advertencia: Fila original con ID {original_row['id']} no encontrada en el dataframe editado.")
+
 
                 if updates_to_make:
                     success_count = 0
@@ -870,21 +941,17 @@ def show_admin_dashboard():
                     with st.spinner(f"Guardando {len(updates_to_make)} cambio(s)..."):
                         for update in updates_to_make:
                             try:
-                                supabase_admin_client.table("users").update({
-                                    "rol": update["new_rol"]
-                                }).eq("id", update["id"]).execute() # Usar ID para el WHERE
+                                supabase_admin_client.table("users").update({"rol": update["new_rol"]}).eq("id", update["id"]).execute()
                                 success_count += 1
                             except Exception as e:
                                 errors.append(f"Error al actualizar rol de {update['email']} (ID: {update['id']}): {e}")
                                 error_count += 1
 
-                    if success_count > 0:
-                        st.success(f"{success_count} usuario(s) actualizado(s).")
+                    if success_count > 0: st.success(f"{success_count} usuario(s) actualizado(s).")
                     if error_count > 0:
                         st.error(f"{error_count} error(es) al guardar:")
                         for err in errors: st.error(f"- {err}")
 
-                    # Limpiar el estado original y re-ejecutar para refrescar
                     del st.session_state.original_users_df
                     st.rerun()
                 else:
@@ -902,14 +969,9 @@ def run_user_mode(db_full, user_features, footer_html):
     """
     Ejecuta toda la lógica de la aplicación para el modo de usuario estándar.
     """
-
-    # --- DIBUJAR SIDEBAR ---
-    # Esto se dibuja UNA VEZ, incluso si el admin cambia de pestaña
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
-    # Mostrar si es admin en el sidebar
-    if st.session_state.get("is_admin", False):
-        st.sidebar.caption("Rol: Administrador")
+    if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
     st.sidebar.divider()
 
     db_filtered = db_full[:]
@@ -921,122 +983,84 @@ def run_user_mode(db_full, user_features, footer_html):
     if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
 
     st.sidebar.header("Seleccione el modo de uso")
-    modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed", key="main_mode_selector") # Añadir key
+    modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed", key="main_mode_selector")
 
-    # Resetear estados específicos del modo si cambia
     if 'current_mode' not in st.session_state: st.session_state.current_mode = modo
     if st.session_state.current_mode != modo:
-        reset_chat_workflow() # Resetea historial de chat
-        st.session_state.pop("generated_concept", None) # Resetea concepto
-        st.session_state.pop("evaluation_result", None) # Resetea evaluación
-        st.session_state.pop("report", None) # Resetea reporte
-        st.session_state.pop("last_question", None) # Resetea última pregunta de reporte
-        st.session_state.current_mode = modo # Actualiza modo actual
-
+        reset_chat_workflow()
+        st.session_state.pop("generated_concept", None); st.session_state.pop("evaluation_result", None)
+        st.session_state.pop("report", None); st.session_state.pop("last_question", None)
+        st.session_state.current_mode = modo
 
     st.sidebar.header("Filtros de Búsqueda")
-    # Filtro de Marcas
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
     selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas")
-    if selected_marcas:
-        db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
+    if selected_marcas: db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
 
-    # Filtro de Años
     years_options = sorted({doc.get("marca", "") for doc in db_full if doc.get("marca")})
     selected_years = st.sidebar.multiselect("Año(s):", years_options, key="filter_years")
-    if selected_years:
-        db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
+    if selected_years: db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
-    # Filtro de Proyectos (basado en db ya filtrada)
     brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered if extract_brand(d.get("nombre_archivo", ""))})
     selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects")
-    if selected_brands:
-        db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
+    if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
-    # Botón Cerrar Sesión
     if st.sidebar.button("Cerrar Sesión", key="logout_main"):
-        supabase.auth.sign_out()
-        st.session_state.clear()
-        st.rerun()
+        supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
 
-    # Footer del Sidebar
     st.sidebar.divider()
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
-    # --- FIN SIDEBAR ---
 
-    # --- MOSTRAR MODO SELECCIONADO ---
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
-
-    # Mostrar advertencia si no hay archivos seleccionados para los modos que los requieren
-    if not selected_files and modo != "Generar un reporte de reportes": # Asumiendo que reporte puede funcionar sin selección? Verificar.
-         st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados. Algunos modos pueden no funcionar correctamente.")
-         # Podrías deshabilitar botones o mostrar mensaje más específico por modo
+    if not selected_files and modo != "Generar un reporte de reportes": # Ajustar condición si aplica a reportes
+         st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
 
     if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
     elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
-    # --- FIN MOSTRAR MODO ---
 
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
 def main():
-    if 'page' not in st.session_state:
-        st.session_state.page = "login"
-
+    if 'page' not in st.session_state: st.session_state.page = "login"
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
     if not st.session_state.get("logged_in"):
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
-            st.image("LogoDataStudio.png") # Asumiendo que tienes esta imagen
-            if st.session_state.page == "login":
-                show_login_page()
+            st.image("LogoDataStudio.png")
+            if st.session_state.page == "login": show_login_page()
             elif st.session_state.page == "signup":
                 show_signup_page()
-                if st.button("¿Ya tienes cuenta? Inicia Sesión"):
-                    st.session_state.page = "login"
-                    st.rerun()
+                # Botón movido dentro de show_signup_page
             elif st.session_state.page == "reset_password":
                 show_reset_password_page()
-                if st.button("Volver a Iniciar Sesión"):
-                    st.session_state.page = "login"
-                    st.rerun()
+                # Botón movido dentro de show_reset_password_page
         st.divider()
         st.markdown(footer_html, unsafe_allow_html=True)
         st.stop()
 
-    # --- Usuario Logueado ---
     try:
         db_full = load_database(st.session_state.cliente)
     except Exception as e:
-        st.error(f"Error crítico al cargar la base de datos: {e}")
-        st.stop()
+        st.error(f"Error crítico al cargar la base de datos: {e}"); st.stop()
 
     user_features = st.session_state.plan_features
 
-    # --- Separación Admin / Usuario ---
     if st.session_state.get("is_admin", False):
-        tab_user, tab_admin = st.tabs(["[ Modo Usuario ]", "[ Modo Administrador ]"])
-
+        tab_user, tab_admin = st.tabs(["[ 👤 Modo Usuario ]", "[ 👑 Modo Administrador ]"])
         with tab_user:
-            # Dibuja el sidebar y la interfaz de usuario normal
             run_user_mode(db_full, user_features, footer_html)
-
         with tab_admin:
-            # Muestra el panel de administración (el sidebar ya está dibujado)
-            st.title("Panel de Administración")
+            st.title("Panel de Administración 👑")
             st.write(f"Gestionando como: {st.session_state.user}")
             show_admin_dashboard()
-            # Nota: El botón "Cerrar Sesión" del sidebar dibujado por run_user_mode funciona aquí también.
-
     else:
-        # Usuario normal: solo ve la interfaz de usuario
         run_user_mode(db_full, user_features, footer_html)
-
 
 if __name__ == "__main__":
     main()
