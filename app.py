@@ -216,12 +216,22 @@ model = genai.GenerativeModel(model_name="gemini-2.5-flash", generation_config=g
 def call_gemini_api(prompt):
     configure_api_dynamically()
     try:
-        response = model.generate_content([prompt])
+        # --- AJUSTE AQUÍ ---
+        # Verificar si el prompt ya es una lista (para multimodal)
+        if isinstance(prompt, list):
+            # Si ya es una lista, pasarla directamente
+            response = model.generate_content(prompt)
+        else:
+            # Si es un string (modo texto), envolverlo en una lista como antes
+            response = model.generate_content([prompt])
+        # --- FIN AJUSTE ---
+
         # Usar html.unescape para decodificar entidades HTML como &oacute;
         return html.unescape(response.text)
     except Exception as e:
         print(f"----------- ERROR DETALLADO DE GEMINI -----------\n{e}\n-----------------------------------------------")
-        st.error(f"Error en la llamada a Gemini (Key #{st.session_state.api_key_index}): {e}.")
+        # Mostrar el tipo de dato que causó el error ayuda a depurar
+        st.error(f"Error en la llamada a Gemini (Key #{st.session_state.api_key_index}): {e}. Tipo de dato recibido: {type(prompt)}")
         return None
 
 # ==============================
