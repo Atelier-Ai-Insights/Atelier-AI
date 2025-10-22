@@ -727,7 +727,7 @@ def show_admin_dashboard():
     Muestra el panel de control para administradores, permitiendo editar roles.
     """
 
-    st.subheader("📊 Estadísticas de Uso", divider="rainbow")
+    st.subheader("Estadísticas de Uso", divider="rainbow")
     with st.spinner("Cargando estadísticas..."):
         try:
             stats_response = supabase.table("queries").select("user_name, mode, timestamp, query").execute() # Añadir query
@@ -746,7 +746,7 @@ def show_admin_dashboard():
                     mode_counts = df_stats.groupby('mode')['user_name'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False)
                     st.dataframe(mode_counts, use_container_width=True, hide_index=True)
 
-                st.write("**Actividad Reciente (Últimas 50 consultas)**")
+                st.write("**Actividad Reciente (Últimas 20 consultas)**")
                 # Mostrar columnas relevantes y formatear fecha
                 df_recent = df_stats[['timestamp', 'user_name', 'mode', 'query']].sort_values(by="timestamp", ascending=False).head(50)
                 df_recent['timestamp'] = df_recent['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
@@ -757,7 +757,7 @@ def show_admin_dashboard():
         except Exception as e:
             st.error(f"Error al cargar estadísticas: {e}")
 
-    st.subheader("🔑 Gestión de Clientes (Invitaciones)", divider="rainbow")
+    st.subheader("Gestión de Clientes (Invitaciones)", divider="rainbow")
     try:
         clients_response = supabase.table("clients").select("client_name, plan, invite_code, created_at").order("created_at", desc=True).execute()
         if clients_response.data:
@@ -770,7 +770,7 @@ def show_admin_dashboard():
     except Exception as e:
         st.error(f"Error al cargar clientes: {e}")
 
-    with st.expander("➕ Crear Nuevo Cliente y Código de Invitación"):
+    with st.expander("Crear Nuevo Cliente y Código de Invitación"):
         with st.form("new_client_form"):
             new_client_name = st.text_input("Nombre del Nuevo Cliente")
             new_plan = st.selectbox("Plan Asignado", options=list(PLAN_FEATURES.keys()), index=0)
@@ -794,7 +794,7 @@ def show_admin_dashboard():
                     except Exception as e:
                         st.error(f"Error al crear cliente: {e} (¿Código duplicado?)")
 
-    st.subheader("👥 Gestión de Usuarios", divider="rainbow")
+    st.subheader("Gestión de Usuarios", divider="rainbow")
     try:
         if "SUPABASE_SERVICE_KEY" not in st.secrets:
             st.error("Configuración requerida: Falta 'SUPABASE_SERVICE_KEY' en los secretos.")
@@ -909,7 +909,7 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     # Mostrar si es admin en el sidebar
     if st.session_state.get("is_admin", False):
-        st.sidebar.caption("Rol: Administrador 👑")
+        st.sidebar.caption("Rol: Administrador")
     st.sidebar.divider()
 
     db_filtered = db_full[:]
@@ -980,7 +980,7 @@ def run_user_mode(db_full, user_features, footer_html):
     # --- FIN MOSTRAR MODO ---
 
 # =====================================================
-# FUNCIÓN PRINCIPAL DE LA APLICACIÓN (MODIFICADA)
+# FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
 def main():
     if 'page' not in st.session_state:
@@ -1020,7 +1020,7 @@ def main():
 
     # --- Separación Admin / Usuario ---
     if st.session_state.get("is_admin", False):
-        tab_user, tab_admin = st.tabs(["[ 👤 Modo Usuario ]", "[ 👑 Modo Administrador ]"])
+        tab_user, tab_admin = st.tabs(["[ Modo Usuario ]", "[ Modo Administrador ]"])
 
         with tab_user:
             # Dibuja el sidebar y la interfaz de usuario normal
@@ -1028,7 +1028,7 @@ def main():
 
         with tab_admin:
             # Muestra el panel de administración (el sidebar ya está dibujado)
-            st.title("Panel de Administración 👑")
+            st.title("Panel de Administración")
             st.write(f"Gestionando como: {st.session_state.user}")
             show_admin_dashboard()
             # Nota: El botón "Cerrar Sesión" del sidebar dibujado por run_user_mode funciona aquí también.
