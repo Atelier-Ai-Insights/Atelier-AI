@@ -131,12 +131,12 @@ def show_login_page():
 
     col1, col2 = st.columns(2)
     with col1:
-        # --- AJUSTE AQUÍ ---
+        # --- AJUSTE LOGIN BOTÓN 1 ---
         if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
             st.session_state.page = "signup"
             st.rerun()
     with col2:
-        # --- AJUSTE AQUÍ ---
+        # --- AJUSTE LOGIN BOTÓN 2 ---
         if st.button("¿Olvidaste tu contraseña?", type="secondary", use_container_width=True):
             st.session_state.page = "reset_password"
             st.rerun()
@@ -249,7 +249,6 @@ def get_daily_usage(username, action_type):
     except Exception as e:
         print(f"Error getting daily usage: {e}")
         return 0
-
 
 # ==============================
 # FUNCIONES AUXILIARES Y DE PDF
@@ -415,7 +414,7 @@ def report_mode(db, selected_files):
     if "report" in st.session_state and st.session_state["report"]:
         st.markdown("---"); st.markdown("### Informe Generado"); st.markdown(st.session_state["report"], unsafe_allow_html=True); st.markdown("---")
     question = st.text_area("Escribe tu consulta para el reporte…", value=st.session_state.get("last_question", ""), height=150, key="report_question")
-    if st.button("Generar Reporte", use_container_width=True):
+    if st.button("Generar Reporte", use_container_width=True): # Botón ancho
         report_limit = st.session_state.plan_features.get('reports_per_month', 0); current_reports = get_monthly_usage(st.session_state.user, "Generar un reporte de reportes")
         if current_reports >= report_limit and report_limit != float('inf'): st.error(f"Límite de {int(report_limit)} reportes alcanzado."); return
         if not question.strip(): st.warning("Ingresa una consulta."); return
@@ -428,7 +427,7 @@ def report_mode(db, selected_files):
         col1, col2 = st.columns(2)
         with col1:
             if pdf_bytes: st.download_button("Descargar PDF", data=pdf_bytes, file_name="Informe_AtelierIA.pdf", mime="application/pdf", use_container_width=True)
-            else: st.button("Error PDF", disabled=True, use_container_width=True)
+            else: st.button("Error PDF", disabled=True, use_container_width=True) # Mostrar botón deshabilitado si falla PDF
         with col2: st.button("Nueva consulta", on_click=reset_report_workflow, key="new_report_query_btn", use_container_width=True)
 
 def grounded_chat_mode(db, selected_files):
@@ -483,10 +482,10 @@ def concept_generation_mode(db, selected_files):
     st.subheader("Generación de Conceptos"); st.markdown("Genera concepto de producto/servicio a partir de idea y hallazgos.")
     if "generated_concept" in st.session_state:
         st.markdown("---"); st.markdown("### Concepto Generado"); st.markdown(st.session_state.generated_concept)
-        if st.button("Generar nuevo concepto", use_container_width=True): st.session_state.pop("generated_concept"); st.rerun()
+        if st.button("Generar nuevo concepto", use_container_width=True): st.session_state.pop("generated_concept"); st.rerun() # Botón ancho
     else:
         product_idea = st.text_area("Describe tu idea:", height=150, placeholder="Ej: Snack saludable...")
-        if st.button("Generar Concepto", use_container_width=True):
+        if st.button("Generar Concepto", use_container_width=True): # Botón ancho
             if not product_idea.strip(): st.warning("Describe tu idea."); return
             with st.spinner("Generando concepto..."):
                 context_info = get_relevant_info(db, product_idea, selected_files)
@@ -499,10 +498,10 @@ def idea_evaluator_mode(db, selected_files):
     st.subheader("Evaluación de Pre-Ideas"); st.markdown("Evalúa potencial de idea contra hallazgos.")
     if "evaluation_result" in st.session_state:
         st.markdown("---"); st.markdown("### Evaluación"); st.markdown(st.session_state.evaluation_result)
-        if st.button("Evaluar otra idea", use_container_width=True): del st.session_state["evaluation_result"]; st.rerun()
+        if st.button("Evaluar otra idea", use_container_width=True): del st.session_state["evaluation_result"]; st.rerun() # Botón ancho
     else:
         idea_input = st.text_area("Describe la idea a evaluar:", height=150, placeholder="Ej: Yogures con probióticos...")
-        if st.button("Evaluar Idea", use_container_width=True):
+        if st.button("Evaluar Idea", use_container_width=True): # Botón ancho
             if not idea_input.strip(): st.warning("Describe una idea."); return
             with st.spinner("Evaluando potencial..."):
                 context_info = get_relevant_info(db, idea_input, selected_files)
@@ -520,28 +519,46 @@ def show_admin_dashboard():
         try:
             stats_response = supabase.table("queries").select("user_name, mode, timestamp, query").execute()
             if stats_response.data:
-                df_stats = pd.DataFrame(stats_response.data); df_stats['timestamp'] = pd.to_datetime(df_stats['timestamp']).dt.tz_localize(None); df_stats['date'] = df_stats['timestamp'].dt.date
+                df_stats = pd.DataFrame(stats_response.data)
+                df_stats['timestamp'] = pd.to_datetime(df_stats['timestamp']).dt.tz_localize(None)
+                df_stats['date'] = df_stats['timestamp'].dt.date
                 col1, col2 = st.columns(2)
-                with col1: st.write("**Consultas por Usuario (Total)**"); user_counts = df_stats.groupby('user_name')['mode'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False); st.dataframe(user_counts, use_container_width=True, hide_index=True)
-                with col2: st.write("**Consultas por Modo de Uso (Total)**"); mode_counts = df_stats.groupby('mode')['user_name'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False); st.dataframe(mode_counts, use_container_width=True, hide_index=True)
-                st.write("**Actividad Reciente (Últimas 50 consultas)**"); df_recent = df_stats[['timestamp', 'user_name', 'mode', 'query']].sort_values(by="timestamp", ascending=False).head(50); df_recent['timestamp'] = df_recent['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S'); st.dataframe(df_recent, use_container_width=True, hide_index=True)
-            else: st.info("Aún no hay datos de uso.")
-        except Exception as e: st.error(f"Error cargando estadísticas: {e}")
+                with col1:
+                    st.write("**Consultas por Usuario (Total)**")
+                    user_counts = df_stats.groupby('user_name')['mode'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False)
+                    st.dataframe(user_counts, use_container_width=True, hide_index=True)
+                with col2:
+                    st.write("**Consultas por Modo de Uso (Total)**")
+                    mode_counts = df_stats.groupby('mode')['user_name'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False)
+                    st.dataframe(mode_counts, use_container_width=True, hide_index=True)
+                st.write("**Actividad Reciente (Últimas 50 consultas)**")
+                df_recent = df_stats[['timestamp', 'user_name', 'mode', 'query']].sort_values(by="timestamp", ascending=False).head(50)
+                df_recent['timestamp'] = df_recent['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
+                st.dataframe(df_recent, use_container_width=True, hide_index=True)
+            else: st.info("Aún no hay datos de uso registrados.")
+        except Exception as e: st.error(f"Error al cargar estadísticas: {e}")
 
     st.subheader("🔑 Gestión de Clientes (Invitaciones)", divider="rainbow")
     try:
         clients_response = supabase.table("clients").select("client_name, plan, invite_code, created_at").order("created_at", desc=True).execute()
-        if clients_response.data: st.write("**Clientes Actuales**"); df_clients = pd.DataFrame(clients_response.data); df_clients['created_at'] = pd.to_datetime(df_clients['created_at']).dt.strftime('%Y-%m-%d'); st.dataframe(df_clients, use_container_width=True, hide_index=True)
-        else: st.info("No hay clientes.")
-    except Exception as e: st.error(f"Error cargando clientes: {e}")
+        if clients_response.data:
+            st.write("**Clientes Actuales**"); df_clients = pd.DataFrame(clients_response.data)
+            df_clients['created_at'] = pd.to_datetime(df_clients['created_at']).dt.strftime('%Y-%m-%d')
+            st.dataframe(df_clients, use_container_width=True, hide_index=True)
+        else: st.info("No hay clientes registrados.")
+    except Exception as e: st.error(f"Error al cargar clientes: {e}")
 
-    with st.expander("➕ Crear Nuevo Cliente y Código"):
+    with st.expander("➕ Crear Nuevo Cliente y Código de Invitación"):
         with st.form("new_client_form"):
-            new_client_name = st.text_input("Nombre"); new_plan = st.selectbox("Plan", options=list(PLAN_FEATURES.keys()), index=0); new_invite_code = st.text_input("Código Invitación")
+            new_client_name = st.text_input("Nombre"); new_plan = st.selectbox("Plan", options=list(PLAN_FEATURES.keys()), index=0)
+            new_invite_code = st.text_input("Código Invitación")
             submitted = st.form_submit_button("Crear Cliente")
             if submitted:
-                if not new_client_name or not new_plan or not new_invite_code: st.warning("Completa campos."); return
-                try: supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"]); supabase_admin_client.table("clients").insert({"client_name": new_client_name, "plan": new_plan, "invite_code": new_invite_code}).execute(); st.success(f"Cliente '{new_client_name}' creado. Código: {new_invite_code}")
+                if not new_client_name or not new_plan or not new_invite_code: st.warning("Completa todos los campos."); return
+                try:
+                    supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
+                    supabase_admin_client.table("clients").insert({"client_name": new_client_name, "plan": new_plan, "invite_code": new_invite_code}).execute()
+                    st.success(f"Cliente '{new_client_name}' creado. Código: {new_invite_code}")
                 except Exception as e: st.error(f"Error al crear: {e}")
 
     st.subheader("👥 Gestión de Usuarios", divider="rainbow")
@@ -550,14 +567,15 @@ def show_admin_dashboard():
         supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
         users_response = supabase_admin_client.table("users").select("id, email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute()
         if users_response.data:
-            st.write("**Usuarios Registrados** (Editar Rol)")
+            st.write("**Usuarios Registrados** (Puedes editar Rol)")
             user_list = [{'id': u.get('id'), 'email': u.get('email'), 'creado_el': u.get('created_at'), 'rol': u.get('rol', 'user'), 'cliente': u.get('clients', {}).get('client_name', "N/A"), 'plan': u.get('clients', {}).get('plan', "N/A")} for u in users_response.data]
-            original_df = pd.DataFrame(user_list);
+            original_df = pd.DataFrame(user_list)
             if 'original_users_df' not in st.session_state: st.session_state.original_users_df = original_df.copy()
             display_df = original_df.copy(); display_df['creado_el'] = pd.to_datetime(display_df['creado_el']).dt.strftime('%Y-%m-%d %H:%M')
-            edited_df = st.data_editor( display_df, key="user_editor", column_config={"id": None, "rol": st.column_config.SelectboxColumn("Rol", options=["user", "admin"], required=True), "email": st.column_config.TextColumn("Email", disabled=True), "creado_el": st.column_config.TextColumn("Creado", disabled=True), "cliente": st.column_config.TextColumn("Cliente", disabled=True), "plan": st.column_config.TextColumn("Plan", disabled=True)}, use_container_width=True, hide_index=True, num_rows="fixed")
-            if st.button("Guardar Cambios Usuarios", use_container_width=True):
-                updates_to_make = []; original_users = st.session_state.original_users_df; edited_df_indexed = edited_df.set_index(original_df.index); edited_df_with_ids = original_df[['id']].join(edited_df_indexed)
+            edited_df = st.data_editor( display_df, key="user_editor", column_config={"id": None, "rol": st.column_config.SelectboxColumn("Rol", options=["user", "admin"], required=True), "email": st.column_config.TextColumn("Email", disabled=True), "creado_el": st.column_config.TextColumn("Creado El", disabled=True), "cliente": st.column_config.TextColumn("Cliente", disabled=True), "plan": st.column_config.TextColumn("Plan", disabled=True)}, use_container_width=True, hide_index=True, num_rows="fixed")
+            if st.button("Guardar Cambios en Usuarios", use_container_width=True): # Botón ancho
+                updates_to_make = []; original_users = st.session_state.original_users_df
+                edited_df_indexed = edited_df.set_index(original_df.index); edited_df_with_ids = original_df[['id']].join(edited_df_indexed)
                 for index, original_row in original_users.iterrows():
                     edited_rows_match = edited_df_with_ids[edited_df_with_ids['id'] == original_row['id']]
                     if not edited_rows_match.empty:
@@ -573,8 +591,8 @@ def show_admin_dashboard():
                     if success_count > 0: st.success(f"{success_count} actualizado(s).")
                     if error_count > 0: st.error(f"{error_count} error(es):"); [st.error(f"- {err}") for err in errors]
                     del st.session_state.original_users_df; st.rerun()
-                else: st.info("No detectaron cambios.")
-        else: st.info("No hay usuarios.")
+                else: st.info("No se detectaron cambios.")
+        else: st.info("No hay usuarios registrados.")
     except Exception as e: st.error(f"Error gestión usuarios: {e}")
 
 # =====================================================
