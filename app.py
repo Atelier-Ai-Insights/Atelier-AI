@@ -127,9 +127,10 @@ def show_login_page():
         except Exception as e:
             st.error("Credenciales incorrectas o cuenta no confirmada.")
 
-    st.divider()
+    # --- AJUSTE: Línea divisoria eliminada ---
+    # st.divider() # <--- Esta línea fue eliminada
 
-    # --- AJUSTE: Eliminar columnas y apilar botones ---
+    # Apilar botones verticalmente
     if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
         st.session_state.page = "signup"
         st.rerun()
@@ -247,6 +248,7 @@ def get_daily_usage(username, action_type):
     except Exception as e:
         print(f"Error getting daily usage: {e}")
         return 0
+
 
 # ==============================
 # FUNCIONES AUXILIARES Y DE PDF
@@ -612,7 +614,6 @@ def run_user_mode(db_full, user_features, footer_html):
     selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects")
     if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
-    # --- AJUSTE BOTÓN CERRAR SESIÓN ---
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
 
@@ -643,7 +644,7 @@ def main():
             if st.session_state.page == "login": show_login_page()
             elif st.session_state.page == "signup": show_signup_page()
             elif st.session_state.page == "reset_password": show_reset_password_page()
-        st.divider()
+        st.divider() # Mantener el divider del footer general
         st.markdown(footer_html, unsafe_allow_html=True)
         st.stop()
 
