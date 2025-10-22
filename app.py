@@ -582,7 +582,7 @@ def image_evaluation_mode(db, selected_files):
         # Leer los bytes de la imagen
         image_bytes = uploaded_file.getvalue()
         # Mostrar la imagen subida
-        st.image(image_bytes, caption="Imagen a evaluar", use_column_width=True)
+        st.image(image_bytes, caption="Imagen a evaluar", use_container_width=True)
 
     st.markdown("---") # Separador visual
 
