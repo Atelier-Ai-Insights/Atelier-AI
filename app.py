@@ -10,7 +10,7 @@ import boto3
 import google.generativeai as genai
 import markdown2
 import streamlit as st
-import pandas as pd  # <-- IMPORTACIÓN AÑADIDA
+import pandas as pd
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -621,7 +621,7 @@ def idea_evaluator_mode(db, selected_files):
                         st.error("No se pudo generar la evaluación.")
 
 # =====================================================
-# ¡NUEVO! PANEL DE ADMINISTRACIÓN (CORREGIDO)
+# PANEL DE ADMINISTRACIÓN
 # =====================================================
 def show_admin_dashboard():
     """
@@ -733,7 +733,7 @@ def show_admin_dashboard():
 
 
 # =====================================================
-# ¡NUEVO! FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA)
+# FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA)
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
     """
