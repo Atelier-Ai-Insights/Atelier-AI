@@ -129,17 +129,15 @@ def show_login_page():
 
     st.divider()
 
-    col1, col2 = st.columns(2)
-    with col1:
-        # --- AJUSTE AQUÍ ---
-        if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
-            st.session_state.page = "signup"
-            st.rerun()
-    with col2:
-        # --- AJUSTE AQUÍ ---
-        if st.button("¿Olvidaste tu contraseña?", type="secondary", use_container_width=True):
-            st.session_state.page = "reset_password"
-            st.rerun()
+    # --- AJUSTE: Eliminar columnas y apilar botones ---
+    if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
+        st.session_state.page = "signup"
+        st.rerun()
+
+    if st.button("¿Olvidaste tu contraseña?", type="secondary", use_container_width=True):
+        st.session_state.page = "reset_password"
+        st.rerun()
+    # --- FIN AJUSTE ---
 
 
 def show_reset_password_page():
@@ -249,7 +247,6 @@ def get_daily_usage(username, action_type):
     except Exception as e:
         print(f"Error getting daily usage: {e}")
         return 0
-
 
 # ==============================
 # FUNCIONES AUXILIARES Y DE PDF
@@ -550,7 +547,7 @@ def show_admin_dashboard():
         supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
         users_response = supabase_admin_client.table("users").select("id, email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute()
         if users_response.data:
-            st.write("**Usuarios Registrados** (Editar Rol)")
+            st.write("**Usuarios Registrados** (Puedes editar Rol)")
             user_list = [{'id': u.get('id'), 'email': u.get('email'), 'creado_el': u.get('created_at'), 'rol': u.get('rol', 'user'), 'cliente': u.get('clients', {}).get('client_name', "N/A"), 'plan': u.get('clients', {}).get('plan', "N/A")} for u in users_response.data]
             original_df = pd.DataFrame(user_list);
             if 'original_users_df' not in st.session_state: st.session_state.original_users_df = original_df.copy()
@@ -573,7 +570,7 @@ def show_admin_dashboard():
                     if success_count > 0: st.success(f"{success_count} actualizado(s).")
                     if error_count > 0: st.error(f"{error_count} error(es):"); [st.error(f"- {err}") for err in errors]
                     del st.session_state.original_users_df; st.rerun()
-                else: st.info("No detectaron cambios.")
+                else: st.info("No se detectaron cambios.")
         else: st.info("No hay usuarios.")
     except Exception as e: st.error(f"Error gestión usuarios: {e}")
 
