@@ -289,11 +289,11 @@ def add_markdown_content(pdf, markdown_text):
                 for li in elem.find_all("li", recursive=False): pdf.add_paragraph("• " + li.decode_contents(formatter="html"))
             elif tag_name == "ol":
                 for idx, li in enumerate(elem.find_all("li", recursive=False), 1): pdf.add_paragraph(f"{idx}. {li.decode_contents(formatter="html")}")
-            elif tag_name == "pre": pdf.add_paragraph(elem.get_text(), style='Code')
+            elif tag_name == "pre": pdf.add_paragraph(elem.get_text(), style='Code') # Usar estilo 'Code' existente
             elif tag_name == "blockquote": pdf.add_paragraph(">" + elem.decode_contents(formatter="html"))
             else:
                  try: pdf.add_paragraph(elem.decode_contents(formatter="html"))
-                 except: pdf.add_paragraph(elem.get_text(strip=True))
+                 except: pdf.add_paragraph(elem.get_text(strip=True)) # Fallback
     except Exception as e:
         print(f"Error adding markdown content to PDF: {e}")
         pdf.add_paragraph("--- Error parsing markdown ---"); pdf.add_paragraph(markdown_text); pdf.add_paragraph("--- End error ---")
@@ -349,12 +349,12 @@ banner_file = "Banner (2).jpg"
 
 def clean_text(text):
     if not isinstance(text, str): text = str(text)
-    # Solo reemplazar & si no es parte de una entidad HTML conocida por ReportLab
-    # Esto es complejo, por ahora solo reemplazamos & -> &amp;
-    # Una mejor solución sería usar una librería HTML->PDF más robusta si se necesita HTML complejo
-    return text.replace('&', '&amp;')
+    # Reemplazar solo ampersands que no forman parte de una entidad HTML conocida
+    # Esto es más seguro que un replace simple
+    # Usamos ReportLab Paragraph que ya maneja entidades HTML básicas
+    return text # Dejar que Paragraph maneje la codificación
 
-# --- AJUSTE CLASE PDFReport (Corrección Estilo 'Code' y Aplicación Fuente Base) ---
+# --- AJUSTE CLASE PDFReport (Refuerzo Fuente Base y Estilo Code) ---
 class PDFReport:
     def __init__(self, buffer_or_filename, banner_path=None):
         self.banner_path = banner_path
@@ -362,29 +362,32 @@ class PDFReport:
         self.styles = getSampleStyleSheet()
         self.doc = SimpleDocTemplate(buffer_or_filename, pagesize=A4, rightMargin=12*mm, leftMargin=12*mm, topMargin=45*mm, bottomMargin=18*mm)
 
-        # Usar la fuente registrada (DejaVuSans) o el fallback (Helvetica)
+        # Usar la fuente registrada globalmente (FONT_NAME)
         pdf_font_name = FONT_NAME
 
         # Aplicar la fuente a los estilos base más comunes
-        base_styles_to_update = ['Normal', 'BodyText', 'Italic', 'Heading1', 'Heading2', 'Heading3', 'Heading4', 'Heading5', 'Heading6', 'Code']
+        base_styles_to_update = ['Normal', 'BodyText', 'Italic', 'Bold', 'Heading1', 'Heading2', 'Heading3', 'Heading4', 'Heading5', 'Heading6', 'Code']
         for style_name in base_styles_to_update:
             if style_name in self.styles:
-                self.styles[style_name].fontName = pdf_font_name
-                # Ajustes adicionales opcionales para estilos base
-                if style_name == 'Code':
-                     self.styles[style_name].fontSize = 9
-                     self.styles[style_name].leading = 11
-                     self.styles[style_name].leftIndent = 6*mm
-                     # Si DejaVuSans no está, Courier es mejor fallback para código
-                     if pdf_font_name == FALLBACK_FONT_NAME:
-                          self.styles[style_name].fontName = 'Courier'
+                try:
+                    self.styles[style_name].fontName = pdf_font_name
+                    # Ajustes específicos para estilos base si es necesario
+                    if style_name == 'Code':
+                        # Usar Courier si la fuente principal no es monoespaciada (o si falló DejaVuSans)
+                        if pdf_font_name == FALLBACK_FONT_NAME or not FONT_REGISTERED:
+                             self.styles[style_name].fontName = 'Courier'
+                        self.styles[style_name].fontSize = 9
+                        self.styles[style_name].leading = 11
+                        self.styles[style_name].leftIndent = 6*mm
+                except Exception as e:
+                    print(f"Advertencia: No se pudo aplicar fuente '{pdf_font_name}' al estilo base '{style_name}'. {e}")
 
-        # Definir estilos personalizados usando la fuente seleccionada
+
+        # Definir estilos personalizados asegurando que hereden la fuente correcta
         self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], fontName=pdf_font_name, alignment=1, spaceAfter=12, fontSize=14, leading=18))
         self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['Heading2'], fontName=pdf_font_name, spaceBefore=10, spaceAfter=6, fontSize=12, leading=16))
-        self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], fontName=pdf_font_name, leading=14, alignment=4, fontSize=11)) # Justification=4
-        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], fontName=pdf_font_name, alignment=1, textColor=colors.grey, fontSize=8)) # Centered alignment=1
-
+        self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], fontName=pdf_font_name, leading=14, alignment=4, fontSize=11))
+        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], fontName=pdf_font_name, alignment=1, textColor=colors.grey, fontSize=8))
 
     def header(self, canvas, doc):
         canvas.saveState()
@@ -394,36 +397,27 @@ class PDFReport:
                 canvas.drawImage(self.banner_path, 0, y_pos, width=img_w, height=img_h, preserveAspectRatio=True, anchor='n')
             except Exception as e: print(f"Error drawing PDF header image: {e}")
         canvas.restoreState()
-
     def footer(self, canvas, doc):
         canvas.saveState()
         footer_text = "Generado por Atelier Data Studio IA. Es posible que se muestre información imprecisa. Verifica las respuestas."
         p = Paragraph(footer_text, self.styles['CustomFooter']); w, h = p.wrap(doc.width, doc.bottomMargin); p.drawOn(canvas, doc.leftMargin, 5 * mm)
-        # Sin número de página
         canvas.restoreState()
-
     def header_footer(self, canvas, doc): self.header(canvas, doc); self.footer(canvas, doc)
-
     def add_paragraph(self, text, style='CustomBodyText'):
         try:
-             # Usar el estilo base 'BodyText' si el personalizado falla, o 'Normal' como último recurso
              style_to_use = self.styles.get(style, self.styles.get('BodyText', self.styles['Normal']))
-             cleaned_text = text.replace('<br>', '<br/>').replace('<br />', '<br/>').replace('<strong>', '<b>').replace('</strong>', '</b>').replace('<em>', '<i>').replace('</em>', '</i>')
-             # Usar clean_text para escapar ampersands correctamente
-             p = Paragraph(clean_text(cleaned_text), style_to_use); self.elements.append(p); self.elements.append(Spacer(1, 4))
+             # Dejar que Paragraph maneje las entidades HTML básicas
+             p = Paragraph(text, style_to_use); self.elements.append(p); self.elements.append(Spacer(1, 4))
         except Exception as e: print(f"Error adding paragraph: {e}. Text was: {text[:100]}..."); self.elements.append(Paragraph(f"Error rendering: {text[:100]}...", self.styles['Code']))
-
     def add_title(self, text, level=1):
-        # Mapeo más explícito a estilos base y personalizados
         if level == 1: style_name = 'CustomTitle'
-        elif level == 2: style_name = 'CustomHeading' # Nuestro H2 personalizado
-        elif level >= 3: style_name = f'Heading{level}' # Usar H3, H4, etc. base si existen
-        else: style_name = 'CustomHeading' # Fallback
-
-        style_to_use = self.styles.get(style_name, self.styles['CustomHeading']) # Fallback a H2 personalizado
-        p = Paragraph(clean_text(text), style_to_use); spacer_height = 10 if level == 1 else (6 if level == 2 else 4)
+        elif level == 2: style_name = 'CustomHeading'
+        elif level >= 3: style_name = f'Heading{level}'
+        else: style_name = 'CustomHeading'
+        style_to_use = self.styles.get(style_name, self.styles['CustomHeading'])
+        # Dejar que Paragraph maneje las entidades HTML básicas
+        p = Paragraph(text, style_to_use); spacer_height = 10 if level == 1 else (6 if level == 2 else 4)
         self.elements.append(p); self.elements.append(Spacer(1, spacer_height))
-
     def build_pdf(self):
         try: self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
         except Exception as e: st.error(f"Error building PDF: {e}")
@@ -434,18 +428,13 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None):
     try:
         buffer = BytesIO(); pdf = PDFReport(buffer, banner_path=banner_path); pdf.add_title(title, level=1)
         add_markdown_content(pdf, content); pdf.build_pdf(); pdf_data = buffer.getvalue(); buffer.close()
-        # Verificar si se generaron datos PDF
-        if pdf_data:
-            return pdf_data
-        else:
-            st.error("Se produjo un error interno al construir el PDF (build_pdf no generó datos).")
-            return None
-    except Exception as e: st.error(f"Error crítico al generar el PDF: {e}"); return None
+        if pdf_data: return pdf_data
+        else: st.error("Error interno al construir PDF."); return None
+    except Exception as e: st.error(f"Error crítico al generar PDF: {e}"); return None
 
 # =====================================================
 # MODOS DE LA APLICACIÓN (SIN CAMBIOS FUNCIONALES)
 # =====================================================
-# (generate_final_report, report_mode, grounded_chat_mode, ideacion_mode, concept_generation_mode, idea_evaluator_mode - sin cambios)
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
     prompt1 = ( f"Pregunta del Cliente: ***{question}***\n\nInstrucciones:\n1. Identifica marca/producto exacto.\n2. Reitera: ***{question}***.\n3. Usa contexto para hallazgos relevantes.\n4. Extractos breves, no citas completas.\n5. Metadatos y cita IEEE [1].\n6. Referencias completas asociadas a [1], usar título de proyecto.\n7. Enfócate en hallazgos positivos.\n\nContexto:\n{relevant_info}\n\nRespuesta:\n## Hallazgos Clave:\n- [Hallazgo 1 [1]]\n- [Hallazgo 2 [2]]\n## Referencias:\n- [1] [Referencia completa 1]\n- [2] [Referencia completa 2]" )
