@@ -621,7 +621,7 @@ def idea_evaluator_mode(db, selected_files):
                         st.error("No se pudo generar la evaluación.")
 
 # =====================================================
-# ¡NUEVO! PANEL DE ADMINISTRACIÓN
+# ¡NUEVO! PANEL DE ADMINISTRACIÓN (CORREGIDO)
 # =====================================================
 def show_admin_dashboard():
     """
@@ -640,11 +640,17 @@ def show_admin_dashboard():
                 col1, col2 = st.columns(2)
                 with col1:
                     st.write("**Consultas por Usuario (Total)**")
-                    user_counts = df.groupby('user_name')['mode'].count().reset_name(name='Total Consultas').sort_values(by="Total Consultas", ascending=False)
+                    
+                    ### CORRECCIÓN 1: Se usa reset_index() en lugar de reset_name() ###
+                    user_counts = df.groupby('user_name')['mode'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False)
+                    
                     st.dataframe(user_counts, use_container_width=True)
                 with col2:
                     st.write("**Consultas por Modo de Uso (Total)**")
-                    mode_counts = df.groupby('mode')['user_name'].count().reset_name(name='Total Consultas').sort_values(by="Total Consultas", ascending=False)
+                    
+                    ### CORRECCIÓN 1: Se usa reset_index() en lugar de reset_name() ###
+                    mode_counts = df.groupby('mode')['user_name'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False)
+                    
                     st.dataframe(mode_counts, use_container_width=True)
 
                 st.write("**Actividad Reciente (Últimas 50 consultas)**")
@@ -690,26 +696,38 @@ def show_admin_dashboard():
 
     st.subheader("👥 Gestión de Usuarios", divider="rainbow")
     try:
-        # Fetch users and their client info
-        # AJUSTE: Se cambia "admin" por "rol" en el select
-        users_response = supabase.table("users").select("email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute()
+        ### CORRECCIÓN 2: Usar clave de servicio (service_role) para saltar RLS ###
+        
+        # 1. Verificar si el secreto de 'service_role' existe
+        if "SUPABASE_SERVICE_KEY" not in st.secrets:
+            st.error("Error de configuración: La clave 'SUPABASE_SERVICE_KEY' no se encuentra en los secretos de Streamlit.")
+            st.warning("Para ver la lista de usuarios, debes añadir la 'service_role key' de tu proyecto de Supabase a los secretos (secrets.toml).")
+            # Usamos st.stop() para no continuar si falta la clave
+            st.stop()
+
+        # 2. Crear un cliente admin que bypass RLS
+        supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
+        
+        # 3. Usar el cliente admin para la consulta
+        users_response = supabase_admin_client.table("users").select("email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute()
+        
         if users_response.data:
             st.write("**Usuarios Registrados**")
-            # Flatten the data for easier display in dataframe
             user_list = []
             for user in users_response.data:
                 client_info = user.get('clients')
                 user_list.append({
                     "email": user.get('email'),
                     "creado_el": user.get('created_at'),
-                    "rol": user.get('rol', 'user'), # Se muestra el rol
-                    "es_admin": (user.get('rol', '') == 'admin'), # Se calcula si es admin
+                    "rol": user.get('rol', 'user'), 
+                    "es_admin": (user.get('rol', '') == 'admin'),
                     "cliente": client_info.get('client_name') if client_info else "N/A",
                     "plan": client_info.get('plan') if client_info else "N/A"
                 })
             st.dataframe(user_list, use_container_width=True)
         else:
-            st.info("No hay usuarios registrados.")
+            # Si la consulta CON service_role no devuelve nada, entonces SÍ que no hay usuarios.
+            st.info("No hay usuarios registrados en la base de datos.")
     except Exception as e:
         st.error(f"Error al cargar usuarios: {e}")
 
