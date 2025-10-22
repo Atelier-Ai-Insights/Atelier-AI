@@ -867,6 +867,7 @@ def main():
         
         with tab_user:
             # Ejecuta la aplicación normal en modo usuario
+            # ESTA FUNCIÓN DIBUJA EL SIDEBAR COMPLETO
             run_user_mode(db_full, user_features, footer_html)
 
         with tab_admin:
@@ -876,16 +877,10 @@ def main():
             
             show_admin_dashboard()
             
-            # Sidebar específico para el modo admin (solo para cerrar sesión)
-            st.sidebar.image("LogoDataStudio.png")
-            st.sidebar.write(f"Usuario (Admin): {st.session_state.user}")
-            st.sidebar.divider()
-            if st.sidebar.button("Cerrar Sesión", key="logout_admin"):
-                supabase.auth.sign_out()
-                st.session_state.clear()
-                st.rerun()
-            st.sidebar.divider()
-            st.sidebar.markdown(footer_html, unsafe_allow_html=True)
+            ### ¡CORRECCIÓN! ###
+            # Se elimina el código duplicado del sidebar.
+            # El sidebar es global y ya fue dibujado por 'run_user_mode'
+            # El botón 'Cerrar Sesión' (key="logout_main") funcionará globalmente.
             
     else:
         # El usuario normal solo ve la aplicación de usuario
