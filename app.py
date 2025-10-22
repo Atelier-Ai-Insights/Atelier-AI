@@ -3,6 +3,7 @@ import html
 import json
 import unicodedata
 from io import BytesIO
+from PIL import Image
 import os
 from bs4 import BeautifulSoup
 
@@ -55,18 +56,25 @@ except Exception as e:
 # ==============================
 # DEFINICIÓN DE PLANES Y PERMISOS
 # ==============================
+
 PLAN_FEATURES = {
     "Explorer": {
         "reports_per_month": 0, "chat_queries_per_day": 4, "projects_per_year": 2,
-        "has_report_generation": False, "has_creative_conversation": False, "has_concept_generation": False, "has_idea_evaluation": False,
+        "has_report_generation": False, "has_creative_conversation": False,
+        "has_concept_generation": False, "has_idea_evaluation": False,
+        "has_image_evaluation": False, 
     },
     "Strategist": {
         "reports_per_month": 0, "chat_queries_per_day": float('inf'), "projects_per_year": 10,
-        "has_report_generation": False, "has_creative_conversation": True, "has_concept_generation": True, "has_idea_evaluation": False,
+        "has_report_generation": False, "has_creative_conversation": True,
+        "has_concept_generation": True, "has_idea_evaluation": False,
+        "has_image_evaluation": False,
     },
     "Enterprise": {
         "reports_per_month": float('inf'), "chat_queries_per_day": float('inf'), "projects_per_year": float('inf'),
-        "has_report_generation": True, "has_creative_conversation": True, "has_concept_generation": True, "has_idea_evaluation": True,
+        "has_report_generation": True, "has_creative_conversation": True,
+        "has_concept_generation": True, "has_idea_evaluation": True,
+        "has_image_evaluation": True, 
     }
 }
 
@@ -547,6 +555,97 @@ def idea_evaluator_mode(db, selected_files):
                 if response: st.session_state.evaluation_result = response; log_query_event(idea_input, mode="Evaluación de Idea"); st.rerun()
                 else: st.error("No se pudo generar evaluación.")
 
+def image_evaluation_mode(db, selected_files):
+    st.subheader("Evaluación Visual de Creatividades")
+    st.markdown("""
+        Sube una imagen (JPG/PNG) y describe tu público objetivo y objetivos de comunicación.
+        El asistente evaluará la imagen basándose en criterios de marketing y
+        utilizará los hallazgos de los estudios seleccionados como contexto.
+    """)
+
+    uploaded_file = st.file_uploader("Sube tu imagen aquí:", type=["jpg", "png", "jpeg"])
+    target_audience = st.text_area("Describe el público objetivo (Target):", height=100, placeholder="Ej: Mujeres jóvenes, 25-35 años, interesadas en vida sana...")
+    comm_objectives = st.text_area("Define 2-3 objetivos de comunicación:", height=100, placeholder="Ej:\n1. Generar reconocimiento de nuevo producto.\n2. Comunicar frescura y naturalidad.\n3. Incentivar visita a la web.")
+
+    image_bytes = None
+    if uploaded_file is not None:
+        # Leer los bytes de la imagen
+        image_bytes = uploaded_file.getvalue()
+        # Mostrar la imagen subida
+        st.image(image_bytes, caption="Imagen a evaluar", use_column_width=True)
+
+    st.markdown("---") # Separador visual
+
+    # Botón para iniciar la evaluación
+    if st.button("🧠 Evaluar Imagen", use_container_width=True, disabled=(uploaded_file is None)):
+        if not image_bytes:
+            st.warning("Por favor, sube una imagen.")
+            return
+        if not target_audience.strip():
+            st.warning("Por favor, describe el público objetivo.")
+            return
+        if not comm_objectives.strip():
+            st.warning("Por favor, define los objetivos de comunicación.")
+            return
+
+        with st.spinner("Analizando imagen y contexto... 🧠✨"):
+            # Obtener contexto de texto de los estudios seleccionados
+            # Usaremos TODO el texto filtrado como contexto general del mercado/consumidor
+            # Una mejora futura podría ser filtrar más específicamente basado en palabras clave
+            relevant_text_context = get_relevant_info(db, f"Contexto para imagen: {target_audience}", selected_files)
+
+            # Construir el prompt multimodal
+            prompt_parts = [
+                "Actúa como un director creativo y estratega de marketing experto. Analiza la siguiente imagen en el contexto de un público objetivo y objetivos de comunicación específicos, utilizando también los hallazgos de estudios de mercado proporcionados como referencia.",
+                f"\n\n**Público Objetivo (Target):**\n{target_audience}",
+                f"\n\n**Objetivos de Comunicación:**\n{comm_objectives}",
+                "\n\n**Imagen a Evaluar:**",
+                # Pasar los bytes de la imagen al modelo
+                # Necesitamos importar PIL Image
+                Image.open(BytesIO(image_bytes)), # Asume que tienes 'from PIL import Image' y 'from io import BytesIO'
+                f"\n\n**Contexto (Hallazgos de Estudios de Mercado):**\n```\n{relevant_text_context[:10000]}\n```", # Limitar contexto para no exceder límites
+                "\n\n**Evaluación Detallada (Formato Markdown):**",
+                "\n### 1. Notoriedad e Impacto Visual",
+                "* ¿La imagen capta la atención? ¿Es visualmente atractiva o disruptiva para el target descrito?",
+                "* ¿Qué elementos visuales (colores, composición, personajes, etc.) contribuyen (o restan) a su impacto? Apóyate en el contexto si encuentras insights relevantes sobre preferencias visuales del target.",
+                "\n### 2. Mensaje Clave y Claridad",
+                "* ¿Qué mensaje principal y secundarios transmite la imagen? ¿Son coherentes con los objetivos?",
+                "* ¿Es el mensaje fácil de entender para el público objetivo? ¿Hay ambigüedades?",
+                "* ¿Cómo se relaciona el mensaje visual con posibles insights del consumidor encontrados en el contexto?",
+                "\n### 3. Branding e Identidad",
+                "* ¿Se integra la marca (logo, colores corporativos, estilo visual) de forma efectiva? ¿Es reconocible?",
+                "* ¿La imagen refuerza la personalidad o valores de la marca (según se pueda inferir o si hay contexto relevante)?",
+                "\n### 4. Llamada a la Acción (Implícita o Explícita) y Respuesta Esperada",
+                "* ¿La imagen sugiere alguna acción o genera alguna emoción/pensamiento específico en el espectador (curiosidad, deseo, confianza, urgencia)?",
+                "* ¿Está alineada esta respuesta esperada con los objetivos de comunicación?",
+                "* Considerando el contexto, ¿es probable que esta creatividad motive al target a dar el siguiente paso?",
+                "\n\n**Conclusión General:**",
+                "* Resume tu valoración sobre la efectividad potencial de esta imagen para el target y objetivos dados, mencionando sus puntos fuertes y áreas de mejora, idealmente conectando con algún insight clave del contexto si aplica."
+            ]
+
+            # Llamar a la API de Gemini (asegúrate que call_gemini_api puede manejar listas como prompt)
+            # La librería google.generativeai maneja la lista de partes automáticamente
+            evaluation_result = call_gemini_api(prompt_parts)
+
+            if evaluation_result:
+                st.session_state.image_evaluation_result = evaluation_result
+                log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode="Evaluación Visual")
+                # No necesitamos rerun aquí, el resultado se mostrará abajo
+            else:
+                st.error("No se pudo generar la evaluación de la imagen.")
+                st.session_state.pop("image_evaluation_result", None)
+
+    # Mostrar el resultado si existe
+    if "image_evaluation_result" in st.session_state:
+        st.markdown("---")
+        st.markdown("### ✨ Resultados de la Evaluación:")
+        st.markdown(st.session_state.image_evaluation_result)
+        # Botón para limpiar y evaluar otra
+        if st.button("Evaluar Otra Imagen", use_container_width=True):
+            st.session_state.pop("image_evaluation_result", None)
+            # No limpiamos el uploader, pero sí el resultado. El usuario puede subir otra.
+            st.rerun()
+
 # =====================================================
 # PANEL DE ADMINISTRACIÓN (CON EDICIÓN DE USUARIOS)
 # =====================================================
@@ -616,10 +715,14 @@ def show_admin_dashboard():
 # =====================================================
 # FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA)
 # =====================================================
+
 def run_user_mode(db_full, user_features, footer_html):
+    """
+    Ejecuta toda la lógica de la aplicación para el modo de usuario estándar.
+    """
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
-    if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
+    if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador")
     st.sidebar.divider()
 
     db_filtered = db_full[:]
@@ -629,16 +732,24 @@ def run_user_mode(db_full, user_features, footer_html):
     if user_features.get("has_creative_conversation"): modos_disponibles.append("Conversaciones creativas")
     if user_features.get("has_concept_generation"): modos_disponibles.append("Generación de conceptos")
     if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
+    # --- AÑADIR NUEVO MODO AQUÍ ---
+    if user_features.get("has_image_evaluation"): modos_disponibles.append("Evaluación Visual")
+    # --- FIN AÑADIR ---
 
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed", key="main_mode_selector")
 
+    # Resetear estados específicos del modo si cambia (incluir nuevo estado)
     if 'current_mode' not in st.session_state: st.session_state.current_mode = modo
     if st.session_state.current_mode != modo:
-        reset_chat_workflow(); st.session_state.pop("generated_concept", None); st.session_state.pop("evaluation_result", None)
-        st.session_state.pop("report", None); st.session_state.pop("last_question", None); st.session_state.current_mode = modo
+        reset_chat_workflow()
+        st.session_state.pop("generated_concept", None); st.session_state.pop("evaluation_result", None)
+        st.session_state.pop("report", None); st.session_state.pop("last_question", None)
+        st.session_state.pop("image_evaluation_result", None) # <-- Limpiar resultado de imagen
+        st.session_state.current_mode = modo
 
     st.sidebar.header("Filtros de Búsqueda")
+    # ... (código de filtros sin cambios) ...
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
     selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas")
     if selected_marcas: db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
@@ -651,6 +762,7 @@ def run_user_mode(db_full, user_features, footer_html):
     selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects")
     if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
+
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
 
@@ -658,13 +770,17 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
-    if not selected_files and modo != "Generar un reporte de reportes": st.warning("⚠️ No hay estudios que coincidan con los filtros.")
+    # Mostrar advertencia si es necesario (sin cambios)
+    # if not selected_files and modo not in ["Generar un reporte de reportes", "Evaluación Visual"]: # Ajustar si evaluación necesita filtros
+    #      st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
 
+    # --- AÑADIR ELIF PARA NUEVO MODO ---
     if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
     elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
+    elif modo == "Evaluación Visual": image_evaluation_mode(db_filtered, selected_files) 
 
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
@@ -691,7 +807,7 @@ def main():
     user_features = st.session_state.plan_features
 
     if st.session_state.get("is_admin", False):
-        tab_user, tab_admin = st.tabs(["MODO USUARIO", "MODO ADMINISTRADOR"])
+        tab_user, tab_admin = st.tabs(["[ Modo Usuario ]", "[ Modo Administrador ]"])
         with tab_user: run_user_mode(db_full, user_features, footer_html)
         with tab_admin:
             st.title("Panel de Administración")
@@ -701,3 +817,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
