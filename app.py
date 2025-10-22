@@ -128,7 +128,7 @@ def show_login_page():
             st.error("Credenciales incorrectas o cuenta no confirmada.")
 
     # --- AJUSTE: Línea divisoria eliminada ---
-    # st.divider() # <--- Esta línea fue eliminada
+    # st.divider()
 
     # Apilar botones verticalmente
     if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
@@ -249,7 +249,6 @@ def get_daily_usage(username, action_type):
         print(f"Error getting daily usage: {e}")
         return 0
 
-
 # ==============================
 # FUNCIONES AUXILIARES Y DE PDF
 # ==============================
@@ -283,7 +282,15 @@ def add_markdown_content(pdf, markdown_text):
                 for li in elem.find_all("li", recursive=False): pdf.add_paragraph("• " + li.decode_contents(formatter="html"))
             elif tag_name == "ol":
                 for idx, li in enumerate(elem.find_all("li", recursive=False), 1): pdf.add_paragraph(f"{idx}. {li.decode_contents(formatter="html")}")
-            elif tag_name == "pre": pdf.add_paragraph(elem.get_text(), style='Code')
+            elif tag_name == "pre":
+                 # --- AJUSTE: Usar estilo 'Code' con fallback ---
+                 code_content = elem.get_text()
+                 try:
+                     pdf.add_paragraph(code_content, style='Code') # Intenta usar 'Code'
+                 except KeyError:
+                     print("Advertencia: Estilo 'Code' no encontrado en PDF stylesheet, usando 'CustomBodyText'.")
+                     pdf.add_paragraph(code_content, style='CustomBodyText') # Fallback
+                 # --- FIN AJUSTE ---
             elif tag_name == "blockquote": pdf.add_paragraph(">" + elem.decode_contents(formatter="html"))
             else:
                  try: pdf.add_paragraph(elem.decode_contents(formatter="html"))
@@ -356,7 +363,10 @@ class PDFReport:
         self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['Heading2'], fontName=font_name, spaceBefore=10, spaceAfter=6, fontSize=12, leading=16))
         self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], fontName=font_name, leading=14, alignment=4, fontSize=11))
         self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], fontName=font_name, alignment=2, textColor=colors.grey, fontSize=8))
-        self.styles.add(ParagraphStyle(name='Code', parent=self.styles['Code'], fontName='Courier', fontSize=9, leading=11, leftIndent=6*mm))
+        # --- AJUSTE: No añadir 'Code' si ya existe ---
+        # La línea self.styles.add(ParagraphStyle(name='Code', ...)) fue eliminada.
+        # Se usará el estilo 'Code' predeterminado si existe.
+        # --- FIN AJUSTE ---
 
     def header(self, canvas, doc):
         canvas.saveState()
@@ -377,8 +387,22 @@ class PDFReport:
     def add_paragraph(self, text, style='CustomBodyText'):
         try:
              cleaned_text = text.replace('<br>', '<br/>').replace('<br />', '<br/>').replace('<strong>', '<b>').replace('</strong>', '</b>').replace('<em>', '<i>').replace('</em>', '</i>')
-             p = Paragraph(clean_text(cleaned_text), self.styles[style]); self.elements.append(p); self.elements.append(Spacer(1, 4))
-        except Exception as e: print(f"Error adding paragraph: {e}. Text was: {text[:100]}..."); self.elements.append(Paragraph(f"Error rendering: {text[:100]}...", self.styles['Code']))
+             # Intenta usar el estilo, si falla usa el body text
+             try:
+                 style_obj = self.styles[style]
+             except KeyError:
+                 print(f"Advertencia: Estilo '{style}' no encontrado, usando 'CustomBodyText'.")
+                 style_obj = self.styles['CustomBodyText']
+             p = Paragraph(clean_text(cleaned_text), style_obj)
+             self.elements.append(p)
+             self.elements.append(Spacer(1, 4))
+        except Exception as e:
+            print(f"Error adding paragraph: {e}. Text was: {text[:100]}...")
+            # Fallback seguro con estilo predeterminado si todo falla
+            try:
+                self.elements.append(Paragraph(f"Error rendering: {text[:100]}...", self.styles['Normal']))
+            except: pass # Evita error si incluso 'Normal' falla
+
     def add_title(self, text, level=1):
         style_name = 'CustomTitle' if level == 1 else ('CustomHeading' if level == 2 else 'h3')
         if level > 2: style_name = self.styles.get(f'h{level}', self.styles['CustomHeading']).name
@@ -508,159 +532,4 @@ def idea_evaluator_mode(db, selected_files):
                 prompt = ( f"**Tarea:** Estratega Mkt/Innovación. Evalúa potencial de 'Idea' **solo** con 'Contexto' (hallazgos Atelier).\n\n**Idea:**\n\"{idea_input}\"\n\n**Contexto (Hallazgos):**\n\"{context_info}\"\n\n**Instrucciones:**\nEvalúa en Markdown estructurado. Basa **cada punto** en 'Contexto'. No conocimiento externo. No citas explícitas.\n\n---\n\n### 1. Valoración General Potencial\n* Resume: Alto, Moderado con Desafíos, Bajo según Hallazgos.\n\n### 2. Sustento Detallado (Basado en Contexto)\n* **Positivos:** Conecta idea con necesidades/tensiones clave del contexto. Hallazgos específicos que respaldan.\n* **Desafíos/Contradicciones:** Hallazgos que obstaculizan/contradicen.\n\n### 3. Sugerencias Evaluación Consumidor (Basado en Contexto)\n* 3-4 **hipótesis cruciales** (de hallazgos o vacíos). Para c/u:\n    * **Hipótesis:** (Ej: \"Consumidores valoran X sobre Y...\").\n    * **Pregunta Clave:** (Ej: \"¿Qué tan importante es X para Ud? ¿Por qué?\").\n    * **Aporte Pregunta:** (Ej: \"Validar si beneficio X resuena...\")." )
                 response = call_gemini_api(prompt)
                 if response: st.session_state.evaluation_result = response; log_query_event(idea_input, mode="Evaluación de Idea"); st.rerun()
-                else: st.error("No se pudo generar evaluación.")
-
-# =====================================================
-# PANEL DE ADMINISTRACIÓN (CON EDICIÓN DE USUARIOS)
-# =====================================================
-def show_admin_dashboard():
-    st.subheader("📊 Estadísticas de Uso", divider="rainbow")
-    with st.spinner("Cargando estadísticas..."):
-        try:
-            stats_response = supabase.table("queries").select("user_name, mode, timestamp, query").execute()
-            if stats_response.data:
-                df_stats = pd.DataFrame(stats_response.data); df_stats['timestamp'] = pd.to_datetime(df_stats['timestamp']).dt.tz_localize(None); df_stats['date'] = df_stats['timestamp'].dt.date
-                col1, col2 = st.columns(2)
-                with col1: st.write("**Consultas por Usuario (Total)**"); user_counts = df_stats.groupby('user_name')['mode'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False); st.dataframe(user_counts, use_container_width=True, hide_index=True)
-                with col2: st.write("**Consultas por Modo de Uso (Total)**"); mode_counts = df_stats.groupby('mode')['user_name'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False); st.dataframe(mode_counts, use_container_width=True, hide_index=True)
-                st.write("**Actividad Reciente (Últimas 50 consultas)**"); df_recent = df_stats[['timestamp', 'user_name', 'mode', 'query']].sort_values(by="timestamp", ascending=False).head(50); df_recent['timestamp'] = df_recent['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S'); st.dataframe(df_recent, use_container_width=True, hide_index=True)
-            else: st.info("Aún no hay datos de uso.")
-        except Exception as e: st.error(f"Error cargando estadísticas: {e}")
-
-    st.subheader("🔑 Gestión de Clientes (Invitaciones)", divider="rainbow")
-    try:
-        clients_response = supabase.table("clients").select("client_name, plan, invite_code, created_at").order("created_at", desc=True).execute()
-        if clients_response.data: st.write("**Clientes Actuales**"); df_clients = pd.DataFrame(clients_response.data); df_clients['created_at'] = pd.to_datetime(df_clients['created_at']).dt.strftime('%Y-%m-%d'); st.dataframe(df_clients, use_container_width=True, hide_index=True)
-        else: st.info("No hay clientes.")
-    except Exception as e: st.error(f"Error cargando clientes: {e}")
-
-    with st.expander("➕ Crear Nuevo Cliente y Código"):
-        with st.form("new_client_form"):
-            new_client_name = st.text_input("Nombre"); new_plan = st.selectbox("Plan", options=list(PLAN_FEATURES.keys()), index=0); new_invite_code = st.text_input("Código Invitación")
-            submitted = st.form_submit_button("Crear Cliente")
-            if submitted:
-                if not new_client_name or not new_plan or not new_invite_code: st.warning("Completa campos."); return
-                try: supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"]); supabase_admin_client.table("clients").insert({"client_name": new_client_name, "plan": new_plan, "invite_code": new_invite_code}).execute(); st.success(f"Cliente '{new_client_name}' creado. Código: {new_invite_code}")
-                except Exception as e: st.error(f"Error al crear: {e}")
-
-    st.subheader("👥 Gestión de Usuarios", divider="rainbow")
-    try:
-        if "SUPABASE_SERVICE_KEY" not in st.secrets: st.error("Falta 'SUPABASE_SERVICE_KEY'"); st.stop()
-        supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
-        users_response = supabase_admin_client.table("users").select("id, email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute()
-        if users_response.data:
-            st.write("**Usuarios Registrados** (Puedes editar Rol)")
-            user_list = [{'id': u.get('id'), 'email': u.get('email'), 'creado_el': u.get('created_at'), 'rol': u.get('rol', 'user'), 'cliente': u.get('clients', {}).get('client_name', "N/A"), 'plan': u.get('clients', {}).get('plan', "N/A")} for u in users_response.data]
-            original_df = pd.DataFrame(user_list);
-            if 'original_users_df' not in st.session_state: st.session_state.original_users_df = original_df.copy()
-            display_df = original_df.copy(); display_df['creado_el'] = pd.to_datetime(display_df['creado_el']).dt.strftime('%Y-%m-%d %H:%M')
-            edited_df = st.data_editor( display_df, key="user_editor", column_config={"id": None, "rol": st.column_config.SelectboxColumn("Rol", options=["user", "admin"], required=True), "email": st.column_config.TextColumn("Email", disabled=True), "creado_el": st.column_config.TextColumn("Creado", disabled=True), "cliente": st.column_config.TextColumn("Cliente", disabled=True), "plan": st.column_config.TextColumn("Plan", disabled=True)}, use_container_width=True, hide_index=True, num_rows="fixed")
-            if st.button("Guardar Cambios Usuarios", use_container_width=True):
-                updates_to_make = []; original_users = st.session_state.original_users_df; edited_df_indexed = edited_df.set_index(original_df.index); edited_df_with_ids = original_df[['id']].join(edited_df_indexed)
-                for index, original_row in original_users.iterrows():
-                    edited_rows_match = edited_df_with_ids[edited_df_with_ids['id'] == original_row['id']]
-                    if not edited_rows_match.empty:
-                        edited_row = edited_rows_match.iloc[0]
-                        if original_row['rol'] != edited_row['rol']: updates_to_make.append({"id": original_row['id'], "email": original_row['email'], "new_rol": edited_row['rol']})
-                    else: print(f"Warn: Row ID {original_row['id']} not in edited df.")
-                if updates_to_make:
-                    success_count, error_count, errors = 0, 0, []
-                    with st.spinner(f"Guardando {len(updates_to_make)} cambio(s)..."):
-                        for update in updates_to_make:
-                            try: supabase_admin_client.table("users").update({"rol": update["new_rol"]}).eq("id", update["id"]).execute(); success_count += 1
-                            except Exception as e: errors.append(f"Error {update['email']} (ID: {update['id']}): {e}"); error_count += 1
-                    if success_count > 0: st.success(f"{success_count} actualizado(s).")
-                    if error_count > 0: st.error(f"{error_count} error(es):"); [st.error(f"- {err}") for err in errors]
-                    del st.session_state.original_users_df; st.rerun()
-                else: st.info("No se detectaron cambios.")
-        else: st.info("No hay usuarios.")
-    except Exception as e: st.error(f"Error gestión usuarios: {e}")
-
-# =====================================================
-# FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA)
-# =====================================================
-def run_user_mode(db_full, user_features, footer_html):
-    st.sidebar.image("LogoDataStudio.png")
-    st.sidebar.write(f"Usuario: {st.session_state.user}")
-    if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
-    st.sidebar.divider()
-
-    db_filtered = db_full[:]
-
-    modos_disponibles = ["Chat de Consulta Directa"]
-    if user_features.get("has_report_generation"): modos_disponibles.insert(0, "Generar un reporte de reportes")
-    if user_features.get("has_creative_conversation"): modos_disponibles.append("Conversaciones creativas")
-    if user_features.get("has_concept_generation"): modos_disponibles.append("Generación de conceptos")
-    if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
-
-    st.sidebar.header("Seleccione el modo de uso")
-    modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed", key="main_mode_selector")
-
-    if 'current_mode' not in st.session_state: st.session_state.current_mode = modo
-    if st.session_state.current_mode != modo:
-        reset_chat_workflow(); st.session_state.pop("generated_concept", None); st.session_state.pop("evaluation_result", None)
-        st.session_state.pop("report", None); st.session_state.pop("last_question", None); st.session_state.current_mode = modo
-
-    st.sidebar.header("Filtros de Búsqueda")
-    marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
-    selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas")
-    if selected_marcas: db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
-
-    years_options = sorted({doc.get("marca", "") for doc in db_full if doc.get("marca")})
-    selected_years = st.sidebar.multiselect("Año(s):", years_options, key="filter_years")
-    if selected_years: db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
-
-    brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered if extract_brand(d.get("nombre_archivo", ""))})
-    selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects")
-    if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
-
-    if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
-        supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
-
-    st.sidebar.divider()
-    st.sidebar.markdown(footer_html, unsafe_allow_html=True)
-
-    selected_files = [d.get("nombre_archivo") for d in db_filtered]
-    if not selected_files and modo != "Generar un reporte de reportes": st.warning("⚠️ No hay estudios que coincidan con los filtros.")
-
-    if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
-    elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
-    elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
-    elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
-    elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
-
-# =====================================================
-# FUNCIÓN PRINCIPAL DE LA APLICACIÓN
-# =====================================================
-def main():
-    if 'page' not in st.session_state: st.session_state.page = "login"
-    footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
-    footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
-
-    if not st.session_state.get("logged_in"):
-        col1, col2, col3 = st.columns([1,2,1])
-        with col2:
-            st.image("LogoDataStudio.png")
-            if st.session_state.page == "login": show_login_page()
-            elif st.session_state.page == "signup": show_signup_page()
-            elif st.session_state.page == "reset_password": show_reset_password_page()
-        st.divider() # Mantener el divider del footer general
-        st.markdown(footer_html, unsafe_allow_html=True)
-        st.stop()
-
-    try: db_full = load_database(st.session_state.cliente)
-    except Exception as e: st.error(f"Error crítico al cargar BD: {e}"); st.stop()
-
-    user_features = st.session_state.plan_features
-
-    if st.session_state.get("is_admin", False):
-        tab_user, tab_admin = st.tabs(["[ 👤 Modo Usuario ]", "[ 👑 Modo Administrador ]"])
-        with tab_user: run_user_mode(db_full, user_features, footer_html)
-        with tab_admin:
-            st.title("Panel de Administración 👑")
-            st.write(f"Gestionando como: {st.session_state.user}")
-            show_admin_dashboard()
-    else: run_user_mode(db_full, user_features, footer_html)
-
-if __name__ == "__main__":
-    main()
+                else: st.error
