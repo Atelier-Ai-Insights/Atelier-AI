@@ -587,7 +587,7 @@ def image_evaluation_mode(db, selected_files):
     st.markdown("---") # Separador visual
 
     # Botón para iniciar la evaluación
-    if st.button("🧠 Evaluar Imagen", use_container_width=True, disabled=(uploaded_file is None)):
+    if st.button("Evaluar Imagen", use_container_width=True, disabled=(uploaded_file is None)):
         if not image_bytes:
             st.warning("Por favor, sube una imagen.")
             return
