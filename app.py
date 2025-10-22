@@ -69,7 +69,7 @@ PLAN_FEATURES = {
 supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
 # ==============================
-# Autenticación con Supabase Auth
+# Autenticación con Supabase Auth (Botones ajustados)
 # ==============================
 
 def show_signup_page():
@@ -78,11 +78,11 @@ def show_signup_page():
     password = st.text_input("Crea una Contraseña", type="password")
     invite_code = st.text_input("Código de Invitación de tu Empresa")
 
-    if st.button("Registrarse", use_container_width=True): # Botón principal mantiene ancho completo
+    # Botón Registrarse ajustado
+    if st.button("Registrarse", use_container_width=True):
         if not email or not password or not invite_code:
             st.error("Por favor, completa todos los campos.")
             return
-
         try:
             client_response = supabase.table("clients").select("id").eq("invite_code", invite_code).single().execute()
             if not client_response.data:
@@ -98,8 +98,8 @@ def show_signup_page():
             print(f"----------- ERROR DETALLADO DE REGISTRO -----------\n{e}\n-------------------------------------------------")
             st.error(f"Error en el registro: {e}")
 
-    # Botón secundario también con ancho completo
-    if st.button("¿Ya tienes cuenta? Inicia Sesión", type="link", use_container_width=True): # Cambiado a link
+    # Botón Volver al Login ajustado
+    if st.button("¿Ya tienes cuenta? Inicia Sesión", type="secondary", use_container_width=True):
          st.session_state.page = "login"
          st.rerun()
 
@@ -109,7 +109,8 @@ def show_login_page():
     email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
     password = st.text_input("Contraseña", type="password", placeholder="password")
 
-    if st.button("Ingresar", use_container_width=True): # Botón principal mantiene ancho completo
+    # Botón Ingresar ajustado
+    if st.button("Ingresar", use_container_width=True):
         try:
             response = supabase.auth.sign_in_with_password({"email": email, "password": password})
             user_id = response.user.id
@@ -132,13 +133,13 @@ def show_login_page():
 
     col1, col2 = st.columns(2)
     with col1:
-        # --- AJUSTE AQUÍ ---
-        if st.button("¿No tienes cuenta? Regístrate", type="link", use_container_width=True): # Cambiado a link y ancho completo
+        # Botón Registrarse ajustado
+        if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
             st.session_state.page = "signup"
             st.rerun()
     with col2:
-        # --- AJUSTE AQUÍ ---
-        if st.button("¿Olvidaste tu contraseña?", type="link", use_container_width=True): # Cambiado a link y ancho completo
+        # Botón Olvidaste Contraseña ajustado
+        if st.button("¿Olvidaste tu contraseña?", type="secondary", use_container_width=True):
             st.session_state.page = "reset_password"
             st.rerun()
 
@@ -148,11 +149,11 @@ def show_reset_password_page():
     st.write("Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.")
     email = st.text_input("Tu Correo Electrónico")
 
-    if st.button("Enviar enlace de recuperación", use_container_width=True): # Botón principal mantiene ancho completo
+    # Botón Enviar Enlace ajustado
+    if st.button("Enviar enlace de recuperación", use_container_width=True):
         if not email:
             st.warning("Por favor, ingresa tu correo electrónico.")
             return
-
         try:
             supabase.auth.reset_password_for_email(email)
             st.success("¡Correo enviado! Revisa tu bandeja de entrada.")
@@ -160,8 +161,8 @@ def show_reset_password_page():
         except Exception as e:
             st.error(f"Error al enviar el correo: {e}")
 
-    # Botón secundario también con ancho completo
-    if st.button("Volver a Iniciar Sesión", type="link", use_container_width=True): # Cambiado a link
+    # Botón Volver al Login ajustado
+    if st.button("Volver a Iniciar Sesión", type="secondary", use_container_width=True):
          st.session_state.page = "login"
          st.rerun()
 
@@ -184,7 +185,6 @@ if "api_key_index" not in st.session_state:
     st.session_state.api_key_index = 0
 
 def configure_api_dynamically():
-    """Configura Gemini con la API key actual y rota el índice para la próxima llamada."""
     global api_keys
     index = st.session_state.api_key_index
     try:
@@ -252,6 +252,7 @@ def get_daily_usage(username, action_type):
         print(f"Error getting daily usage: {e}")
         return 0
 
+
 # ==============================
 # FUNCIONES AUXILIARES Y DE PDF
 # ==============================
@@ -277,7 +278,6 @@ def add_markdown_content(pdf, markdown_text):
                 continue
             if not hasattr(elem, 'name') or not elem.name: continue
             tag_name = elem.name.lower()
-
             if tag_name.startswith("h"):
                 level = int(tag_name[1]) if len(tag_name) > 1 and tag_name[1].isdigit() else 1
                 pdf.add_title(elem.get_text(strip=True), level=level)
@@ -285,18 +285,18 @@ def add_markdown_content(pdf, markdown_text):
             elif tag_name == "ul":
                 for li in elem.find_all("li", recursive=False): pdf.add_paragraph("• " + li.decode_contents(formatter="html"))
             elif tag_name == "ol":
-                for idx, li in enumerate(elem.find_all("li", recursive=False), 1): pdf.add_paragraph(f"{idx}. {li.decode_contents(formatter="html")}")
-            elif tag_name == "pre":
-                 code_content = elem.get_text()
-                 pdf.add_paragraph(code_content, style='Code')
+                for idx, li in enumerate(elem.find_all("li", recursive=False), 1): pdf.add_paragraph(f"{idx}. {li.decode_contents(formatter='html')}")
+            elif tag_name == "pre": pdf.add_paragraph(elem.get_text(), style='Code')
             elif tag_name == "blockquote": pdf.add_paragraph(">" + elem.decode_contents(formatter="html"))
             else:
                  try: pdf.add_paragraph(elem.decode_contents(formatter="html"))
                  except: pdf.add_paragraph(elem.get_text(strip=True))
-
     except Exception as e:
         print(f"Error adding markdown content to PDF: {e}")
-        pdf.add_paragraph("--- Error parsing markdown ---"); pdf.add_paragraph(markdown_text); pdf.add_paragraph("--- End error ---")
+        pdf.add_paragraph("--- Error parsing markdown ---")
+        pdf.add_paragraph(markdown_text)
+        pdf.add_paragraph("--- End error ---")
+
 
 @st.cache_data(show_spinner=False)
 def load_database(cliente: str):
@@ -305,7 +305,8 @@ def load_database(cliente: str):
         response = s3.get_object(Bucket=st.secrets.get("S3_BUCKET"), Key="resultado_presentacion (1).json")
         data = json.loads(response["Body"].read().decode("utf-8"))
         cliente_norm = normalize_text(cliente or "")
-        if cliente_norm != "insights-atelier": data = [doc for doc in data if cliente_norm in normalize_text(doc.get("cliente", ""))]
+        if cliente_norm != "insights-atelier":
+            data = [doc for doc in data if cliente_norm in normalize_text(doc.get("cliente", ""))]
         return data
     except Exception as e:
         st.error(f"Error crítico al cargar datos desde S3: {e}")
@@ -320,6 +321,7 @@ def extract_brand(filename):
     except Exception as e:
         print(f"Error extracting brand from '{filename}': {e}")
         return ""
+
 
 def get_relevant_info(db, question, selected_files):
     all_text = ""
@@ -353,8 +355,7 @@ def clean_text(text):
 
 class PDFReport:
     def __init__(self, buffer_or_filename, banner_path=None):
-        self.banner_path = banner_path
-        self.elements = []
+        self.banner_path = banner_path; self.elements = []
         self.styles = getSampleStyleSheet()
         self.doc = SimpleDocTemplate(buffer_or_filename, pagesize=A4, rightMargin=12*mm, leftMargin=12*mm, topMargin=45*mm, bottomMargin=18*mm)
         font_name = 'DejaVuSans' if 'DejaVuSans' in pdfmetrics.getRegisteredFontNames() else 'Helvetica'
@@ -376,8 +377,8 @@ class PDFReport:
         canvas.saveState()
         footer_text = "Generado por Atelier Data Studio IA. Es posible que se muestre información imprecisa. Verifica las respuestas."
         p = Paragraph(footer_text, self.styles['CustomFooter']); w, h = p.wrap(doc.width, doc.bottomMargin); p.drawOn(canvas, doc.leftMargin, 5 * mm)
-        page_num = canvas.getPageNumber(); page_text = f"Página {page_num}"; p_page = Paragraph(page_text, self.styles['CustomFooter'])
-        w_page, h_page = p_page.wrap(doc.width, doc.bottomMargin); p_page.drawOn(canvas, doc.width + doc.leftMargin - w_page, 5 * mm)
+        page_num = canvas.getPageNumber(); page_text = f"Página {page_num}"
+        p_page = Paragraph(page_text, self.styles['CustomFooter']); w_page, h_page = p_page.wrap(doc.width, doc.bottomMargin); p_page.drawOn(canvas, doc.width + doc.leftMargin - w_page, 5 * mm)
         canvas.restoreState()
     def header_footer(self, canvas, doc): self.header(canvas, doc); self.footer(canvas, doc)
     def add_paragraph(self, text, style='CustomBodyText'):
@@ -398,9 +399,9 @@ class PDFReport:
 
 def generate_pdf_html(content, title="Documento Final", banner_path=None):
     try:
-        buffer = BytesIO(); pdf = PDFReport(buffer, banner_path=banner_path); pdf.add_title(title, level=1)
-        add_markdown_content(pdf, content); pdf.build_pdf(); pdf_data = buffer.getvalue(); buffer.close()
-        return pdf_data
+        buffer = BytesIO(); pdf = PDFReport(buffer, banner_path=banner_path)
+        pdf.add_title(title, level=1); add_markdown_content(pdf, content); pdf.build_pdf()
+        pdf_data = buffer.getvalue(); buffer.close(); return pdf_data
     except Exception as e: st.error(f"Error crítico al generar el PDF: {e}"); return None
 
 # =====================================================
@@ -745,17 +746,10 @@ def show_admin_dashboard():
                 df_stats['date'] = df_stats['timestamp'].dt.date
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.write("**Consultas por Usuario (Total)**")
-                    user_counts = df_stats.groupby('user_name')['mode'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False)
-                    st.dataframe(user_counts, use_container_width=True, hide_index=True)
+                    st.write("**Consultas por Usuario (Total)**"); user_counts = df_stats.groupby('user_name')['mode'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False); st.dataframe(user_counts, use_container_width=True, hide_index=True)
                 with col2:
-                    st.write("**Consultas por Modo de Uso (Total)**")
-                    mode_counts = df_stats.groupby('mode')['user_name'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False)
-                    st.dataframe(mode_counts, use_container_width=True, hide_index=True)
-                st.write("**Actividad Reciente (Últimas 50 consultas)**")
-                df_recent = df_stats[['timestamp', 'user_name', 'mode', 'query']].sort_values(by="timestamp", ascending=False).head(50)
-                df_recent['timestamp'] = df_recent['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
-                st.dataframe(df_recent, use_container_width=True, hide_index=True)
+                    st.write("**Consultas por Modo de Uso (Total)**"); mode_counts = df_stats.groupby('mode')['user_name'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False); st.dataframe(mode_counts, use_container_width=True, hide_index=True)
+                st.write("**Actividad Reciente (Últimas 50 consultas)**"); df_recent = df_stats[['timestamp', 'user_name', 'mode', 'query']].sort_values(by="timestamp", ascending=False).head(50); df_recent['timestamp'] = df_recent['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S'); st.dataframe(df_recent, use_container_width=True, hide_index=True)
             else: st.info("Aún no hay datos de uso registrados.")
         except Exception as e: st.error(f"Error al cargar estadísticas: {e}")
 
@@ -763,23 +757,19 @@ def show_admin_dashboard():
     try:
         clients_response = supabase.table("clients").select("client_name, plan, invite_code, created_at").order("created_at", desc=True).execute()
         if clients_response.data:
-            st.write("**Clientes Actuales**")
-            df_clients = pd.DataFrame(clients_response.data); df_clients['created_at'] = pd.to_datetime(df_clients['created_at']).dt.strftime('%Y-%m-%d')
-            st.dataframe(df_clients, use_container_width=True, hide_index=True)
+            st.write("**Clientes Actuales**"); df_clients = pd.DataFrame(clients_response.data); df_clients['created_at'] = pd.to_datetime(df_clients['created_at']).dt.strftime('%Y-%m-%d'); st.dataframe(df_clients, use_container_width=True, hide_index=True)
         else: st.info("No hay clientes registrados.")
     except Exception as e: st.error(f"Error al cargar clientes: {e}")
 
     with st.expander("➕ Crear Nuevo Cliente y Código de Invitación"):
         with st.form("new_client_form"):
-            new_client_name = st.text_input("Nombre del Nuevo Cliente"); new_plan = st.selectbox("Plan Asignado", options=list(PLAN_FEATURES.keys()), index=0)
-            new_invite_code = st.text_input("Nuevo Código de Invitación (Ej: CLIENTE2025)")
+            new_client_name = st.text_input("Nombre del Nuevo Cliente"); new_plan = st.selectbox("Plan Asignado", options=list(PLAN_FEATURES.keys()), index=0); new_invite_code = st.text_input("Nuevo Código de Invitación (Ej: CLIENTE2025)")
             submitted = st.form_submit_button("Crear Cliente")
             if submitted:
                 if not new_client_name or not new_plan or not new_invite_code: st.warning("Por favor, completa todos los campos.")
                 else:
                     try:
-                        supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
-                        supabase_admin_client.table("clients").insert({"client_name": new_client_name, "plan": new_plan, "invite_code": new_invite_code}).execute()
+                        supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"]); supabase_admin_client.table("clients").insert({"client_name": new_client_name, "plan": new_plan, "invite_code": new_invite_code}).execute()
                         st.success(f"Cliente '{new_client_name}' creado con éxito. Código: {new_invite_code}")
                     except Exception as e: st.error(f"Error al crear cliente: {e} (¿Código duplicado?)")
 
@@ -788,35 +778,23 @@ def show_admin_dashboard():
         if "SUPABASE_SERVICE_KEY" not in st.secrets: st.error("Configuración requerida: Falta 'SUPABASE_SERVICE_KEY' en los secretos."); st.stop()
         supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
         users_response = supabase_admin_client.table("users").select("id, email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute()
-
         if users_response.data:
             st.write("**Usuarios Registrados** (Puedes editar la columna 'Rol')")
             user_list = []
             for user in users_response.data:
-                client_info = user.get('clients'); user_list.append({
-                    "id": user.get('id'), "email": user.get('email'), "creado_el": user.get('created_at'),
-                    "rol": user.get('rol', 'user'), "cliente": client_info.get('client_name') if client_info else "N/A",
-                    "plan": client_info.get('plan') if client_info else "N/A"})
+                client_info = user.get('clients'); user_list.append({"id": user.get('id'), "email": user.get('email'), "creado_el": user.get('created_at'), "rol": user.get('rol', 'user'), "cliente": client_info.get('client_name') if client_info else "N/A", "plan": client_info.get('plan') if client_info else "N/A"})
             original_df = pd.DataFrame(user_list)
             if 'original_users_df' not in st.session_state: st.session_state.original_users_df = original_df.copy()
             display_df = original_df.copy(); display_df['creado_el'] = pd.to_datetime(display_df['creado_el']).dt.strftime('%Y-%m-%d %H:%M')
-
-            edited_df = st.data_editor( display_df, key="user_editor",
-                column_config={ "id": None, "rol": st.column_config.SelectboxColumn("Rol", options=["user", "admin"], required=True),
-                    "email": st.column_config.TextColumn("Email", disabled=True), "creado_el": st.column_config.TextColumn("Creado El", disabled=True),
-                    "cliente": st.column_config.TextColumn("Cliente", disabled=True), "plan": st.column_config.TextColumn("Plan", disabled=True), },
-                use_container_width=True, hide_index=True, num_rows="fixed" )
-
+            edited_df = st.data_editor(display_df, key="user_editor", column_config={"id": None, "rol": st.column_config.SelectboxColumn("Rol", options=["user", "admin"], required=True), "email": st.column_config.TextColumn("Email", disabled=True), "creado_el": st.column_config.TextColumn("Creado El", disabled=True), "cliente": st.column_config.TextColumn("Cliente", disabled=True), "plan": st.column_config.TextColumn("Plan", disabled=True)}, use_container_width=True, hide_index=True, num_rows="fixed")
             if st.button("Guardar Cambios en Usuarios"):
-                updates_to_make = []; original_users = st.session_state.original_users_df
-                edited_df_indexed = edited_df.set_index(original_df.index); edited_df_with_ids = original_df[['id']].join(edited_df_indexed)
+                updates_to_make = []; original_users = st.session_state.original_users_df; edited_df_indexed = edited_df.set_index(original_df.index); edited_df_with_ids = original_df[['id']].join(edited_df_indexed)
                 for index, original_row in original_users.iterrows():
                     edited_rows_match = edited_df_with_ids[edited_df_with_ids['id'] == original_row['id']]
                     if not edited_rows_match.empty:
                         edited_row = edited_rows_match.iloc[0]
                         if original_row['rol'] != edited_row['rol']: updates_to_make.append({"id": original_row['id'], "email": original_row['email'], "new_rol": edited_row['rol']})
                     else: print(f"Advertencia: Fila original con ID {original_row['id']} no encontrada en el dataframe editado.")
-
                 if updates_to_make:
                     success_count = 0; error_count = 0; errors = []
                     with st.spinner(f"Guardando {len(updates_to_make)} cambio(s)..."):
@@ -830,9 +808,8 @@ def show_admin_dashboard():
         else: st.info("No hay usuarios registrados.")
     except Exception as e: st.error(f"Error en la gestión de usuarios: {e}")
 
-
 # =====================================================
-# FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA)
+# FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA Y BOTÓN AJUSTADO)
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.image("LogoDataStudio.png")
@@ -853,8 +830,10 @@ def run_user_mode(db_full, user_features, footer_html):
 
     if 'current_mode' not in st.session_state: st.session_state.current_mode = modo
     if st.session_state.current_mode != modo:
-        reset_chat_workflow(); st.session_state.pop("generated_concept", None); st.session_state.pop("evaluation_result", None)
-        st.session_state.pop("report", None); st.session_state.pop("last_question", None); st.session_state.current_mode = modo
+        reset_chat_workflow()
+        st.session_state.pop("generated_concept", None); st.session_state.pop("evaluation_result", None)
+        st.session_state.pop("report", None); st.session_state.pop("last_question", None)
+        st.session_state.current_mode = modo
 
     st.sidebar.header("Filtros de Búsqueda")
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
@@ -870,7 +849,8 @@ def run_user_mode(db_full, user_features, footer_html):
     if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
     # --- AJUSTE AQUÍ ---
-    if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True): # Añadido use_container_width
+    # Botón Cerrar Sesión ajustado
+    if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
 
     st.sidebar.divider()
@@ -905,17 +885,22 @@ def main():
         st.markdown(footer_html, unsafe_allow_html=True)
         st.stop()
 
-    try: db_full = load_database(st.session_state.cliente)
-    except Exception as e: st.error(f"Error crítico al cargar la base de datos: {e}"); st.stop()
+    try:
+        db_full = load_database(st.session_state.cliente)
+    except Exception as e:
+        st.error(f"Error crítico al cargar la base de datos: {e}"); st.stop()
+
     user_features = st.session_state.plan_features
 
     if st.session_state.get("is_admin", False):
         tab_user, tab_admin = st.tabs(["[ 👤 Modo Usuario ]", "[ 👑 Modo Administrador ]"])
         with tab_user: run_user_mode(db_full, user_features, footer_html)
         with tab_admin:
-            st.title("Panel de Administración 👑"); st.write(f"Gestionando como: {st.session_state.user}")
+            st.title("Panel de Administración 👑")
+            st.write(f"Gestionando como: {st.session_state.user}")
             show_admin_dashboard()
-    else: run_user_mode(db_full, user_features, footer_html)
+    else:
+        run_user_mode(db_full, user_features, footer_html)
 
 if __name__ == "__main__":
     main()
