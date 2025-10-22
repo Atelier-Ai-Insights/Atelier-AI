@@ -551,7 +551,7 @@ def idea_evaluator_mode(db, selected_files):
 # PANEL DE ADMINISTRACIÓN (CON EDICIÓN DE USUARIOS)
 # =====================================================
 def show_admin_dashboard():
-    st.subheader("📊 Estadísticas de Uso", divider="rainbow")
+    st.subheader("Estadísticas de Uso", divider="rainbow")
     with st.spinner("Cargando estadísticas..."):
         try:
             stats_response = supabase.table("queries").select("user_name, mode, timestamp, query").execute()
@@ -564,7 +564,7 @@ def show_admin_dashboard():
             else: st.info("Aún no hay datos de uso.")
         except Exception as e: st.error(f"Error cargando estadísticas: {e}")
 
-    st.subheader("🔑 Gestión de Clientes (Invitaciones)", divider="rainbow")
+    st.subheader("Gestión de Clientes (Invitaciones)", divider="rainbow")
     try:
         clients_response = supabase.table("clients").select("client_name, plan, invite_code, created_at").order("created_at", desc=True).execute()
         if clients_response.data: st.write("**Clientes Actuales**"); df_clients = pd.DataFrame(clients_response.data); df_clients['created_at'] = pd.to_datetime(df_clients['created_at']).dt.strftime('%Y-%m-%d'); st.dataframe(df_clients, use_container_width=True, hide_index=True)
@@ -580,7 +580,7 @@ def show_admin_dashboard():
                 try: supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"]); supabase_admin_client.table("clients").insert({"client_name": new_client_name, "plan": new_plan, "invite_code": new_invite_code}).execute(); st.success(f"Cliente '{new_client_name}' creado. Código: {new_invite_code}")
                 except Exception as e: st.error(f"Error al crear: {e}")
 
-    st.subheader("👥 Gestión de Usuarios", divider="rainbow")
+    st.subheader("Gestión de Usuarios", divider="rainbow")
     try:
         if "SUPABASE_SERVICE_KEY" not in st.secrets: st.error("Falta 'SUPABASE_SERVICE_KEY'"); st.stop()
         supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
@@ -691,10 +691,10 @@ def main():
     user_features = st.session_state.plan_features
 
     if st.session_state.get("is_admin", False):
-        tab_user, tab_admin = st.tabs(["[ 👤 Modo Usuario ]", "[ 👑 Modo Administrador ]"])
+        tab_user, tab_admin = st.tabs(["[ Modo Usuario ]", "[ Modo Administrador ]"])
         with tab_user: run_user_mode(db_full, user_features, footer_html)
         with tab_admin:
-            st.title("Panel de Administración 👑")
+            st.title("Panel de Administración")
             st.write(f"Gestionando como: {st.session_state.user}")
             show_admin_dashboard()
     else: run_user_mode(db_full, user_features, footer_html)
