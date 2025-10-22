@@ -127,10 +127,7 @@ def show_login_page():
         except Exception as e:
             st.error("Credenciales incorrectas o cuenta no confirmada.")
 
-    # --- AJUSTE: Línea divisoria eliminada ---
-    # st.divider()
-
-    # Apilar botones verticalmente
+    # Apilar botones verticalmente (divisor eliminado)
     if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
         st.session_state.page = "signup"
         st.rerun()
@@ -138,7 +135,6 @@ def show_login_page():
     if st.button("¿Olvidaste tu contraseña?", type="secondary", use_container_width=True):
         st.session_state.page = "reset_password"
         st.rerun()
-    # --- FIN AJUSTE ---
 
 
 def show_reset_password_page():
@@ -345,33 +341,21 @@ def clean_text(text):
     if not isinstance(text, str): text = str(text)
     return text.replace('&', '&amp;')
 
-# --- AJUSTE CLASE PDFReport ---
+# --- AJUSTE CLASE PDFReport (Eliminar numeración página) ---
 class PDFReport:
     def __init__(self, buffer_or_filename, banner_path=None):
         self.banner_path = banner_path
         self.elements = []
-        self.styles = getSampleStyleSheet() # Obtener estilos base
+        self.styles = getSampleStyleSheet()
         self.doc = SimpleDocTemplate(buffer_or_filename, pagesize=A4, rightMargin=12*mm, leftMargin=12*mm, topMargin=45*mm, bottomMargin=18*mm)
-
         font_name = 'DejaVuSans' if 'DejaVuSans' in pdfmetrics.getRegisteredFontNames() else 'Helvetica'
-
-        # Definir o modificar estilos personalizados
         self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], fontName=font_name, alignment=1, spaceAfter=12, fontSize=14, leading=18))
         self.styles.add(ParagraphStyle(name='CustomHeading', parent=self.styles['Heading2'], fontName=font_name, spaceBefore=10, spaceAfter=6, fontSize=12, leading=16))
         self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], fontName=font_name, leading=14, alignment=4, fontSize=11))
-        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], fontName=font_name, alignment=2, textColor=colors.grey, fontSize=8))
-
-        # Modificar el estilo 'Code' existente si es necesario (en lugar de añadirlo)
+        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], fontName=font_name, alignment=1, textColor=colors.grey, fontSize=8)) # Centered alignment=1
         if 'Code' in self.styles:
-            self.styles['Code'].fontName = 'Courier' # O DejaVuSansMono si está registrada
-            self.styles['Code'].fontSize = 9
-            self.styles['Code'].leading = 11
-            self.styles['Code'].leftIndent = 6*mm
-            # No es necesario self.styles.add() para 'Code' si ya existe
-        else:
-             # Si por alguna razón 'Code' no existe, añadirlo como antes
-             self.styles.add(ParagraphStyle(name='Code', parent=self.styles['Normal'], fontName='Courier', fontSize=9, leading=11, leftIndent=6*mm))
-
+            self.styles['Code'].fontName = 'Courier'; self.styles['Code'].fontSize = 9; self.styles['Code'].leading = 11; self.styles['Code'].leftIndent = 6*mm
+        else: self.styles.add(ParagraphStyle(name='Code', parent=self.styles['Normal'], fontName='Courier', fontSize=9, leading=11, leftIndent=6*mm))
 
     def header(self, canvas, doc):
         canvas.saveState()
@@ -383,15 +367,15 @@ class PDFReport:
         canvas.restoreState()
     def footer(self, canvas, doc):
         canvas.saveState()
-        footer_text = "Generado por Atelier Data Studio. Es posible que se muestre información imprecisa. Verifica las respuestas."
+        footer_text = "Generado por Atelier Data Studio IA. Es posible que se muestre información imprecisa. Verifica las respuestas."
         p = Paragraph(footer_text, self.styles['CustomFooter']); w, h = p.wrap(doc.width, doc.bottomMargin); p.drawOn(canvas, doc.leftMargin, 5 * mm)
-        page_num = canvas.getPageNumber(); page_text = f"Página {page_num}"; p_page = Paragraph(page_text, self.styles['CustomFooter'])
-        w_page, h_page = p_page.wrap(doc.width, doc.bottomMargin); p_page.drawOn(canvas, doc.width + doc.leftMargin - w_page, 5 * mm)
+        # --- LÍNEAS DE NUMERACIÓN ELIMINADAS ---
+        # page_num = canvas.getPageNumber(); page_text = f"Página {page_num}"; p_page = Paragraph(page_text, self.styles['CustomFooter'])
+        # w_page, h_page = p_page.wrap(doc.width, doc.bottomMargin); p_page.drawOn(canvas, doc.width + doc.leftMargin - w_page, 5 * mm)
         canvas.restoreState()
     def header_footer(self, canvas, doc): self.header(canvas, doc); self.footer(canvas, doc)
     def add_paragraph(self, text, style='CustomBodyText'):
         try:
-             # Asegurarse que el estilo existe antes de usarlo
              style_to_use = self.styles.get(style, self.styles['CustomBodyText'])
              cleaned_text = text.replace('<br>', '<br/>').replace('<br />', '<br/>').replace('<strong>', '<b>').replace('</strong>', '</b>').replace('<em>', '<i>').replace('</em>', '</i>')
              p = Paragraph(clean_text(cleaned_text), style_to_use); self.elements.append(p); self.elements.append(Spacer(1, 4))
@@ -399,7 +383,6 @@ class PDFReport:
     def add_title(self, text, level=1):
         style_name = 'CustomTitle' if level == 1 else ('CustomHeading' if level == 2 else 'h3')
         if level > 2: style_name = self.styles.get(f'h{level}', self.styles['CustomHeading']).name
-        # Asegurarse que el estilo existe
         style_to_use = self.styles.get(style_name, self.styles['CustomHeading'])
         p = Paragraph(clean_text(text), style_to_use); spacer_height = 10 if level == 1 else (6 if level == 2 else 4)
         self.elements.append(p); self.elements.append(Spacer(1, spacer_height))
@@ -407,6 +390,7 @@ class PDFReport:
         try: self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
         except Exception as e: st.error(f"Error building PDF: {e}")
 # --- FIN AJUSTE CLASE PDFReport ---
+
 
 def generate_pdf_html(content, title="Documento Final", banner_path=None):
     try:
@@ -418,6 +402,7 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None):
 # =====================================================
 # MODOS DE LA APLICACIÓN (SIN CAMBIOS FUNCIONALES)
 # =====================================================
+# (generate_final_report, report_mode, grounded_chat_mode, ideacion_mode, concept_generation_mode, idea_evaluator_mode - sin cambios)
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
     prompt1 = ( f"Pregunta del Cliente: ***{question}***\n\nInstrucciones:\n1. Identifica marca/producto exacto.\n2. Reitera: ***{question}***.\n3. Usa contexto para hallazgos relevantes.\n4. Extractos breves, no citas completas.\n5. Metadatos y cita IEEE [1].\n6. Referencias completas asociadas a [1], usar título de proyecto.\n7. Enfócate en hallazgos positivos.\n\nContexto:\n{relevant_info}\n\nRespuesta:\n## Hallazgos Clave:\n- [Hallazgo 1 [1]]\n- [Hallazgo 2 [2]]\n## Referencias:\n- [1] [Referencia completa 1]\n- [2] [Referencia completa 2]" )
@@ -634,7 +619,6 @@ def run_user_mode(db_full, user_features, footer_html):
     selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects")
     if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
-    # --- AJUSTE BOTÓN CERRAR SESIÓN ---
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
 
