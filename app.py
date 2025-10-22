@@ -741,8 +741,8 @@ def show_admin_dashboard():
                         if error_count > 0: st.error(f"{error_count} error(es):"); [st.error(f"- {err}") for err in errors]
                         del st.session_state.original_users_df; st.rerun()
                     else: st.info("No se detectaron cambios.")
-            else:
-                st.info("No hay usuarios registrados.")
+        else:
+            st.info("No hay usuarios registrados.")
         except Exception as e:
             st.error(f"Error en la gestión de usuarios: {e}")
 
