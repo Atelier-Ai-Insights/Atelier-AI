@@ -691,7 +691,7 @@ def main():
     user_features = st.session_state.plan_features
 
     if st.session_state.get("is_admin", False):
-        tab_user, tab_admin = st.tabs(["Modo Usuario", "Modo Administrador"])
+        tab_user, tab_admin = st.tabs(["MODO USUARIO", "MODO ADMINISTRADOR"])
         with tab_user: run_user_mode(db_full, user_features, footer_html)
         with tab_admin:
             st.title("Panel de Administración")
