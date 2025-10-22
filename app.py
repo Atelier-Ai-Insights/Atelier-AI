@@ -694,20 +694,20 @@ def show_admin_dashboard():
         if "SUPABASE_SERVICE_KEY" not in st.secrets: st.error("Falta 'SUPABASE_SERVICE_KEY'"); st.stop()
         supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
         users_response = supabase_admin_client.table("users").select("id, email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute()
-        if users_response.data:
+if users_response.data:
                 st.write("**Usuarios Registrados** (Puedes editar Rol)")
                 user_list = []
+                # --- INICIO SECCIÓN CORREGIDA ---
                 for user in users_response.data:
                     client_info = user.get('clients')
 
-                    # --- AJUSTE AQUÍ: Manejo más robusto de client_info ---
+                    # Manejo más robusto de client_info
                     client_name = "N/A"
                     client_plan = "N/A"
                     # Verificar si client_info es un diccionario antes de usar .get()
                     if isinstance(client_info, dict):
                         client_name = client_info.get('client_name', "N/A") # Usar default por si falta la key
                         client_plan = client_info.get('plan', "N/A")     # Usar default por si falta la key
-                    # --- FIN AJUSTE ---
 
                     user_list.append({
                         'id': user.get('id'), # Necesario para updates
@@ -717,32 +717,13 @@ def show_admin_dashboard():
                         'cliente': client_name, # Usar variables seguras
                         'plan': client_plan      # Usar variables seguras
                     })
+                # --- FIN SECCIÓN CORREGIDA ---
 
                 original_df = pd.DataFrame(user_list)
-                # ... (resto del código del data_editor y guardar cambios sin modificaciones) ...
-                if 'original_users_df' not in st.session_state: st.session_state.original_users_df = original_df.copy()
-                display_df = original_df.copy(); display_df['creado_el'] = pd.to_datetime(display_df['creado_el']).dt.strftime('%Y-%m-%d %H:%M')
-                edited_df = st.data_editor( display_df, key="user_editor", column_config={"id": None, "rol": st.column_config.SelectboxColumn("Rol", options=["user", "admin"], required=True), "email": st.column_config.TextColumn("Email", disabled=True), "creado_el": st.column_config.TextColumn("Creado", disabled=True), "cliente": st.column_config.TextColumn("Cliente", disabled=True), "plan": st.column_config.TextColumn("Plan", disabled=True)}, use_container_width=True, hide_index=True, num_rows="fixed")
-                if st.button("Guardar Cambios Usuarios", use_container_width=True):
-                    updates_to_make = []; original_users = st.session_state.original_users_df; edited_df_indexed = edited_df.set_index(original_df.index); edited_df_with_ids = original_df[['id']].join(edited_df_indexed)
-                    for index, original_row in original_users.iterrows():
-                        edited_rows_match = edited_df_with_ids[edited_df_with_ids['id'] == original_row['id']]
-                        if not edited_rows_match.empty:
-                            edited_row = edited_rows_match.iloc[0]
-                            if original_row['rol'] != edited_row['rol']: updates_to_make.append({"id": original_row['id'], "email": original_row['email'], "new_rol": edited_row['rol']})
-                        else: print(f"Warn: Row ID {original_row['id']} not in edited df.")
-                    if updates_to_make:
-                        success_count, error_count, errors = 0, 0, []
-                        with st.spinner(f"Guardando {len(updates_to_make)} cambio(s)..."):
-                            for update in updates_to_make:
-                                try: supabase_admin_client.table("users").update({"rol": update["new_rol"]}).eq("id", update["id"]).execute(); success_count += 1
-                                except Exception as e: errors.append(f"Error {update['email']} (ID: {update['id']}): {e}"); error_count += 1
-                        if success_count > 0: st.success(f"{success_count} actualizado(s).")
-                        if error_count > 0: st.error(f"{error_count} error(es):"); [st.error(f"- {err}") for err in errors]
-                        del st.session_state.original_users_df; st.rerun()
-                    else: st.info("No se detectaron cambios.")
-        else:
-            st.info("No hay usuarios registrados.")
+                # ... (resto del código del data_editor y guardar cambios) ...
+
+            else:
+                st.info("No hay usuarios registrados.")
         except Exception as e:
             st.error(f"Error en la gestión de usuarios: {e}")
 
