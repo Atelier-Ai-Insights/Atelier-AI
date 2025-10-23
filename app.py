@@ -531,7 +531,7 @@ def idea_evaluator_mode(db, selected_files):
                 else: st.error("No se pudo generar evaluación.")
 
 def image_evaluation_mode(db, selected_files):
-    st.subheader("🖼️ Evaluación Visual de Creatividades")
+    st.subheader("Evaluación Visual de Creatividades")
     st.markdown(""" Sube una imagen (JPG/PNG) y describe tu público objetivo y objetivos de comunicación. El asistente evaluará la imagen basándose en criterios de marketing y utilizará los hallazgos de los estudios seleccionados como contexto. """)
     uploaded_file = st.file_uploader("Sube tu imagen aquí:", type=["jpg", "png", "jpeg"])
     target_audience = st.text_area("Describe el público objetivo (Target):", height=100, placeholder="Ej: Mujeres jóvenes, 25-35 años...")
@@ -539,7 +539,7 @@ def image_evaluation_mode(db, selected_files):
     image_bytes = None
     if uploaded_file is not None: image_bytes = uploaded_file.getvalue(); st.image(image_bytes, caption="Imagen a evaluar", use_container_width=True)
     st.markdown("---")
-    if st.button("🧠 Evaluar Imagen", use_container_width=True, disabled=(uploaded_file is None)):
+    if st.button("Evaluar Imagen", use_container_width=True, disabled=(uploaded_file is None)):
         if not image_bytes: st.warning("Sube una imagen."); return
         if not target_audience.strip(): st.warning("Describe el público."); return
         if not comm_objectives.strip(): st.warning("Define objetivos."); return
@@ -554,13 +554,13 @@ def image_evaluation_mode(db, selected_files):
         col1, col2 = st.columns(2)
         with col1:
              pdf_bytes = generate_pdf_html(st.session_state.image_evaluation_result, title=f"Evaluacion Visual - {uploaded_file.name if uploaded_file else 'Imagen'}", banner_path=banner_file)
-             if pdf_bytes: st.download_button(label="📄 Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion_{uploaded_file.name if uploaded_file else 'imagen'}.pdf", mime="application/pdf", use_container_width=True)
+             if pdf_bytes: st.download_button(label="Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion_{uploaded_file.name if uploaded_file else 'imagen'}.pdf", mime="application/pdf", use_container_width=True)
              else: st.error("Error al generar PDF.")
         with col2:
-             if st.button("🖼️ Evaluar Otra Imagen", use_container_width=True): st.session_state.pop("image_evaluation_result", None); st.rerun()
+             if st.button("Evaluar Otra Imagen", use_container_width=True): st.session_state.pop("image_evaluation_result", None); st.rerun()
 
 def video_evaluation_mode(db, selected_files):
-    st.subheader("🎬 Evaluación de Video (Comerciales/Publicidad)")
+    st.subheader("Evaluación de Video (Comerciales/Publicidad)")
     st.markdown(""" Sube un video corto (MP4, MOV, AVI - preferiblemente < 100MB) y describe tu público objetivo y objetivos de comunicación. El asistente evaluará el video (contenido visual y audio si lo tiene) basándose en criterios de marketing y utilizará los hallazgos de los estudios seleccionados como contexto. """)
     uploaded_file = st.file_uploader("Sube tu video aquí:", type=["mp4", "mov", "avi", "wmv", "mkv"])
     target_audience = st.text_area("Describe el público objetivo (Target) [Video]:", height=100, placeholder="Ej: Adultos jóvenes 18-30...")
@@ -570,7 +570,7 @@ def video_evaluation_mode(db, selected_files):
         video_bytes = uploaded_file.getvalue(); st.video(video_bytes)
         if uploaded_file.size > 100 * 1024 * 1024: st.warning("⚠️ Video grande (>100MB). Análisis podría tardar/fallar.")
     st.markdown("---")
-    if st.button("🎬 Evaluar Video", use_container_width=True, disabled=(uploaded_file is None)):
+    if st.button("Evaluar Video", use_container_width=True, disabled=(uploaded_file is None)):
         if not video_bytes: st.warning("Sube un video."); return
         if not target_audience.strip(): st.warning("Describe el público."); return
         if not comm_objectives.strip(): st.warning("Define objetivos."); return
@@ -582,14 +582,14 @@ def video_evaluation_mode(db, selected_files):
             if evaluation_result: st.session_state.video_evaluation_result = evaluation_result; log_query_event(f"Evaluación Video: {uploaded_file.name}", mode="Evaluación de Video")
             else: st.error("No se pudo generar evaluación video."); st.session_state.pop("video_evaluation_result", None)
     if "video_evaluation_result" in st.session_state:
-        st.markdown("---"); st.markdown("### ✨ Resultados Evaluación:"); st.markdown(st.session_state.video_evaluation_result)
+        st.markdown("---"); st.markdown("### Resultados Evaluación:"); st.markdown(st.session_state.video_evaluation_result)
         col1, col2 = st.columns(2)
         with col1:
              pdf_bytes = generate_pdf_html(st.session_state.video_evaluation_result, title=f"Evaluacion Video - {uploaded_file.name if uploaded_file else 'Video'}", banner_path=banner_file)
-             if pdf_bytes: st.download_button(label="📄 Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion_{uploaded_file.name if uploaded_file else 'video'}.pdf", mime="application/pdf", use_container_width=True)
+             if pdf_bytes: st.download_button(label="Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion_{uploaded_file.name if uploaded_file else 'video'}.pdf", mime="application/pdf", use_container_width=True)
              else: st.error("Error al generar PDF.")
         with col2:
-             if st.button("🎬 Evaluar Otro Video", use_container_width=True): st.session_state.pop("video_evaluation_result", None); st.rerun()
+             if st.button("Evaluar Otro Video", use_container_width=True): st.session_state.pop("video_evaluation_result", None); st.rerun()
 
 # =====================================================
 # PANEL DE ADMINISTRACIÓN (CON EDICIÓN DE USUARIOS Y CORRECCIÓN INDENTACIÓN)
@@ -694,8 +694,8 @@ def run_user_mode(db_full, user_features, footer_html):
     if user_features.get("has_creative_conversation"): modos_disponibles.append("Conversaciones creativas")
     if user_features.get("has_concept_generation"): modos_disponibles.append("Generación de conceptos")
     if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
-    if user_features.get("has_image_evaluation"): modos_disponibles.append("🖼️ Evaluación Visual")
-    if user_features.get("has_video_evaluation"): modos_disponibles.append("🎬 Evaluación de Video")
+    if user_features.get("has_image_evaluation"): modos_disponibles.append("Evaluación Visual")
+    if user_features.get("has_video_evaluation"): modos_disponibles.append("Evaluación de Video")
 
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed", key="main_mode_selector")
@@ -727,15 +727,15 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
-    if not selected_files and modo not in ["Generar un reporte de reportes", "🖼️ Evaluación Visual", "🎬 Evaluación de Video"]: st.warning("⚠️ No hay estudios que coincidan con los filtros.")
+    if not selected_files and modo not in ["Generar un reporte de reportes", "Evaluación Visual", "Evaluación de Video"]: st.warning("⚠️ No hay estudios que coincidan con los filtros.")
 
     if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
     elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
-    elif modo == "🖼️ Evaluación Visual": image_evaluation_mode(db_filtered, selected_files)
-    elif modo == "🎬 Evaluación de Video": video_evaluation_mode(db_filtered, selected_files)
+    elif modo == "Evaluación Visual": image_evaluation_mode(db_filtered, selected_files)
+    elif modo == "Evaluación de Video": video_evaluation_mode(db_filtered, selected_files)
 
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
@@ -762,10 +762,10 @@ def main():
     user_features = st.session_state.plan_features
 
     if st.session_state.get("is_admin", False):
-        tab_user, tab_admin = st.tabs(["👤 Modo Usuario", "👑 Modo Administrador"]) # Usar emojis
+        tab_user, tab_admin = st.tabs(["Modo Usuario", "Modo Administrador"]) # Usar emojis
         with tab_user: run_user_mode(db_full, user_features, footer_html)
         with tab_admin:
-            st.title("Panel de Administración 👑") # Usar emoji
+            st.title("Panel de Administración") # Usar emoji
             st.write(f"Gestionando como: {st.session_state.user}")
             show_admin_dashboard()
     else: run_user_mode(db_full, user_features, footer_html)
