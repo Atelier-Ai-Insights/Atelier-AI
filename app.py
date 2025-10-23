@@ -649,12 +649,41 @@ def image_evaluation_mode(db, selected_files):
     if "image_evaluation_result" in st.session_state:
         st.markdown("---")
         st.markdown("### ✨ Resultados de la Evaluación:")
-        st.markdown(st.session_state.image_evaluation_result)
-        # Botón para limpiar y evaluar otra
-        if st.button("Evaluar Otra Imagen", use_container_width=True):
-            st.session_state.pop("image_evaluation_result", None)
-            # No limpiamos el uploader, pero sí el resultado. El usuario puede subir otra.
-            st.rerun()
+        evaluation_markdown = st.session_state.image_evaluation_result
+        st.markdown(evaluation_markdown) # Mostrar el resultado en Markdown
+
+        # --- INICIO CÓDIGO AÑADIDO ---
+        # Generar PDF a partir del resultado Markdown
+        pdf_bytes = generate_pdf_html(
+            evaluation_markdown,
+            title=f"Evaluacion Visual - {uploaded_file.name if uploaded_file else 'Imagen'}", # Título del PDF
+            banner_path=banner_file # Usar el banner existente
+        )
+
+        # Crear dos columnas para los botones
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Botón de descarga (solo si el PDF se generó correctamente)
+            if pdf_bytes:
+                st.download_button(
+                    label="📄 Descargar Evaluación en PDF",
+                    data=pdf_bytes,
+                    file_name=f"evaluacion_{uploaded_file.name if uploaded_file else 'imagen'}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+            else:
+                # Mostrar un mensaje o botón deshabilitado si falla la generación del PDF
+                st.error("Error al generar PDF para descarga.")
+                # st.button("Error PDF", disabled=True, use_container_width=True) # Alternativa
+
+        with col2:
+            # Botón para limpiar y evaluar otra
+            if st.button("🖼️ Evaluar Otra Imagen", use_container_width=True):
+                st.session_state.pop("image_evaluation_result", None)
+                st.rerun()
+        # --- FIN CÓDIGO AÑADIDO ---
 
 # =====================================================
 # PANEL DE ADMINISTRACIÓN (CON EDICIÓN DE USUARIOS)
