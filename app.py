@@ -23,7 +23,6 @@ from reportlab.pdfbase import pdfmetrics
 
 import streamlit as st
 
-# --- CSS PARA ESTILO DE PESTAÑAS TIPO NAVEGADOR ---
 st.markdown("""
 <style>
     /* Contenedor principal de las pestañas */
@@ -76,8 +75,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-# --- FIN CSS PESTAÑAS ---
-
 
 hide_st_style = """
     <style>
