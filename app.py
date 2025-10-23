@@ -62,19 +62,19 @@ PLAN_FEATURES = {
         "reports_per_month": 0, "chat_queries_per_day": 4, "projects_per_year": 2,
         "has_report_generation": False, "has_creative_conversation": False,
         "has_concept_generation": False, "has_idea_evaluation": False,
-        "has_image_evaluation": False, 
+        "has_image_evaluation": False, "has_video_evaluation": False, 
     },
     "Strategist": {
         "reports_per_month": 0, "chat_queries_per_day": float('inf'), "projects_per_year": 10,
         "has_report_generation": False, "has_creative_conversation": True,
         "has_concept_generation": True, "has_idea_evaluation": False,
-        "has_image_evaluation": False,
+        "has_image_evaluation": False, "has_video_evaluation": False, 
     },
     "Enterprise": {
         "reports_per_month": float('inf'), "chat_queries_per_day": float('inf'), "projects_per_year": float('inf'),
         "has_report_generation": True, "has_creative_conversation": True,
         "has_concept_generation": True, "has_idea_evaluation": True,
-        "has_image_evaluation": True, 
+        "has_image_evaluation": True, "has_video_evaluation": True,
     }
 }
 
@@ -667,7 +667,7 @@ def image_evaluation_mode(db, selected_files):
             # Botón de descarga (solo si el PDF se generó correctamente)
             if pdf_bytes:
                 st.download_button(
-                    label="📄 Descargar Evaluación en PDF",
+                    label="Descargar Evaluación en PDF",
                     data=pdf_bytes,
                     file_name=f"evaluacion_{uploaded_file.name if uploaded_file else 'imagen'}.pdf",
                     mime="application/pdf",
@@ -683,7 +683,109 @@ def image_evaluation_mode(db, selected_files):
             if st.button("Evaluar Otra Imagen", use_container_width=True):
                 st.session_state.pop("image_evaluation_result", None)
                 st.rerun()
-        # --- FIN CÓDIGO AÑADIDO ---
+
+def video_evaluation_mode(db, selected_files):
+    st.subheader("Evaluación de Video (Comerciales/Publicidad)")
+    st.markdown("""
+        Sube un video corto (MP4, MOV, AVI - preferiblemente < 100MB) y describe tu público
+        objetivo y objetivos de comunicación. El asistente evaluará el video
+        (contenido visual y audio si lo tiene) basándose en criterios de marketing y
+        utilizará los hallazgos de los estudios seleccionados como contexto.
+    """)
+
+    # Permitir formatos comunes de video
+    uploaded_file = st.file_uploader("Sube tu video aquí:", type=["mp4", "mov", "avi", "wmv", "mkv"])
+    target_audience = st.text_area("Describe el público objetivo (Target) [Video]:", height=100, placeholder="Ej: Adultos jóvenes 18-30, urbanos, interesados en tecnología...")
+    comm_objectives = st.text_area("Define 2-3 objetivos de comunicación [Video]:", height=100, placeholder="Ej:\n1. Generar intriga sobre un nuevo lanzamiento.\n2. Asociar la marca con innovación.\n3. Dirigir tráfico a landing page.")
+
+    video_bytes = None
+    if uploaded_file is not None:
+        # Leer los bytes del video
+        video_bytes = uploaded_file.getvalue()
+        # Mostrar el video subido
+        st.video(video_bytes)
+        # Advertir si el video es muy grande (ej > 100MB)
+        if uploaded_file.size > 100 * 1024 * 1024: # 100 MB
+             st.warning("⚠️ El video es grande (>100MB). El análisis podría tardar o fallar.")
+
+    st.markdown("---")
+
+    # Botón para iniciar la evaluación
+    if st.button("🎬 Evaluar Video", use_container_width=True, disabled=(uploaded_file is None)):
+        if not video_bytes: st.warning("Sube un video."); return
+        if not target_audience.strip(): st.warning("Describe el público."); return
+        if not comm_objectives.strip(): st.warning("Define objetivos."); return
+
+        with st.spinner("Analizando video y contexto... ⏳ (Esto puede tardar varios minutos)"):
+            # Obtener contexto de texto
+            relevant_text_context = get_relevant_info(db, f"Contexto para video: {target_audience}", selected_files)
+
+            # --- Preparar datos para la API de Gemini ---
+            # La API de google-generativeai espera los datos del archivo directamente.
+            # Necesitamos el tipo MIME correcto. Streamlit lo infiere.
+            video_file_data = {
+                'mime_type': uploaded_file.type,
+                'data': video_bytes
+            }
+
+            # Construir el prompt multimodal (similar al de imagen, pero con video)
+            prompt_parts = [
+                "Actúa como un director creativo y estratega de marketing experto en publicidad audiovisual. Analiza el siguiente video (visual y audio) en el contexto de un público objetivo y objetivos de comunicación específicos, utilizando también los hallazgos de estudios de mercado proporcionados como referencia.",
+                f"\n\n**Público Objetivo (Target):**\n{target_audience}",
+                f"\n\n**Objetivos de Comunicación:**\n{comm_objectives}",
+                "\n\n**Video a Evaluar:**",
+                # Pasar los datos del video (diccionario con mime_type y data)
+                video_file_data,
+                f"\n\n**Contexto (Hallazgos Estudios Mercado):**\n```\n{relevant_text_context[:8000]}\n```", # Limitar contexto aún más para video
+                "\n\n**Evaluación Detallada (Formato Markdown):**",
+                "\n### 1. Notoriedad e Impacto (Visual y Auditivo)",
+                "* ¿El video capta la atención desde el inicio? ¿Es memorable? ¿Destaca frente a otros comerciales?",
+                "* ¿Qué elementos (narrativa, ritmo, música, personajes, visuales) contribuyen (o restan) a su impacto en el target?",
+                "* ¿Hay insights en el contexto sobre preferencias audiovisuales o narrativas del target?",
+                "\n### 2. Mensaje Clave y Claridad",
+                "* ¿Qué mensaje principal y secundarios transmite el video? ¿Son coherentes con los objetivos?",
+                "* ¿Es el mensaje fácil de entender y relevante para el público objetivo? ¿El audio y el video se complementan?",
+                "* ¿Cómo conecta el mensaje con insights del consumidor del contexto?",
+                "\n### 3. Branding e Identidad",
+                "* ¿Se integra la marca (logo, nombre, elementos sonoros, estilo) de forma natural y efectiva? ¿Cuándo y cómo aparece?",
+                "* ¿El video refuerza la personalidad o valores de la marca (según contexto)?",
+                "\n### 4. Llamada a la Acción y Respuesta Esperada",
+                "* ¿El video sugiere una acción clara o genera una emoción/pensamiento específico (deseo, curiosidad, identificación, etc.)?",
+                "* ¿Está alineada esta respuesta con los objetivos?",
+                "* Considerando el contexto, ¿es probable que motive al target?",
+                "\n\n**Conclusión General:**",
+                "* Resume tu valoración sobre la efectividad potencial de este video para el target y objetivos dados, destacando puntos fuertes, áreas de mejora y conexión con insights clave del contexto si aplica."
+            ]
+
+            evaluation_result = call_gemini_api(prompt_parts) # Tu función ya maneja listas
+
+            if evaluation_result:
+                st.session_state.video_evaluation_result = evaluation_result
+                log_query_event(f"Evaluación Video: {uploaded_file.name}", mode="Evaluación de Video")
+            else:
+                st.error("No se pudo generar la evaluación del video.")
+                st.session_state.pop("video_evaluation_result", None)
+
+    # Mostrar resultado
+    if "video_evaluation_result" in st.session_state:
+        st.markdown("---")
+        st.markdown("### ✨ Resultados de la Evaluación:")
+        st.markdown(st.session_state.video_evaluation_result)
+        # Botones (similar a imagen, ajustando etiquetas)
+        col1, col2 = st.columns(2)
+        with col1:
+             pdf_bytes = generate_pdf_html(
+                 st.session_state.video_evaluation_result,
+                 title=f"Evaluacion Video - {uploaded_file.name if uploaded_file else 'Video'}",
+                 banner_path=banner_file
+             )
+             if pdf_bytes:
+                 st.download_button(label="Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion_{uploaded_file.name if uploaded_file else 'video'}.pdf", mime="application/pdf", use_container_width=True)
+             else: st.error("Error al generar PDF.")
+        with col2:
+             if st.button("Evaluar Otro Video", use_container_width=True):
+                 st.session_state.pop("video_evaluation_result", None)
+                 st.rerun()
 
 # =====================================================
 # PANEL DE ADMINISTRACIÓN (CON EDICIÓN DE USUARIOS)
@@ -754,11 +856,7 @@ def show_admin_dashboard():
 # =====================================================
 # FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA)
 # =====================================================
-
 def run_user_mode(db_full, user_features, footer_html):
-    """
-    Ejecuta toda la lógica de la aplicación para el modo de usuario estándar.
-    """
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador")
@@ -772,17 +870,19 @@ def run_user_mode(db_full, user_features, footer_html):
     if user_features.get("has_concept_generation"): modos_disponibles.append("Generación de conceptos")
     if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
     if user_features.get("has_image_evaluation"): modos_disponibles.append("Evaluación Visual")
+    if user_features.get("has_video_evaluation"): modos_disponibles.append("Evaluación de Video")
 
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed", key="main_mode_selector")
 
-    # Resetear estados específicos del modo si cambia (incluir nuevo estado)
+    # Resetear estados específicos del modo si cambia (incluir nuevo estado video)
     if 'current_mode' not in st.session_state: st.session_state.current_mode = modo
     if st.session_state.current_mode != modo:
         reset_chat_workflow()
         st.session_state.pop("generated_concept", None); st.session_state.pop("evaluation_result", None)
         st.session_state.pop("report", None); st.session_state.pop("last_question", None)
-        st.session_state.pop("image_evaluation_result", None) # <-- Limpiar resultado de imagen
+        st.session_state.pop("image_evaluation_result", None)
+        st.session_state.pop("video_evaluation_result", None) # <-- Limpiar resultado de video
         st.session_state.current_mode = modo
 
     st.sidebar.header("Filtros de Búsqueda")
@@ -799,7 +899,6 @@ def run_user_mode(db_full, user_features, footer_html):
     selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects")
     if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
-
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
 
@@ -808,16 +907,16 @@ def run_user_mode(db_full, user_features, footer_html):
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
     # Mostrar advertencia si es necesario (sin cambios)
-    # if not selected_files and modo not in ["Generar un reporte de reportes", "Evaluación Visual"]: # Ajustar si evaluación necesita filtros
+    # if not selected_files and modo not in ["Generar un reporte de reportes", "Evaluación Visual", "Evaluación de Video"]:
     #      st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
 
-    # --- AÑADIR ELIF PARA NUEVO MODO ---
     if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
     elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
-    elif modo == "Evaluación Visual": image_evaluation_mode(db_filtered, selected_files) 
+    elif modo == "Evaluación Visual": image_evaluation_mode(db_filtered, selected_files)
+    elif modo == "Evaluación de Video": video_evaluation_mode(db_filtered, selected_files)
 
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
