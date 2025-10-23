@@ -711,7 +711,7 @@ def video_evaluation_mode(db, selected_files):
     st.markdown("---")
 
     # Botón para iniciar la evaluación
-    if st.button("🎬 Evaluar Video", use_container_width=True, disabled=(uploaded_file is None)):
+    if st.button("Evaluar Video", use_container_width=True, disabled=(uploaded_file is None)):
         if not video_bytes: st.warning("Sube un video."); return
         if not target_audience.strip(): st.warning("Describe el público."); return
         if not comm_objectives.strip(): st.warning("Define objetivos."); return
