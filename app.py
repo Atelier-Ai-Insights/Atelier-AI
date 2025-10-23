@@ -284,6 +284,7 @@ def get_daily_usage(username, action_type):
     try: today_start_iso = datetime.datetime.now(datetime.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat(); response = supabase.table("queries").select("id", count='exact').eq("user_name", username).eq("mode", action_type).gte("timestamp", today_start_iso).execute(); return response.count
     except Exception as e: print(f"Error get daily usage: {e}"); return 0
 
+
 # ==============================
 # FUNCIONES AUXILIARES Y DE PDF
 # ==============================
@@ -292,24 +293,44 @@ def normalize_text(text):
     try: normalized = unicodedata.normalize("NFD", str(text)); return "".join(c for c in normalized if unicodedata.category(c) != "Mn").lower()
     except Exception as e: print(f"Error normalizing: {e}"); return str(text).lower()
 
+# --- FUNCIÓN CORREGIDA ---
 def add_markdown_content(pdf, markdown_text):
     try:
-        decoded_text = html.unescape(markdown_text); html_text = markdown2.markdown(decoded_text, extras=["fenced-code-blocks", "tables", "break-on-newline", "code-friendly"])
-        soup = BeautifulSoup(html_text, "html.parser"); container = soup.body if soup.body else soup
+        decoded_text = html.unescape(markdown_text)
+        html_text = markdown2.markdown(decoded_text, extras=["fenced-code-blocks", "tables", "break-on-newline", "code-friendly"])
+        soup = BeautifulSoup(html_text, "html.parser")
+        container = soup.body if soup.body else soup
+
         for elem in container.children:
-            if isinstance(elem, str): text = elem.strip();
-            if text: pdf.add_paragraph(text); continue
+            if isinstance(elem, str):
+                text = elem.strip()
+                if text: pdf.add_paragraph(text)
+                continue
             if not hasattr(elem, 'name') or not elem.name: continue
             tag_name = elem.name.lower()
-            if tag_name.startswith("h"): level = int(tag_name[1]) if len(tag_name) > 1 and tag_name[1].isdigit() else 1; pdf.add_title(elem.get_text(strip=True), level=level)
+            if tag_name.startswith("h"):
+                level = int(tag_name[1]) if len(tag_name) > 1 and tag_name[1].isdigit() else 1
+                pdf.add_title(elem.get_text(strip=True), level=level)
             elif tag_name == "p": pdf.add_paragraph(elem.decode_contents(formatter="html"))
-            elif tag_name == "ul": [pdf.add_paragraph("• " + li.decode_contents(formatter="html")) for li in elem.find_all("li", recursive=False)]
-            elif tag_name == "ol": [pdf.add_paragraph(f"{idx}. {li.decode_contents(formatter='html')}") for idx, li in enumerate(elem.find_all("li", recursive=False), 1)]
+            elif tag_name == "ul":
+                for li in elem.find_all("li", recursive=False): pdf.add_paragraph("• " + li.decode_contents(formatter="html"))
+            elif tag_name == "ol":
+                for idx, li in enumerate(elem.find_all("li", recursive=False), 1): pdf.add_paragraph(f"{idx}. {li.decode_contents(formatter='html')}")
             elif tag_name == "pre": pdf.add_paragraph(elem.get_text(), style='Code')
             elif tag_name == "blockquote": pdf.add_paragraph(">" + elem.decode_contents(formatter="html"))
-            else: try: pdf.add_paragraph(elem.decode_contents(formatter="html"))
-            except: pdf.add_paragraph(elem.get_text(strip=True))
-    except Exception as e: print(f"Error add markdown: {e}"); pdf.add_paragraph("--- Error markdown ---"); pdf.add_paragraph(markdown_text); pdf.add_paragraph("--- End error ---")
+            # --- AJUSTE DE INDENTACIÓN ---
+            else:
+                # Mover try/except a líneas separadas e indentar
+                try:
+                    pdf.add_paragraph(elem.decode_contents(formatter="html"))
+                except Exception as inner_e: # Capturar excepción específica si es necesario
+                    print(f"Error decoding/adding element content: {inner_e}")
+                    pdf.add_paragraph(elem.get_text(strip=True)) # Fallback a texto plano
+            # --- FIN AJUSTE ---
+    except Exception as e:
+        print(f"Error adding markdown content to PDF: {e}")
+        pdf.add_paragraph("--- Error parsing markdown ---"); pdf.add_paragraph(markdown_text); pdf.add_paragraph("--- End error ---")
+# --- FIN FUNCIÓN CORREGIDA ---
 
 @st.cache_data(show_spinner=False)
 def load_database(cliente: str):
@@ -651,7 +672,7 @@ def show_admin_dashboard():
                     del st.session_state.original_users_df; st.rerun() # Nivel 5
                 else: # Nivel 4 (Alineado con 'if updates_to_make')
                     st.info("No se detectaron cambios.") # Nivel 5
-        # --- ELSE CORREGIDO (Línea ~725 del error original) ---
+        # --- ELSE CORREGIDO ---
         else: # Nivel 2 (Alineado con 'if users_response.data:')
             st.info("No hay usuarios registrados.") # Nivel 3
     # --- EXCEPT CORREGIDO ---
