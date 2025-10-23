@@ -769,7 +769,7 @@ def video_evaluation_mode(db, selected_files):
     # Mostrar resultado
     if "video_evaluation_result" in st.session_state:
         st.markdown("---")
-        st.markdown("### ✨ Resultados de la Evaluación:")
+        st.markdown("### Resultados de la Evaluación:")
         st.markdown(st.session_state.video_evaluation_result)
         # Botones (similar a imagen, ajustando etiquetas)
         col1, col2 = st.columns(2)
