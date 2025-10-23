@@ -648,7 +648,7 @@ def image_evaluation_mode(db, selected_files):
     # Mostrar el resultado si existe
     if "image_evaluation_result" in st.session_state:
         st.markdown("---")
-        st.markdown("### ✨ Resultados de la Evaluación:")
+        st.markdown("### Resultados de la Evaluación:")
         evaluation_markdown = st.session_state.image_evaluation_result
         st.markdown(evaluation_markdown) # Mostrar el resultado en Markdown
 
@@ -680,7 +680,7 @@ def image_evaluation_mode(db, selected_files):
 
         with col2:
             # Botón para limpiar y evaluar otra
-            if st.button("🖼️ Evaluar Otra Imagen", use_container_width=True):
+            if st.button("Evaluar Otra Imagen", use_container_width=True):
                 st.session_state.pop("image_evaluation_result", None)
                 st.rerun()
         # --- FIN CÓDIGO AÑADIDO ---
@@ -771,9 +771,7 @@ def run_user_mode(db_full, user_features, footer_html):
     if user_features.get("has_creative_conversation"): modos_disponibles.append("Conversaciones creativas")
     if user_features.get("has_concept_generation"): modos_disponibles.append("Generación de conceptos")
     if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
-    # --- AÑADIR NUEVO MODO AQUÍ ---
     if user_features.get("has_image_evaluation"): modos_disponibles.append("Evaluación Visual")
-    # --- FIN AÑADIR ---
 
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed", key="main_mode_selector")
