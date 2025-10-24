@@ -418,7 +418,7 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None):
     except Exception as e: st.error(f"Error crítico al generar PDF: {e}"); return None
 
 # =====================================================
-# MODOS DE LA APLICACIÓN (SIN CAMBIOS FUNCIONALES)
+# MODOS DE LA APLICACIÓN 
 # =====================================================
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
@@ -547,6 +547,10 @@ def image_evaluation_mode(db, selected_files):
         if not comm_objectives.strip(): st.warning("Define objetivos."); return
         with st.spinner("Analizando imagen y contexto... 🧠✨"):
             relevant_text_context = get_relevant_info(db, f"Contexto para imagen: {target_audience}", selected_files)
+            MAX_CONTEXT_TEXT = 800000 
+            if len(relevant_text_context) > MAX_CONTEXT_TEXT:
+                relevant_text_context = relevant_text_context[:MAX_CONTEXT_TEXT] + "\n\n...(contexto truncado)..."
+                st.warning("El contexto de los estudios es muy largo y ha sido truncado.", icon="⚠️")
             prompt_parts = [ "Actúa como director creativo/estratega mkt experto. Analiza la imagen en contexto de target/objetivos, usando hallazgos como referencia.", f"\n\n**Target:**\n{target_audience}", f"\n\n**Objetivos:**\n{comm_objectives}", "\n\n**Imagen:**", Image.open(BytesIO(image_bytes)), f"\n\n**Contexto (Hallazgos Estudios):**\n```\n{relevant_text_context[:10000]}\n```", "\n\n**Evaluación Detallada (Markdown):**", "\n### 1. Notoriedad/Impacto Visual", "* ¿Capta atención? ¿Atractiva/disruptiva para target?", "* Elementos visuales clave y su aporte (apóyate en contexto si hay insights visuales).", "\n### 2. Mensaje Clave/Claridad", "* Mensajes principal/secundarios vs objetivos?", "* ¿Claro para target? ¿Ambigüedad?", "* ¿Mensaje vs insights del contexto?", "\n### 3. Branding/Identidad", "* ¿Marca integrada efectivamente? ¿Reconocible?", "* ¿Refuerza personalidad/valores marca (según contexto)?", "\n### 4. CTA/Respuesta Esperada", "* ¿Sugiere acción o genera emoción/pensamiento (curiosidad, deseo, etc.)?", "* ¿Respuesta alineada con objetivos?", "* ¿Contexto sugiere que motivará al target?", "\n\n**Conclusión General:**", "* Valoración efectividad (target/objetivos), fortalezas, mejoras (conectando con insights si aplica)." ]
             evaluation_result = call_gemini_api(prompt_parts)
             if evaluation_result: st.session_state.image_evaluation_result = evaluation_result; log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode="Evaluación Visual")
@@ -578,6 +582,10 @@ def video_evaluation_mode(db, selected_files):
         if not comm_objectives.strip(): st.warning("Define objetivos."); return
         with st.spinner("Analizando video y contexto... ⏳ (Puede tardar minutos)"):
             relevant_text_context = get_relevant_info(db, f"Contexto para video: {target_audience}", selected_files)
+            MAX_CONTEXT_TEXT = 800000 
+            if len(relevant_text_context) > MAX_CONTEXT_TEXT:
+                relevant_text_context = relevant_text_context[:MAX_CONTEXT_TEXT] + "\n\n...(contexto truncado)..."
+                st.warning("El contexto de los estudios es muy largo y ha sido truncado.", icon="⚠️")
             video_file_data = {'mime_type': uploaded_file.type, 'data': video_bytes}
             prompt_parts = [ "Actúa como director creativo/estratega mkt experto audiovisual. Analiza el video (visual/audio) en contexto de target/objetivos, usando hallazgos como referencia.", f"\n\n**Target:**\n{target_audience}", f"\n\n**Objetivos:**\n{comm_objectives}", "\n\n**Video:**", video_file_data, f"\n\n**Contexto (Hallazgos Estudios):**\n```\n{relevant_text_context[:8000]}\n```", "\n\n**Evaluación Detallada (Markdown):**", "\n### 1. Notoriedad/Impacto (Visual/Auditivo)", "* ¿Capta atención inicio? ¿Memorable? ¿Destaca?", "* Elementos clave (narrativa, ritmo, música, etc.) y su aporte (vs contexto).", "* ¿Insights contexto sobre preferencias audiovisuales?", "\n### 2. Mensaje Clave/Claridad", "* Mensajes principal/secundarios vs objetivos?", "* ¿Claro/relevante para target? ¿Audio+Video OK?", "* ¿Mensaje vs insights contexto?", "\n### 3. Branding/Identidad", "* ¿Marca integrada natural/efectiva? ¿Cuándo/cómo?", "* ¿Refuerza personalidad/valores marca?", "\n### 4. CTA/Respuesta Esperada", "* ¿Sugiere acción o genera emoción/pensamiento?", "* ¿Respuesta alineada con objetivos?", "* ¿Contexto sugiere que motivará?", "\n\n**Conclusión General:**", "* Valoración efectividad (target/objetivos), fortalezas, mejoras (conectando con insights si aplica)." ]
             evaluation_result = call_gemini_api(prompt_parts)
