@@ -23,7 +23,6 @@ from reportlab.pdfbase import pdfmetrics
 
 import streamlit as st
 
-# --- CSS PARA ESTILO DE PESTAÑAS TIPO NAVEGADOR ---
 st.markdown("""
 <style>
     /* Contenedor principal de las pestañas */
@@ -76,8 +75,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-# --- FIN CSS PESTAÑAS ---
-
 
 hide_st_style = """
     <style>
@@ -293,28 +290,44 @@ def normalize_text(text):
     try: normalized = unicodedata.normalize("NFD", str(text)); return "".join(c for c in normalized if unicodedata.category(c) != "Mn").lower()
     except Exception as e: print(f"Error normalizing: {e}"); return str(text).lower()
 
+# --- FUNCIÓN CORREGIDA ---
 def add_markdown_content(pdf, markdown_text):
     try:
-        decoded_text = html.unescape(markdown_text); html_text = markdown2.markdown(decoded_text, extras=["fenced-code-blocks", "tables", "break-on-newline", "code-friendly"])
-        soup = BeautifulSoup(html_text, "html.parser"); container = soup.body if soup.body else soup
+        decoded_text = html.unescape(markdown_text)
+        html_text = markdown2.markdown(decoded_text, extras=["fenced-code-blocks", "tables", "break-on-newline", "code-friendly"])
+        soup = BeautifulSoup(html_text, "html.parser")
+        container = soup.body if soup.body else soup
+
         for elem in container.children:
-            if isinstance(elem, str): text = elem.strip();
-            if text: pdf.add_paragraph(text); continue
+            if isinstance(elem, str):
+                text = elem.strip()
+                if text: pdf.add_paragraph(text)
+                continue
             if not hasattr(elem, 'name') or not elem.name: continue
             tag_name = elem.name.lower()
-            if tag_name.startswith("h"): level = int(tag_name[1]) if len(tag_name) > 1 and tag_name[1].isdigit() else 1; pdf.add_title(elem.get_text(strip=True), level=level)
+            if tag_name.startswith("h"):
+                level = int(tag_name[1]) if len(tag_name) > 1 and tag_name[1].isdigit() else 1
+                pdf.add_title(elem.get_text(strip=True), level=level)
             elif tag_name == "p": pdf.add_paragraph(elem.decode_contents(formatter="html"))
-            elif tag_name == "ul": [pdf.add_paragraph("• " + li.decode_contents(formatter="html")) for li in elem.find_all("li", recursive=False)]
-            elif tag_name == "ol": [pdf.add_paragraph(f"{idx}. {li.decode_contents(formatter='html')}") for idx, li in enumerate(elem.find_all("li", recursive=False), 1)]
+            elif tag_name == "ul":
+                for li in elem.find_all("li", recursive=False): pdf.add_paragraph("• " + li.decode_contents(formatter="html"))
+            elif tag_name == "ol":
+                for idx, li in enumerate(elem.find_all("li", recursive=False), 1): pdf.add_paragraph(f"{idx}. {li.decode_contents(formatter='html')}")
             elif tag_name == "pre": pdf.add_paragraph(elem.get_text(), style='Code')
             elif tag_name == "blockquote": pdf.add_paragraph(">" + elem.decode_contents(formatter="html"))
+            # --- AJUSTE DE INDENTACIÓN ---
             else:
+                # Mover try/except a líneas separadas e indentar
                 try:
                     pdf.add_paragraph(elem.decode_contents(formatter="html"))
-                except Exception as inner_e:
+                except Exception as inner_e: # Capturar excepción específica si es necesario
                     print(f"Error decoding/adding element content: {inner_e}")
-                    pdf.add_paragraph(elem.get_text(strip=True))
-    except Exception as e: print(f"Error add markdown: {e}"); pdf.add_paragraph("--- Error markdown ---"); pdf.add_paragraph(markdown_text); pdf.add_paragraph("--- End error ---")
+                    pdf.add_paragraph(elem.get_text(strip=True)) # Fallback a texto plano
+            # --- FIN AJUSTE ---
+    except Exception as e:
+        print(f"Error adding markdown content to PDF: {e}")
+        pdf.add_paragraph("--- Error parsing markdown ---"); pdf.add_paragraph(markdown_text); pdf.add_paragraph("--- End error ---")
+# --- FIN FUNCIÓN CORREGIDA ---
 
 @st.cache_data(show_spinner=False)
 def load_database(cliente: str):
@@ -322,7 +335,7 @@ def load_database(cliente: str):
         s3 = boto3.client("s3", endpoint_url=st.secrets["S3_ENDPOINT_URL"], aws_access_key_id=st.secrets["S3_ACCESS_KEY"], aws_secret_access_key=st.secrets["S3_SECRET_KEY"])
         response = s3.get_object(Bucket=st.secrets.get("S3_BUCKET"), Key="resultado_presentacion (1).json")
         data = json.loads(response["Body"].read().decode("utf-8")); cliente_norm = normalize_text(cliente or "")
-        if cliente_norm not in ["insights-atelier", "generico"]:
+        if cliente_norm not in ["insights-atelier", "generico"]: # Permitir acceso total a 'generico'
              data = [doc for doc in data if "atelier" in normalize_text(doc.get("cliente", "")) or cliente_norm in normalize_text(doc.get("cliente", ""))]
         return data
     except Exception as e: st.error(f"Error S3: {e}"); return []
@@ -518,7 +531,7 @@ def idea_evaluator_mode(db, selected_files):
                 else: st.error("No se pudo generar evaluación.")
 
 def image_evaluation_mode(db, selected_files):
-    st.subheader("🖼️ Evaluación Visual de Creatividades")
+    st.subheader("Evaluación Visual de Creatividades")
     st.markdown(""" Sube una imagen (JPG/PNG) y describe tu público objetivo y objetivos de comunicación. El asistente evaluará la imagen basándose en criterios de marketing y utilizará los hallazgos de los estudios seleccionados como contexto. """)
     uploaded_file = st.file_uploader("Sube tu imagen aquí:", type=["jpg", "png", "jpeg"])
     target_audience = st.text_area("Describe el público objetivo (Target):", height=100, placeholder="Ej: Mujeres jóvenes, 25-35 años...")
@@ -526,7 +539,7 @@ def image_evaluation_mode(db, selected_files):
     image_bytes = None
     if uploaded_file is not None: image_bytes = uploaded_file.getvalue(); st.image(image_bytes, caption="Imagen a evaluar", use_container_width=True)
     st.markdown("---")
-    if st.button("🧠 Evaluar Imagen", use_container_width=True, disabled=(uploaded_file is None)):
+    if st.button("Evaluar Imagen", use_container_width=True, disabled=(uploaded_file is None)):
         if not image_bytes: st.warning("Sube una imagen."); return
         if not target_audience.strip(): st.warning("Describe el público."); return
         if not comm_objectives.strip(): st.warning("Define objetivos."); return
@@ -541,13 +554,13 @@ def image_evaluation_mode(db, selected_files):
         col1, col2 = st.columns(2)
         with col1:
              pdf_bytes = generate_pdf_html(st.session_state.image_evaluation_result, title=f"Evaluacion Visual - {uploaded_file.name if uploaded_file else 'Imagen'}", banner_path=banner_file)
-             if pdf_bytes: st.download_button(label="📄 Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion_{uploaded_file.name if uploaded_file else 'imagen'}.pdf", mime="application/pdf", use_container_width=True)
+             if pdf_bytes: st.download_button(label="Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion_{uploaded_file.name if uploaded_file else 'imagen'}.pdf", mime="application/pdf", use_container_width=True)
              else: st.error("Error al generar PDF.")
         with col2:
-             if st.button("🖼️ Evaluar Otra Imagen", use_container_width=True): st.session_state.pop("image_evaluation_result", None); st.rerun()
+             if st.button("Evaluar Otra Imagen", use_container_width=True): st.session_state.pop("image_evaluation_result", None); st.rerun()
 
 def video_evaluation_mode(db, selected_files):
-    st.subheader("🎬 Evaluación de Video (Comerciales/Publicidad)")
+    st.subheader("Evaluación de Video (Comerciales/Publicidad)")
     st.markdown(""" Sube un video corto (MP4, MOV, AVI - preferiblemente < 100MB) y describe tu público objetivo y objetivos de comunicación. El asistente evaluará el video (contenido visual y audio si lo tiene) basándose en criterios de marketing y utilizará los hallazgos de los estudios seleccionados como contexto. """)
     uploaded_file = st.file_uploader("Sube tu video aquí:", type=["mp4", "mov", "avi", "wmv", "mkv"])
     target_audience = st.text_area("Describe el público objetivo (Target) [Video]:", height=100, placeholder="Ej: Adultos jóvenes 18-30...")
@@ -557,7 +570,7 @@ def video_evaluation_mode(db, selected_files):
         video_bytes = uploaded_file.getvalue(); st.video(video_bytes)
         if uploaded_file.size > 100 * 1024 * 1024: st.warning("⚠️ Video grande (>100MB). Análisis podría tardar/fallar.")
     st.markdown("---")
-    if st.button("🎬 Evaluar Video", use_container_width=True, disabled=(uploaded_file is None)):
+    if st.button("Evaluar Video", use_container_width=True, disabled=(uploaded_file is None)):
         if not video_bytes: st.warning("Sube un video."); return
         if not target_audience.strip(): st.warning("Describe el público."); return
         if not comm_objectives.strip(): st.warning("Define objetivos."); return
@@ -569,14 +582,14 @@ def video_evaluation_mode(db, selected_files):
             if evaluation_result: st.session_state.video_evaluation_result = evaluation_result; log_query_event(f"Evaluación Video: {uploaded_file.name}", mode="Evaluación de Video")
             else: st.error("No se pudo generar evaluación video."); st.session_state.pop("video_evaluation_result", None)
     if "video_evaluation_result" in st.session_state:
-        st.markdown("---"); st.markdown("### ✨ Resultados Evaluación:"); st.markdown(st.session_state.video_evaluation_result)
+        st.markdown("---"); st.markdown("### Resultados Evaluación:"); st.markdown(st.session_state.video_evaluation_result)
         col1, col2 = st.columns(2)
         with col1:
              pdf_bytes = generate_pdf_html(st.session_state.video_evaluation_result, title=f"Evaluacion Video - {uploaded_file.name if uploaded_file else 'Video'}", banner_path=banner_file)
-             if pdf_bytes: st.download_button(label="📄 Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion_{uploaded_file.name if uploaded_file else 'video'}.pdf", mime="application/pdf", use_container_width=True)
+             if pdf_bytes: st.download_button(label="Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion_{uploaded_file.name if uploaded_file else 'video'}.pdf", mime="application/pdf", use_container_width=True)
              else: st.error("Error al generar PDF.")
         with col2:
-             if st.button("🎬 Evaluar Otro Video", use_container_width=True): st.session_state.pop("video_evaluation_result", None); st.rerun()
+             if st.button("Evaluar Otro Video", use_container_width=True): st.session_state.pop("video_evaluation_result", None); st.rerun()
 
 # =====================================================
 # PANEL DE ADMINISTRACIÓN (CON EDICIÓN DE USUARIOS Y CORRECCIÓN INDENTACIÓN)
@@ -612,50 +625,57 @@ def show_admin_dashboard():
                 except Exception as e: st.error(f"Error al crear: {e}")
 
     st.subheader("👥 Gestión de Usuarios", divider="grey")
-    try:
-        if "SUPABASE_SERVICE_KEY" not in st.secrets: st.error("Falta 'SUPABASE_SERVICE_KEY'"); st.stop()
-        supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
-        users_response = supabase_admin_client.table("users").select("id, email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute()
-        
-        if users_response.data:
-            st.write("**Usuarios Registrados** (Puedes editar Rol)")
-            user_list = []
-            for user in users_response.data:
-                client_info = user.get('clients')
-                client_name = "N/A"; client_plan = "N/A"
-                if isinstance(client_info, dict):
-                    client_name = client_info.get('client_name', "N/A")
-                    client_plan = client_info.get('plan', "N/A")
-                user_list.append({
+    # --- CORRECCIÓN INDENTACIÓN ---
+    try: # Nivel 1
+        if "SUPABASE_SERVICE_KEY" not in st.secrets: # Nivel 2
+            st.error("Falta 'SUPABASE_SERVICE_KEY'"); st.stop() # Nivel 3
+
+        supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"]) # Nivel 2
+        users_response = supabase_admin_client.table("users").select("id, email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute() # Nivel 2
+
+        if users_response.data: # Nivel 2
+            st.write("**Usuarios Registrados** (Puedes editar Rol)") # Nivel 3
+            user_list = [] # Nivel 3
+            for user in users_response.data: # Nivel 3
+                client_info = user.get('clients') # Nivel 4
+                client_name = "N/A"; client_plan = "N/A" # Nivel 4
+                if isinstance(client_info, dict): # Nivel 4
+                    client_name = client_info.get('client_name', "N/A") # Nivel 5
+                    client_plan = client_info.get('plan', "N/A") # Nivel 5
+                user_list.append({ # Nivel 4
                     'id': user.get('id'), 'email': user.get('email'), 'creado_el': user.get('created_at'),
                     'rol': user.get('rol', 'user'), 'cliente': client_name, 'plan': client_plan
                 })
-            original_df = pd.DataFrame(user_list);
-            if 'original_users_df' not in st.session_state: st.session_state.original_users_df = original_df.copy()
-            display_df = original_df.copy(); display_df['creado_el'] = pd.to_datetime(display_df['creado_el']).dt.strftime('%Y-%m-%d %H:%M')
-            edited_df = st.data_editor( display_df, key="user_editor", column_config={"id": None, "rol": st.column_config.SelectboxColumn("Rol", options=["user", "admin"], required=True), "email": st.column_config.TextColumn("Email", disabled=True), "creado_el": st.column_config.TextColumn("Creado", disabled=True), "cliente": st.column_config.TextColumn("Cliente", disabled=True), "plan": st.column_config.TextColumn("Plan", disabled=True)}, use_container_width=True, hide_index=True, num_rows="fixed")
-            if st.button("Guardar Cambios Usuarios", use_container_width=True):
-                updates_to_make = []; original_users = st.session_state.original_users_df; edited_df_indexed = edited_df.set_index(original_df.index); edited_df_with_ids = original_df[['id']].join(edited_df_indexed)
-                for index, original_row in original_users.iterrows():
-                    edited_rows_match = edited_df_with_ids[edited_df_with_ids['id'] == original_row['id']]
-                    if not edited_rows_match.empty:
-                        edited_row = edited_rows_match.iloc[0]
-                        if original_row['rol'] != edited_row['rol']: updates_to_make.append({"id": original_row['id'], "email": original_row['email'], "new_rol": edited_row['rol']})
-                    else: print(f"Warn: Row ID {original_row['id']} not in edited df.")
-                if updates_to_make:
-                    success_count, error_count, errors = 0, 0, []
-                    with st.spinner(f"Guardando {len(updates_to_make)} cambio(s)..."):
-                        for update in updates_to_make:
-                            try: supabase_admin_client.table("users").update({"rol": update["new_rol"]}).eq("id", update["id"]).execute(); success_count += 1
-                            except Exception as e: errors.append(f"Error {update['email']} (ID: {update['id']}): {e}"); error_count += 1
-                    if success_count > 0: st.success(f"{success_count} actualizado(s).")
-                    if error_count > 0: st.error(f"{error_count} error(es):"); [st.error(f"- {err}") for err in errors]
-                    del st.session_state.original_users_df; st.rerun()
-                else: st.info("No se detectaron cambios.")
-        else:
-            st.info("No hay usuarios registrados.")
-    except Exception as e:
-        st.error(f"Error en la gestión de usuarios: {e}")
+            original_df = pd.DataFrame(user_list); # Nivel 3
+            if 'original_users_df' not in st.session_state: st.session_state.original_users_df = original_df.copy() # Nivel 3
+            display_df = original_df.copy(); display_df['creado_el'] = pd.to_datetime(display_df['creado_el']).dt.strftime('%Y-%m-%d %H:%M') # Nivel 3
+            edited_df = st.data_editor( display_df, key="user_editor", column_config={"id": None, "rol": st.column_config.SelectboxColumn("Rol", options=["user", "admin"], required=True), "email": st.column_config.TextColumn("Email", disabled=True), "creado_el": st.column_config.TextColumn("Creado", disabled=True), "cliente": st.column_config.TextColumn("Cliente", disabled=True), "plan": st.column_config.TextColumn("Plan", disabled=True)}, use_container_width=True, hide_index=True, num_rows="fixed") # Nivel 3
+            if st.button("Guardar Cambios Usuarios", use_container_width=True): # Nivel 3
+                updates_to_make = []; original_users = st.session_state.original_users_df; edited_df_indexed = edited_df.set_index(original_df.index); edited_df_with_ids = original_df[['id']].join(edited_df_indexed) # Nivel 4
+                for index, original_row in original_users.iterrows(): # Nivel 4
+                    edited_rows_match = edited_df_with_ids[edited_df_with_ids['id'] == original_row['id']] # Nivel 5
+                    if not edited_rows_match.empty: # Nivel 5
+                        edited_row = edited_rows_match.iloc[0] # Nivel 6
+                        if original_row['rol'] != edited_row['rol']: updates_to_make.append({"id": original_row['id'], "email": original_row['email'], "new_rol": edited_row['rol']}) # Nivel 6
+                    else: print(f"Warn: Row ID {original_row['id']} not in edited df.") # Nivel 5
+                if updates_to_make: # Nivel 4
+                    success_count, error_count, errors = 0, 0, [] # Nivel 5
+                    with st.spinner(f"Guardando {len(updates_to_make)} cambio(s)..."): # Nivel 5
+                        for update in updates_to_make: # Nivel 6
+                            try: supabase_admin_client.table("users").update({"rol": update["new_rol"]}).eq("id", update["id"]).execute(); success_count += 1 # Nivel 7
+                            except Exception as e: errors.append(f"Error {update['email']} (ID: {update['id']}): {e}"); error_count += 1 # Nivel 7
+                    if success_count > 0: st.success(f"{success_count} actualizado(s).") # Nivel 5
+                    if error_count > 0: st.error(f"{error_count} error(es):"); [st.error(f"- {err}") for err in errors] # Nivel 5
+                    del st.session_state.original_users_df; st.rerun() # Nivel 5
+                else: # Nivel 4 (Alineado con 'if updates_to_make')
+                    st.info("No se detectaron cambios.") # Nivel 5
+        # --- ELSE CORREGIDO ---
+        else: # Nivel 2 (Alineado con 'if users_response.data:')
+            st.info("No hay usuarios registrados.") # Nivel 3
+    # --- EXCEPT CORREGIDO ---
+    except Exception as e: # Nivel 1 (Alineado con 'try:')
+        st.error(f"Error en la gestión de usuarios: {e}") # Nivel 2
+    # --- FIN CORRECCIÓN INDENTACIÓN ---
 
 
 # =====================================================
@@ -674,9 +694,9 @@ def run_user_mode(db_full, user_features, footer_html):
     if user_features.get("has_creative_conversation"): modos_disponibles.append("Conversaciones creativas")
     if user_features.get("has_concept_generation"): modos_disponibles.append("Generación de conceptos")
     if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
-    if user_features.get("has_image_evaluation"): modos_disponibles.append("🖼️ Evaluación Visual")
-    if user_features.get("has_video_evaluation"): modos_disponibles.append("🎬 Evaluación de Video")
-    
+    if user_features.get("has_image_evaluation"): modos_disponibles.append("Evaluación Visual")
+    if user_features.get("has_video_evaluation"): modos_disponibles.append("Evaluación de Video")
+
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed", key="main_mode_selector")
 
@@ -707,15 +727,15 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
-    if not selected_files and modo not in ["Generar un reporte de reportes", "🖼️ Evaluación Visual", "🎬 Evaluación de Video"]: st.warning("⚠️ No hay estudios que coincidan con los filtros.")
+    if not selected_files and modo not in ["Generar un reporte de reportes", "Evaluación Visual", "Evaluación de Video"]: st.warning("⚠️ No hay estudios que coincidan con los filtros.")
 
     if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
     elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
     elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
-    elif modo == "🖼️ Evaluación Visual": image_evaluation_mode(db_filtered, selected_files)
-    elif modo == "🎬 Evaluación de Video": video_evaluation_mode(db_filtered, selected_files)
+    elif modo == "Evaluación Visual": image_evaluation_mode(db_filtered, selected_files)
+    elif modo == "Evaluación de Video": video_evaluation_mode(db_filtered, selected_files)
 
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
@@ -742,10 +762,10 @@ def main():
     user_features = st.session_state.plan_features
 
     if st.session_state.get("is_admin", False):
-        tab_user, tab_admin = st.tabs(["👤 Modo Usuario", "👑 Modo Administrador"]) # Usar emojis
+        tab_user, tab_admin = st.tabs(["Modo Usuario", "Modo Administrador"]) # Usar emojis
         with tab_user: run_user_mode(db_full, user_features, footer_html)
         with tab_admin:
-            st.title("Panel de Administración 👑") # Usar emoji
+            st.title("Panel de Administración") # Usar emoji
             st.write(f"Gestionando como: {st.session_state.user}")
             show_admin_dashboard()
     else: run_user_mode(db_full, user_features, footer_html)
