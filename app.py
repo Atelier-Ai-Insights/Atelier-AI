@@ -681,10 +681,11 @@ def transcript_analysis_mode():
                 for name, text in st.session_state.uploaded_transcripts_text.items()
             )
 
-            # Limitar contexto si es muy largo (ajusta el límite según necesidad)
-            MAX_CONTEXT_LENGTH = 25000 # Ejemplo: ~25k caracteres
+            # Se aumenta el límite de 25,000 a 800,000 caracteres (aprox 200k tokens, seguro para 1M)
+            MAX_CONTEXT_LENGTH = 800000 
             if len(combined_context) > MAX_CONTEXT_LENGTH:
                 combined_context = combined_context[:MAX_CONTEXT_LENGTH] + "\n\n...(contexto truncado)..."
+                # La advertencia ahora solo aparecerá si superas este límite mucho mayor
                 st.warning("El contexto combinado de las transcripciones es muy largo y ha sido truncado.", icon="⚠️")
 
             # Construir el prompt para Gemini
