@@ -22,6 +22,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 
 import streamlit as st
+import docx
 
 st.markdown("""
 <style>
@@ -114,18 +115,21 @@ PLAN_FEATURES = {
         "has_report_generation": False, "has_creative_conversation": False,
         "has_concept_generation": False, "has_idea_evaluation": False,
         "has_image_evaluation": False, "has_video_evaluation": False,
+        "has_transcript_analysis": True,
     },
     "Strategist": {
         "reports_per_month": 0, "chat_queries_per_day": float('inf'), "projects_per_year": 10,
         "has_report_generation": False, "has_creative_conversation": True,
         "has_concept_generation": True, "has_idea_evaluation": False,
         "has_image_evaluation": False, "has_video_evaluation": False,
+        "has_transcript_analysis": True,
     },
     "Enterprise": {
         "reports_per_month": float('inf'), "chat_queries_per_day": float('inf'), "projects_per_year": float('inf'),
         "has_report_generation": True, "has_creative_conversation": True,
         "has_concept_generation": True, "has_idea_evaluation": True,
         "has_image_evaluation": True, "has_video_evaluation": True,
+        "has_transcript_analysis": True,
     }
 }
 
@@ -290,7 +294,6 @@ def normalize_text(text):
     try: normalized = unicodedata.normalize("NFD", str(text)); return "".join(c for c in normalized if unicodedata.category(c) != "Mn").lower()
     except Exception as e: print(f"Error normalizing: {e}"); return str(text).lower()
 
-# --- FUNCIÓN CORREGIDA ---
 def add_markdown_content(pdf, markdown_text):
     try:
         decoded_text = html.unescape(markdown_text)
@@ -315,7 +318,7 @@ def add_markdown_content(pdf, markdown_text):
                 for idx, li in enumerate(elem.find_all("li", recursive=False), 1): pdf.add_paragraph(f"{idx}. {li.decode_contents(formatter='html')}")
             elif tag_name == "pre": pdf.add_paragraph(elem.get_text(), style='Code')
             elif tag_name == "blockquote": pdf.add_paragraph(">" + elem.decode_contents(formatter="html"))
-            # --- AJUSTE DE INDENTACIÓN ---
+    
             else:
                 # Mover try/except a líneas separadas e indentar
                 try:
@@ -323,11 +326,10 @@ def add_markdown_content(pdf, markdown_text):
                 except Exception as inner_e: # Capturar excepción específica si es necesario
                     print(f"Error decoding/adding element content: {inner_e}")
                     pdf.add_paragraph(elem.get_text(strip=True)) # Fallback a texto plano
-            # --- FIN AJUSTE ---
+     
     except Exception as e:
         print(f"Error adding markdown content to PDF: {e}")
         pdf.add_paragraph("--- Error parsing markdown ---"); pdf.add_paragraph(markdown_text); pdf.add_paragraph("--- End error ---")
-# --- FIN FUNCIÓN CORREGIDA ---
 
 @st.cache_data(show_spinner=False)
 def load_database(cliente: str):
@@ -591,6 +593,135 @@ def video_evaluation_mode(db, selected_files):
         with col2:
              if st.button("Evaluar Otro Video", use_container_width=True): st.session_state.pop("video_evaluation_result", None); st.rerun()
 
+def transcript_analysis_mode():
+    st.subheader("Análisis de Transcripciones (.docx)")
+    st.markdown("""
+        Sube uno o varios archivos Word (.docx) con transcripciones de entrevistas o
+        focus groups. Luego, haz preguntas sobre el contenido en el chat.
+    """)
+
+    # --- Sección de Carga y Procesamiento de Archivos ---
+    uploaded_files = st.file_uploader(
+        "Sube tus archivos .docx aquí:",
+        type=["docx"],
+        accept_multiple_files=True,
+        key="transcript_uploader" # Key para manejar el estado
+    )
+
+    # Inicializar estado si no existe
+    if 'uploaded_transcripts_text' not in st.session_state:
+        st.session_state.uploaded_transcripts_text = {} # Diccionario para guardar texto por nombre de archivo
+    if 'transcript_chat_history' not in st.session_state:
+        st.session_state.transcript_chat_history = []
+
+    # Procesar archivos subidos si hay cambios
+    if uploaded_files:
+        newly_processed = False
+        with st.spinner("Procesando archivos .docx..."):
+            current_texts = {}
+            for uploaded_file in uploaded_files:
+                # Usar BytesIO para leer el archivo en memoria sin guardarlo
+                file_stream = BytesIO(uploaded_file.getvalue())
+                try:
+                    document = docx.Document(file_stream)
+                    full_text = "\n".join([para.text for para in document.paragraphs if para.text.strip()])
+                    current_texts[uploaded_file.name] = full_text
+                    # Marcar si se procesó un archivo nuevo o diferente
+                    if uploaded_file.name not in st.session_state.uploaded_transcripts_text or st.session_state.uploaded_transcripts_text.get(uploaded_file.name) != full_text:
+                        newly_processed = True
+                except Exception as e:
+                    st.error(f"Error al procesar '{uploaded_file.name}': {e}")
+
+            # Si hubo cambios en los archivos, actualizar estado y limpiar chat
+            if newly_processed or set(current_texts.keys()) != set(st.session_state.uploaded_transcripts_text.keys()):
+                st.session_state.uploaded_transcripts_text = current_texts
+                st.session_state.transcript_chat_history = [] # Limpiar historial si cambian los archivos
+                st.info(f"Se procesaron {len(current_texts)} archivo(s). El chat se ha reiniciado.")
+                # st.rerun() # Opcional: forzar recarga inmediata
+
+    # Mostrar nombres de archivos cargados (si hay alguno)
+    if st.session_state.uploaded_transcripts_text:
+        st.write("**Archivos cargados para análisis:**")
+        for filename in st.session_state.uploaded_transcripts_text.keys():
+            st.caption(f"- {filename}")
+        st.markdown("---")
+    else:
+        st.info("Sube uno o más archivos .docx para comenzar a chatear.")
+
+    # --- Sección de Chat ---
+    st.write("**Chat con Transcripciones:**")
+
+    # Mostrar historial de chat
+    for message in st.session_state.transcript_chat_history:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Input del usuario
+    user_prompt = st.chat_input("Haz una pregunta sobre las transcripciones...")
+
+    if user_prompt:
+        # Añadir mensaje de usuario al historial y mostrarlo
+        st.session_state.transcript_chat_history.append({"role": "user", "content": user_prompt})
+        with st.chat_message("user"):
+            st.markdown(user_prompt)
+
+        # Verificar si hay texto cargado
+        if not st.session_state.uploaded_transcripts_text:
+            st.error("No hay transcripciones cargadas para analizar. Por favor, sube archivos .docx.")
+            return # Detener si no hay contexto
+
+        # Preparar contexto y llamar a Gemini
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            message_placeholder.markdown("Analizando transcripciones...")
+
+            # Combinar el texto de todos los archivos subidos
+            combined_context = "\n\n--- Nueva Transcripción ---\n\n".join(
+                f"**Archivo: {name}**\n\n{text}"
+                for name, text in st.session_state.uploaded_transcripts_text.items()
+            )
+
+            # Limitar contexto si es muy largo (ajusta el límite según necesidad)
+            MAX_CONTEXT_LENGTH = 25000 # Ejemplo: ~25k caracteres
+            if len(combined_context) > MAX_CONTEXT_LENGTH:
+                combined_context = combined_context[:MAX_CONTEXT_LENGTH] + "\n\n...(contexto truncado)..."
+                st.warning("El contexto combinado de las transcripciones es muy largo y ha sido truncado.", icon="⚠️")
+
+            # Construir el prompt para Gemini
+            chat_prompt = [
+                f"Actúa como un asistente experto en análisis cualitativo de transcripciones de entrevistas y focus groups. Tu tarea es responder la pregunta del usuario basándote únicamente en el texto de las transcripciones proporcionadas.",
+                f"\n\n**TRANSCRIPCIONES (Contexto Principal):**\n```\n{combined_context}\n```",
+                # Historial reciente del chat (opcional, puede ayudar en conversaciones largas)
+                # f"\n\n**Historial Reciente:**\n" + "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.transcript_chat_history[-5:-1]]), # Excluye último mensaje user
+                f"\n\n**Pregunta del Usuario:**\n{user_prompt}",
+                f"\n\n**Instrucciones:**",
+                f"- Responde de forma concisa y directa a la pregunta.",
+                f"- Basa tu respuesta **estrictamente** en la información contenida en las transcripciones.",
+                f"- Si la respuesta no se encuentra en el texto, indica claramente: 'La información solicitada no se encuentra en las transcripciones proporcionadas.'",
+                f"- Puedes citar extractos breves si ayuda a sustentar la respuesta, indicando opcionalmente el nombre del archivo si es relevante.",
+                f"\n\n**Respuesta:**"
+            ]
+
+            response = call_gemini_api(chat_prompt) # Tu función call_gemini_api ya maneja listas
+
+            if response:
+                message_placeholder.markdown(response)
+                st.session_state.transcript_chat_history.append({"role": "assistant", "content": response})
+                # Loggear el evento (ajusta el nombre del modo si es necesario)
+                log_query_event(user_prompt, mode="Análisis de Transcripciones")
+            else:
+                message_placeholder.error("Error al obtener respuesta del análisis.")
+                # Opcional: eliminar el último mensaje de usuario si la respuesta falla
+                # st.session_state.transcript_chat_history.pop()
+
+    # Botón para limpiar archivos y chat (opcional pero útil)
+    if st.session_state.uploaded_transcripts_text or st.session_state.transcript_chat_history:
+        if st.button("Limpiar Archivos y Chat", use_container_width=True, type="secondary"):
+            st.session_state.uploaded_transcripts_text = {}
+            st.session_state.transcript_chat_history = []
+            # Limpiar el file_uploader requiere un truco o rerun
+            st.rerun()
+
 # =====================================================
 # PANEL DE ADMINISTRACIÓN (CON EDICIÓN DE USUARIOS Y CORRECCIÓN INDENTACIÓN)
 # =====================================================
@@ -696,29 +827,39 @@ def run_user_mode(db_full, user_features, footer_html):
     if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
     if user_features.get("has_image_evaluation"): modos_disponibles.append("Evaluación Visual")
     if user_features.get("has_video_evaluation"): modos_disponibles.append("Evaluación de Video")
+    if user_features.get("has_transcript_analysis"): modos_disponibles.append("Análisis de Transcripciones")
 
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed", key="main_mode_selector")
 
+    # Resetear estados específicos del modo si cambia (incluir nuevos estados)
     if 'current_mode' not in st.session_state: st.session_state.current_mode = modo
     if st.session_state.current_mode != modo:
-        reset_chat_workflow(); st.session_state.pop("generated_concept", None); st.session_state.pop("evaluation_result", None)
-        st.session_state.pop("report", None); st.session_state.pop("last_question", None); st.session_state.pop("image_evaluation_result", None)
+        reset_chat_workflow() # Resetea chat_history (usado por chat grounded y creativo)
+        st.session_state.pop("generated_concept", None); st.session_state.pop("evaluation_result", None)
+        st.session_state.pop("report", None); st.session_state.pop("last_question", None)
+        st.session_state.pop("image_evaluation_result", None)
         st.session_state.pop("video_evaluation_result", None)
+        st.session_state.pop("uploaded_transcripts_text", None)
+        st.session_state.pop("transcript_chat_history", None)
         st.session_state.current_mode = modo
 
     st.sidebar.header("Filtros de Búsqueda")
+    # Aplicar filtros solo si el modo actual NO es Análisis de Transcripciones
+    # (Porque este modo usa archivos subidos, no el repositorio S3)
+    run_filters = modo != "Análisis de Transcripciones"
+
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
-    selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas")
-    if selected_marcas: db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
+    selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas", disabled=not run_filters)
+    if run_filters and selected_marcas: db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
 
     years_options = sorted({doc.get("marca", "") for doc in db_full if doc.get("marca")})
-    selected_years = st.sidebar.multiselect("Año(s):", years_options, key="filter_years")
-    if selected_years: db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
+    selected_years = st.sidebar.multiselect("Año(s):", years_options, key="filter_years", disabled=not run_filters)
+    if run_filters and selected_years: db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
     brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered if extract_brand(d.get("nombre_archivo", ""))})
-    selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects")
-    if selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
+    selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects", disabled=not run_filters)
+    if run_filters and selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
@@ -726,8 +867,12 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.divider()
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
 
-    selected_files = [d.get("nombre_archivo") for d in db_filtered]
-    if not selected_files and modo not in ["Generar un reporte de reportes", "Evaluación Visual", "Evaluación de Video"]: st.warning("⚠️ No hay estudios que coincidan con los filtros.")
+    # --- LLAMAR A LA FUNCIÓN DEL MODO ---
+    selected_files = [d.get("nombre_archivo") for d in db_filtered] # Calcular aunque no se use en todos los modos
+
+    # Mostrar advertencia si es necesario (ajustar condición)
+    if run_filters and not selected_files and modo not in ["Generar un reporte de reportes", "Evaluación Visual", "Evaluación de Video"]:
+         st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
 
     if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
@@ -736,6 +881,7 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
     elif modo == "Evaluación Visual": image_evaluation_mode(db_filtered, selected_files)
     elif modo == "Evaluación de Video": video_evaluation_mode(db_filtered, selected_files)
+    elif modo == "Análisis de Transcripciones": transcript_analysis_mode() # No necesita db_filtered ni selected_files
 
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
