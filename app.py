@@ -556,7 +556,7 @@ def image_evaluation_mode(db, selected_files):
             if evaluation_result: st.session_state.image_evaluation_result = evaluation_result; log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode="Evaluación Visual")
             else: st.error("No se pudo generar evaluación."); st.session_state.pop("image_evaluation_result", None)
     if "image_evaluation_result" in st.session_state:
-        st.markdown("---"); st.markdown("### ✨ Resultados Evaluación:"); st.markdown(st.session_state.image_evaluation_result)
+        st.markdown("---"); st.markdown("### Resultados Evaluación:"); st.markdown(st.session_state.image_evaluation_result)
         col1, col2 = st.columns(2)
         with col1:
              pdf_bytes = generate_pdf_html(st.session_state.image_evaluation_result, title=f"Evaluacion Visual - {uploaded_file.name if uploaded_file else 'Imagen'}", banner_path=banner_file)
@@ -735,7 +735,7 @@ def transcript_analysis_mode():
 # PANEL DE ADMINISTRACIÓN (CON EDICIÓN DE USUARIOS Y CORRECCIÓN INDENTACIÓN)
 # =====================================================
 def show_admin_dashboard():
-    st.subheader("📊 Estadísticas de Uso", divider="grey")
+    st.subheader("Estadísticas de Uso", divider="grey")
     with st.spinner("Cargando estadísticas..."):
         try:
             stats_response = supabase.table("queries").select("user_name, mode, timestamp, query").execute()
@@ -748,7 +748,7 @@ def show_admin_dashboard():
             else: st.info("Aún no hay datos de uso.")
         except Exception as e: st.error(f"Error cargando estadísticas: {e}")
 
-    st.subheader("🔑 Gestión de Clientes (Invitaciones)", divider="grey")
+    st.subheader("Gestión de Clientes (Invitaciones)", divider="grey")
     try:
         clients_response = supabase.table("clients").select("client_name, plan, invite_code, created_at").order("created_at", desc=True).execute()
         if clients_response.data: st.write("**Clientes Actuales**"); df_clients = pd.DataFrame(clients_response.data); df_clients['created_at'] = pd.to_datetime(df_clients['created_at']).dt.strftime('%Y-%m-%d'); st.dataframe(df_clients, use_container_width=True, hide_index=True)
@@ -764,7 +764,7 @@ def show_admin_dashboard():
                 try: supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"]); supabase_admin_client.table("clients").insert({"client_name": new_client_name, "plan": new_plan, "invite_code": new_invite_code}).execute(); st.success(f"Cliente '{new_client_name}' creado. Código: {new_invite_code}")
                 except Exception as e: st.error(f"Error al crear: {e}")
 
-    st.subheader("👥 Gestión de Usuarios", divider="grey")
+    st.subheader("Gestión de Usuarios", divider="grey")
     # --- CORRECCIÓN INDENTACIÓN ---
     try: # Nivel 1
         if "SUPABASE_SERVICE_KEY" not in st.secrets: # Nivel 2
