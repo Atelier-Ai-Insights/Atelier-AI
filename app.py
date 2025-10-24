@@ -395,7 +395,7 @@ class PDFReport:
             except Exception as e: print(f"Error PDF header: {e}")
         canvas.restoreState()
     def footer(self, canvas, doc):
-        canvas.saveState(); footer_text = "Generado por Atelier Data Studio IA..."; p = Paragraph(footer_text, self.styles['CustomFooter']); w, h = p.wrap(doc.width, doc.bottomMargin); p.drawOn(canvas, doc.leftMargin, 5 * mm); canvas.restoreState()
+        canvas.saveState(); footer_text = "Generado por Atelier Data Studio. Es posible que se muestre información imprecisa. Verifica las respuestas."; p = Paragraph(footer_text, self.styles['CustomFooter']); w, h = p.wrap(doc.width, doc.bottomMargin); p.drawOn(canvas, doc.leftMargin, 5 * mm); canvas.restoreState()
     def header_footer(self, canvas, doc): self.header(canvas, doc); self.footer(canvas, doc)
     def add_paragraph(self, text, style='CustomBodyText'):
         try: style_to_use = self.styles.get(style, self.styles.get('BodyText', self.styles['Normal'])); p = Paragraph(text, style_to_use); self.elements.append(p); self.elements.append(Spacer(1, 4))
