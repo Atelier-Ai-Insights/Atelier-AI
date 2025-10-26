@@ -866,7 +866,7 @@ def one_pager_ppt_mode(db, selected_files):
             st.warning("No has seleccionado ningún estudio. Por favor, selecciona estudios en el filtro del sidebar.")
             return
 
-        with st.spinner("1/4 - Obteniendo contexto de los estudios..."):
+        with st.spinner("Obteniendo contexto de los estudios..."):
             relevant_info = get_relevant_info(db, tema_central, selected_files)
         
         # --- Prompt de Gemini para JSON ---
@@ -882,7 +882,7 @@ def one_pager_ppt_mode(db, selected_files):
         Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
 
         {{
-          "titulo_diapositiva": "Un título principal corto y potente (máx. 10 palabras) sobre '{tema_central}'",
+          "titulo_diapositiva": "Un título principal corto y potente (máx. 6 palabras) sobre '{tema_central}'",
           "insight_clave": "El insight o 'verdad oculta' más importante que encontraste (1 frase concisa).",
           "hallazgos_principales": [
             "Hallazgo #1: Un punto clave sintetizado.",
@@ -891,14 +891,15 @@ def one_pager_ppt_mode(db, selected_files):
           ],
           "oportunidades": [
             "Oportunidad #1: Una acción o área de innovación basada en los hallazgos.",
-            "Oportunidad #2: Otra acción o área de innovación."
+            "Oportunidad #2: Otra acción o área de innovación.",
+            "Oportunidad #3: Otra acción o área de innovación."
           ],
           "recomendacion_estrategica": "Una recomendación final clara y accionable (máx. 2 líneas)."
         }}
         """
 
         data_json = None
-        with st.spinner("2/4 - Generando contenido con IA... (Esto puede tardar)"):
+        with st.spinner("Generando contenido con IA..."):
             response = call_gemini_api(prompt_json)
             if not response:
                 st.error("Error al contactar la API de Gemini.")
@@ -914,13 +915,13 @@ def one_pager_ppt_mode(db, selected_files):
                 return
         
         if data_json:
-            with st.spinner("3/4 - Ensamblando diapositiva .pptx..."):
+            with st.spinner("Ensamblando diapositiva .pptx..."):
                 ppt_bytes = crear_ppt_one_pager(data_json)
             
             if ppt_bytes:
                 st.session_state.generated_ppt_bytes = ppt_bytes
                 log_query_event(tema_central, mode="Generador de One-Pager PPT")
-                with st.spinner("4/4 - Finalizando..."):
+                with st.spinner("Finalizando..."):
                     st.rerun() # Recargar para mostrar el botón de descarga
             else:
                 st.error("No se pudo crear el archivo PowerPoint.")
