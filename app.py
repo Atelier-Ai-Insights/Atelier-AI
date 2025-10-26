@@ -117,14 +117,14 @@ PLAN_FEATURES = {
         "has_report_generation": False, "has_creative_conversation": False,
         "has_concept_generation": False, "has_idea_evaluation": False,
         "has_image_evaluation": False, "has_video_evaluation": False,
-        "has_transcript_analysis": True, "has_one_pager_generation": False,
+        "has_transcript_analysis": True, "has_one_pager_generation": True,
     },
     "Strategist": {
         "reports_per_month": 0, "chat_queries_per_day": float('inf'), "projects_per_year": 10,
         "has_report_generation": False, "has_creative_conversation": True,
         "has_concept_generation": True, "has_idea_evaluation": False,
         "has_image_evaluation": False, "has_video_evaluation": False,
-        "has_transcript_analysis": True, "has_one_pager_generation": False,
+        "has_transcript_analysis": True, "has_one_pager_generation": True,
     },
     "Enterprise": {
         "reports_per_month": float('inf'), "chat_queries_per_day": float('inf'), "projects_per_year": float('inf'),
