@@ -424,7 +424,7 @@ def crear_ppt_one_pager(data: dict):
     Toma un diccionario estructurado y genera un archivo .pptx en memoria.
     """
     try:
-        prs = Presentation()
+        prs = Presentation("Plantilla_PPT_ATL.pptx")
         # Definir tamaño panorámico (16:9)
         prs.slide_width = Inches(16)
         prs.slide_height = Inches(9)
