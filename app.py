@@ -862,7 +862,7 @@ def one_pager_ppt_mode(db, selected_files):
         placeholder="Ej: Oportunidades para snacks saludables en adultos jóvenes"
     )
 
-    if st.button("Generar One-Pager PPT", use_container_width=True):
+    if st.button("Generar One-Pager", use_container_width=True):
         if not tema_central.strip():
             st.warning("Por favor, describe el tema central.")
             return
@@ -925,7 +925,7 @@ def one_pager_ppt_mode(db, selected_files):
             
             if ppt_bytes:
                 st.session_state.generated_ppt_bytes = ppt_bytes
-                log_query_event(tema_central, mode="Generador de One-Pager PPT")
+                log_query_event(tema_central, mode="Generador de One-Pager")
                 with st.spinner("Finalizando..."):
                     st.rerun() # Recargar para mostrar el botón de descarga
             else:
