@@ -424,7 +424,7 @@ def crear_ppt_one_pager(data: dict):
     Toma un diccionario estructurado y genera un archivo .pptx en memoria.
     """
     try:
-        prs = Presentation("mi_plantilla.pptx") 
+        prs = Presentation("Plantilla_PPT_ATL.pptx") 
         
         prs.slide_width = Inches(12)
         prs.slide_height = Inches(8)
