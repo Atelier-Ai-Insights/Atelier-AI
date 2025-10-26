@@ -3,10 +3,13 @@ import html
 import json
 import unicodedata
 from io import BytesIO
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.enum.text import PP_ALIGN
+from pptx.dml.color import RGBColor
 from PIL import Image
 import os
 from bs4 import BeautifulSoup
-
 import boto3
 import google.generativeai as genai
 import markdown2
@@ -20,7 +23,6 @@ from reportlab.lib import colors
 from supabase import create_client, Client
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
-
 import streamlit as st
 import docx
 
@@ -115,21 +117,21 @@ PLAN_FEATURES = {
         "has_report_generation": False, "has_creative_conversation": False,
         "has_concept_generation": False, "has_idea_evaluation": False,
         "has_image_evaluation": False, "has_video_evaluation": False,
-        "has_transcript_analysis": True,
+        "has_transcript_analysis": True, "has_one_pager_generation": False,
     },
     "Strategist": {
         "reports_per_month": 0, "chat_queries_per_day": float('inf'), "projects_per_year": 10,
         "has_report_generation": False, "has_creative_conversation": True,
         "has_concept_generation": True, "has_idea_evaluation": False,
         "has_image_evaluation": False, "has_video_evaluation": False,
-        "has_transcript_analysis": True,
+        "has_transcript_analysis": True, "has_one_pager_generation": False,
     },
     "Enterprise": {
         "reports_per_month": float('inf'), "chat_queries_per_day": float('inf'), "projects_per_year": float('inf'),
         "has_report_generation": True, "has_creative_conversation": True,
         "has_concept_generation": True, "has_idea_evaluation": True,
         "has_image_evaluation": True, "has_video_evaluation": True,
-        "has_transcript_analysis": True,
+        "has_transcript_analysis": True, "has_one_pager_generation": True,
     }
 }
 
@@ -416,6 +418,93 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None):
         if pdf_data: return pdf_data
         else: st.error("Error interno al construir PDF."); return None
     except Exception as e: st.error(f"Error crítico al generar PDF: {e}"); return None
+
+def crear_ppt_one_pager(data: dict):
+    """
+    Toma un diccionario estructurado y genera un archivo .pptx en memoria.
+    """
+    try:
+        prs = Presentation()
+        # Definir tamaño panorámico (16:9)
+        prs.slide_width = Inches(16)
+        prs.slide_height = Inches(9)
+        
+        # Usar el layout "En Blanco" (índice 6 usualmente)
+        blank_slide_layout = prs.slide_layouts[6] 
+        slide = prs.slides.add_slide(blank_slide_layout)
+
+        # --- Título ---
+        txBox_title = slide.shapes.add_textbox(Inches(1), Inches(0.5), Inches(14), Inches(1.2))
+        p_title = txBox_title.text_frame.paragraphs[0]
+        p_title.text = data.get("titulo_diapositiva", "Resumen Estratégico")
+        p_title.font.bold = True
+        p_title.font.size = Pt(40)
+        p_title.alignment = PP_ALIGN.CENTER
+
+        # --- Insight Clave ---
+        txBox_insight = slide.shapes.add_textbox(Inches(1), Inches(1.8), Inches(14), Inches(0.8))
+        p_insight = txBox_insight.text_frame.add_paragraph()
+        p_insight.text = f"Insight Clave: {data.get('insight_clave', 'N/A')}"
+        p_insight.font.italic = True
+        p_insight.font.size = Pt(20)
+        p_insight.font.color.rgb = RGBColor(0x33, 0x33, 0x33) # Gris oscuro
+        p_insight.alignment = PP_ALIGN.CENTER
+
+        # --- Columna 1: Hallazgos ---
+        txBox_hallazgos = slide.shapes.add_textbox(Inches(1), Inches(2.8), Inches(6.5), Inches(5.5))
+        tf_hallazgos = txBox_hallazgos.text_frame
+        tf_hallazgos.word_wrap = True
+        
+        p_h_title = tf_hallazgos.paragraphs[0]
+        p_h_title.text = "Hallazgos Principales"
+        p_h_title.font.bold = True
+        p_h_title.font.size = Pt(24)
+        
+        for hallazgo in data.get("hallazgos_principales", ["N/A"]):
+            p = tf_hallazgos.add_paragraph()
+            p.text = hallazgo
+            p.font.size = Pt(16)
+            p.level = 1 # Añade viñeta
+
+        # --- Columna 2: Oportunidades ---
+        txBox_ops = slide.shapes.add_textbox(Inches(8.5), Inches(2.8), Inches(6.5), Inches(4))
+        tf_ops = txBox_ops.text_frame
+        tf_ops.word_wrap = True
+
+        p_o_title = tf_ops.paragraphs[0]
+        p_o_title.text = "Oportunidades"
+        p_o_title.font.bold = True
+        p_o_title.font.size = Pt(24)
+        
+        for op in data.get("oportunidades", ["N/A"]):
+            p = tf_ops.add_paragraph()
+            p.text = op
+            p.font.size = Pt(16)
+            p.level = 1
+
+        # --- Footer: Recomendación ---
+        txBox_reco = slide.shapes.add_textbox(Inches(8.5), Inches(7.0), Inches(6.5), Inches(1.5))
+        tf_reco = txBox_reco.text_frame
+        tf_reco.word_wrap = True
+
+        p_r_title = tf_reco.paragraphs[0]
+        p_r_title.text = "Recomendación Estratégica"
+        p_r_title.font.bold = True
+        p_r_title.font.size = Pt(18)
+        
+        p_r = tf_reco.add_paragraph()
+        p_r.text = data.get("recomendacion_estrategica", "N/A")
+        p_r.font.size = Pt(16)
+
+        # --- Guardar en memoria ---
+        f = BytesIO()
+        prs.save(f)
+        f.seek(0)
+        return f.getvalue()
+
+    except Exception as e:
+        st.error(f"Error al generar el archivo .pptx: {e}")
+        return None
 
 # =====================================================
 # MODOS DE LA APLICACIÓN 
@@ -731,6 +820,100 @@ def transcript_analysis_mode():
             # Limpiar el file_uploader requiere un truco o rerun
             st.rerun()
 
+def one_pager_ppt_mode(db, selected_files):
+    st.subheader("Generador de One-Pager Estratégico (.pptx)")
+    st.markdown("Sintetiza los hallazgos clave en una sola diapositiva de PowerPoint sobre un tema específico.")
+
+    # Usar session_state para mantener los datos del PPT generado
+    if "generated_ppt_bytes" in st.session_state:
+        st.success("¡Tu diapositiva One-Pager está lista!")
+        st.download_button(
+            label="Descargar One-Pager (.pptx)",
+            data=st.session_state.generated_ppt_bytes,
+            file_name=f"one_pager_estrategico.pptx",
+            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            use_container_width=True
+        )
+        if st.button("Generar nuevo One-Pager", use_container_width=True, type="secondary"):
+            del st.session_state.generated_ppt_bytes
+            st.rerun()
+        return # Detener la ejecución si el archivo ya está generado
+
+    # --- Formulario de generación ---
+    tema_central = st.text_area(
+        "¿Cuál es el tema central o la pregunta clave para este One-Pager?", 
+        height=100, 
+        placeholder="Ej: Oportunidades para snacks saludables en adultos jóvenes"
+    )
+
+    if st.button("Generar One-Pager PPT", use_container_width=True):
+        if not tema_central.strip():
+            st.warning("Por favor, describe el tema central.")
+            return
+
+        if not selected_files:
+            st.warning("No has seleccionado ningún estudio. Por favor, selecciona estudios en el filtro del sidebar.")
+            return
+
+        with st.spinner("1/4 - Obteniendo contexto de los estudios..."):
+            relevant_info = get_relevant_info(db, tema_central, selected_files)
+        
+        # --- Prompt de Gemini para JSON ---
+        prompt_json = f"""
+        Actúa como un Director de Estrategia. Has analizado los siguientes hallazgos de investigación:
+        
+        --- CONTEXTO ---
+        {relevant_info}
+        --- FIN CONTEXTO ---
+
+        Tu tarea es sintetizar esta información para crear un "One-Pager" estratégico en una sola diapositiva de PowerPoint sobre el tema: "{tema_central}".
+
+        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
+
+        {{
+          "titulo_diapositiva": "Un título principal corto y potente (máx. 10 palabras) sobre '{tema_central}'",
+          "insight_clave": "El insight o 'verdad oculta' más importante que encontraste (1 frase concisa).",
+          "hallazgos_principales": [
+            "Hallazgo #1: Un punto clave sintetizado.",
+            "Hallazgo #2: Otro punto clave sintetizado.",
+            "Hallazgo #3: Un tercer punto clave sintetizado."
+          ],
+          "oportunidades": [
+            "Oportunidad #1: Una acción o área de innovación basada en los hallazgos.",
+            "Oportunidad #2: Otra acción o área de innovación."
+          ],
+          "recomendacion_estrategica": "Una recomendación final clara y accionable (máx. 2 líneas)."
+        }}
+        """
+
+        data_json = None
+        with st.spinner("2/4 - Generando contenido con IA... (Esto puede tardar)"):
+            response = call_gemini_api(prompt_json)
+            if not response:
+                st.error("Error al contactar la API de Gemini.")
+                return
+
+            try:
+                # Limpiar la respuesta de Gemini (a veces añade '```json' y '```')
+                clean_response = response.strip().replace("```json", "").replace("```", "")
+                data_json = json.loads(clean_response)
+            except json.JSONDecodeError:
+                st.error("Error: La IA no devolvió un JSON válido. Reintentando...")
+                st.code(response) # Muestra la respuesta errónea para depuración
+                return
+        
+        if data_json:
+            with st.spinner("3/4 - Ensamblando diapositiva .pptx..."):
+                ppt_bytes = crear_ppt_one_pager(data_json)
+            
+            if ppt_bytes:
+                st.session_state.generated_ppt_bytes = ppt_bytes
+                log_query_event(tema_central, mode="Generador de One-Pager PPT")
+                with st.spinner("4/4 - Finalizando..."):
+                    st.rerun() # Recargar para mostrar el botón de descarga
+            else:
+                st.error("No se pudo crear el archivo PowerPoint.")
+
 # =====================================================
 # PANEL DE ADMINISTRACIÓN (CON EDICIÓN DE USUARIOS Y CORRECCIÓN INDENTACIÓN)
 # =====================================================
@@ -837,6 +1020,7 @@ def run_user_mode(db_full, user_features, footer_html):
     if user_features.get("has_image_evaluation"): modos_disponibles.append("Evaluación Visual")
     if user_features.get("has_video_evaluation"): modos_disponibles.append("Evaluación de Video")
     if user_features.get("has_transcript_analysis"): modos_disponibles.append("Análisis de Transcripciones")
+    if user_features.get("has_one_pager_generation"): modos_disponibles.append("Generador de One-Pager PPT")
 
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed", key="main_mode_selector")
@@ -851,12 +1035,14 @@ def run_user_mode(db_full, user_features, footer_html):
         st.session_state.pop("video_evaluation_result", None)
         st.session_state.pop("uploaded_transcripts_text", None)
         st.session_state.pop("transcript_chat_history", None)
+        st.session_state.pop("generated_ppt_bytes", None)
+        
         st.session_state.current_mode = modo
 
     st.sidebar.header("Filtros de Búsqueda")
     # Aplicar filtros solo si el modo actual NO es Análisis de Transcripciones
     # (Porque este modo usa archivos subidos, no el repositorio S3)
-    run_filters = modo != "Análisis de Transcripciones"
+    run_filters = modo not in ["Análisis de Transcripciones"] # <-- El modo PPT SÍ usa filtros
 
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
     selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas", disabled=not run_filters)
@@ -891,6 +1077,7 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == "Evaluación Visual": image_evaluation_mode(db_filtered, selected_files)
     elif modo == "Evaluación de Video": video_evaluation_mode(db_filtered, selected_files)
     elif modo == "Análisis de Transcripciones": transcript_analysis_mode() # No necesita db_filtered ni selected_files
+    elif modo == "Generador de One-Pager PPT": one_pager_ppt_mode(db_filtered, selected_files)
 
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
