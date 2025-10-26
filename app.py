@@ -426,8 +426,8 @@ def crear_ppt_one_pager(data: dict):
     try:
         prs = Presentation("Plantilla_PPT_ATL.pptx") 
         
-        prs.slide_width = Inches(12)
-        prs.slide_height = Inches(8)
+        prs.slide_width = Inches(16)
+        prs.slide_height = Inches(9)
         
         blank_slide_layout = prs.slide_layouts[6] 
         slide = prs.slides.add_slide(blank_slide_layout)
