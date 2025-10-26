@@ -726,7 +726,7 @@ def transcript_analysis_mode():
     )
 
     if uploaded_files:
-        if len(uploaded_files) > file_limit:
+        if len(uploaded_files) > file_limit:
             st.error(f"¡Límite de archivos excedido! Tu plan permite {file_limit} archivo(s), pero has subido {len(uploaded_files)}. Por favor, deselecciona los archivos sobrantes.")
             return # Detener la ejecución
             
