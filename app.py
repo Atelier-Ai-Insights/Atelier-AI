@@ -424,89 +424,94 @@ def crear_ppt_one_pager(data: dict):
     Toma un diccionario estructurado y genera un archivo .pptx en memoria.
     """
     try:
-        prs = Presentation("Plantilla_PPT_ATL.pptx") 
+        # 1. Cargar tu plantilla (asegúrate que el nombre sea correcto)
+        prs = Presentation("mi_plantilla.pptx") 
         
         prs.slide_width = Inches(16)
         prs.slide_height = Inches(9)
         
+        # 2. Usar el layout en blanco (índice 6) de tu plantilla
         blank_slide_layout = prs.slide_layouts[6] 
         slide = prs.slides.add_slide(blank_slide_layout)
 
-        txBox_title = slide.shapes.add_textbox(Inches(1), Inches(0.5), Inches(14), Inches(1))
+        # --- Título (Centrado arriba) ---
+        txBox_title = slide.shapes.add_textbox(Inches(1.5), Inches(0.5), Inches(13), Inches(1))
         p_title = txBox_title.text_frame.paragraphs[0]
         p_title.text = data.get("titulo_diapositiva", "Resumen Estratégico")
         p_title.font.bold = True
-        p_title.font.size = Pt(40)
+        p_title.font.size = Pt(44) # Un poco más grande
         p_title.alignment = PP_ALIGN.CENTER
         txBox_title.text_frame.auto_size = True 
 
-        txBox_insight = slide.shapes.add_textbox(Inches(1), Inches(1.8), Inches(14), Inches(0.8)) 
-        p_insight = txBox_insight.text_frame.add_paragraph()
+        # --- Insight Clave (Alineado a la izquierda, debajo del título) ---
+        txBox_insight = slide.shapes.add_textbox(Inches(1.5), Inches(1.8), Inches(13), Inches(1))
+        tf_insight = txBox_insight.text_frame
+        tf_insight.word_wrap = True
+        
+        p_insight = tf_insight.add_paragraph()
         p_insight.text = f"Insight Clave: {data.get('insight_clave', 'N/A')}"
         p_insight.font.italic = True
         p_insight.font.size = Pt(18)
-        p_insight.font.color.rgb = RGBColor(0x33, 0x33, 0x33) 
-        p_insight.alignment = PP_ALIGN.CENTER
-        txBox_insight.text_frame.word_wrap = True
-        txBox_insight.text_frame.auto_size = True # Asegura que si es muy largo, la caja se expande
+        p_insight.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        p_insight.alignment = PP_ALIGN.LEFT # <-- Alineado a la izquierda como en Imagen 2
+        
+        # --- Cuadro de Contenido Principal (para todo lo demás) ---
+        content_left = Inches(1.5)
+        content_top = Inches(2.8)
+        content_width = Inches(13)
+        content_height = Inches(5.5) # Alto suficiente para todo
 
-        # --- Columna 1: Hallazgos (Ajuste de margen izquierdo, altura y ancho) ---
-        # Empezar un poco más a la izquierda, dar más ancho.
-        # Top ligeramente ajustado para separarlo del insight.
-        txBox_hallazgos = slide.shapes.add_textbox(Inches(0.7), Inches(2.8), Inches(7.0), Inches(5.8)) 
-        tf_hallazgos = txBox_hallazgos.text_frame
-        tf_hallazgos.word_wrap = True
-        tf_hallazgos.auto_size = True 
+        txBox_content = slide.shapes.add_textbox(content_left, content_top, content_width, content_height)
+        tf_content = txBox_content.text_frame
+        tf_content.word_wrap = True
 
-        p_h_title = tf_hallazgos.paragraphs[0]
+        # --- Hallazgos Principales ---
+        p_h_title = tf_content.paragraphs[0]
         p_h_title.text = "Hallazgos Principales"
         p_h_title.font.bold = True
-        p_h_title.font.size = Pt(22)
-        
+        p_h_title.font.size = Pt(28) # Título de sección más grande
+        p_h_title.space_after = Pt(8) # Espacio después del título
+
         for hallazgo in data.get("hallazgos_principales", ["N/A"]):
-            p = tf_hallazgos.add_paragraph()
+            p = tf_content.add_paragraph()
             p.text = hallazgo
-            p.font.size = Pt(15)
-            p.level = 1 
-            # Añadir un pequeño espacio entre párrafos
-            p.space_after = Pt(6) # 6 puntos de espacio después de cada viñeta
+            p.font.size = Pt(16)
+            p.level = 1 # <-- ESTO CREA LA VIÑETA (BULLET)
+            p.space_after = Pt(8) # Espacio entre viñetas
 
-        # --- Columna 2: Oportunidades (Ajuste de margen izquierdo, altura y ancho) ---
-        # Empieza más a la derecha para separar de Hallazgos
-        txBox_ops = slide.shapes.add_textbox(Inches(8.3), Inches(2.8), Inches(7.0), Inches(3.8)) # Menor altura inicial
-        tf_ops = txBox_ops.text_frame
-        tf_ops.word_wrap = True
-        tf_ops.auto_size = True 
+        # Espacio grande entre secciones
+        tf_content.add_paragraph().space_after = Pt(14)
 
-        p_o_title = tf_ops.paragraphs[0]
+        # --- Oportunidades ---
+        p_o_title = tf_content.add_paragraph()
         p_o_title.text = "Oportunidades"
         p_o_title.font.bold = True
-        p_o_title.font.size = Pt(22)
+        p_o_title.font.size = Pt(28)
+        p_o_title.space_after = Pt(8)
         
         for op in data.get("oportunidades", ["N/A"]):
-            p = tf_ops.add_paragraph()
+            p = tf_content.add_paragraph()
             p.text = op
-            p.font.size = Pt(15)
-            p.level = 1
-            p.space_after = Pt(6)
+            p.font.size = Pt(16)
+            p.level = 1 # <-- ESTO CREA LA VIÑETA (BULLET)
+            p.space_after = Pt(8)
 
-        # --- Footer: Recomendación (Ajusta posición para que no se superponga, más altura) ---
-        # Asegurarse de que el "top" es suficientemente bajo para no tocar "Oportunidades"
-        # Aumentar la altura para acomodar texto
-        txBox_reco = slide.shapes.add_textbox(Inches(8.3), Inches(6.8), Inches(7.0), Inches(1.8)) 
-        tf_reco = txBox_reco.text_frame
-        tf_reco.word_wrap = True
-        tf_reco.auto_size = True 
+        # Espacio grande entre secciones
+        tf_content.add_paragraph().space_after = Pt(14)
 
-        p_r_title = tf_reco.paragraphs[0]
+        # --- Recomendación Estratégica ---
+        p_r_title = tf_content.add_paragraph()
         p_r_title.text = "Recomendación Estratégica"
         p_r_title.font.bold = True
-        p_r_title.font.size = Pt(18)
+        p_r_title.font.size = Pt(28)
+        p_r_title.space_after = Pt(8)
         
-        p_r = tf_reco.add_paragraph()
+        p_r = tf_content.add_paragraph()
         p_r.text = data.get("recomendacion_estrategica", "N/A")
-        p_r.font.size = Pt(15)
-
+        p_r.font.size = Pt(16)
+        p_r.level = 1 # <-- ESTO CREA LA VIÑETA (BULLET)
+        p_r.space_after = Pt(8)
+        
         # --- Guardar en memoria ---
         f = BytesIO()
         prs.save(f)
@@ -514,7 +519,7 @@ def crear_ppt_one_pager(data: dict):
         return f.getvalue()
 
     except Exception as e:
-        st.error(f"Error al generar el archivo .pptx: {e}")
+        st.error(f"Error al generar el archivo .pptx: {e}") 
         return None
 
 # =====================================================
