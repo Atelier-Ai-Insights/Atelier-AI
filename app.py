@@ -424,68 +424,79 @@ def crear_ppt_one_pager(data: dict):
     Toma un diccionario estructurado y genera un archivo .pptx en memoria.
     """
     try:
-        prs = Presentation("Plantilla_PPT_ATL.pptx")
-        # Definir tamaño panorámico (16:9)
-        prs.slide_width = Inches(16)
-        prs.slide_height = Inches(9)
+        prs = Presentation("mi_plantilla.pptx") 
         
-        # Usar el layout "En Blanco" (índice 6 usualmente)
+        prs.slide_width = Inches(12)
+        prs.slide_height = Inches(8)
+        
         blank_slide_layout = prs.slide_layouts[6] 
         slide = prs.slides.add_slide(blank_slide_layout)
 
-        # --- Título ---
-        txBox_title = slide.shapes.add_textbox(Inches(1), Inches(0.5), Inches(14), Inches(1.2))
+        txBox_title = slide.shapes.add_textbox(Inches(1), Inches(0.5), Inches(14), Inches(1))
         p_title = txBox_title.text_frame.paragraphs[0]
         p_title.text = data.get("titulo_diapositiva", "Resumen Estratégico")
         p_title.font.bold = True
         p_title.font.size = Pt(40)
         p_title.alignment = PP_ALIGN.CENTER
+        txBox_title.text_frame.auto_size = True 
 
-        # --- Insight Clave ---
-        txBox_insight = slide.shapes.add_textbox(Inches(1), Inches(1.8), Inches(14), Inches(0.8))
+        txBox_insight = slide.shapes.add_textbox(Inches(1), Inches(1.8), Inches(14), Inches(0.8)) 
         p_insight = txBox_insight.text_frame.add_paragraph()
         p_insight.text = f"Insight Clave: {data.get('insight_clave', 'N/A')}"
         p_insight.font.italic = True
-        p_insight.font.size = Pt(20)
-        p_insight.font.color.rgb = RGBColor(0x33, 0x33, 0x33) # Gris oscuro
+        p_insight.font.size = Pt(18)
+        p_insight.font.color.rgb = RGBColor(0x33, 0x33, 0x33) 
         p_insight.alignment = PP_ALIGN.CENTER
+        txBox_insight.text_frame.word_wrap = True
+        txBox_insight.text_frame.auto_size = True # Asegura que si es muy largo, la caja se expande
 
-        # --- Columna 1: Hallazgos ---
-        txBox_hallazgos = slide.shapes.add_textbox(Inches(1), Inches(2.8), Inches(6.5), Inches(5.5))
+        # --- Columna 1: Hallazgos (Ajuste de margen izquierdo, altura y ancho) ---
+        # Empezar un poco más a la izquierda, dar más ancho.
+        # Top ligeramente ajustado para separarlo del insight.
+        txBox_hallazgos = slide.shapes.add_textbox(Inches(0.7), Inches(2.8), Inches(7.0), Inches(5.8)) 
         tf_hallazgos = txBox_hallazgos.text_frame
         tf_hallazgos.word_wrap = True
-        
+        tf_hallazgos.auto_size = True 
+
         p_h_title = tf_hallazgos.paragraphs[0]
         p_h_title.text = "Hallazgos Principales"
         p_h_title.font.bold = True
-        p_h_title.font.size = Pt(24)
+        p_h_title.font.size = Pt(22)
         
         for hallazgo in data.get("hallazgos_principales", ["N/A"]):
             p = tf_hallazgos.add_paragraph()
             p.text = hallazgo
-            p.font.size = Pt(16)
-            p.level = 1 # Añade viñeta
+            p.font.size = Pt(15)
+            p.level = 1 
+            # Añadir un pequeño espacio entre párrafos
+            p.space_after = Pt(6) # 6 puntos de espacio después de cada viñeta
 
-        # --- Columna 2: Oportunidades ---
-        txBox_ops = slide.shapes.add_textbox(Inches(8.5), Inches(2.8), Inches(6.5), Inches(4))
+        # --- Columna 2: Oportunidades (Ajuste de margen izquierdo, altura y ancho) ---
+        # Empieza más a la derecha para separar de Hallazgos
+        txBox_ops = slide.shapes.add_textbox(Inches(8.3), Inches(2.8), Inches(7.0), Inches(3.8)) # Menor altura inicial
         tf_ops = txBox_ops.text_frame
         tf_ops.word_wrap = True
+        tf_ops.auto_size = True 
 
         p_o_title = tf_ops.paragraphs[0]
         p_o_title.text = "Oportunidades"
         p_o_title.font.bold = True
-        p_o_title.font.size = Pt(24)
+        p_o_title.font.size = Pt(22)
         
         for op in data.get("oportunidades", ["N/A"]):
             p = tf_ops.add_paragraph()
             p.text = op
-            p.font.size = Pt(16)
+            p.font.size = Pt(15)
             p.level = 1
+            p.space_after = Pt(6)
 
-        # --- Footer: Recomendación ---
-        txBox_reco = slide.shapes.add_textbox(Inches(8.5), Inches(7.0), Inches(6.5), Inches(1.5))
+        # --- Footer: Recomendación (Ajusta posición para que no se superponga, más altura) ---
+        # Asegurarse de que el "top" es suficientemente bajo para no tocar "Oportunidades"
+        # Aumentar la altura para acomodar texto
+        txBox_reco = slide.shapes.add_textbox(Inches(8.3), Inches(6.8), Inches(7.0), Inches(1.8)) 
         tf_reco = txBox_reco.text_frame
         tf_reco.word_wrap = True
+        tf_reco.auto_size = True 
 
         p_r_title = tf_reco.paragraphs[0]
         p_r_title.text = "Recomendación Estratégica"
@@ -494,7 +505,7 @@ def crear_ppt_one_pager(data: dict):
         
         p_r = tf_reco.add_paragraph()
         p_r.text = data.get("recomendacion_estrategica", "N/A")
-        p_r.font.size = Pt(16)
+        p_r.font.size = Pt(15)
 
         # --- Guardar en memoria ---
         f = BytesIO()
