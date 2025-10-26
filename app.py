@@ -117,21 +117,21 @@ PLAN_FEATURES = {
         "has_report_generation": False, "has_creative_conversation": False,
         "has_concept_generation": False, "has_idea_evaluation": False,
         "has_image_evaluation": False, "has_video_evaluation": False,
-        "has_transcript_analysis": True, "has_one_pager_generation": True,
+        "transcript_file_limit": 1, "has_one_pager_generation": True,
     },
     "Strategist": {
         "reports_per_month": 0, "chat_queries_per_day": float('inf'), "projects_per_year": 10,
         "has_report_generation": False, "has_creative_conversation": True,
         "has_concept_generation": True, "has_idea_evaluation": False,
         "has_image_evaluation": False, "has_video_evaluation": False,
-        "has_transcript_analysis": True, "has_one_pager_generation": True,
+        "transcript_file_limit": 5, "has_one_pager_generation": True,
     },
     "Enterprise": {
         "reports_per_month": float('inf'), "chat_queries_per_day": float('inf'), "projects_per_year": float('inf'),
         "has_report_generation": True, "has_creative_conversation": True,
         "has_concept_generation": True, "has_idea_evaluation": True,
         "has_image_evaluation": True, "has_video_evaluation": True,
-        "has_transcript_analysis": True, "has_one_pager_generation": True,
+        "transcript_file_limit": 10, "has_one_pager_generation": True,
     }
 }
 
@@ -708,11 +708,15 @@ def video_evaluation_mode(db, selected_files):
 
 def transcript_analysis_mode():
     st.subheader("Análisis de Transcripciones (.docx)")
-    st.markdown("""
+    file_limit = st.session_state.plan_features.get('transcript_file_limit', 0)
+    
+    st.markdown(f"""
         Sube uno o varios archivos Word (.docx) con transcripciones de entrevistas o
         focus groups. Luego, haz preguntas sobre el contenido en el chat.
+        
+        **Tu plan actual te permite cargar un máximo de {file_limit} archivo(s) a la vez.**
     """)
-
+    
     # --- Sección de Carga y Procesamiento de Archivos ---
     uploaded_files = st.file_uploader(
         "Sube tus archivos .docx aquí:",
@@ -721,34 +725,38 @@ def transcript_analysis_mode():
         key="transcript_uploader" # Key para manejar el estado
     )
 
+    if uploaded_files:
+        if len(uploaded_files) > file_limit:
+            st.error(f"¡Límite de archivos excedido! Tu plan permite {file_limit} archivo(s), pero has subido {len(uploaded_files)}. Por favor, deselecciona los archivos sobrantes.")
+            st.session_state.transcript_uploader = uploaded_files # Mantenerlos para que el usuario pueda deseleccionar
+            return # Detener la ejecución hasta que el usuario corrija
+            
     # Inicializar estado si no existe
     if 'uploaded_transcripts_text' not in st.session_state:
         st.session_state.uploaded_transcripts_text = {} # Diccionario para guardar texto por nombre de archivo
     if 'transcript_chat_history' not in st.session_state:
         st.session_state.transcript_chat_history = []
 
-    # Procesar archivos subidos si hay cambios
+    # Procesar archivos subidos si hay cambios (y si pasan la validación)
     if uploaded_files:
         newly_processed = False
         with st.spinner("Procesando archivos .docx..."):
+            # (El resto de tu lógica de procesamiento de archivos .docx sigue igual)
             current_texts = {}
             for uploaded_file in uploaded_files:
-                # Usar BytesIO para leer el archivo en memoria sin guardarlo
                 file_stream = BytesIO(uploaded_file.getvalue())
                 try:
                     document = docx.Document(file_stream)
                     full_text = "\n".join([para.text for para in document.paragraphs if para.text.strip()])
                     current_texts[uploaded_file.name] = full_text
-                    # Marcar si se procesó un archivo nuevo o diferente
                     if uploaded_file.name not in st.session_state.uploaded_transcripts_text or st.session_state.uploaded_transcripts_text.get(uploaded_file.name) != full_text:
                         newly_processed = True
                 except Exception as e:
                     st.error(f"Error al procesar '{uploaded_file.name}': {e}")
 
-            # Si hubo cambios en los archivos, actualizar estado y limpiar chat
             if newly_processed or set(current_texts.keys()) != set(st.session_state.uploaded_transcripts_text.keys()):
                 st.session_state.uploaded_transcripts_text = current_texts
-                st.session_state.transcript_chat_history = [] # Limpiar historial si cambian los archivos
+                st.session_state.transcript_chat_history = [] 
                 st.info(f"Se procesaron {len(current_texts)} archivo(s). El chat se ha reiniciado.")
                 # st.rerun() # Opcional: forzar recarga inmediata
 
@@ -1036,7 +1044,7 @@ def run_user_mode(db_full, user_features, footer_html):
     if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
     if user_features.get("has_image_evaluation"): modos_disponibles.append("Evaluación Visual")
     if user_features.get("has_video_evaluation"): modos_disponibles.append("Evaluación de Video")
-    if user_features.get("has_transcript_analysis"): modos_disponibles.append("Análisis de Transcripciones")
+    if user_features.get("transcript_file_limit", 0) > 0: modos_disponibles.append("Análisis de Transcripciones")
     if user_features.get("has_one_pager_generation"): modos_disponibles.append("Generador de One-Pager PPT")
 
     st.sidebar.header("Seleccione el modo de uso")
