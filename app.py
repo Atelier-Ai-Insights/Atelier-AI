@@ -117,21 +117,21 @@ PLAN_FEATURES = {
         "has_report_generation": False, "has_creative_conversation": False,
         "has_concept_generation": False, "has_idea_evaluation": False,
         "has_image_evaluation": False, "has_video_evaluation": False,
-        "transcript_file_limit": 1, "has_one_pager_generation": True,
+        "transcript_file_limit": 1, "ppt_downloads_per_month": 2,
     },
     "Strategist": {
         "reports_per_month": 0, "chat_queries_per_day": float('inf'), "projects_per_year": 10,
         "has_report_generation": False, "has_creative_conversation": True,
         "has_concept_generation": True, "has_idea_evaluation": False,
         "has_image_evaluation": False, "has_video_evaluation": False,
-        "transcript_file_limit": 5, "has_one_pager_generation": True,
+        "transcript_file_limit": 5, "ppt_downloads_per_month": 4,
     },
     "Enterprise": {
         "reports_per_month": float('inf'), "chat_queries_per_day": float('inf'), "projects_per_year": float('inf'),
         "has_report_generation": True, "has_creative_conversation": True,
         "has_concept_generation": True, "has_idea_evaluation": True,
         "has_image_evaluation": True, "has_video_evaluation": True,
-        "transcript_file_limit": 10, "has_one_pager_generation": True,
+        "transcript_file_limit": 10, "ppt_downloads_per_month": float('inf'),
     }
 }
 
@@ -845,7 +845,16 @@ def transcript_analysis_mode():
 
 def one_pager_ppt_mode(db, selected_files):
     st.subheader("One-Pager Estratégico")
-    st.markdown("Sintetiza los hallazgos clave en una sola diapositiva de PowerPoint sobre un tema específico.")
+    ppt_limit = st.session_state.plan_features.get('ppt_downloads_per_month', 0)
+    
+    limit_text = f"**Tu plan actual te permite generar {int(ppt_limit)} One-Pagers al mes.**"
+    if ppt_limit == float('inf'):
+        limit_text = "**Tu plan actual te permite generar One-Pagers ilimitados.**"
+        
+    st.markdown(f"""
+        Sintetiza los hallazgos clave en una sola diapositiva de PowerPoint sobre un tema específico.
+        {limit_text}
+    """)
 
     # Usar session_state para mantener los datos del PPT generado
     if "generated_ppt_bytes" in st.session_state:
@@ -870,6 +879,12 @@ def one_pager_ppt_mode(db, selected_files):
     )
 
     if st.button("Generar One-Pager", use_container_width=True):
+        current_ppt_usage = get_monthly_usage(st.session_state.user, "Generador de One-Pager PPT")
+        
+        if current_ppt_usage >= ppt_limit and ppt_limit != float('inf'):
+            st.error(f"¡Límite de generación de PPT alcanzado! Tu plan permite {int(ppt_limit)} al mes.")
+            return # Detener la ejecución
+        
         if not tema_central.strip():
             st.warning("Por favor, describe el tema central.")
             return
@@ -932,7 +947,7 @@ def one_pager_ppt_mode(db, selected_files):
             
             if ppt_bytes:
                 st.session_state.generated_ppt_bytes = ppt_bytes
-                log_query_event(tema_central, mode="Generador de One-Pager")
+                log_query_event(tema_central, mode="Generador de One-Pager PPT")
                 with st.spinner("Finalizando..."):
                     st.rerun() # Recargar para mostrar el botón de descarga
             else:
@@ -1044,7 +1059,7 @@ def run_user_mode(db_full, user_features, footer_html):
     if user_features.get("has_image_evaluation"): modos_disponibles.append("Evaluación Visual")
     if user_features.get("has_video_evaluation"): modos_disponibles.append("Evaluación de Video")
     if user_features.get("transcript_file_limit", 0) > 0: modos_disponibles.append("Análisis de Transcripciones")
-    if user_features.get("has_one_pager_generation"): modos_disponibles.append("Generador de One-Pager PPT")
+    if user_features.get("ppt_downloads_per_month", 0) > 0: modos_disponibles.append("Generador de One-Pager PPT")
 
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed", key="main_mode_selector")
