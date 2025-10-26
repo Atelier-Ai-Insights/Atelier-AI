@@ -108,3 +108,4 @@ yarl==1.18.3
 beautifulsoup4
 Pillow
 python-docx
+python-pptx
