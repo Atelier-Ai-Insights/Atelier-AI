@@ -1121,10 +1121,10 @@ def main():
     user_features = st.session_state.plan_features
 
     if st.session_state.get("is_admin", False):
-        tab_user, tab_admin = st.tabs(["Modo Usuario", "Modo Administrador"]) # Usar emojis
+        tab_user, tab_admin = st.tabs(["Modo Usuario", "Modo Administrador"])
         with tab_user: run_user_mode(db_full, user_features, footer_html)
         with tab_admin:
-            st.title("Panel de Administración") # Usar emoji
+            st.title("Panel de Administración")
             st.write(f"Gestionando como: {st.session_state.user}")
             show_admin_dashboard()
     else: run_user_mode(db_full, user_features, footer_html)
