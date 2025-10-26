@@ -847,9 +847,12 @@ def one_pager_ppt_mode(db, selected_files):
     st.subheader("One-Pager Estratégico")
     ppt_limit = st.session_state.plan_features.get('ppt_downloads_per_month', 0)
     
-    limit_text = f"**Tu plan actual te permite generar {int(ppt_limit)} One-Pagers al mes.**"
     if ppt_limit == float('inf'):
         limit_text = "**Tu plan actual te permite generar One-Pagers ilimitados.**"
+    elif ppt_limit > 0: # Si no es infinito y es mayor que 0
+        limit_text = f"**Tu plan actual te permite generar {int(ppt_limit)} One-Pagers al mes.**"
+    else: # Si es 0 (aunque este caso no debería mostrar el modo, es bueno tenerlo)
+         limit_text = "**Tu plan actual no incluye la generación de One-Pagers.**"
         
     st.markdown(f"""
         Sintetiza los hallazgos clave en una sola diapositiva de PowerPoint sobre un tema específico.
