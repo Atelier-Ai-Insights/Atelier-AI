@@ -832,7 +832,7 @@ def transcript_analysis_mode():
             st.rerun()
 
 def one_pager_ppt_mode(db, selected_files):
-    st.subheader("Generador de One-Pager Estratégico (.pptx)")
+    st.subheader("One-Pager Estratégico (.pptx)")
     st.markdown("Sintetiza los hallazgos clave en una sola diapositiva de PowerPoint sobre un tema específico.")
 
     # Usar session_state para mantener los datos del PPT generado
