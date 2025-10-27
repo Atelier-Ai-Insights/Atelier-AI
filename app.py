@@ -296,6 +296,115 @@ def normalize_text(text):
     try: normalized = unicodedata.normalize("NFD", str(text)); return "".join(c for c in normalized if unicodedata.category(c) != "Mn").lower()
     except Exception as e: print(f"Error normalizing: {e}"); return str(text).lower()
 
+class PDFReport:
+    def __init__(self, buffer_or_filename, banner_path=None):
+        self.banner_path = banner_path
+        self.elements = []
+        self.styles = getSampleStyleSheet()
+        self.doc = SimpleDocTemplate(buffer_or_filename, pagesize=A4, 
+                                     rightMargin=15*mm, leftMargin=15*mm,
+                                     topMargin=40*mm, bottomMargin=20*mm)
+        
+        pdf_font_name = FONT_NAME
+        base_styles = ['Normal', 'BodyText', 'Italic', 'Bold', 'Heading1', 'Heading2', 'Heading3', 'Heading4', 'Heading5', 'Heading6', 'Code']
+        
+        for style_name in base_styles:
+            if style_name in self.styles:
+                try:
+                    self.styles[style_name].fontName = pdf_font_name
+                    if style_name == 'Code':
+                        if pdf_font_name == FALLBACK_FONT_NAME or not FONT_REGISTERED: 
+                            self.styles[style_name].fontName = 'Courier'
+                        self.styles[style_name].fontSize = 9
+                        self.styles[style_name].leading = 11
+                        self.styles[style_name].leftIndent = 6*mm
+                        self.styles[style_name].backColor = colors.whitesmoke
+                        self.styles[style_name].textColor = colors.darkslategrey
+                except Exception as e:
+                    print(f"Warn: Font '{pdf_font_name}' -> '{style_name}'. {e}")
+
+        self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], fontName=pdf_font_name, 
+                                       alignment=1, spaceAfter=14, fontSize=16, leading=20)) 
+        
+        self.styles.add(ParagraphStyle(name='CustomHeading2', parent=self.styles['Heading2'], fontName=pdf_font_name, 
+                                       spaceBefore=12, spaceAfter=6, fontSize=13, leading=17, textColor=colors.darkblue))
+        self.styles.add(ParagraphStyle(name='CustomHeading3', parent=self.styles['Heading3'], fontName=pdf_font_name, 
+                                       spaceBefore=10, spaceAfter=5, fontSize=12, leading=16, textColor=colors.darkslategray))
+
+        self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], fontName=pdf_font_name, 
+                                       leading=15, alignment=4, fontSize=11, spaceAfter=6)) 
+        
+        self.styles.add(ParagraphStyle(name='CustomBullet', parent=self.styles['Normal'], fontName=pdf_font_name,
+                                       fontSize=11, leading=15, spaceAfter=4,
+                                       leftIndent=10*mm, bulletIndent=5*mm)) # Indentación clave
+                                       
+        self.styles.add(ParagraphStyle(name='CustomNumber', parent=self.styles['Normal'], fontName=pdf_font_name,
+                                       fontSize=11, leading=15, spaceAfter=4,
+                                       leftIndent=10*mm, bulletIndent=5*mm)) # Indentación clave
+
+        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], fontName=pdf_font_name, 
+                                       alignment=1, textColor=colors.grey, fontSize=8))
+
+    def header(self, canvas, doc):
+        canvas.saveState()
+        if self.banner_path and os.path.isfile(self.banner_path):
+            try:
+                # Ajustar tamaño y posición del banner si es necesario
+                img_w, img_h = 210*mm, 30*mm # Banner un poco más pequeño
+                y_pos = A4[1] - img_h - 5*mm # Bajarlo un poco
+                canvas.drawImage(self.banner_path, 0, y_pos, width=img_w, height=img_h, 
+                                 preserveAspectRatio=True, anchor='n')
+            except Exception as e:
+                print(f"Error PDF header: {e}")
+        canvas.restoreState()
+        
+    def footer(self, canvas, doc):
+        canvas.saveState()
+        footer_text = "Generado por Atelier Data Studio. Es posible que se muestre información imprecisa. Verifica las respuestas."
+        p = Paragraph(footer_text, self.styles['CustomFooter'])
+        w, h = p.wrap(doc.width, doc.bottomMargin)
+        p.drawOn(canvas, doc.leftMargin, 8*mm) # Subir un poco el footer
+        canvas.restoreState()
+        
+    def header_footer(self, canvas, doc): 
+        self.header(canvas, doc)
+        self.footer(canvas, doc)
+
+    def add_paragraph(self, text, style='CustomBodyText'):
+        """Añade un párrafo con el estilo especificado."""
+        try:
+            # Usar HTML <br> para saltos de línea explícitos dentro del párrafo
+            text_with_breaks = text.replace('\n', '<br/>')
+            style_to_use = self.styles.get(style, self.styles['CustomBodyText'])
+            p = Paragraph(text_with_breaks, style_to_use)
+            self.elements.append(p)
+            # No añadir Spacer aquí, el estilo ya tiene spaceAfter
+        except Exception as e:
+            print(f"Err add para: {e}. Text: {text[:100]}...")
+            self.elements.append(Paragraph(f"Err render: {text[:100]}...", self.styles['Code']))
+
+    def add_title(self, text, level=1):
+        """Añade un título basado en el nivel (H1, H2, H3)."""
+        if level == 1:
+            style_name = 'CustomTitle'
+        elif level == 2:
+            style_name = 'CustomHeading2'
+        elif level >= 3:
+            style_name = 'CustomHeading3' # Usar H3 para H3 y superiores
+        else: # Por defecto, H2
+            style_name = 'CustomHeading2'
+            
+        style_to_use = self.styles.get(style_name, self.styles['CustomHeading2'])
+        p = Paragraph(text, style_to_use)
+        self.elements.append(p)
+        # No añadir Spacer, los estilos ya tienen spaceBefore/After
+
+    def build_pdf(self):
+        try:
+            self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
+        except Exception as e:
+            st.error(f"Error building PDF: {e}")
+            
 def add_markdown_content(pdf: PDFReport, markdown_text: str):
     """
     Convierte Markdown a elementos de ReportLab usando estilos mejorados.
@@ -431,115 +540,6 @@ banner_file = "Banner (2).jpg"
 def clean_text(text):
     if not isinstance(text, str): text = str(text)
     return text
-
-class PDFReport:
-    def __init__(self, buffer_or_filename, banner_path=None):
-        self.banner_path = banner_path
-        self.elements = []
-        self.styles = getSampleStyleSheet()
-        self.doc = SimpleDocTemplate(buffer_or_filename, pagesize=A4, 
-                                     rightMargin=15*mm, leftMargin=15*mm,
-                                     topMargin=40*mm, bottomMargin=20*mm)
-        
-        pdf_font_name = FONT_NAME
-        base_styles = ['Normal', 'BodyText', 'Italic', 'Bold', 'Heading1', 'Heading2', 'Heading3', 'Heading4', 'Heading5', 'Heading6', 'Code']
-        
-        for style_name in base_styles:
-            if style_name in self.styles:
-                try:
-                    self.styles[style_name].fontName = pdf_font_name
-                    if style_name == 'Code':
-                        if pdf_font_name == FALLBACK_FONT_NAME or not FONT_REGISTERED: 
-                            self.styles[style_name].fontName = 'Courier'
-                        self.styles[style_name].fontSize = 9
-                        self.styles[style_name].leading = 11
-                        self.styles[style_name].leftIndent = 6*mm
-                        self.styles[style_name].backColor = colors.whitesmoke
-                        self.styles[style_name].textColor = colors.darkslategrey
-                except Exception as e:
-                    print(f"Warn: Font '{pdf_font_name}' -> '{style_name}'. {e}")
-
-        self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], fontName=pdf_font_name, 
-                                       alignment=1, spaceAfter=14, fontSize=16, leading=20)) 
-        
-        self.styles.add(ParagraphStyle(name='CustomHeading2', parent=self.styles['Heading2'], fontName=pdf_font_name, 
-                                       spaceBefore=12, spaceAfter=6, fontSize=13, leading=17, textColor=colors.darkblue))
-        self.styles.add(ParagraphStyle(name='CustomHeading3', parent=self.styles['Heading3'], fontName=pdf_font_name, 
-                                       spaceBefore=10, spaceAfter=5, fontSize=12, leading=16, textColor=colors.darkslategray))
-
-        self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], fontName=pdf_font_name, 
-                                       leading=15, alignment=4, fontSize=11, spaceAfter=6)) 
-        
-        self.styles.add(ParagraphStyle(name='CustomBullet', parent=self.styles['Normal'], fontName=pdf_font_name,
-                                       fontSize=11, leading=15, spaceAfter=4,
-                                       leftIndent=10*mm, bulletIndent=5*mm)) # Indentación clave
-                                       
-        self.styles.add(ParagraphStyle(name='CustomNumber', parent=self.styles['Normal'], fontName=pdf_font_name,
-                                       fontSize=11, leading=15, spaceAfter=4,
-                                       leftIndent=10*mm, bulletIndent=5*mm)) # Indentación clave
-
-        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], fontName=pdf_font_name, 
-                                       alignment=1, textColor=colors.grey, fontSize=8))
-
-    def header(self, canvas, doc):
-        canvas.saveState()
-        if self.banner_path and os.path.isfile(self.banner_path):
-            try:
-                # Ajustar tamaño y posición del banner si es necesario
-                img_w, img_h = 210*mm, 30*mm # Banner un poco más pequeño
-                y_pos = A4[1] - img_h - 5*mm # Bajarlo un poco
-                canvas.drawImage(self.banner_path, 0, y_pos, width=img_w, height=img_h, 
-                                 preserveAspectRatio=True, anchor='n')
-            except Exception as e:
-                print(f"Error PDF header: {e}")
-        canvas.restoreState()
-        
-    def footer(self, canvas, doc):
-        canvas.saveState()
-        footer_text = "Generado por Atelier Data Studio. Es posible que se muestre información imprecisa. Verifica las respuestas."
-        p = Paragraph(footer_text, self.styles['CustomFooter'])
-        w, h = p.wrap(doc.width, doc.bottomMargin)
-        p.drawOn(canvas, doc.leftMargin, 8*mm) # Subir un poco el footer
-        canvas.restoreState()
-        
-    def header_footer(self, canvas, doc): 
-        self.header(canvas, doc)
-        self.footer(canvas, doc)
-
-    def add_paragraph(self, text, style='CustomBodyText'):
-        """Añade un párrafo con el estilo especificado."""
-        try:
-            # Usar HTML <br> para saltos de línea explícitos dentro del párrafo
-            text_with_breaks = text.replace('\n', '<br/>')
-            style_to_use = self.styles.get(style, self.styles['CustomBodyText'])
-            p = Paragraph(text_with_breaks, style_to_use)
-            self.elements.append(p)
-            # No añadir Spacer aquí, el estilo ya tiene spaceAfter
-        except Exception as e:
-            print(f"Err add para: {e}. Text: {text[:100]}...")
-            self.elements.append(Paragraph(f"Err render: {text[:100]}...", self.styles['Code']))
-
-    def add_title(self, text, level=1):
-        """Añade un título basado en el nivel (H1, H2, H3)."""
-        if level == 1:
-            style_name = 'CustomTitle'
-        elif level == 2:
-            style_name = 'CustomHeading2'
-        elif level >= 3:
-            style_name = 'CustomHeading3' # Usar H3 para H3 y superiores
-        else: # Por defecto, H2
-            style_name = 'CustomHeading2'
-            
-        style_to_use = self.styles.get(style_name, self.styles['CustomHeading2'])
-        p = Paragraph(text, style_to_use)
-        self.elements.append(p)
-        # No añadir Spacer, los estilos ya tienen spaceBefore/After
-
-    def build_pdf(self):
-        try:
-            self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
-        except Exception as e:
-            st.error(f"Error building PDF: {e}")
 
 def generate_pdf_html(content, title="Documento Final", banner_path=None):
     try:
