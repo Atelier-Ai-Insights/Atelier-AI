@@ -360,7 +360,7 @@ class PDFReport:
         footer_text = "Generado por Atelier Data Studio. Es posible que se muestre información imprecisa. Verifica las respuestas."
         p = Paragraph(footer_text, self.styles['CustomFooter'])
         w, h = p.wrap(doc.width, doc.bottomMargin)
-        p.drawOn(canvas, doc.leftMargin, 8*mm) # Subir un poco el footer
+        p.drawOn(canvas, doc.leftMargin, 8*mm)
         canvas.restoreState()
         
     def header_footer(self, canvas, doc): 
@@ -653,15 +653,15 @@ def crear_ppt_one_pager(data: dict):
         p_h_title = tf_content.paragraphs[0]
         p_h_title.text = "Hallazgos Principales"
         p_h_title.font.bold = True
-        p_h_title.font.size = Pt(28) # Título de sección más grande
-        p_h_title.space_after = Pt(8) # Espacio después del título
+        p_h_title.font.size = Pt(28)
+        p_h_title.space_after = Pt(6)
 
         for hallazgo in data.get("hallazgos_principales", ["N/A"]):
             p = tf_content.add_paragraph()
             p.text = hallazgo
             p.font.size = Pt(16)
             p.level = 1 # <-- ESTO CREA LA VIÑETA (BULLET)
-            p.space_after = Pt(8) # Espacio entre viñetas
+            p.space_after = Pt(6) # Espacio entre viñetas
 
         # Espacio grande entre secciones
         tf_content.add_paragraph().space_after = Pt(14)
@@ -671,14 +671,14 @@ def crear_ppt_one_pager(data: dict):
         p_o_title.text = "Oportunidades"
         p_o_title.font.bold = True
         p_o_title.font.size = Pt(28)
-        p_o_title.space_after = Pt(8)
+        p_o_title.space_after = Pt(6)
         
         for op in data.get("oportunidades", ["N/A"]):
             p = tf_content.add_paragraph()
             p.text = op
             p.font.size = Pt(16)
             p.level = 1
-            p.space_after = Pt(8)
+            p.space_after = Pt(6)
 
         # Espacio grande entre secciones
         tf_content.add_paragraph().space_after = Pt(14)
@@ -688,13 +688,13 @@ def crear_ppt_one_pager(data: dict):
         p_r_title.text = "Recomendación Estratégica"
         p_r_title.font.bold = True
         p_r_title.font.size = Pt(28)
-        p_r_title.space_after = Pt(8)
+        p_r_title.space_after = Pt(6)
         
         p_r = tf_content.add_paragraph()
         p_r.text = data.get("recomendacion_estrategica", "N/A")
         p_r.font.size = Pt(16)
         p_r.level = 1
-        p_r.space_after = Pt(8)
+        p_r.space_after = Pt(6)
         
         # --- Guardar en memoria ---
         f = BytesIO()
