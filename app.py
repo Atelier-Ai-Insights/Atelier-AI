@@ -543,10 +543,27 @@ class PDFReport:
 
 def generate_pdf_html(content, title="Documento Final", banner_path=None):
     try:
-        buffer = BytesIO(); pdf = PDFReport(buffer, banner_path=banner_path); pdf.add_title(title, level=1); add_markdown_content(pdf, content); pdf.build_pdf(); pdf_data = buffer.getvalue(); buffer.close()
-        if pdf_data: return pdf_data
-        else: st.error("Error interno al construir PDF."); return None
-    except Exception as e: st.error(f"Error crítico al generar PDF: {e}"); return None
+        buffer = BytesIO()
+        pdf = PDFReport(buffer, banner_path=banner_path) # Crear instancia de PDFReport
+        pdf.add_title(title, level=1) # Añadir título principal
+        
+        # --- ASEGÚRATE QUE ESTA LÍNEA PASE 'pdf' PRIMERO ---
+        add_markdown_content(pdf, content) 
+        # ---------------------------------------------------
+        
+        pdf.build_pdf() # Construir el PDF
+        pdf_data = buffer.getvalue()
+        buffer.close()
+        
+        if pdf_data:
+            return pdf_data
+        else:
+            st.error("Error interno al construir PDF.")
+            return None
+            
+    except Exception as e:
+        st.error(f"Error crítico al generar PDF: {e}")
+        return None
 
 def crear_ppt_one_pager(data: dict):
     """
