@@ -174,7 +174,6 @@ def show_signup_page():
          st.session_state.page = "login"
          st.rerun()
 
-
 def show_login_page():
     st.header("Iniciar Sesión")
     email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
@@ -207,7 +206,6 @@ def show_login_page():
     if st.button("¿Olvidaste tu contraseña?", type="secondary", use_container_width=True):
         st.session_state.page = "reset_password"
         st.rerun()
-
 
 def show_reset_password_page():
     st.header("Restablecer Contraseña")
@@ -287,7 +285,6 @@ def get_daily_usage(username, action_type):
     try: today_start_iso = datetime.datetime.now(datetime.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat(); response = supabase.table("queries").select("id", count='exact').eq("user_name", username).eq("mode", action_type).gte("timestamp", today_start_iso).execute(); return response.count
     except Exception as e: print(f"Error get daily usage: {e}"); return 0
 
-
 # ==============================
 # FUNCIONES AUXILIARES Y DE PDF
 # ==============================
@@ -327,9 +324,9 @@ class PDFReport:
                                        alignment=1, spaceAfter=14, fontSize=16, leading=20)) 
         
         self.styles.add(ParagraphStyle(name='CustomHeading2', parent=self.styles['Heading2'], fontName=pdf_font_name, 
-                                       spaceBefore=12, spaceAfter=6, fontSize=13, leading=17, textColor=colors.darkblue))
+                                       spaceBefore=12, spaceAfter=6, fontSize=13, leading=17))
         self.styles.add(ParagraphStyle(name='CustomHeading3', parent=self.styles['Heading3'], fontName=pdf_font_name, 
-                                       spaceBefore=10, spaceAfter=5, fontSize=12, leading=16, textColor=colors.darkslategray))
+                                       spaceBefore=10, spaceAfter=5, fontSize=12, leading=16))
 
         self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], fontName=pdf_font_name, 
                                        leading=15, alignment=4, fontSize=11, spaceAfter=6)) 
