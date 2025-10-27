@@ -404,104 +404,151 @@ class PDFReport:
             self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
         except Exception as e:
             st.error(f"Error building PDF: {e}")
-            
+
 def add_markdown_content(pdf: PDFReport, markdown_text: str):
     """
-    Convierte Markdown a elementos de ReportLab usando estilos mejorados.
+    Convierte Markdown a elementos de ReportLab usando estilos mejorados
+    y con manejo de errores más detallado.
     """
+    processed_elements = 0 # Contador para ver si procesó algo
     try:
-        # Decodificar entidades HTML y convertir Markdown a HTML
-        decoded_text = html.unescape(markdown_text)
-        # Usar extras para manejar mejor listas, código, etc.
+        # 1. Limpieza inicial y conversión a HTML
+        decoded_text = html.unescape(str(markdown_text)) # Asegurar que sea string
         html_text = markdown2.markdown(decoded_text, extras=[
             "fenced-code-blocks", "tables", "break-on-newline", 
             "code-friendly", "cuddled-lists", "smarty-pants" 
         ])
         
-        # Parsear el HTML
+        # 2. Parsear el HTML
         soup = BeautifulSoup(html_text, "html.parser")
         container = soup.body if soup.body else soup
+        
+        if not container:
+             print("WARN: BeautifulSoup container is empty after parsing.")
+             raise ValueError("Could not parse HTML content.")
 
-        # Iterar sobre los elementos HTML generados
+        # 3. Iterar sobre los elementos HTML con más cuidado
         for elem in container.children:
-            if isinstance(elem, str):
-                text = elem.strip()
-                if text:
-                    pdf.add_paragraph(text) # Párrafo normal para texto suelto
-                continue
+            try:
+                if isinstance(elem, str):
+                    text = elem.strip()
+                    if text:
+                        pdf.add_paragraph(text)
+                        processed_elements += 1
+                    continue
                 
-            if not hasattr(elem, 'name') or not elem.name:
-                continue
+                # Ignorar elementos sin nombre de etiqueta (ej. comentarios, NavigableString ya manejado)
+                if not hasattr(elem, 'name') or not elem.name: 
+                    continue
 
-            tag_name = elem.name.lower()
-
-            # --- Manejo de Títulos ---
-            if tag_name.startswith("h"):
-                level = int(tag_name[1]) if len(tag_name) > 1 and tag_name[1].isdigit() else 1
-                pdf.add_title(elem.get_text(strip=True), level=level)
-            
-            # --- Manejo de Párrafos ---
-            elif tag_name == "p":
-                # Intentar decodificar contenido HTML, si falla, usar texto plano
-                try:
-                    content = elem.decode_contents(formatter="html")
-                except:
-                    content = elem.get_text(strip=True)
-                if content: # Evitar añadir párrafos vacíos
-                    pdf.add_paragraph(content)
-
-            # --- Manejo de Listas con Viñetas (ul) ---
-            elif tag_name == "ul":
-                for li in elem.find_all("li", recursive=False):
-                    try:
-                        content = li.decode_contents(formatter="html")
-                    except:
-                        content = li.get_text(strip=True)
-                    # Usa el estilo CustomBullet con el carácter de viñeta
-                    pdf.add_paragraph(f'<bullet text="•"/>{content}', style='CustomBullet')
-            
-            # --- Manejo de Listas Numeradas (ol) ---
-            elif tag_name == "ol":
-                for idx, li in enumerate(elem.find_all("li", recursive=False), 1):
-                    try:
-                        content = li.decode_contents(formatter="html")
-                    except:
-                        content = li.get_text(strip=True)
-                    # Usa el estilo CustomNumber con numeración automática
-                    pdf.add_paragraph(f'<bullet text="{idx}."/>{content}', style='CustomNumber') 
-            
-            # --- Manejo de Bloques de Código ---
-            elif tag_name == "pre":
-                code_text = elem.get_text() # No necesita strip=True para mantener formato
-                pdf.add_paragraph(code_text, style='Code')
+                tag_name = elem.name.lower()
                 
-            # --- Manejo de Citas ---
-            elif tag_name == "blockquote":
-                # Podrías crear un estilo 'Quote' con indentación y color diferente
-                try:
-                    content = elem.decode_contents(formatter="html")
-                except:
-                    content = elem.get_text(strip=True)
-                pdf.add_paragraph(f"> {content}", style='Italic') # Usar Italic por ahora
-
-            # --- Otros elementos (tratar como párrafo por defecto) ---
-            else:
-                try:
-                    content = elem.decode_contents(formatter="html")
-                    if content.strip(): # Evitar añadir contenido vacío
+                # --- MANEJO ESPECÍFICO DE ETIQUETAS ---
+                
+                # Títulos
+                if tag_name.startswith("h"):
+                    level = int(tag_name[1]) if len(tag_name) > 1 and tag_name[1].isdigit() else 1
+                    title_text = elem.get_text(strip=True)
+                    if title_text:
+                        pdf.add_title(title_text, level=level)
+                        processed_elements += 1
+                
+                # Párrafos
+                elif tag_name == "p":
+                    try:
+                        content = elem.decode_contents(formatter="html").strip()
+                    except Exception as decode_err:
+                        # print(f"DEBUG: decode_contents failed for <p>, using get_text. Error: {decode_err!r}")
+                        content = elem.get_text(strip=True)
+                    if content: 
                         pdf.add_paragraph(content)
-                except Exception as inner_e:
-                    print(f"Warn: Fallback to plain text for tag '{tag_name}'. Error: {inner_e}")
-                    plain_text = elem.get_text(strip=True)
-                    if plain_text:
-                        pdf.add_paragraph(plain_text)
+                        processed_elements += 1
+
+                # Listas con Viñetas (ul)
+                elif tag_name == "ul":
+                    list_items = elem.find_all("li", recursive=False)
+                    if not list_items: continue # Ignorar listas vacías
+                    for li in list_items:
+                        try:
+                            content = li.decode_contents(formatter="html").strip()
+                        except Exception as decode_err:
+                            # print(f"DEBUG: decode_contents failed for <li> in <ul>, using get_text. Error: {decode_err!r}")
+                            content = li.get_text(strip=True)
+                        if content:
+                             # Asegurar que no añadimos viñetas dobles si el contenido ya empieza con una
+                            prefix = '<bullet text="•"/>' if not content.lstrip().startswith('•') else ''
+                            pdf.add_paragraph(f'{prefix}{content}', style='CustomBullet')
+                            processed_elements += 1
             
+                # Listas Numeradas (ol)
+                elif tag_name == "ol":
+                    list_items = elem.find_all("li", recursive=False)
+                    if not list_items: continue # Ignorar listas vacías
+                    for idx, li in enumerate(list_items, 1):
+                        try:
+                            content = li.decode_contents(formatter="html").strip()
+                        except Exception as decode_err:
+                            # print(f"DEBUG: decode_contents failed for <li> in <ol>, using get_text. Error: {decode_err!r}")
+                            content = li.get_text(strip=True)
+                        if content:
+                            pdf.add_paragraph(f'<bullet text="{idx}."/>{content}', style='CustomNumber') 
+                            processed_elements += 1
+                
+                # Bloques de Código
+                elif tag_name == "pre":
+                    code_elem = elem.find('code') # A menudo el código está dentro de <code>
+                    code_text = (code_elem.get_text() if code_elem else elem.get_text())
+                    if code_text:
+                        pdf.add_paragraph(code_text, style='Code')
+                        processed_elements += 1
+                        
+                # Citas
+                elif tag_name == "blockquote":
+                    try:
+                        content = elem.decode_contents(formatter="html").strip()
+                    except:
+                        content = elem.get_text(strip=True)
+                    if content:
+                        pdf.add_paragraph(f"> {content}", style='Italic') # Mantener estilo Italic
+                        processed_elements += 1
+
+                # Otros elementos (intentar como párrafo)
+                else:
+                    try:
+                        content = elem.decode_contents(formatter="html").strip()
+                        if content: 
+                            pdf.add_paragraph(content)
+                            processed_elements += 1
+                    except Exception as inner_e:
+                        # Si falla el decode, intentar obtener solo el texto
+                        plain_text = elem.get_text(strip=True)
+                        if plain_text:
+                            # print(f"DEBUG: Fallback to plain text for tag '{tag_name}'. Content: {plain_text[:50]}...")
+                            pdf.add_paragraph(plain_text)
+                            processed_elements += 1
+                        # else:
+                            # print(f"DEBUG: Tag '{tag_name}' had no decodable content or plain text.")
+
+            except Exception as loop_error:
+                # Error procesando un elemento específico
+                print(f"ERROR processing element: <{elem.name if hasattr(elem, 'name') else 'unknown'}>. Error: {loop_error!r}")
+                # Opcional: añadir un marcador de error en el PDF
+                pdf.add_paragraph(f"--- Error processing tag: {elem.name if hasattr(elem, 'name') else 'unknown'} ---", style='Code')
+                # Continuar con el siguiente elemento
+                continue
+                
+        # Comprobación final: ¿Se procesó algo?
+        if processed_elements == 0 and markdown_text.strip():
+             print("WARN: No elements were processed by add_markdown_content, but input text was not empty.")
+             raise ValueError("Markdown processing resulted in zero PDF elements.")
+
     except Exception as e:
-        print(f"Error adding markdown content to PDF: {e}")
-        # Añadir el texto original si falla el parseo
-        pdf.add_paragraph("--- Error parsing markdown ---", style='Code')
-        pdf.add_paragraph(markdown_text, style='Code')
-        pdf.add_paragraph("--- End error ---", style='Code')
+        # Error general en la función (ej. fallo de markdown2 o BeautifulSoup)
+        print(f"CRITICAL ERROR in add_markdown_content: {e!r}")
+        # Añadir el texto original como fallback final
+        pdf.add_paragraph("--- Error Crítico al Parsear Markdown ---", style='Code')
+        pdf.add_paragraph(str(markdown_text), style='Code') # Usar str() por si acaso
+        pdf.add_paragraph("--- Fin del Error ---", style='Code')
         
 @st.cache_data(show_spinner=False)
 def load_database(cliente: str):
