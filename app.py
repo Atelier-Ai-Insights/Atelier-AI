@@ -402,8 +402,6 @@ class PDFReport:
         except Exception as e:
             st.error(f"Error building PDF: {e}")
 
-# --- REEMPLAZA TU FUNCIÓN add_markdown_content CON ESTA VERSIÓN FINAL ---
-
 def add_markdown_content(pdf: PDFReport, markdown_text: str):
     processed_elements = 0
     try:
@@ -601,6 +599,10 @@ def generate_pdf_html(content, title="Documento Final", banner_path=None):
         st.error(f"Error crítico al generar PDF: {e}")
         return None
 
+# ==============================
+# PPT ONE PAGER
+# ==============================
+
 def crear_ppt_one_pager(data: dict):
     """
     Toma un diccionario estructurado y genera un archivo .pptx en memoria.
@@ -675,7 +677,7 @@ def crear_ppt_one_pager(data: dict):
             p = tf_content.add_paragraph()
             p.text = op
             p.font.size = Pt(16)
-            p.level = 1 # <-- ESTO CREA LA VIÑETA (BULLET)
+            p.level = 1
             p.space_after = Pt(8)
 
         # Espacio grande entre secciones
@@ -691,7 +693,7 @@ def crear_ppt_one_pager(data: dict):
         p_r = tf_content.add_paragraph()
         p_r.text = data.get("recomendacion_estrategica", "N/A")
         p_r.font.size = Pt(16)
-        p_r.level = 1 # <-- ESTO CREA LA VIÑETA (BULLET)
+        p_r.level = 1
         p_r.space_after = Pt(8)
         
         # --- Guardar en memoria ---
@@ -1172,7 +1174,7 @@ def show_admin_dashboard():
                 except Exception as e: st.error(f"Error al crear: {e}")
 
     st.subheader("Gestión de Usuarios", divider="grey")
-    # --- CORRECCIÓN INDENTACIÓN ---
+   
     try: # Nivel 1
         if "SUPABASE_SERVICE_KEY" not in st.secrets: # Nivel 2
             st.error("Falta 'SUPABASE_SERVICE_KEY'"); st.stop() # Nivel 3
@@ -1222,8 +1224,6 @@ def show_admin_dashboard():
     # --- EXCEPT CORREGIDO ---
     except Exception as e: # Nivel 1 (Alineado con 'try:')
         st.error(f"Error en la gestión de usuarios: {e}") # Nivel 2
-    # --- FIN CORRECCIÓN INDENTACIÓN ---
-
 
 # =====================================================
 # FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA)
