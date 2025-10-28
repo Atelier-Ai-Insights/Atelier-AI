@@ -260,20 +260,36 @@ generation_config = {"temperature": 0.5, "top_p": 0.8, "top_k": 32, "max_output_
 safety_settings = [{"category": c, "threshold": "BLOCK_ONLY_HIGH"} for c in ["HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT"]]
 model = genai.GenerativeModel(model_name="gemini-2.5-flash", generation_config=generation_config, safety_settings=safety_settings)
 
-def call_gemini_api(prompt):
+def call_gemini_api(prompt, stream_response=False): # Añadido stream_response=False por defecto
     """
-    Llama a la API de Gemini y devuelve el stream de la respuesta.
+    Llama a la API de Gemini. Devuelve el stream si stream_response=True,
+    de lo contrario, devuelve el texto completo procesado.
     """
     configure_api_dynamically()
     try:
-        response_stream = model.generate_content(prompt, stream=True) 
-        return response_stream # Devuelve el objeto stream directamente
-        
+        if stream_response:
+            # Si se pide stream, llama con stream=True y devuelve el stream
+            response_stream = model.generate_content(prompt, stream=True)
+            return response_stream
+        else:
+            # Si no se pide stream (por defecto), llama normal y devuelve el texto
+            response = model.generate_content(prompt) # Sin stream=True
+            # Asegurarse de que response.text exista antes de procesar
+            if hasattr(response, 'text'):
+                 return html.unescape(response.text)
+            elif response.parts: # A veces la respuesta está en 'parts'
+                 full_text = "".join(part.text for part in response.parts if hasattr(part, 'text'))
+                 return html.unescape(full_text)
+            else:
+                 # Si no hay texto ni partes, intentar obtener la representación cruda
+                 print(f"WARN: Gemini response has no 'text' or 'parts'. Response: {response}")
+                 # Devolver None o una cadena vacía para evitar errores posteriores
+                 return None # O return ""
+
     except Exception as e:
-        print(f"ERROR GEMINI (Streaming): {e}")
+        print(f"ERROR GEMINI (Flexible): {e}")
         st.error(f"Error API Gemini (Key #{st.session_state.api_key_index}): {e}.")
         return None
-
 # ==============================
 # RASTREO DE USO
 # ==============================
