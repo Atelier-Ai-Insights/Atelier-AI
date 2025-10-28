@@ -260,23 +260,19 @@ generation_config = {"temperature": 0.5, "top_p": 0.8, "top_k": 32, "max_output_
 safety_settings = [{"category": c, "threshold": "BLOCK_ONLY_HIGH"} for c in ["HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT"]]
 model = genai.GenerativeModel(model_name="gemini-2.5-flash", generation_config=generation_config, safety_settings=safety_settings)
 
-# VERIFICA QUE TU FUNCIÓN SEA IDÉNTICA A ESTA:
 def call_gemini_api(prompt):
     """
     Llama a la API de Gemini y devuelve el stream de la respuesta.
     """
     configure_api_dynamically()
     try:
-        # ----> ASEGÚRATE QUE stream=True ESTÉ AQUÍ <----
         response_stream = model.generate_content(prompt, stream=True) 
-        
-        # ----> ASEGÚRATE QUE DEVUELVA EL STREAM <----
         return response_stream # Devuelve el objeto stream directamente
         
     except Exception as e:
         print(f"ERROR GEMINI (Streaming): {e}")
         st.error(f"Error API Gemini (Key #{st.session_state.api_key_index}): {e}.")
-        return None # Devuelve None si hay un error
+        return None
 
 # ==============================
 # RASTREO DE USO
@@ -752,17 +748,33 @@ def report_mode(db, selected_files):
         with col2: st.button("Nueva consulta", on_click=reset_report_workflow, key="new_report_query_btn", use_container_width=True)
 
 def grounded_chat_mode(db, selected_files):
-    st.subheader("Chat de Consulta Directa"); st.markdown("Preguntas específicas, respuestas basadas solo en hallazgos seleccionados.")
+    st.subheader("Chat de Consulta Directa")
+    st.markdown("Preguntas específicas, respuestas basadas solo en hallazgos seleccionados.")
+    
+    # Mostrar historial (sin cambios)
     if "chat_history" not in st.session_state: st.session_state.chat_history = []
     for msg in st.session_state.chat_history:
         with st.chat_message(msg['role']): st.markdown(msg['message'])
+        
     user_input = st.chat_input("Escribe tu pregunta...")
+    
     if user_input:
+        # Añadir mensaje de usuario (sin cambios)
         st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
-        with st.chat_message("Asistente"):
-            message_placeholder = st.empty() # Crea un contenedor vacío
+        with st.chat_message("Usuario"): st.markdown(user_input)
+            
+        # Validación de límite de queries (sin cambios)
+        query_limit = st.session_state.plan_features.get('chat_queries_per_day', 0)
+        current_queries = get_daily_usage(st.session_state.user, "Chat de Consulta Directa")
+        if current_queries >= query_limit and query_limit != float('inf'):
+            st.error(f"Límite de {int(query_limit)} consultas diarias alcanzado.")
+            return
 
-            # Construye tu prompt como antes
+        # --- Bloque Modificado para Streaming Manual ---
+        with st.chat_message("Asistente"):
+            message_placeholder = st.empty() # Contenedor para la respuesta
+
+            # Construir prompt (sin cambios)
             relevant_info = get_relevant_info(db, user_input, selected_files)
             conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history[-10:])
             grounded_prompt = (
@@ -780,31 +792,48 @@ def grounded_chat_mode(db, selected_files):
                 f"**Respuesta:**"
             )
 
-            # Llama a la API para obtener el stream
+            # Llamar a la API para obtener el stream (sin cambios)
             response_stream = call_gemini_api(grounded_prompt)
 
             if response_stream:
+                # --- Iteración Manual sobre el Stream ---
+                full_response_text = "" # Variable para acumular el texto
                 try:
-                    # Usa st.write_stream para mostrar la respuesta en tiempo real
-                    full_response = message_placeholder.write_stream(response_stream)
-
-                    # Guarda la respuesta completa en el historial DESPUÉS de mostrarla
-                    st.session_state.chat_history.append({"role": "Asistente", "message": full_response})
+                    # Itera sobre cada 'chunk' (fragmento) que llega del stream
+                    for chunk in response_stream:
+                        try:
+                            # Intenta obtener el texto del chunk y limpiarlo
+                            chunk_text = html.unescape(chunk.text)
+                            full_response_text += chunk_text # Acumula el texto
+                            # Actualiza el placeholder con el texto acumulado hasta ahora
+                            message_placeholder.markdown(full_response_text + "▌", unsafe_allow_html=True) # Añade cursor parpadeante
+                        except (AttributeError, ValueError) as chunk_error:
+                            # Si un chunk específico no tiene '.text' o causa error
+                            print(f"WARN: Skipping problematic stream chunk: {chunk_error}")
+                            continue # Salta este chunk y sigue con el siguiente
+                    
+                    # Al final, actualiza el placeholder con la respuesta final sin cursor
+                    message_placeholder.markdown(full_response_text, unsafe_allow_html=True)
+                    
+                    # Guarda la respuesta completa acumulada en el historial
+                    st.session_state.chat_history.append({"role": "Asistente", "message": full_response_text})
                     log_query_event(user_input, mode="Chat de Consulta Directa")
 
                 except Exception as e:
-                    # Manejo de error si el stream falla durante la escritura
-                    message_placeholder.error(f"Error al mostrar la respuesta: {e}")
-                    print(f"ERROR STREAMING UI (Grounded): {e}")
+                    # Error general durante la iteración del stream
+                    message_placeholder.error(f"Error al procesar la respuesta: {e}")
+                    print(f"ERROR STREAMING UI (Grounded Manual Loop): {e}")
+                # --- Fin Iteración Manual ---
             else:
-                # Manejo de error si call_gemini_api devolvió None
+                # Error si call_gemini_api devolvió None (sin cambios)
                 message_placeholder.error("No se pudo generar la respuesta desde la API.")
 
+    # Descarga y Nueva Conversación (sin cambios)
     if st.session_state.chat_history:
         col1, col2 = st.columns([1,1])
         with col1:
-             pdf_bytes = generate_pdf_html("\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history), title="Historial Consulta", banner_path=banner_file)
-             if pdf_bytes: st.download_button("Descargar Chat PDF", data=pdf_bytes, file_name="chat_consulta.pdf", mime="application/pdf", use_container_width=True)
+            pdf_bytes = generate_pdf_html("\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history), title="Historial Consulta", banner_path=banner_file)
+            if pdf_bytes: st.download_button("Descargar Chat PDF", data=pdf_bytes, file_name="chat_consulta.pdf", mime="application/pdf", use_container_width=True)
         with col2: st.button("Nueva Conversación", on_click=reset_chat_workflow, key="new_grounded_chat_btn", use_container_width=True)
 
 def ideacion_mode(db, selected_files):
