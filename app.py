@@ -266,13 +266,14 @@ def call_gemini_api(prompt):
     """
     configure_api_dynamically()
     try:
-        # Añade stream=True a la llamada
+        # ----> ASEGÚRATE QUE stream=True ESTÉ AQUÍ <----
         response_stream = model.generate_content(prompt, stream=True) 
+        
+        # ----> ASEGÚRATE QUE DEVUELVA EL STREAM <----
         return response_stream # Devuelve el objeto stream directamente
         
     except Exception as e:
         print(f"ERROR GEMINI (Streaming): {e}")
-        # Mostrar error en la UI, pero no detener la app si es posible
         st.error(f"Error API Gemini (Key #{st.session_state.api_key_index}): {e}.")
         return None # Devuelve None si hay un error
 
