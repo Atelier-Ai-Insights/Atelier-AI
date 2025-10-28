@@ -260,6 +260,7 @@ generation_config = {"temperature": 0.5, "top_p": 0.8, "top_k": 32, "max_output_
 safety_settings = [{"category": c, "threshold": "BLOCK_ONLY_HIGH"} for c in ["HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT"]]
 model = genai.GenerativeModel(model_name="gemini-2.5-flash", generation_config=generation_config, safety_settings=safety_settings)
 
+# VERIFICA QUE TU FUNCIÓN SEA IDÉNTICA A ESTA:
 def call_gemini_api(prompt):
     """
     Llama a la API de Gemini y devuelve el stream de la respuesta.
