@@ -1,10 +1,9 @@
 import streamlit as st
 import unicodedata
 import json
+import io
+import fitz  # PyMuPDF
 
-# ==============================
-# Funciones de Reset
-# ==============================
 def reset_report_workflow():
     for k in ["report", "last_question", "report_question", "personalization", "rating"]:
         st.session_state.pop(k, None)
@@ -12,9 +11,6 @@ def reset_report_workflow():
 def reset_chat_workflow():
     st.session_state.pop("chat_history", None)
 
-# ==============================
-# FUNCIONES AUXILIARES 
-# ==============================
 def normalize_text(text):
     if not text: return ""
     try: 
@@ -35,9 +31,6 @@ def clean_text(text):
     if not isinstance(text, str): text = str(text)
     return text
 
-# ==============================
-# FUNCIÓN RAG (Recuperación de Información)
-# ==============================
 def get_relevant_info(db, question, selected_files):
     all_text = ""
     selected_files_set = set(selected_files) if isinstance(selected_files, (list, set)) else set()
@@ -50,19 +43,28 @@ def get_relevant_info(db, question, selected_files):
                 all_text += f"Documento: {title}\n"
                 
                 for grupo in pres.get("grupos", []):
-                    grupo_index = grupo.get('grupo_index', 'N/A')
-                    contenido = str(grupo.get('contenido_texto', ''))
-                    metadatos = json.dumps(grupo.get('metadatos', {}), ensure_ascii=False) if grupo.get('metadatos') else ""
-                    hechos = json.dumps(grupo.get('hechos', []), ensure_ascii=False) if grupo.get('hechos') else ""
-                    
-                    all_text += f" Grupo {grupo_index}: {contenido}\n"
-                    if metadatos: 
-                        all_text += f"  Metadatos: {metadatos}\n"
-                    if hechos: 
-                        all_text += f"  Hechos: {hechos}\n"
-                        
+                    grupo_index = grupo.get('grupo_index', 'N/A'); contenido = str(grupo.get('contenido_texto', '')); metadatos = json.dumps(grupo.get('metadatos', {}), ensure_ascii=False) if grupo.get('metadatos') else ""; hechos = json.dumps(grupo.get('hechos', []), ensure_ascii=False) if grupo.get('hechos') else ""
+                    all_text += f" Grupo {grupo_index}: {contenido}\n";
+                    if metadatos: all_text += f"  Metadatos: {metadatos}\n"
+                    if hechos: all_text += f"  Hechos: {hechos}\n"
                 all_text += "\n---\n\n"
             except Exception as e: 
                 print(f"Error proc doc '{doc_name}': {e}")
-                
     return all_text
+
+def extract_text_from_pdfs(uploaded_files):
+    combined_text = ""
+    if not uploaded_files: return combined_text
+    for file in uploaded_files:
+        try:
+            file_bytes = file.getvalue()
+            pdf_document = fitz.open(stream=file_bytes, filetype="pdf")
+            combined_text += f"\n\n--- INICIO DOCUMENTO: {file.name} ---\n\n"
+            for page in pdf_document:
+                combined_text += page.get_text() + "\n"
+            pdf_document.close()
+            combined_text += f"\n--- FIN DOCUMENTO: {file.name} ---\n"
+        except Exception as e:
+            print(f"Error al procesar PDF '{file.name}': {e}")
+            combined_text += f"\n\n--- ERROR AL PROCESAR: {file.name} ---\n"
+    return combined_text
