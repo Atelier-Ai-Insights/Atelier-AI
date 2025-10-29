@@ -1,4 +1,5 @@
 import streamlit as st
+
 # ==============================
 # DEFINICIÓN DE PLANES Y PERMISOS
 # ==============================
@@ -25,3 +26,17 @@ PLAN_FEATURES = {
         "transcript_file_limit": 10, "ppt_downloads_per_month": float('inf'),
     }
 }
+
+# ==============================
+# CONFIGURACIÓN DE LA API DE GEMINI
+# ==============================
+api_keys = [st.secrets["API_KEY_1"], st.secrets["API_KEY_2"], st.secrets["API_KEY_3"]]
+
+generation_config = {"temperature": 0.5, "top_p": 0.8, "top_k": 32, "max_output_tokens": 8192}
+
+safety_settings = [{"category": c, "threshold": "BLOCK_ONLY_HIGH"} for c in ["HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT"]]
+
+# ==============================
+# CONSTANTES GLOBALES
+# ==============================
+banner_file = "Banner (2).jpg"
