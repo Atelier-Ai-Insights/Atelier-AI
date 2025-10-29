@@ -109,3 +109,4 @@ beautifulsoup4
 Pillow
 python-docx
 python-pptx
+pymupdf
