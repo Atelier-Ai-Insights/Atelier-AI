@@ -3,6 +3,7 @@ from io import BytesIO
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN
+from pptx.enum.text import MSO_AUTO_SIZE
 from pptx.dml.color import RGBColor
 import os # Añadido para verificar la plantilla
 
@@ -36,7 +37,7 @@ def crear_ppt_one_pager(data: dict):
         p_title.font.bold = True
         p_title.font.size = Pt(44) # Un poco más grande
         p_title.alignment = PP_ALIGN.CENTER
-        txBox_title.text_frame.auto_size = True 
+        txBox_title.text_frame.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
 
         # --- Insight Clave (Alineado a la izquierda, debajo del título) ---
         txBox_insight = slide.shapes.add_textbox(Inches(1.5), Inches(1.8), Inches(13), Inches(1))
