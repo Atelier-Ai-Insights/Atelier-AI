@@ -1,5 +1,4 @@
 import streamlit as st
-
 # ==============================
 # DEFINICIÓN DE PLANES Y PERMISOS
 # ==============================
