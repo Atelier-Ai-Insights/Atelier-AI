@@ -39,10 +39,8 @@ def set_mode_and_reset(new_mode):
     """
     Actualiza el modo y resetea los flujos de trabajo si el modo cambia.
     """
-    # Comprueba si el modo realmente cambió para evitar reseteos innecesarios
     if 'current_mode' not in st.session_state or st.session_state.current_mode != new_mode:
-        # Resetea todos los flujos de trabajo
-        reset_chat_workflow() # Resetea chat_history
+        reset_chat_workflow() 
         st.session_state.pop("generated_concept", None)
         st.session_state.pop("evaluation_result", None)
         st.session_state.pop("report", None)
@@ -52,8 +50,6 @@ def set_mode_and_reset(new_mode):
         st.session_state.pop("uploaded_transcripts_text", None)
         st.session_state.pop("transcript_chat_history", None)
         st.session_state.pop("generated_ppt_bytes", None)
-        
-        # Establece el nuevo modo
         st.session_state.current_mode = new_mode
 
 # =====================================================
@@ -67,7 +63,6 @@ def run_user_mode(db_full, user_features, footer_html):
 
     st.sidebar.header("Seleccione el modo de uso")
     
-    # Obtiene el modo activo desde el estado de la sesión
     modo = st.session_state.current_mode
 
     # --- 1. Definir categorías y qué modos están permitidos ---
@@ -93,7 +88,6 @@ def run_user_mode(db_full, user_features, footer_html):
 
     # --- 2. Renderizar los expanders y botones ---
     
-    # Determinar qué expander debe estar abierto por defecto
     default_expanded = ""
     for category, modes in all_categories.items():
         if modo in modes:
@@ -101,24 +95,12 @@ def run_user_mode(db_full, user_features, footer_html):
             break
 
     # Expander de Análisis
-    if any(all_categories["Análisis"].values()): # Solo muestra si hay modos disponibles
+    if any(all_categories["Análisis"].values()): 
         with st.sidebar.expander("Análisis", expanded=(default_expanded == "Análisis")):
             if all_categories["Análisis"]["Chat de Consulta Directa"]:
-                st.button(
-                    "Chat de Consulta Directa", 
-                    on_click=set_mode_and_reset, 
-                    args=("Chat de Consulta Directa",), 
-                    use_container_width=True,
-                    type="primary" if modo == "Chat de Consulta Directa" else "secondary"
-                )
+                st.button("Chat de Consulta Directa", on_click=set_mode_and_reset, args=("Chat de Consulta Directa",), use_container_width=True, type="primary" if modo == "Chat de Consulta Directa" else "secondary")
             if all_categories["Análisis"]["Análisis de Transcripciones"]:
-                st.button(
-                    "Análisis de Transcripciones", 
-                    on_click=set_mode_and_reset, 
-                    args=("Análisis de Transcripciones",), 
-                    use_container_width=True,
-                    type="primary" if modo == "Análisis de Transcripciones" else "secondary"
-                )
+                st.button("Análisis de Transcripciones", on_click=set_mode_and_reset, args=("Análisis de Transcripciones",), use_container_width=True, type="primary" if modo == "Análisis de Transcripciones" else "secondary")
 
     # Expander de Evaluación
     if any(all_categories["Evaluación"].values()):
@@ -146,20 +128,33 @@ def run_user_mode(db_full, user_features, footer_html):
             if all_categories["Creatividad"]["Generación de conceptos"]:
                 st.button("Generación de conceptos", on_click=set_mode_and_reset, args=("Generación de conceptos",), use_container_width=True, type="primary" if modo == "Generación de conceptos" else "secondary")
 
+    
+    # --- FILTROS DE BÚSQUEDA (CON ARREGLO) ---
     st.sidebar.header("Filtros de Búsqueda")
     run_filters = modo not in ["Análisis de Transcripciones"] 
 
+    # --- ¡ARREGLO! ---
+    # Inicializa db_filtered aquí para que siempre exista
+    db_filtered = db_full[:] 
+    # --- FIN DEL ARREGLO ---
+
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
     selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas", disabled=not run_filters)
-    if run_filters and selected_marcas: db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
+    if run_filters and selected_marcas: 
+        db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
 
     years_options = sorted({doc.get("marca", "") for doc in db_full if doc.get("marca")})
     selected_years = st.sidebar.multiselect("Año(s):", years_options, key="filter_years", disabled=not run_filters)
-    if run_filters and selected_years: db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
+    if run_filters and selected_years: 
+        db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
+    # Esta línea ahora puede leer db_filtered sin error
     brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered if extract_brand(d.get("nombre_archivo", ""))})
     selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects", disabled=not run_filters)
-    if run_filters and selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
+    if run_filters and selected_brands: 
+        db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
+
+    # --- FIN SECCIÓN DE FILTROS ---
 
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         supabase.auth.sign_out()
@@ -171,7 +166,7 @@ def run_user_mode(db_full, user_features, footer_html):
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
-    if run_filters and not selected_files and modo not in ["Generar un reporte de reportes", "Evaluación Visual", "Evaluación de Video", "Generador de One-Pager PPT"]: # Añadido One-Pager a la exclusión
+    if run_filters and not selected_files and modo not in ["Generar un reporte de reportes", "Evaluación Visual", "Evaluación de Video", "Generador de One-Pager PPT"]: 
          st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
 
     if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
@@ -188,26 +183,20 @@ def run_user_mode(db_full, user_features, footer_html):
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
 def main():
-    # Aplicar estilos CSS (desde styles.py)
     apply_styles()
 
-    # Inicializar estado de sesión
     if 'page' not in st.session_state: st.session_state.page = "login"
     if "api_key_index" not in st.session_state: st.session_state.api_key_index = 0
-    
-    # Establece un modo por defecto si ninguno está seleccionado
     if 'current_mode' not in st.session_state:
         st.session_state.current_mode = "Chat de Consulta Directa"
         
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
-    # Lógica de autenticación
     if not st.session_state.get("logged_in"):
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
             st.image("LogoDataStudio.png")
-            # Llamar a las funciones de auth.py
             if st.session_state.page == "login": show_login_page()
             elif st.session_state.page == "signup": show_signup_page()
             elif st.session_state.page == "reset_password": show_reset_password_page()
@@ -215,9 +204,7 @@ def main():
         st.markdown(footer_html, unsafe_allow_html=True)
         st.stop()
 
-    # Carga de datos post-login
     try: 
-        # Llamar a la función de storage.py
         db_full = load_database(st.session_state.cliente) 
     except Exception as e: 
         st.error(f"Error crítico al cargar BD: {e}")
@@ -225,7 +212,6 @@ def main():
 
     user_features = st.session_state.plan_features
 
-    # Lógica de enrutamiento Admin/Usuario
     if st.session_state.get("is_admin", False):
         tab_user, tab_admin = st.tabs(["Modo Usuario", "Modo Administrador"])
         with tab_user: 
@@ -233,7 +219,6 @@ def main():
         with tab_admin:
             st.title("Panel de Administración")
             st.write(f"Gestionando como: {st.session_state.user}")
-            # Llamar a la función de admin/dashboard.py
             show_admin_dashboard() 
     else: 
         run_user_mode(db_full, user_features, footer_html)
