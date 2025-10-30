@@ -39,8 +39,10 @@ def set_mode_and_reset(new_mode):
     """
     Actualiza el modo y resetea los flujos de trabajo si el modo cambia.
     """
+    # Comprueba si el modo realmente cambió para evitar reseteos innecesarios
     if 'current_mode' not in st.session_state or st.session_state.current_mode != new_mode:
-        reset_chat_workflow() 
+        # Resetea todos los flujos de trabajo
+        reset_chat_workflow() # Resetea chat_history
         st.session_state.pop("generated_concept", None)
         st.session_state.pop("evaluation_result", None)
         st.session_state.pop("report", None)
@@ -50,6 +52,8 @@ def set_mode_and_reset(new_mode):
         st.session_state.pop("uploaded_transcripts_text", None)
         st.session_state.pop("transcript_chat_history", None)
         st.session_state.pop("generated_ppt_bytes", None)
+        
+        # Establece el nuevo modo
         st.session_state.current_mode = new_mode
 
 # =====================================================
@@ -63,13 +67,15 @@ def run_user_mode(db_full, user_features, footer_html):
 
     st.sidebar.header("Seleccione el modo de uso")
     
+    # Obtiene el modo activo desde el estado de la sesión
     modo = st.session_state.current_mode
 
     # --- 1. Definir categorías y qué modos están permitidos ---
     all_categories = {
         "Análisis": {
             "Chat de Consulta Directa": True, # Siempre disponible
-            "Análisis de Transcripciones": user_features.get("transcript_file_limit", 0) > 0
+            # --- CAMBIO AQUÍ ---
+            "Análisis de Notas y Transcripciones": user_features.get("transcript_file_limit", 0) > 0
         },
         "Evaluación": {
             "Evaluar una idea": user_features.get("has_idea_evaluation"),
@@ -88,6 +94,7 @@ def run_user_mode(db_full, user_features, footer_html):
 
     # --- 2. Renderizar los expanders y botones ---
     
+    # Determinar qué expander debe estar abierto por defecto
     default_expanded = ""
     for category, modes in all_categories.items():
         if modo in modes:
@@ -95,12 +102,25 @@ def run_user_mode(db_full, user_features, footer_html):
             break
 
     # Expander de Análisis
-    if any(all_categories["Análisis"].values()): 
+    if any(all_categories["Análisis"].values()): # Solo muestra si hay modos disponibles
         with st.sidebar.expander("Análisis", expanded=(default_expanded == "Análisis")):
             if all_categories["Análisis"]["Chat de Consulta Directa"]:
-                st.button("Chat de Consulta Directa", on_click=set_mode_and_reset, args=("Chat de Consulta Directa",), use_container_width=True, type="primary" if modo == "Chat de Consulta Directa" else "secondary")
-            if all_categories["Análisis"]["Análisis de Transcripciones"]:
-                st.button("Análisis de Transcripciones", on_click=set_mode_and_reset, args=("Análisis de Transcripciones",), use_container_width=True, type="primary" if modo == "Análisis de Transcripciones" else "secondary")
+                st.button(
+                    "Chat de Consulta Directa", 
+                    on_click=set_mode_and_reset, 
+                    args=("Chat de Consulta Directa",), 
+                    use_container_width=True,
+                    type="primary" if modo == "Chat de Consulta Directa" else "secondary"
+                )
+            # --- CAMBIO AQUÍ ---
+            if all_categories["Análisis"]["Análisis de Notas y Transcripciones"]:
+                st.button(
+                    "Análisis de Notas y Transcripciones", 
+                    on_click=set_mode_and_reset, 
+                    args=("Análisis de Notas y Transcripciones",), 
+                    use_container_width=True,
+                    type="primary" if modo == "Análisis de Notas y Transcripciones" else "secondary"
+                )
 
     # Expander de Evaluación
     if any(all_categories["Evaluación"].values()):
@@ -131,10 +151,10 @@ def run_user_mode(db_full, user_features, footer_html):
     
     # --- FILTROS DE BÚSQUEDA (CON ARREGLO) ---
     st.sidebar.header("Filtros de Búsqueda")
-    run_filters = modo not in ["Análisis de Transcripciones"] 
+    # --- CAMBIO AQUÍ ---
+    run_filters = modo not in ["Análisis de Notas y Transcripciones"] 
 
     # --- ¡ARREGLO! ---
-    # Inicializa db_filtered aquí para que siempre exista
     db_filtered = db_full[:] 
     # --- FIN DEL ARREGLO ---
 
@@ -148,7 +168,6 @@ def run_user_mode(db_full, user_features, footer_html):
     if run_filters and selected_years: 
         db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
-    # Esta línea ahora puede leer db_filtered sin error
     brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered if extract_brand(d.get("nombre_archivo", ""))})
     selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects", disabled=not run_filters)
     if run_filters and selected_brands: 
@@ -169,6 +188,7 @@ def run_user_mode(db_full, user_features, footer_html):
     if run_filters and not selected_files and modo not in ["Generar un reporte de reportes", "Evaluación Visual", "Evaluación de Video", "Generador de One-Pager PPT"]: 
          st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
 
+    # --- ENRUTADOR DE MODOS ---
     if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
     elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
@@ -176,7 +196,8 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
     elif modo == "Evaluación Visual": image_evaluation_mode(db_filtered, selected_files)
     elif modo == "Evaluación de Video": video_evaluation_mode(db_filtered, selected_files)
-    elif modo == "Análisis de Transcripciones": transcript_analysis_mode()
+    # --- CAMBIO AQUÍ ---
+    elif modo == "Análisis de Notas y Transcripciones": transcript_analysis_mode()
     elif modo == "Generador de One-Pager PPT": one_pager_ppt_mode(db_filtered, selected_files)
 
 # =====================================================
