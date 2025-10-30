@@ -174,3 +174,4 @@ def crear_ppt_desde_json(data: dict):
         st.code(traceback.format_exc())
         return None
     
+    

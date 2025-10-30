@@ -226,3 +226,4 @@ def one_pager_ppt_mode(db_filtered, selected_files):
             else:
                 pass # El error ya se muestra desde crear_ppt_desde_json
             
+            

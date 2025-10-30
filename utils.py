@@ -99,3 +99,4 @@ def extract_text_from_pdfs(uploaded_files):
             combined_text += f"\n\n--- ERROR AL PROCESAR: {file.name} ---\n"
             
     return combined_text
+
