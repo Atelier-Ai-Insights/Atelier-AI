@@ -95,7 +95,7 @@ def _crear_slide_dofa(prs, data):
     # Título
     txBox_title = slide.shapes.add_textbox(Inches(1), Inches(0.5), Inches(14), Inches(1))
     p_title = txBox_title.text_frame.paragraphs[0]
-    p_title.text = data.get("titulo_diapositiva", "Análisis DOFA")
+    p_title.text = data.get("Análisis DOFA", ["N/A"])
     p_title.font.bold = True; p_title.font.size = Pt(40); p_title.alignment = PP_ALIGN.CENTER
     txBox_title.text_frame.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
 
@@ -121,7 +121,7 @@ def _crear_slide_empatia(prs, data):
     # Título
     txBox_title = slide.shapes.add_textbox(Inches(1), Inches(0.2), Inches(14), Inches(0.8))
     p_title = txBox_title.text_frame.paragraphs[0]
-    p_title.text = data.get("titulo_diapositiva", "Mapa de Empatía")
+    p_title.text = data.get("Mapa de Empatía", ["N/A"])
     p_title.font.bold = True; p_title.font.size = Pt(36); p_title.alignment = PP_ALIGN.CENTER
     txBox_title.text_frame.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
     
@@ -155,7 +155,7 @@ def _crear_slide_propuesta_valor(prs, data):
     # Título
     txBox_title1 = slide1.shapes.add_textbox(Inches(1), Inches(0.5), Inches(14), Inches(1))
     p_title1 = txBox_title1.text_frame.paragraphs[0]
-    p_title1.text = data.get("titulo_diapositiva", "Propuesta de Valor") + ": Perfil del Cliente"
+    p_title1.text = data.get("Propuesta de Valor", ["N/A"]) + ": Perfil del Cliente"
     p_title1.font.bold = True; p_title1.font.size = Pt(40); p_title1.alignment = PP_ALIGN.CENTER
     txBox_title1.text_frame.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
 
@@ -171,7 +171,7 @@ def _crear_slide_propuesta_valor(prs, data):
     # Título
     txBox_title2 = slide2.shapes.add_textbox(Inches(1), Inches(0.5), Inches(14), Inches(1))
     p_title2 = txBox_title2.text_frame.paragraphs[0]
-    p_title2.text = data.get("titulo_diapositiva", "Propuesta de Valor") + ": Mapa de Valor"
+    p_title2.text = data.get("Propuesta de Valor", ["N/A"]) + ": Mapa de Valor"
     p_title2.font.bold = True; p_title2.font.size = Pt(40); p_title2.alignment = PP_ALIGN.CENTER
     txBox_title2.text_frame.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
 
