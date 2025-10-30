@@ -35,34 +35,13 @@ from utils import (
     extract_brand, reset_chat_workflow, reset_report_workflow 
 )
 
-# =====================================================
-# FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA)
-# =====================================================
-def run_user_mode(db_full, user_features, footer_html):
-    st.sidebar.image("LogoDataStudio.png")
-    st.sidebar.write(f"Usuario: {st.session_state.user}")
-    if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
-    st.sidebar.divider()
-
-    db_filtered = db_full[:]
-
-    # Construir lista de modos disponibles según el plan del usuario
-    modos_disponibles = ["Chat de Consulta Directa"]
-    if user_features.get("has_report_generation"): modos_disponibles.insert(0, "Generar un reporte de reportes")
-    if user_features.get("has_creative_conversation"): modos_disponibles.append("Conversaciones creativas")
-    if user_features.get("has_concept_generation"): modos_disponibles.append("Generación de conceptos")
-    if user_features.get("has_idea_evaluation"): modos_disponibles.append("Evaluar una idea")
-    if user_features.get("has_image_evaluation"): modos_disponibles.append("Evaluación Visual")
-    if user_features.get("has_video_evaluation"): modos_disponibles.append("Evaluación de Video")
-    if user_features.get("transcript_file_limit", 0) > 0: modos_disponibles.append("Análisis de Transcripciones")
-    if user_features.get("ppt_downloads_per_month", 0) > 0: modos_disponibles.append("Generador de One-Pager PPT")
-
-    st.sidebar.header("Seleccione el modo de uso")
-    modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed", key="main_mode_selector")
-
-    # Resetear estados específicos del modo si cambia
-    if 'current_mode' not in st.session_state: st.session_state.current_mode = modo
-    if st.session_state.current_mode != modo:
+def set_mode_and_reset(new_mode):
+    """
+    Actualiza el modo y resetea los flujos de trabajo si el modo cambia.
+    """
+    # Comprueba si el modo realmente cambió para evitar reseteos innecesarios
+    if 'current_mode' not in st.session_state or st.session_state.current_mode != new_mode:
+        # Resetea todos los flujos de trabajo
         reset_chat_workflow() # Resetea chat_history
         st.session_state.pop("generated_concept", None)
         st.session_state.pop("evaluation_result", None)
@@ -74,10 +53,100 @@ def run_user_mode(db_full, user_features, footer_html):
         st.session_state.pop("transcript_chat_history", None)
         st.session_state.pop("generated_ppt_bytes", None)
         
-        st.session_state.current_mode = modo
+        # Establece el nuevo modo
+        st.session_state.current_mode = new_mode
+
+# =====================================================
+# FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA CON EXPANDERS)
+# =====================================================
+def run_user_mode(db_full, user_features, footer_html):
+    st.sidebar.image("LogoDataStudio.png")
+    st.sidebar.write(f"Usuario: {st.session_state.user}")
+    if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
+    st.sidebar.divider()
+
+    st.sidebar.header("Seleccione el modo de uso")
+    
+    # Obtiene el modo activo desde el estado de la sesión
+    modo = st.session_state.current_mode
+
+    # --- 1. Definir categorías y qué modos están permitidos ---
+    all_categories = {
+        "Análisis": {
+            "Chat de Consulta Directa": True, # Siempre disponible
+            "Análisis de Transcripciones": user_features.get("transcript_file_limit", 0) > 0
+        },
+        "Evaluación": {
+            "Evaluar una idea": user_features.get("has_idea_evaluation"),
+            "Evaluación Visual": user_features.get("has_image_evaluation"),
+            "Evaluación de Video": user_features.get("has_video_evaluation")
+        },
+        "Reportes": {
+            "Generar un reporte de reportes": user_features.get("has_report_generation"),
+            "Generador de One-Pager PPT": user_features.get("ppt_downloads_per_month", 0) > 0
+        },
+        "Creatividad": {
+            "Conversaciones creativas": user_features.get("has_creative_conversation"),
+            "Generación de conceptos": user_features.get("has_concept_generation")
+        }
+    }
+
+    # --- 2. Renderizar los expanders y botones ---
+    
+    # Determinar qué expander debe estar abierto por defecto
+    default_expanded = ""
+    for category, modes in all_categories.items():
+        if modo in modes:
+            default_expanded = category
+            break
+
+    # Expander de Análisis
+    if any(all_categories["Análisis"].values()): # Solo muestra si hay modos disponibles
+        with st.sidebar.expander("Análisis", expanded=(default_expanded == "Análisis")):
+            if all_categories["Análisis"]["Chat de Consulta Directa"]:
+                st.button(
+                    "Chat de Consulta Directa", 
+                    on_click=set_mode_and_reset, 
+                    args=("Chat de Consulta Directa",), 
+                    use_container_width=True,
+                    type="primary" if modo == "Chat de Consulta Directa" else "secondary"
+                )
+            if all_categories["Análisis"]["Análisis de Transcripciones"]:
+                st.button(
+                    "Análisis de Transcripciones", 
+                    on_click=set_mode_and_reset, 
+                    args=("Análisis de Transcripciones",), 
+                    use_container_width=True,
+                    type="primary" if modo == "Análisis de Transcripciones" else "secondary"
+                )
+
+    # Expander de Evaluación
+    if any(all_categories["Evaluación"].values()):
+        with st.sidebar.expander("Evaluación", expanded=(default_expanded == "Evaluación")):
+            if all_categories["Evaluación"]["Evaluar una idea"]:
+                st.button("Evaluar una idea", on_click=set_mode_and_reset, args=("Evaluar una idea",), use_container_width=True, type="primary" if modo == "Evaluar una idea" else "secondary")
+            if all_categories["Evaluación"]["Evaluación Visual"]:
+                st.button("Evaluación Visual", on_click=set_mode_and_reset, args=("Evaluación Visual",), use_container_width=True, type="primary" if modo == "Evaluación Visual" else "secondary")
+            if all_categories["Evaluación"]["Evaluación de Video"]:
+                st.button("Evaluación de Video", on_click=set_mode_and_reset, args=("Evaluación de Video",), use_container_width=True, type="primary" if modo == "Evaluación de Video" else "secondary")
+
+    # Expander de Reportes
+    if any(all_categories["Reportes"].values()):
+        with st.sidebar.expander("Reportes", expanded=(default_expanded == "Reportes")):
+            if all_categories["Reportes"]["Generar un reporte de reportes"]:
+                st.button("Generar un reporte de reportes", on_click=set_mode_and_reset, args=("Generar un reporte de reportes",), use_container_width=True, type="primary" if modo == "Generar un reporte de reportes" else "secondary")
+            if all_categories["Reportes"]["Generador de One-Pager PPT"]:
+                st.button("Generador de One-Pager PPT", on_click=set_mode_and_reset, args=("Generador de One-Pager PPT",), use_container_width=True, type="primary" if modo == "Generador de One-Pager PPT" else "secondary")
+
+    # Expander de Creatividad
+    if any(all_categories["Creatividad"].values()):
+        with st.sidebar.expander("Creatividad", expanded=(default_expanded == "Creatividad")):
+            if all_categories["Creatividad"]["Conversaciones creativas"]:
+                st.button("Conversaciones creativas", on_click=set_mode_and_reset, args=("Conversaciones creativas",), use_container_width=True, type="primary" if modo == "Conversaciones creativas" else "secondary")
+            if all_categories["Creatividad"]["Generación de conceptos"]:
+                st.button("Generación de conceptos", on_click=set_mode_and_reset, args=("Generación de conceptos",), use_container_width=True, type="primary" if modo == "Generación de conceptos" else "secondary")
 
     st.sidebar.header("Filtros de Búsqueda")
-    # Aplicar filtros solo si el modo actual NO es Análisis de Transcripciones
     run_filters = modo not in ["Análisis de Transcripciones"] 
 
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
@@ -100,10 +169,9 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.divider()
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
 
-    # --- ENRUTADOR DE MODOS ---
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
-    if run_filters and not selected_files and modo not in ["Generar un reporte de reportes", "Evaluación Visual", "Evaluación de Video"]:
+    if run_filters and not selected_files and modo not in ["Generar un reporte de reportes", "Evaluación Visual", "Evaluación de Video", "Generador de One-Pager PPT"]: # Añadido One-Pager a la exclusión
          st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
 
     if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
@@ -113,7 +181,7 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
     elif modo == "Evaluación Visual": image_evaluation_mode(db_filtered, selected_files)
     elif modo == "Evaluación de Video": video_evaluation_mode(db_filtered, selected_files)
-    elif modo == "Análisis de Transcripciones": transcript_analysis_mode() # No necesita db_filtered
+    elif modo == "Análisis de Transcripciones": transcript_analysis_mode()
     elif modo == "Generador de One-Pager PPT": one_pager_ppt_mode(db_filtered, selected_files)
 
 # =====================================================
@@ -127,6 +195,10 @@ def main():
     if 'page' not in st.session_state: st.session_state.page = "login"
     if "api_key_index" not in st.session_state: st.session_state.api_key_index = 0
     
+    # Establece un modo por defecto si ninguno está seleccionado
+    if 'current_mode' not in st.session_state:
+        st.session_state.current_mode = "Chat de Consulta Directa"
+        
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
