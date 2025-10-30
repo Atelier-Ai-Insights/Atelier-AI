@@ -27,7 +27,6 @@ from modes.idea_eval_mode import idea_evaluator_mode
 from modes.image_eval_mode import image_evaluation_mode
 from modes.video_eval_mode import video_evaluation_mode
 from modes.transcript_mode import transcript_analysis_mode
-# (Importamos el modo onepager que modificaste para incluir PDFs)
 from modes.onepager_mode import one_pager_ppt_mode
 
 # Importar utilidades
@@ -39,10 +38,8 @@ def set_mode_and_reset(new_mode):
     """
     Actualiza el modo y resetea los flujos de trabajo si el modo cambia.
     """
-    # Comprueba si el modo realmente cambió para evitar reseteos innecesarios
     if 'current_mode' not in st.session_state or st.session_state.current_mode != new_mode:
-        # Resetea todos los flujos de trabajo
-        reset_chat_workflow() # Resetea chat_history
+        reset_chat_workflow() 
         st.session_state.pop("generated_concept", None)
         st.session_state.pop("evaluation_result", None)
         st.session_state.pop("report", None)
@@ -52,8 +49,6 @@ def set_mode_and_reset(new_mode):
         st.session_state.pop("uploaded_transcripts_text", None)
         st.session_state.pop("transcript_chat_history", None)
         st.session_state.pop("generated_ppt_bytes", None)
-        
-        # Establece el nuevo modo
         st.session_state.current_mode = new_mode
 
 # =====================================================
@@ -67,14 +62,12 @@ def run_user_mode(db_full, user_features, footer_html):
 
     st.sidebar.header("Seleccione el modo de uso")
     
-    # Obtiene el modo activo desde el estado de la sesión
     modo = st.session_state.current_mode
 
     # --- 1. Definir categorías y qué modos están permitidos ---
     all_categories = {
         "Análisis": {
-            "Chat de Consulta Directa": True, # Siempre disponible
-            # --- CAMBIO AQUÍ ---
+            "Chat de Consulta Directa": True, 
             "Análisis de Notas y Transcripciones": user_features.get("transcript_file_limit", 0) > 0
         },
         "Evaluación": {
@@ -94,7 +87,6 @@ def run_user_mode(db_full, user_features, footer_html):
 
     # --- 2. Renderizar los expanders y botones ---
     
-    # Determinar qué expander debe estar abierto por defecto
     default_expanded = ""
     for category, modes in all_categories.items():
         if modo in modes:
@@ -102,25 +94,12 @@ def run_user_mode(db_full, user_features, footer_html):
             break
 
     # Expander de Análisis
-    if any(all_categories["Análisis"].values()): # Solo muestra si hay modos disponibles
+    if any(all_categories["Análisis"].values()): 
         with st.sidebar.expander("Análisis", expanded=(default_expanded == "Análisis")):
             if all_categories["Análisis"]["Chat de Consulta Directa"]:
-                st.button(
-                    "Chat de Consulta Directa", 
-                    on_click=set_mode_and_reset, 
-                    args=("Chat de Consulta Directa",), 
-                    use_container_width=True,
-                    type="primary" if modo == "Chat de Consulta Directa" else "secondary"
-                )
-            # --- CAMBIO AQUÍ ---
+                st.button("Chat de Consulta Directa", on_click=set_mode_and_reset, args=("Chat de Consulta Directa",), use_container_width=True, type="primary" if modo == "Chat de Consulta Directa" else "secondary")
             if all_categories["Análisis"]["Análisis de Notas y Transcripciones"]:
-                st.button(
-                    "Análisis de Notas y Transcripciones", 
-                    on_click=set_mode_and_reset, 
-                    args=("Análisis de Notas y Transcripciones",), 
-                    use_container_width=True,
-                    type="primary" if modo == "Análisis de Notas y Transcripciones" else "secondary"
-                )
+                st.button("Análisis de Notas y Transcripciones", on_click=set_mode_and_reset, args=("Análisis de Notas y Transcripciones",), use_container_width=True, type="primary" if modo == "Análisis de Notas y Transcripciones" else "secondary")
 
     # Expander de Evaluación
     if any(all_categories["Evaluación"].values()):
@@ -151,12 +130,9 @@ def run_user_mode(db_full, user_features, footer_html):
     
     # --- FILTROS DE BÚSQUEDA (CON ARREGLO) ---
     st.sidebar.header("Filtros de Búsqueda")
-    # --- CAMBIO AQUÍ ---
     run_filters = modo not in ["Análisis de Notas y Transcripciones"] 
 
-    # --- ¡ARREGLO! ---
     db_filtered = db_full[:] 
-    # --- FIN DEL ARREGLO ---
 
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
     selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas", disabled=not run_filters)
@@ -196,7 +172,6 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
     elif modo == "Evaluación Visual": image_evaluation_mode(db_filtered, selected_files)
     elif modo == "Evaluación de Video": video_evaluation_mode(db_filtered, selected_files)
-    # --- CAMBIO AQUÍ ---
     elif modo == "Análisis de Notas y Transcripciones": transcript_analysis_mode()
     elif modo == "Generador de One-Pager PPT": one_pager_ppt_mode(db_filtered, selected_files)
 
@@ -204,6 +179,12 @@ def run_user_mode(db_full, user_features, footer_html):
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
 def main():
+    
+    st.set_page_config(
+        page_title="Atelier Data Studio",
+        page_icon="Logo_Casa.png" 
+    )
+    
     apply_styles()
 
     if 'page' not in st.session_state: st.session_state.page = "login"
@@ -214,7 +195,23 @@ def main():
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
+    # Lógica de autenticación
     if not st.session_state.get("logged_in"):
+        
+        # Inyecta CSS para reducir el padding SÓLO en la página de login
+        st.markdown("""
+            <style>
+                /* Target the main app container */
+                [data-testid="stAppViewContainer"] > .main {
+                    padding-top: 2rem; /* Reduce el espacio superior */
+                }
+                /* Target the specific block container holding the login form */
+                div[data-testid="stBlock"] {
+                    padding-top: 0rem; /* Elimina el padding del bloque */
+                }
+            </style>
+            """, unsafe_allow_html=True)
+
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
             st.image("LogoDataStudio.png")
