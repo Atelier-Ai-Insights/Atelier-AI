@@ -4,7 +4,6 @@ from services.supabase_db import get_monthly_usage, log_query_event
 import google.generativeai as genai
 from config import safety_settings
 from services.gemini_api import configure_api_dynamically
-# ¡Importante! Ahora llamaremos a una función más genérica
 from reporting.ppt_generator import crear_ppt_desde_json
 from utils import get_relevant_info, extract_text_from_pdfs
 
@@ -77,11 +76,11 @@ PROMPTS_ONEPAGER = {
             "Influencia Auditiva #1: Algo que escucha de amigos, medios, etc.",
             "Influencia Auditiva #2: Otra fuente de información."
           ],
-          "esfuerzos": [ # Pains
+          "esfuerzos": [
             "Dolor/Esfuerzo #1: Frustración, obstáculo o miedo.",
             "Dolor/Esfuerzo #2: Otro desafío."
           ],
-          "resultados": [ # Gains
+          "resultados": [
             "Ganancia/Resultado #1: Deseo, necesidad o medida de éxito.",
             "Ganancia/Resultado #2: Otra aspiración."
            ]
@@ -93,23 +92,23 @@ PROMPTS_ONEPAGER = {
           "template_type": "propuesta_valor",
           "titulo_diapositiva": "Propuesta de Valor: {tema_central}",
           "producto_servicio": "Descripción breve del producto/servicio central.",
-          "creadores_alegria": [ # Gain Creators
+          "creadores_alegria": [
              "Creador de Alegría #1: Cómo el producto/servicio produce ganancias.",
              "Creador de Alegría #2: Otra forma en que ayuda a obtener resultados."
           ],
-          "aliviadores_frustracion": [ # Pain Relievers
+          "aliviadores_frustracion": [
              "Aliviador #1: Cómo el producto/servicio alivia dolores.",
              "Aliviador #2: Otra forma en que soluciona problemas."
           ],
-          "trabajos_cliente": [ # Customer Jobs
+          "trabajos_cliente": [
               "Trabajo #1: Tarea funcional, social o emocional que el cliente intenta hacer.",
               "Trabajo #2: Otra tarea o problema a resolver."
           ],
-          "alegrias": [ # Gains
+          "alegrias": [
               "Alegría #1: Resultado o beneficio deseado por el cliente.",
               "Alegría #2: Otra aspiración."
           ],
-          "frustraciones": [ # Pains
+          "frustraciones": [
               "Frustración #1: Obstáculo, riesgo o emoción negativa del cliente.",
               "Frustración #2: Otro dolor."
           ]
@@ -122,21 +121,18 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     st.subheader("Generador de Diapositivas Estratégicas")
     ppt_limit = st.session_state.plan_features.get('ppt_downloads_per_month', 0)
 
-    # --- BLOQUE CORREGIDO: Definición de limit_text ---
     if ppt_limit == float('inf'):
         limit_text = "**Tu plan actual te permite generar One-Pagers ilimitados.**"
     elif ppt_limit > 0:
         limit_text = f"**Tu plan actual te permite generar {int(ppt_limit)} One-Pagers al mes.**"
     else:
         limit_text = "**Tu plan actual no incluye la generación de One-Pagers.**"
-    # --- FIN BLOQUE CORREGIDO ---
 
     st.markdown(f"""
         Sintetiza los hallazgos clave en una diapositiva de PowerPoint usando la plantilla seleccionada.
         {limit_text}
     """)
 
-    # --- Lógica de descarga (si el archivo ya existe) ---
     if "generated_ppt_bytes" in st.session_state:
         st.success(f"¡Tu diapositiva '{st.session_state.get('generated_ppt_template_name', 'Estratégica')}' está lista!")
         st.download_button(
@@ -152,7 +148,6 @@ def one_pager_ppt_mode(db_filtered, selected_files):
             st.rerun()
         return
 
-    # --- Formulario de generación ---
     st.divider()
     st.markdown("#### 1. Selecciona la Plantilla")
     template_options = list(PROMPTS_ONEPAGER.keys())
@@ -229,4 +224,4 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                 log_query_event(f"{selected_template_name}: {tema_central}", mode="Generador de One-Pager PPT")
                 st.rerun()
             else:
-                pass
+                pass # El error ya se muestra desde crear_ppt_desde_json

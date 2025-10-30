@@ -6,6 +6,7 @@ from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN, MSO_AUTO_SIZE
 from pptx.dml.color import RGBColor
 import os
+import traceback # Importar traceback para errores
 
 # --- Plantillas de Diapositivas ---
 
@@ -57,8 +58,6 @@ def _crear_slide_oportunidades(prs, data):
 
 def _crear_slide_dofa(prs, data):
     """Crea la diapositiva de Análisis DOFA."""
-    # Usaremos un layout con 4 cuadrantes (asumimos que existe uno, si no, lo creamos a mano)
-    # Por simplicidad ahora, lo haremos en una sola columna como el anterior
     blank_slide_layout = prs.slide_layouts[6]
     slide = prs.slides.add_slide(blank_slide_layout)
 
@@ -105,11 +104,8 @@ def _crear_slide_dofa(prs, data):
 
     return prs
 
-# --- (AQUÍ AÑADIRÍAMOS LAS FUNCIONES _crear_slide_empatia y _crear_slide_propuesta_valor) ---
-# --- (Por ahora las dejamos pendientes para mantener el código más corto) ---
 def _crear_slide_empatia(prs, data):
      st.warning("Plantilla 'Mapa de Empatía' aún no implementada en el generador PPT.")
-     # Crear una diapositiva simple como fallback
      blank_slide_layout = prs.slide_layouts[6]
      slide = prs.slides.add_slide(blank_slide_layout)
      txBox = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(14), Inches(6))
@@ -122,7 +118,6 @@ def _crear_slide_empatia(prs, data):
 
 def _crear_slide_propuesta_valor(prs, data):
      st.warning("Plantilla 'Propuesta de Valor' aún no implementada en el generador PPT.")
-     # Crear una diapositiva simple como fallback
      blank_slide_layout = prs.slide_layouts[6]
      slide = prs.slides.add_slide(blank_slide_layout)
      txBox = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(14), Inches(6))
@@ -152,7 +147,6 @@ def crear_ppt_desde_json(data: dict):
 
         template_type = data.get("template_type")
 
-        # --- Enrutador basado en el tipo de plantilla ---
         if template_type == "oportunidades":
             prs = _crear_slide_oportunidades(prs, data)
         elif template_type == "dofa":
@@ -163,14 +157,12 @@ def crear_ppt_desde_json(data: dict):
             prs = _crear_slide_propuesta_valor(prs, data)
         else:
             st.error(f"Error: Tipo de plantilla desconocido '{template_type}' en el JSON.")
-            # Crear una diapositiva de error
             blank_slide_layout = prs.slide_layouts[6]
             slide = prs.slides.add_slide(blank_slide_layout)
             txBox = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(14), Inches(6))
             tf = txBox.text_frame; tf.paragraphs[0].text = f"Error: Plantilla '{template_type}' no reconocida"
             p = tf.add_paragraph(); p.text = json.dumps(data, indent=2)
 
-        # --- Guardar en memoria ---
         f = BytesIO()
         prs.save(f)
         f.seek(0)
@@ -178,8 +170,6 @@ def crear_ppt_desde_json(data: dict):
 
     except Exception as e:
         st.error(f"Error crítico al generar el archivo .pptx: {e}")
-        # Intentar mostrar más detalles del error si es posible
-        import traceback
         st.error("Detalles del error:")
         st.code(traceback.format_exc())
         return None
