@@ -1,1229 +1,39 @@
-import datetime
-import html
-import json
-import unicodedata
-from io import BytesIO
-from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.enum.text import PP_ALIGN
-from pptx.dml.color import RGBColor
-from PIL import Image
-import os
-from bs4 import BeautifulSoup
-import boto3
-import google.generativeai as genai
-import markdown2
 import streamlit as st
-import pandas as pd
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-from supabase import create_client, Client
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfbase import pdfmetrics
-import streamlit as st
-import docx
-
-st.markdown("""
-<style>
-    /* Contenedor principal de las pestañas */
-    div[data-testid="stTabs"] > div[role="tablist"] {
-        border-bottom: 1px solid #e0e0e0; /* Línea base */
-        gap: 5px; /* Espacio entre pestañas */
-        padding-bottom: 0px; /* Eliminar padding inferior si existe */
-    }
-
-    /* Botones individuales de las pestañas (inactivas) */
-    button[data-baseweb="tab"] {
-        border: 1px solid #e0e0e0;
-        border-bottom: none; /* Sin borde inferior para conectar */
-        border-radius: 8px 8px 0 0; /* Bordes redondeados arriba */
-        padding: 10px 18px !important;
-        margin: 0px; /* Resetear margen */
-        background-color: #f0f0f0; /* Fondo gris claro inactivo */
-        color: #555; /* Texto gris oscuro */
-        transition: background-color 0.2s ease, color 0.2s ease;
-        position: relative; /* Para el posicionamiento del :after */
-        bottom: -1px; /* Bajar 1px para alinearse con la línea base */
-    }
-
-     /* Efecto hover en pestañas inactivas */
-    button[data-baseweb="tab"]:not([aria-selected="true"]):hover {
-        background-color: #e5e5e5;
-        color: #333;
-    }
-
-    /* Pestaña activa */
-    button[data-baseweb="tab"][aria-selected="true"] {
-        background-color: white; /* Fondo blanco (color del contenido) */
-        border-color: #e0e0e0; /* Mismo color de borde */
-        color: #0068c9; /* Color de texto principal */
-        font-weight: 600; /* Un poco más grueso */
-        /* La clave: el borde inferior es blanco para 'ocultar' la línea base */
-        border-bottom-color: white !important;
-        z-index: 1; /* Ponerla por encima de la línea base */
-    }
-
-    /* Ocultar la línea azul indicadora por defecto */
-     div[data-baseweb="tab-highlight"] {
-        display: none;
-    }
-
-    /* Contenido debajo de las pestañas (asegurar que no haya espacio extra arriba) */
-    div[data-testid="stTabContent"] {
-        padding-top: 20px; /* Ajustar según sea necesario */
-        border-top: none; /* Asegurar que no haya doble borde */
-    }
-</style>
-""", unsafe_allow_html=True)
-
-hide_st_style = """
-    <style>
-    /* Oculta el menú de hamburguesa */
-    #MainMenu {visibility: hidden;}
-
-    /* Oculta el encabezado de la app */
-    header {visibility: hidden;}
-
-    /* Oculta el "Made with Streamlit" footer */
-    footer {visibility: hidden;}
-
-    /* Oculta la barra de estado inferior (iconos) */
-    [data-testid="stStatusWidget"] {visibility: hidden;}
-    </style>
-"""
-st.markdown(hide_st_style, unsafe_allow_html=True)
-
-# Registrar fuente Unicode para tildes/ñ
-FONT_REGISTERED = False
-FONT_NAME = 'DejaVuSans'
-FALLBACK_FONT_NAME = 'Helvetica' # Fuente por defecto de ReportLab
-try:
-    pdfmetrics.registerFont(TTFont(FONT_NAME, 'DejaVuSans.ttf'))
-    FONT_REGISTERED = True
-    print(f"INFO: Fuente '{FONT_NAME}' registrada correctamente para PDF.")
-except Exception as e:
-    st.sidebar.warning(f"Advertencia PDF: No se encontró '{FONT_NAME}.ttf'. Caracteres especiales podrían no mostrarse. Usando '{FALLBACK_FONT_NAME}'. Error: {e}")
-    FONT_NAME = FALLBACK_FONT_NAME
 
 # ==============================
-# DEFINICIÓN DE PLANES Y PERMISOS
-# ==============================
-PLAN_FEATURES = {
-    "Explorer": {
-        "reports_per_month": 0, "chat_queries_per_day": 4, "projects_per_year": 2,
-        "has_report_generation": False, "has_creative_conversation": False,
-        "has_concept_generation": False, "has_idea_evaluation": False,
-        "has_image_evaluation": False, "has_video_evaluation": False,
-        "transcript_file_limit": 1, "ppt_downloads_per_month": 2,
-    },
-    "Strategist": {
-        "reports_per_month": 0, "chat_queries_per_day": float('inf'), "projects_per_year": 10,
-        "has_report_generation": False, "has_creative_conversation": True,
-        "has_concept_generation": True, "has_idea_evaluation": False,
-        "has_image_evaluation": False, "has_video_evaluation": False,
-        "transcript_file_limit": 5, "ppt_downloads_per_month": 4,
-    },
-    "Enterprise": {
-        "reports_per_month": float('inf'), "chat_queries_per_day": float('inf'), "projects_per_year": float('inf'),
-        "has_report_generation": True, "has_creative_conversation": True,
-        "has_concept_generation": True, "has_idea_evaluation": True,
-        "has_image_evaluation": True, "has_video_evaluation": True,
-        "transcript_file_limit": 10, "ppt_downloads_per_month": float('inf'),
-    }
-}
-
-# ==============================
-# CONEXIÓN A SUPABASE
-# ==============================
-supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
-
-# ==============================
-# Autenticación con Supabase Auth (Botones ajustados)
+# 1. IMPORTAR MÓDULOS
 # ==============================
 
-def show_signup_page():
-    st.header("Crear Nueva Cuenta")
-    email = st.text_input("Tu Correo Electrónico")
-    password = st.text_input("Crea una Contraseña", type="password")
-    invite_code = st.text_input("Código de Invitación de tu Empresa")
-
-    if st.button("Registrarse", use_container_width=True):
-        if not email or not password or not invite_code:
-            st.error("Por favor, completa todos los campos.")
-            return
-
-        try:
-            client_response = supabase.table("clients").select("id").eq("invite_code", invite_code).single().execute()
-            if not client_response.data:
-                st.error("El código de invitación no es válido.")
-                return
-            selected_client_id = client_response.data['id']
-            auth_response = supabase.auth.sign_up({
-                "email": email, "password": password,
-                "options": { "data": { 'client_id': selected_client_id } }
-            })
-            st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
-        except Exception as e:
-            print(f"----------- ERROR DETALLADO DE REGISTRO -----------\n{e}\n-------------------------------------------------")
-            st.error(f"Error en el registro: {e}")
-
-    if st.button("¿Ya tienes cuenta? Inicia Sesión", type="secondary", use_container_width=True):
-         st.session_state.page = "login"
-         st.rerun()
-
-def show_login_page():
-    st.header("Iniciar Sesión")
-    email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
-    password = st.text_input("Contraseña", type="password", placeholder="password")
-
-    if st.button("Ingresar", use_container_width=True):
-        try:
-            response = supabase.auth.sign_in_with_password({"email": email, "password": password})
-            user_id = response.user.id
-            user_profile = supabase.table("users").select("*, rol, clients(client_name, plan)").eq("id", user_id).single().execute()
-            if user_profile.data and user_profile.data.get('clients'):
-                client_info = user_profile.data['clients']
-                st.session_state.logged_in = True
-                st.session_state.user = user_profile.data['email']
-                st.session_state.cliente = client_info['client_name'].lower()
-                st.session_state.plan = client_info.get('plan', 'Explorer')
-                st.session_state.plan_features = PLAN_FEATURES.get(st.session_state.plan, PLAN_FEATURES['Explorer'])
-                st.session_state.is_admin = (user_profile.data.get('rol', '') == 'admin')
-                st.rerun()
-            else:
-                st.error("Perfil de usuario no encontrado. Contacta al administrador.")
-        except Exception as e:
-            st.error("Credenciales incorrectas o cuenta no confirmada.")
-
-    # Apilar botones verticalmente
-    if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
-        st.session_state.page = "signup"
-        st.rerun()
-
-    if st.button("¿Olvidaste tu contraseña?", type="secondary", use_container_width=True):
-        st.session_state.page = "reset_password"
-        st.rerun()
-
-def show_reset_password_page():
-    st.header("Restablecer Contraseña")
-    st.write("Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.")
-    email = st.text_input("Tu Correo Electrónico")
-
-    if st.button("Enviar enlace de recuperación", use_container_width=True):
-        if not email:
-            st.warning("Por favor, ingresa tu correo electrónico.")
-            return
-
-        try:
-            supabase.auth.reset_password_for_email(email)
-            st.success("¡Correo enviado! Revisa tu bandeja de entrada.")
-            st.info("Sigue las instrucciones del correo para crear una nueva contraseña. Una vez creada, podrás iniciar sesión.")
-        except Exception as e:
-            st.error(f"Error al enviar el correo: {e}")
-
-    if st.button("Volver a Iniciar Sesión", type="secondary", use_container_width=True):
-         st.session_state.page = "login"
-         st.rerun()
-
-# ==============================
-# Funciones de Reset
-# ==============================
-def reset_report_workflow():
-    for k in ["report", "last_question", "report_question", "personalization", "rating"]:
-        st.session_state.pop(k, None)
-
-def reset_chat_workflow():
-    st.session_state.pop("chat_history", None)
-
-# ==============================
-# CONFIGURACIÓN DE LA API DE GEMINI (CON ROTACIÓN)
-# ==============================
-api_keys = [st.secrets["API_KEY_1"], st.secrets["API_KEY_2"], st.secrets["API_KEY_3"]]
-
-if "api_key_index" not in st.session_state:
-    st.session_state.api_key_index = 0
-
-def configure_api_dynamically():
-    global api_keys
-    index = st.session_state.api_key_index
-    try:
-        api_key = api_keys[index]; genai.configure(api_key=api_key)
-        st.session_state.api_key_index = (index + 1) % len(api_keys)
-        print(f"INFO: Usando API Key #{index + 1}")
-    except IndexError: st.error(f"Error: Índice API Key ({index}) fuera de rango.")
-    except Exception as e: st.error(f"Error config API Key #{index + 1}: {e}")
-
-generation_config = {"temperature": 0.5, "top_p": 0.8, "top_k": 32, "max_output_tokens": 8192}
-safety_settings = [{"category": c, "threshold": "BLOCK_ONLY_HIGH"} for c in ["HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT"]]
-model = genai.GenerativeModel(model_name="gemini-2.5-flash", generation_config=generation_config, safety_settings=safety_settings)
-
-def call_gemini_api(prompt):
-    configure_api_dynamically()
-    try:
-        if isinstance(prompt, list): response = model.generate_content(prompt)
-        else: response = model.generate_content([prompt])
-        return html.unescape(response.text)
-    except Exception as e: print(f"ERROR GEMINI: {e}"); st.error(f"Error API Gemini (Key #{st.session_state.api_key_index}): {e}. Tipo: {type(prompt)}"); return None
-
-# ==============================
-# RASTREO DE USO
-# ==============================
-def log_query_event(query_text, mode, rating=None):
-    try:
-        data = {"id": datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f"), "user_name": st.session_state.user, "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(), "mode": mode, "query": query_text, "rating": rating}
-        supabase.table("queries").insert(data).execute()
-    except Exception as e: print(f"Error log query: {e}")
-
-def get_monthly_usage(username, action_type):
-    try: first_day_iso = datetime.date.today().replace(day=1).isoformat(); response = supabase.table("queries").select("id", count='exact').eq("user_name", username).eq("mode", action_type).gte("timestamp", first_day_iso).execute(); return response.count
-    except Exception as e: print(f"Error get monthly usage: {e}"); return 0
-
-def get_daily_usage(username, action_type):
-    try: today_start_iso = datetime.datetime.now(datetime.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat(); response = supabase.table("queries").select("id", count='exact').eq("user_name", username).eq("mode", action_type).gte("timestamp", today_start_iso).execute(); return response.count
-    except Exception as e: print(f"Error get daily usage: {e}"); return 0
-
-# ==============================
-# FUNCIONES AUXILIARES Y DE PDF
-# ==============================
-def normalize_text(text):
-    if not text: return ""
-    try: normalized = unicodedata.normalize("NFD", str(text)); return "".join(c for c in normalized if unicodedata.category(c) != "Mn").lower()
-    except Exception as e: print(f"Error normalizing: {e}"); return str(text).lower()
-
-class PDFReport:
-    def __init__(self, buffer_or_filename, banner_path=None):
-        self.banner_path = banner_path
-        self.elements = []
-        self.styles = getSampleStyleSheet()
-        self.doc = SimpleDocTemplate(buffer_or_filename, pagesize=A4, 
-                                     rightMargin=15*mm, leftMargin=15*mm,
-                                     topMargin=40*mm, bottomMargin=20*mm)
-        
-        pdf_font_name = FONT_NAME
-        base_styles = ['Normal', 'BodyText', 'Italic', 'Bold', 'Heading1', 'Heading2', 'Heading3', 'Heading4', 'Heading5', 'Heading6', 'Code']
-        
-        for style_name in base_styles:
-            if style_name in self.styles:
-                try:
-                    self.styles[style_name].fontName = pdf_font_name
-                    if style_name == 'Code':
-                        if pdf_font_name == FALLBACK_FONT_NAME or not FONT_REGISTERED: 
-                            self.styles[style_name].fontName = 'Courier'
-                        self.styles[style_name].fontSize = 9
-                        self.styles[style_name].leading = 11
-                        self.styles[style_name].leftIndent = 6*mm
-                        self.styles[style_name].backColor = colors.whitesmoke
-                        self.styles[style_name].textColor = colors.darkslategrey
-                except Exception as e:
-                    print(f"Warn: Font '{pdf_font_name}' -> '{style_name}'. {e}")
-
-        self.styles.add(ParagraphStyle(name='CustomTitle', parent=self.styles['Heading1'], fontName=pdf_font_name, 
-                                       alignment=1, spaceAfter=14, fontSize=16, leading=20)) 
-        
-        self.styles.add(ParagraphStyle(name='CustomHeading2', parent=self.styles['Heading2'], fontName=pdf_font_name, 
-                                       spaceBefore=12, spaceAfter=6, fontSize=13, leading=17))
-        self.styles.add(ParagraphStyle(name='CustomHeading3', parent=self.styles['Heading3'], fontName=pdf_font_name, 
-                                       spaceBefore=10, spaceAfter=5, fontSize=12, leading=16))
-
-        self.styles.add(ParagraphStyle(name='CustomBodyText', parent=self.styles['Normal'], fontName=pdf_font_name, 
-                                       leading=15, alignment=4, fontSize=11, spaceAfter=6)) 
-        
-        self.styles.add(ParagraphStyle(name='CustomBullet', parent=self.styles['Normal'], fontName=pdf_font_name,
-                                       fontSize=11, leading=15, spaceAfter=4,
-                                       leftIndent=10*mm, bulletIndent=5*mm)) # Indentación clave
-                                       
-        self.styles.add(ParagraphStyle(name='CustomNumber', parent=self.styles['Normal'], fontName=pdf_font_name,
-                                       fontSize=11, leading=15, spaceAfter=4,
-                                       leftIndent=10*mm, bulletIndent=5*mm)) # Indentación clave
-
-        self.styles.add(ParagraphStyle(name='CustomFooter', parent=self.styles['Normal'], fontName=pdf_font_name, 
-                                       alignment=1, textColor=colors.grey, fontSize=8))
-
-    def header(self, canvas, doc):
-        canvas.saveState()
-        if self.banner_path and os.path.isfile(self.banner_path):
-            try:
-                # Ajustar tamaño y posición del banner si es necesario
-                img_w, img_h = 210*mm, 30*mm # Banner un poco más pequeño
-                y_pos = A4[1] - img_h - 5*mm # Bajarlo un poco
-                canvas.drawImage(self.banner_path, 0, y_pos, width=img_w, height=img_h, 
-                                 preserveAspectRatio=True, anchor='n')
-            except Exception as e:
-                print(f"Error PDF header: {e}")
-        canvas.restoreState()
-        
-    def footer(self, canvas, doc):
-        canvas.saveState()
-        footer_text = "Generado por Atelier Data Studio. Es posible que se muestre información imprecisa. Verifica las respuestas."
-        p = Paragraph(footer_text, self.styles['CustomFooter'])
-        w, h = p.wrap(doc.width, doc.bottomMargin)
-        p.drawOn(canvas, doc.leftMargin, 8*mm)
-        canvas.restoreState()
-        
-    def header_footer(self, canvas, doc): 
-        self.header(canvas, doc)
-        self.footer(canvas, doc)
-
-    def add_paragraph(self, text, style='CustomBodyText'):
-        """Añade un párrafo con el estilo especificado."""
-        try:
-            # Usar HTML <br> para saltos de línea explícitos dentro del párrafo
-            text_with_breaks = text.replace('\n', '<br/>')
-            style_to_use = self.styles.get(style, self.styles['CustomBodyText'])
-            p = Paragraph(text_with_breaks, style_to_use)
-            self.elements.append(p)
-            # No añadir Spacer aquí, el estilo ya tiene spaceAfter
-        except Exception as e:
-            print(f"Err add para: {e}. Text: {text[:100]}...")
-            self.elements.append(Paragraph(f"Err render: {text[:100]}...", self.styles['Code']))
-
-    def add_title(self, text, level=1):
-        """Añade un título basado en el nivel (H1, H2, H3)."""
-        if level == 1:
-            style_name = 'CustomTitle'
-        elif level == 2:
-            style_name = 'CustomHeading2'
-        elif level >= 3:
-            style_name = 'CustomHeading3' # Usar H3 para H3 y superiores
-        else: # Por defecto, H2
-            style_name = 'CustomHeading2'
-            
-        style_to_use = self.styles.get(style_name, self.styles['CustomHeading2'])
-        p = Paragraph(text, style_to_use)
-        self.elements.append(p)
-        # No añadir Spacer, los estilos ya tienen spaceBefore/After
-
-    def build_pdf(self):
-        try:
-            self.doc.build(self.elements, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
-        except Exception as e:
-            st.error(f"Error building PDF: {e}")
-
-def add_markdown_content(pdf: PDFReport, markdown_text: str):
-    processed_elements = 0
-    try:
-        decoded_text = html.unescape(str(markdown_text))
-        html_text = markdown2.markdown(decoded_text, extras=[
-            "fenced-code-blocks", "tables", "break-on-newline",
-            "code-friendly", "cuddled-lists", "smarty-pants"
-        ])
-
-        soup = BeautifulSoup(html_text, "html.parser")
-        container = soup.body if soup.body else soup
-
-        if not container:
-             print("WARN: BeautifulSoup container is empty after parsing.")
-             raise ValueError("Could not parse HTML content.")
-
-        for elem in container.children:
-            try:
-                if isinstance(elem, str):
-                    # (Manejo de texto suelto sin cambios)
-                    text = elem.strip()
-                    if text:
-                        pdf.add_paragraph(text)
-                        processed_elements += 1
-                    continue
-
-                if not hasattr(elem, 'name') or not elem.name:
-                    continue
-
-                tag_name = elem.name.lower()
-
-                # --- Títulos ---
-                if tag_name.startswith("h"):
-                   # (Manejo de títulos sin cambios)
-                   level = int(tag_name[1]) if len(tag_name) > 1 and tag_name[1].isdigit() else 1
-                   title_text = elem.get_text(strip=True)
-                   if title_text:
-                       pdf.add_title(title_text, level=level)
-                       processed_elements += 1
-
-                # --- Párrafos ---
-                elif tag_name == "p":
-                    # (Manejo de párrafos sin cambios)
-                    content = ""
-                    try:
-                        content = elem.decode_contents(formatter="html").strip()
-                        # Si decode_contents devuelve HTML simple (sin tags anidados complejos), funcionará.
-                        # Si falla, get_text es el fallback.
-                    except Exception:
-                        content = elem.get_text(strip=True)
-                    if content:
-                        pdf.add_paragraph(content)
-                        processed_elements += 1
-
-                # --- Listas con Viñetas (ul) - EXTRACCIÓN DE TEXTO PURO ---
-                elif tag_name == "ul":
-                    list_items = elem.find_all("li", recursive=False)
-                    if not list_items: continue
-                    for li in list_items:
-                        # Extraer TODO el texto dentro del <li>, ignorando tags HTML internos
-                        # separator=' ' une textos de diferentes tags con un espacio
-                        content = li.get_text(separator=' ', strip=True)
-
-                        if content:
-                            # Añadir viñeta manualmente y luego el texto plano
-                            pdf.add_paragraph(f"• {content}", style='CustomBullet') # Usamos el estilo solo para indentación
-                            processed_elements += 1
-
-                # --- Listas Numeradas (ol) - EXTRACCIÓN DE TEXTO PURO ---
-                elif tag_name == "ol":
-                    list_items = elem.find_all("li", recursive=False)
-                    if not list_items: continue
-                    for idx, li in enumerate(list_items, 1):
-                        # Extraer TODO el texto dentro del <li>
-                        content = li.get_text(separator=' ', strip=True)
-
-                        if content:
-                            # Añadir número manualmente y luego el texto plano
-                            pdf.add_paragraph(f"{idx}. {content}", style='CustomNumber') # Usamos el estilo solo para indentación
-                            processed_elements += 1
-
-                # --- Bloques de Código ---
-                elif tag_name == "pre":
-                   # (Manejo de código sin cambios)
-                   code_elem = elem.find('code')
-                   code_text = (code_elem.get_text() if code_elem else elem.get_text())
-                   if code_text:
-                       pdf.add_paragraph(code_text, style='Code')
-                       processed_elements += 1
-
-                # --- Citas ---
-                elif tag_name == "blockquote":
-                    # (Manejo de citas sin cambios)
-                    content = ""
-                    try:
-                        content = elem.decode_contents(formatter="html").strip()
-                    except:
-                        content = elem.get_text(strip=True)
-                    if content:
-                        pdf.add_paragraph(f"> {content}", style='Italic')
-                        processed_elements += 1
-
-                # --- Otros elementos (intentar como párrafo) ---
-                else:
-                    # (Manejo de otros elementos sin cambios)
-                    try:
-                        content = elem.decode_contents(formatter="html").strip()
-                        if content:
-                            pdf.add_paragraph(content)
-                            processed_elements += 1
-                    except Exception:
-                        plain_text = elem.get_text(strip=True)
-                        if plain_text:
-                            pdf.add_paragraph(plain_text)
-                            processed_elements += 1
-
-            except Exception as loop_error:
-                # (Manejo de errores en el loop sin cambios)
-                print(f"ERROR processing element: <{elem.name if hasattr(elem, 'name') else 'unknown'}>. Error: {loop_error!r}")
-                pdf.add_paragraph(f"--- Error processing tag: {elem.name if hasattr(elem, 'name') else 'unknown'} ---", style='Code')
-                continue
-
-        if processed_elements == 0 and markdown_text.strip():
-             print("WARN: No elements were processed by add_markdown_content, but input text was not empty.")
-             # No lanzar error aquí, simplemente añadir el texto plano como fallback final
-             pdf.add_paragraph("--- Warning: Markdown parsing yielded no elements. Displaying raw text: ---", style='Code')
-             pdf.add_paragraph(str(markdown_text), style='CustomBodyText')
-
-    except Exception as e:
-        # (Manejo de error crítico sin cambios)
-        print(f"CRITICAL ERROR in add_markdown_content: {e!r}")
-        pdf.add_paragraph("--- Error Crítico al Parsear Markdown ---", style='Code')
-        pdf.add_paragraph(str(markdown_text), style='Code')
-        pdf.add_paragraph("--- Fin del Error ---", style='Code')
-        
-@st.cache_data(show_spinner=False)
-def load_database(cliente: str):
-    try:
-        s3 = boto3.client("s3", endpoint_url=st.secrets["S3_ENDPOINT_URL"], aws_access_key_id=st.secrets["S3_ACCESS_KEY"], aws_secret_access_key=st.secrets["S3_SECRET_KEY"])
-        response = s3.get_object(Bucket=st.secrets.get("S3_BUCKET"), Key="resultado_presentacion (1).json")
-        data = json.loads(response["Body"].read().decode("utf-8")); cliente_norm = normalize_text(cliente or "")
-        if cliente_norm not in ["insights-atelier", "generico"]: # Permitir acceso total a 'generico'
-             data = [doc for doc in data if "atelier" in normalize_text(doc.get("cliente", "")) or cliente_norm in normalize_text(doc.get("cliente", ""))]
-        return data
-    except Exception as e: st.error(f"Error S3: {e}"); return []
-
-def extract_brand(filename):
-    if not filename or not isinstance(filename, str) or "In-ATL_" not in filename: return ""
-    try: base_filename = filename.replace("\\", "/").split("/")[-1]; return base_filename.split("In-ATL_")[1].rsplit(".", 1)[0] if "In-ATL_" in base_filename else ""
-    except Exception as e: print(f"Error extract brand: {e}"); return ""
-
-def get_relevant_info(db, question, selected_files):
-    all_text = ""; selected_files_set = set(selected_files) if isinstance(selected_files, (list, set)) else set()
-    for pres in db:
-        doc_name = pres.get('nombre_archivo')
-        if doc_name and doc_name in selected_files_set:
-            try:
-                title = pres.get('titulo_estudio', doc_name); all_text += f"Documento: {title}\n"
-                for grupo in pres.get("grupos", []):
-                    grupo_index = grupo.get('grupo_index', 'N/A'); contenido = str(grupo.get('contenido_texto', '')); metadatos = json.dumps(grupo.get('metadatos', {}), ensure_ascii=False) if grupo.get('metadatos') else ""; hechos = json.dumps(grupo.get('hechos', []), ensure_ascii=False) if grupo.get('hechos') else ""
-                    all_text += f" Grupo {grupo_index}: {contenido}\n";
-                    if metadatos: all_text += f"  Metadatos: {metadatos}\n"
-                    if hechos: all_text += f"  Hechos: {hechos}\n"
-                all_text += "\n---\n\n"
-            except Exception as e: print(f"Error proc doc '{doc_name}': {e}")
-    return all_text
-
-banner_file = "Banner (2).jpg"
-
-def clean_text(text):
-    if not isinstance(text, str): text = str(text)
-    return text
-
-def generate_pdf_html(content, title="Documento Final", banner_path=None):
-    try:
-        buffer = BytesIO()
-        pdf = PDFReport(buffer, banner_path=banner_path) # Crear instancia de PDFReport
-        pdf.add_title(title, level=1) # Añadir título principal
-        
-        # --- ASEGÚRATE QUE ESTA LÍNEA PASE 'pdf' PRIMERO ---
-        add_markdown_content(pdf, content) 
-        # ---------------------------------------------------
-        
-        pdf.build_pdf() # Construir el PDF
-        pdf_data = buffer.getvalue()
-        buffer.close()
-        
-        if pdf_data:
-            return pdf_data
-        else:
-            st.error("Error interno al construir PDF.")
-            return None
-            
-    except Exception as e:
-        st.error(f"Error crítico al generar PDF: {e}")
-        return None
-
-# ==============================
-# PPT ONE PAGER
-# ==============================
-
-def crear_ppt_one_pager(data: dict):
-    """
-    Toma un diccionario estructurado y genera un archivo .pptx en memoria.
-    """
-    try:
-        # 1. Cargar tu plantilla (asegúrate que el nombre sea correcto)
-        prs = Presentation("Plantilla_PPT_ATL.pptx") 
-        
-        prs.slide_width = Inches(16)
-        prs.slide_height = Inches(9)
-        
-        # 2. Usar el layout en blanco (índice 6) de tu plantilla
-        blank_slide_layout = prs.slide_layouts[6] 
-        slide = prs.slides.add_slide(blank_slide_layout)
-
-        # --- Título (Centrado arriba) ---
-        txBox_title = slide.shapes.add_textbox(Inches(1.5), Inches(0.5), Inches(13), Inches(1))
-        p_title = txBox_title.text_frame.paragraphs[0]
-        p_title.text = data.get("titulo_diapositiva", "Resumen Estratégico")
-        p_title.font.bold = True
-        p_title.font.size = Pt(44) # Un poco más grande
-        p_title.alignment = PP_ALIGN.CENTER
-        txBox_title.text_frame.auto_size = True 
-
-        # --- Insight Clave (Alineado a la izquierda, debajo del título) ---
-        txBox_insight = slide.shapes.add_textbox(Inches(1.5), Inches(1.8), Inches(13), Inches(1))
-        tf_insight = txBox_insight.text_frame
-        tf_insight.word_wrap = True
-        
-        p_insight = tf_insight.add_paragraph()
-        p_insight.text = f"Insight Clave: {data.get('insight_clave', 'N/A')}"
-        p_insight.font.italic = True
-        p_insight.font.size = Pt(18)
-        p_insight.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
-        p_insight.alignment = PP_ALIGN.LEFT # <-- Alineado a la izquierda como en Imagen 2
-        
-        # --- Cuadro de Contenido Principal (para todo lo demás) ---
-        content_left = Inches(1.5)
-        content_top = Inches(2.8)
-        content_width = Inches(13)
-        content_height = Inches(5.5) # Alto suficiente para todo
-
-        txBox_content = slide.shapes.add_textbox(content_left, content_top, content_width, content_height)
-        tf_content = txBox_content.text_frame
-        tf_content.word_wrap = True
-
-        # --- Hallazgos Principales ---
-        p_h_title = tf_content.paragraphs[0]
-        p_h_title.text = "Hallazgos Principales"
-        p_h_title.font.bold = True
-        p_h_title.font.size = Pt(28)
-        p_h_title.space_after = Pt(6)
-
-        for hallazgo in data.get("hallazgos_principales", ["N/A"]):
-            p = tf_content.add_paragraph()
-            p.text = hallazgo
-            p.font.size = Pt(16)
-            p.level = 1 # <-- ESTO CREA LA VIÑETA (BULLET)
-            p.space_after = Pt(6) # Espacio entre viñetas
-
-        # Espacio grande entre secciones
-        tf_content.add_paragraph().space_after = Pt(14)
-
-        # --- Oportunidades ---
-        p_o_title = tf_content.add_paragraph()
-        p_o_title.text = "Oportunidades"
-        p_o_title.font.bold = True
-        p_o_title.font.size = Pt(28)
-        p_o_title.space_after = Pt(6)
-        
-        for op in data.get("oportunidades", ["N/A"]):
-            p = tf_content.add_paragraph()
-            p.text = op
-            p.font.size = Pt(16)
-            p.level = 1
-            p.space_after = Pt(6)
-
-        # Espacio grande entre secciones
-        tf_content.add_paragraph().space_after = Pt(14)
-
-        # --- Recomendación Estratégica ---
-        p_r_title = tf_content.add_paragraph()
-        p_r_title.text = "Recomendación Estratégica"
-        p_r_title.font.bold = True
-        p_r_title.font.size = Pt(28)
-        p_r_title.space_after = Pt(6)
-        
-        p_r = tf_content.add_paragraph()
-        p_r.text = data.get("recomendacion_estrategica", "N/A")
-        p_r.font.size = Pt(16)
-        p_r.level = 1
-        p_r.space_after = Pt(6)
-        
-        # --- Guardar en memoria ---
-        f = BytesIO()
-        prs.save(f)
-        f.seek(0)
-        return f.getvalue()
-
-    except Exception as e:
-        st.error(f"Error al generar el archivo .pptx: {e}") 
-        return None
-
-# =====================================================
-# MODOS DE LA APLICACIÓN 
-# =====================================================
-def generate_final_report(question, db, selected_files):
-    relevant_info = get_relevant_info(db, question, selected_files)
-    prompt1 = ( f"Pregunta del Cliente: ***{question}***\n\nInstrucciones:\n1. Identifica marca/producto exacto.\n2. Reitera: ***{question}***.\n3. Usa contexto para hallazgos relevantes.\n4. Extractos breves, no citas completas.\n5. Metadatos y cita IEEE [1].\n6. Referencias completas asociadas a [1], usar título de proyecto.\n7. Enfócate en hallazgos positivos.\n\nContexto:\n{relevant_info}\n\nRespuesta:\n## Hallazgos Clave:\n- [Hallazgo 1 [1]]\n- [Hallazgo 2 [2]]\n## Referencias:\n- [1] [Referencia completa 1]\n- [2] [Referencia completa 2]" )
-    result1 = call_gemini_api(prompt1)
-    if result1 is None: return None
-    prompt2 = ( f"Pregunta: ***{question}***\n\nInstrucciones:\n1. Responde específico a marca/producto.\n2. Menciona que estudios son de Atelier.\n3. Rol: Analista experto (Ciencias Comportamiento, Mkt Research, Mkt Estratégico). Claridad, síntesis, estructura.\n4. Estilo: Claro, directo, conciso, memorable (Heath). Evita tecnicismos.\n\nEstructura Informe (breve y preciso):\n- Introducción: Contexto, pregunta, hallazgo cualitativo atractivo.\n- Hallazgos Principales: Hechos relevantes del contexto/resultados, respondiendo a pregunta. Solo info relevante de marca/producto. Citas IEEE [1] (título estudio).\n- Insights: Aprendizajes profundos, analogías. Frases cortas con significado.\n- Conclusiones: Síntesis, dirección clara basada en insights. No repetir.\n- Recomendaciones (3-4): Concretas, creativas, accionables, alineadas con insights/conclusiones.\n- Referencias: Título estudio [1].\n\n5. IMPORTANTE: Espaciar nombres de marcas/productos (ej: 'marca X debe...').\n\nUsa este Resumen y Contexto:\nResumen:\n{result1}\n\nContexto Adicional:\n{relevant_info}\n\nRedacta informe completo:" )
-    result2 = call_gemini_api(prompt2)
-    if result2 is None: return None
-    return result2
-
-def report_mode(db, selected_files):
-    st.markdown("### Generar Reporte de Reportes")
-    st.markdown("Herramienta potente para síntesis. Analiza estudios seleccionados y genera informe consolidado.")
-    if "report" in st.session_state and st.session_state["report"]:
-        st.markdown("---"); st.markdown("### Informe Generado"); st.markdown(st.session_state["report"], unsafe_allow_html=True); st.markdown("---")
-    question = st.text_area("Escribe tu consulta para el reporte…", value=st.session_state.get("last_question", ""), height=150, key="report_question")
-    if st.button("Generar Reporte", use_container_width=True):
-        report_limit = st.session_state.plan_features.get('reports_per_month', 0); current_reports = get_monthly_usage(st.session_state.user, "Generar un reporte de reportes")
-        if current_reports >= report_limit and report_limit != float('inf'): st.error(f"Límite de {int(report_limit)} reportes alcanzado."); return
-        if not question.strip(): st.warning("Ingresa una consulta."); return
-        st.session_state["last_question"] = question
-        with st.spinner("Generando informe..."): report = generate_final_report(question, db, selected_files)
-        if report is None: st.error("No se pudo generar."); st.session_state.pop("report", None)
-        else: st.session_state["report"] = report; log_query_event(question, mode="Generar un reporte de reportes"); st.rerun()
-    if "report" in st.session_state and st.session_state["report"]:
-        pdf_bytes = generate_pdf_html(st.session_state["report"], title="Informe Final", banner_path=banner_file)
-        col1, col2 = st.columns(2)
-        with col1:
-            if pdf_bytes: st.download_button("Descargar PDF", data=pdf_bytes, file_name="Informe_AtelierIA.pdf", mime="application/pdf", use_container_width=True)
-            else: st.button("Error PDF", disabled=True, use_container_width=True)
-        with col2: st.button("Nueva consulta", on_click=reset_report_workflow, key="new_report_query_btn", use_container_width=True)
-
-def grounded_chat_mode(db, selected_files):
-    st.subheader("Chat de Consulta Directa"); st.markdown("Preguntas específicas, respuestas basadas solo en hallazgos seleccionados.")
-    if "chat_history" not in st.session_state: st.session_state.chat_history = []
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg['role']): st.markdown(msg['message'])
-    user_input = st.chat_input("Escribe tu pregunta...")
-    if user_input:
-        st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
-        with st.chat_message("Usuario"): st.markdown(user_input)
-        query_limit = st.session_state.plan_features.get('chat_queries_per_day', 0); current_queries = get_daily_usage(st.session_state.user, "Chat de Consulta Directa")
-        if current_queries >= query_limit and query_limit != float('inf'): st.error(f"Límite de {int(query_limit)} consultas diarias alcanzado."); return
-        with st.chat_message("Asistente"):
-            message_placeholder = st.empty(); message_placeholder.markdown("Pensando...")
-            relevant_info = get_relevant_info(db, user_input, selected_files); conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history[-10:])
-            grounded_prompt = (f"**Tarea:** Asistente IA. Responde **última pregunta** del Usuario usando **solo** 'Información documentada' e 'Historial'.\n\n**Historial (reciente):**\n{conversation_history}\n\n**Información documentada:**\n{relevant_info}\n\n**Instrucciones:**\n1. Enfócate en última pregunta.\n2. Sintetiza hallazgos relevantes.\n3. Respuesta corta, clara, basada en hallazgos (no metodología/objetivos).\n4. Fidelidad absoluta a info documentada.\n5. Si falta info: \"La información solicitada no se encuentra disponible...\".\n6. Especificidad marca/producto.\n7. Sin citas.\n\n**Respuesta:**")
-            response = call_gemini_api(grounded_prompt)
-            if response: message_placeholder.markdown(response); st.session_state.chat_history.append({"role": "Asistente", "message": response}); log_query_event(user_input, mode="Chat de Consulta Directa")
-            else: message_placeholder.error("Error al generar respuesta.")
-    if st.session_state.chat_history:
-        col1, col2 = st.columns([1,1])
-        with col1:
-             pdf_bytes = generate_pdf_html("\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history), title="Historial Consulta", banner_path=banner_file)
-             if pdf_bytes: st.download_button("Descargar Chat PDF", data=pdf_bytes, file_name="chat_consulta.pdf", mime="application/pdf", use_container_width=True)
-        with col2: st.button("Nueva Conversación", on_click=reset_chat_workflow, key="new_grounded_chat_btn", use_container_width=True)
-
-def ideacion_mode(db, selected_files):
-    st.subheader("Conversaciones Creativas"); st.markdown("Explora ideas novedosas basadas en hallazgos.")
-    if "chat_history" not in st.session_state: st.session_state.chat_history = []
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg['role']): st.markdown(msg['message'])
-    user_input = st.chat_input("Lanza una idea o pregunta...")
-    if user_input:
-        st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
-        with st.chat_message("Usuario"): st.markdown(user_input)
-        with st.chat_message("Asistente"):
-            message_placeholder = st.empty(); message_placeholder.markdown("Generando ideas...")
-            relevant = get_relevant_info(db, user_input, selected_files); conv_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history[-10:])
-            conv_prompt = (f"**Tarea:** Experto Mkt/Innovación creativo. Conversación inspiradora con usuario sobre ideas/soluciones basadas **solo** en 'Información de contexto' e 'Historial'.\n\n**Historial:**\n{conv_history}\n\n**Contexto (hallazgos):**\n{relevant}\n\n**Instrucciones:**\n1. Rol: Experto creativo.\n2. Base: Solo 'Contexto' (resultados/hallazgos).\n3. Objetivo: Ayudar a explorar soluciones creativas conectando datos.\n4. Inicio (1er msg asistente): Breve resumen estudios relevantes.\n5. Estilo: Claro, sintético, inspirador.\n6. Citas: IEEE [1] (ej: estudio snacks [1]).\n\n**Respuesta creativa:**")
-            resp = call_gemini_api(conv_prompt)
-            if resp: message_placeholder.markdown(resp); st.session_state.chat_history.append({"role": "Asistente", "message": resp}); log_query_event(user_input, mode="Conversaciones creativas")
-            else: message_placeholder.error("Error generando respuesta.")
-    if st.session_state.chat_history:
-        col1, col2 = st.columns([1,1])
-        with col1:
-            pdf_bytes = generate_pdf_html("\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history), title="Historial Creativo", banner_path=banner_file)
-            if pdf_bytes: st.download_button("Descargar Chat PDF", data=pdf_bytes, file_name="chat_creativo.pdf", mime="application/pdf", use_container_width=True)
-        with col2: st.button("Nueva conversación", on_click=reset_chat_workflow, key="new_chat_btn", use_container_width=True)
-
-def concept_generation_mode(db, selected_files):
-    st.subheader("Generación de Conceptos"); st.markdown("Genera concepto de producto/servicio a partir de idea y hallazgos.")
-    if "generated_concept" in st.session_state:
-        st.markdown("---"); st.markdown("### Concepto Generado"); st.markdown(st.session_state.generated_concept)
-        if st.button("Generar nuevo concepto", use_container_width=True): st.session_state.pop("generated_concept"); st.rerun()
-    else:
-        product_idea = st.text_area("Describe tu idea:", height=150, placeholder="Ej: Snack saludable...")
-        if st.button("Generar Concepto", use_container_width=True):
-            if not product_idea.strip(): st.warning("Describe tu idea."); return
-            with st.spinner("Generando concepto..."):
-                context_info = get_relevant_info(db, product_idea, selected_files)
-                prompt = ( f"**Tarea:** Estratega Mkt/Innovación. Desarrolla concepto estructurado a partir de 'Idea' y 'Contexto'.\n\n**Idea:**\n\"{product_idea}\"\n\n**Contexto (Hallazgos):**\n\"{context_info}\"\n\n**Instrucciones:**\nGenera Markdown con estructura exacta. Basa respuestas en contexto. Sé claro, conciso, accionable.\n\n---\n\n### 1. Necesidad Consumidor\n* Identifica tensiones/deseos clave del contexto. Conecta con oportunidad.\n\n### 2. Descripción Producto/Servicio\n* Basado en Idea y enriquecido por Contexto. Características, funcionamiento.\n\n### 3. Beneficios Clave (3-4)\n* Responde a necesidad (Pto 1). Sustentado en Contexto. Funcional/Racional/Emocional.\n\n### 4. Conceptos para Evaluar (2 Opc.)\n* **Opción A:**\n    * **Insight:** (Dolor + Deseo. Basado en contexto).\n    * **What:** (Características/Beneficios. Basado en contexto/descripción).\n    * **RTB:** (¿Por qué creíble? Basado en contexto).\n    * **Claim:** (Esencia memorable).\n\n* **Opción B:** (Alternativa)\n    * **Insight:**\n    * **What:**\n    * **RTB:**\n    * **Claim:**" )
-                response = call_gemini_api(prompt)
-                if response: st.session_state.generated_concept = response; log_query_event(product_idea, mode="Generación de conceptos"); st.rerun()
-                else: st.error("No se pudo generar concepto.")
-
-def idea_evaluator_mode(db, selected_files):
-    st.subheader("Evaluación de Pre-Ideas"); st.markdown("Evalúa potencial de idea contra hallazgos.")
-    if "evaluation_result" in st.session_state:
-        st.markdown("---"); st.markdown("### Evaluación"); st.markdown(st.session_state.evaluation_result)
-        if st.button("Evaluar otra idea", use_container_width=True): del st.session_state["evaluation_result"]; st.rerun()
-    else:
-        idea_input = st.text_area("Describe la idea a evaluar:", height=150, placeholder="Ej: Yogures con probióticos...")
-        if st.button("Evaluar Idea", use_container_width=True):
-            if not idea_input.strip(): st.warning("Describe una idea."); return
-            with st.spinner("Evaluando potencial..."):
-                context_info = get_relevant_info(db, idea_input, selected_files)
-                prompt = ( f"**Tarea:** Estratega Mkt/Innovación. Evalúa potencial de 'Idea' **solo** con 'Contexto' (hallazgos Atelier).\n\n**Idea:**\n\"{idea_input}\"\n\n**Contexto (Hallazgos):**\n\"{context_info}\"\n\n**Instrucciones:**\nEvalúa en Markdown estructurado. Basa **cada punto** en 'Contexto'. No conocimiento externo. No citas explícitas.\n\n---\n\n### 1. Valoración General Potencial\n* Resume: Alto, Moderado con Desafíos, Bajo según Hallazgos.\n\n### 2. Sustento Detallado (Basado en Contexto)\n* **Positivos:** Conecta idea con necesidades/tensiones clave del contexto. Hallazgos específicos que respaldan.\n* **Desafíos/Contradicciones:** Hallazgos que obstaculizan/contradicen.\n\n### 3. Sugerencias Evaluación Consumidor (Basado en Contexto)\n* 3-4 **hipótesis cruciales** (de hallazgos o vacíos). Para c/u:\n    * **Hipótesis:** (Ej: \"Consumidores valoran X sobre Y...\").\n    * **Pregunta Clave:** (Ej: \"¿Qué tan importante es X para Ud? ¿Por qué?\").\n    * **Aporte Pregunta:** (Ej: \"Validar si beneficio X resuena...\")." )
-                response = call_gemini_api(prompt)
-                if response: st.session_state.evaluation_result = response; log_query_event(idea_input, mode="Evaluación de Idea"); st.rerun()
-                else: st.error("No se pudo generar evaluación.")
-
-def image_evaluation_mode(db, selected_files):
-    st.subheader("Evaluación Visual de Creatividades")
-    st.markdown(""" Sube una imagen (JPG/PNG) y describe tu público objetivo y objetivos de comunicación. El asistente evaluará la imagen basándose en criterios de marketing y utilizará los hallazgos de los estudios seleccionados como contexto. """)
-    uploaded_file = st.file_uploader("Sube tu imagen aquí:", type=["jpg", "png", "jpeg"])
-    target_audience = st.text_area("Describe el público objetivo (Target):", height=100, placeholder="Ej: Mujeres jóvenes, 25-35 años...")
-    comm_objectives = st.text_area("Define 2-3 objetivos de comunicación:", height=100, placeholder="Ej:\n1. Generar reconocimiento.\n2. Comunicar frescura.")
-    image_bytes = None
-    if uploaded_file is not None: image_bytes = uploaded_file.getvalue(); st.image(image_bytes, caption="Imagen a evaluar", use_container_width=True)
-    st.markdown("---")
-    if st.button("Evaluar Imagen", use_container_width=True, disabled=(uploaded_file is None)):
-        if not image_bytes: st.warning("Sube una imagen."); return
-        if not target_audience.strip(): st.warning("Describe el público."); return
-        if not comm_objectives.strip(): st.warning("Define objetivos."); return
-        with st.spinner("Analizando imagen y contexto... 🧠✨"):
-            relevant_text_context = get_relevant_info(db, f"Contexto para imagen: {target_audience}", selected_files)
-            MAX_CONTEXT_TEXT = 800000 
-            if len(relevant_text_context) > MAX_CONTEXT_TEXT:
-                relevant_text_context = relevant_text_context[:MAX_CONTEXT_TEXT] + "\n\n...(contexto truncado)..."
-                st.warning("El contexto de los estudios es muy largo y ha sido truncado.", icon="⚠️")
-            prompt_parts = [ "Actúa como director creativo/estratega mkt experto. Analiza la imagen en contexto de target/objetivos, usando hallazgos como referencia.", f"\n\n**Target:**\n{target_audience}", f"\n\n**Objetivos:**\n{comm_objectives}", "\n\n**Imagen:**", Image.open(BytesIO(image_bytes)), f"\n\n**Contexto (Hallazgos Estudios):**\n```\n{relevant_text_context[:10000]}\n```", "\n\n**Evaluación Detallada (Markdown):**", "\n### 1. Notoriedad/Impacto Visual", "* ¿Capta la atención? ¿Atractiva/disruptiva para target?", "* Elementos visuales clave y su aporte (apóyate en contexto si hay insights visuales).", "\n### 2. Mensaje Clave/Claridad", "* Mensajes principal/secundarios vs objetivos?", "* ¿Claro para target? ¿Ambigüedad?", "* ¿Mensaje vs insights del contexto?", "\n### 3. Branding/Identidad", "* ¿Marca integrada efectivamente? ¿Reconocible?", "* ¿Refuerza personalidad/valores marca (según contexto)?", "\n### 4. Call to Action", "* ¿Sugiere acción o genera emoción/pensamiento (curiosidad, deseo, etc.)?", "* ¿Respuesta alineada con objetivos?", "* ¿Contexto sugiere que motivará al target?", "\n\n**Conclusión General:**", "* Valoración efectividad (target/objetivos), fortalezas, mejoras (conectando con insights si aplica)." ]
-            evaluation_result = call_gemini_api(prompt_parts)
-            if evaluation_result: st.session_state.image_evaluation_result = evaluation_result; log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode="Evaluación Visual")
-            else: st.error("No se pudo generar evaluación."); st.session_state.pop("image_evaluation_result", None)
-    if "image_evaluation_result" in st.session_state:
-        st.markdown("---"); st.markdown("### Resultados Evaluación:"); st.markdown(st.session_state.image_evaluation_result)
-        col1, col2 = st.columns(2)
-        with col1:
-             pdf_bytes = generate_pdf_html(st.session_state.image_evaluation_result, title=f"Evaluacion Visual - {uploaded_file.name if uploaded_file else 'Imagen'}", banner_path=banner_file)
-             if pdf_bytes: st.download_button(label="Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion_{uploaded_file.name if uploaded_file else 'imagen'}.pdf", mime="application/pdf", use_container_width=True)
-             else: st.error("Error al generar PDF.")
-        with col2:
-             if st.button("Evaluar Otra Imagen", use_container_width=True): st.session_state.pop("image_evaluation_result", None); st.rerun()
-
-def video_evaluation_mode(db, selected_files):
-    st.subheader("Evaluación de Video (Comerciales/Publicidad)")
-    st.markdown(""" Sube un video corto (MP4, MOV, AVI - preferiblemente < 100MB) y describe tu público objetivo y objetivos de comunicación. El asistente evaluará el video (contenido visual y audio si lo tiene) basándose en criterios de marketing y utilizará los hallazgos de los estudios seleccionados como contexto. """)
-    uploaded_file = st.file_uploader("Sube tu video aquí:", type=["mp4", "mov", "avi", "wmv", "mkv"])
-    target_audience = st.text_area("Describe el público objetivo (Target) [Video]:", height=100, placeholder="Ej: Adultos jóvenes 18-30...")
-    comm_objectives = st.text_area("Define 2-3 objetivos de comunicación [Video]:", height=100, placeholder="Ej:\n1. Generar intriga.\n2. Asociar marca.")
-    video_bytes = None
-    if uploaded_file is not None:
-        video_bytes = uploaded_file.getvalue(); st.video(video_bytes)
-        if uploaded_file.size > 100 * 1024 * 1024: st.warning("⚠️ Video grande (>100MB). Análisis podría tardar/fallar.")
-    st.markdown("---")
-    if st.button("Evaluar Video", use_container_width=True, disabled=(uploaded_file is None)):
-        if not video_bytes: st.warning("Sube un video."); return
-        if not target_audience.strip(): st.warning("Describe el público."); return
-        if not comm_objectives.strip(): st.warning("Define objetivos."); return
-        with st.spinner("Analizando video y contexto... ⏳ (Puede tardar minutos)"):
-            relevant_text_context = get_relevant_info(db, f"Contexto para video: {target_audience}", selected_files)
-            MAX_CONTEXT_TEXT = 800000 
-            if len(relevant_text_context) > MAX_CONTEXT_TEXT:
-                relevant_text_context = relevant_text_context[:MAX_CONTEXT_TEXT] + "\n\n...(contexto truncado)..."
-                st.warning("El contexto de los estudios es muy largo y ha sido truncado.", icon="⚠️")
-            video_file_data = {'mime_type': uploaded_file.type, 'data': video_bytes}
-            prompt_parts = [ "Actúa como director creativo/estratega mkt experto audiovisual. Analiza el video (visual/audio) en contexto de target/objetivos, usando hallazgos como referencia.", f"\n\n**Target:**\n{target_audience}", f"\n\n**Objetivos:**\n{comm_objectives}", "\n\n**Video:**", video_file_data, f"\n\n**Contexto (Hallazgos Estudios):**\n```\n{relevant_text_context[:8000]}\n```", "\n\n**Evaluación Detallada (Markdown):**", "\n### 1. Notoriedad/Impacto (Visual/Auditivo)", "* ¿Capta la atención? ¿Memorable? ¿Destaca?", "* Elementos clave (narrativa, ritmo, música, etc.) y su aporte (vs contexto).", "* ¿Insights contexto sobre preferencias audiovisuales?", "\n### 2. Mensaje Clave/Claridad", "* Mensajes principal/secundarios vs objetivos?", "* ¿Claro/relevante para target? ¿Audio+Video OK?", "* ¿Mensaje vs insights contexto?", "\n### 3. Branding/Identidad", "* ¿Marca integrada natural/efectiva? ¿Cuándo/cómo?", "* ¿Refuerza personalidad/valores marca?", "\n### 4. Call to Action", "* ¿Sugiere acción o genera emoción/pensamiento?", "* ¿Respuesta alineada con objetivos?", "* ¿Contexto sugiere que motivará?", "\n\n**Conclusión General:**", "* Valoración efectividad (target/objetivos), fortalezas, mejoras (conectando con insights si aplica)." ]
-            evaluation_result = call_gemini_api(prompt_parts)
-            if evaluation_result: st.session_state.video_evaluation_result = evaluation_result; log_query_event(f"Evaluación Video: {uploaded_file.name}", mode="Evaluación de Video")
-            else: st.error("No se pudo generar evaluación video."); st.session_state.pop("video_evaluation_result", None)
-    if "video_evaluation_result" in st.session_state:
-        st.markdown("---"); st.markdown("### Resultados Evaluación:"); st.markdown(st.session_state.video_evaluation_result)
-        col1, col2 = st.columns(2)
-        with col1:
-             pdf_bytes = generate_pdf_html(st.session_state.video_evaluation_result, title=f"Evaluacion Video - {uploaded_file.name if uploaded_file else 'Video'}", banner_path=banner_file)
-             if pdf_bytes: st.download_button(label="Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion_{uploaded_file.name if uploaded_file else 'video'}.pdf", mime="application/pdf", use_container_width=True)
-             else: st.error("Error al generar PDF.")
-        with col2:
-             if st.button("Evaluar Otro Video", use_container_width=True): st.session_state.pop("video_evaluation_result", None); st.rerun()
-
-def transcript_analysis_mode():
-    st.subheader("Análisis de Transcripciones (.docx)")
-    file_limit = st.session_state.plan_features.get('transcript_file_limit', 0)
-    
-    st.markdown(f"""
-        Sube uno o varios archivos Word (.docx) con transcripciones de entrevistas o
-        focus groups. Luego, haz preguntas sobre el contenido en el chat.
-        
-        **Tu plan actual te permite cargar un máximo de {file_limit} archivo(s) a la vez.**
-    """)
-    
-    # --- Sección de Carga y Procesamiento de Archivos ---
-    uploaded_files = st.file_uploader(
-        "Sube tus archivos .docx aquí:",
-        type=["docx"],
-        accept_multiple_files=True,
-        key="transcript_uploader" # Key para manejar el estado
-    )
-
-    if uploaded_files:
-        if len(uploaded_files) > file_limit:
-            st.error(f"¡Límite de archivos excedido! Tu plan permite {file_limit} archivo(s), pero has subido {len(uploaded_files)}. Por favor, deselecciona los archivos sobrantes.")
-            return # Detener la ejecución
-            
-    # Inicializar estado si no existe
-    if 'uploaded_transcripts_text' not in st.session_state:
-        st.session_state.uploaded_transcripts_text = {} # Diccionario para guardar texto por nombre de archivo
-    if 'transcript_chat_history' not in st.session_state:
-        st.session_state.transcript_chat_history = []
-
-    # Procesar archivos subidos si hay cambios (y si pasan la validación)
-    if uploaded_files:
-        newly_processed = False
-        with st.spinner("Procesando archivos .docx..."):
-            # (El resto de tu lógica de procesamiento de archivos .docx sigue igual)
-            current_texts = {}
-            for uploaded_file in uploaded_files:
-                file_stream = BytesIO(uploaded_file.getvalue())
-                try:
-                    document = docx.Document(file_stream)
-                    full_text = "\n".join([para.text for para in document.paragraphs if para.text.strip()])
-                    current_texts[uploaded_file.name] = full_text
-                    if uploaded_file.name not in st.session_state.uploaded_transcripts_text or st.session_state.uploaded_transcripts_text.get(uploaded_file.name) != full_text:
-                        newly_processed = True
-                except Exception as e:
-                    st.error(f"Error al procesar '{uploaded_file.name}': {e}")
-
-            if newly_processed or set(current_texts.keys()) != set(st.session_state.uploaded_transcripts_text.keys()):
-                st.session_state.uploaded_transcripts_text = current_texts
-                st.session_state.transcript_chat_history = [] 
-                st.info(f"Se procesaron {len(current_texts)} archivo(s). El chat se ha reiniciado.")
-                # st.rerun() # Opcional: forzar recarga inmediata
-
-    # Mostrar nombres de archivos cargados (si hay alguno)
-    if st.session_state.uploaded_transcripts_text:
-        st.write("**Archivos cargados para análisis:**")
-        for filename in st.session_state.uploaded_transcripts_text.keys():
-            st.caption(f"- {filename}")
-        st.markdown("---")
-    else:
-        st.info("Sube uno o más archivos .docx para comenzar a chatear.")
-
-    # --- Sección de Chat ---
-    st.write("**Chat con Transcripciones:**")
-
-    # Mostrar historial de chat
-    for message in st.session_state.transcript_chat_history:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    # Input del usuario
-    user_prompt = st.chat_input("Haz una pregunta sobre las transcripciones...")
-
-    if user_prompt:
-        # Añadir mensaje de usuario al historial y mostrarlo
-        st.session_state.transcript_chat_history.append({"role": "user", "content": user_prompt})
-        with st.chat_message("user"):
-            st.markdown(user_prompt)
-
-        # Verificar si hay texto cargado
-        if not st.session_state.uploaded_transcripts_text:
-            st.error("No hay transcripciones cargadas para analizar. Por favor, sube archivos .docx.")
-            return # Detener si no hay contexto
-
-        # Preparar contexto y llamar a Gemini
-        with st.chat_message("assistant"):
-            message_placeholder = st.empty()
-            message_placeholder.markdown("Analizando transcripciones...")
-
-            # Combinar el texto de todos los archivos subidos
-            combined_context = "\n\n--- Nueva Transcripción ---\n\n".join(
-                f"**Archivo: {name}**\n\n{text}"
-                for name, text in st.session_state.uploaded_transcripts_text.items()
-            )
-
-            # Se aumenta el límite de 25,000 a 800,000 caracteres (aprox 200k tokens, seguro para 1M)
-            MAX_CONTEXT_LENGTH = 800000 
-            if len(combined_context) > MAX_CONTEXT_LENGTH:
-                combined_context = combined_context[:MAX_CONTEXT_LENGTH] + "\n\n...(contexto truncado)..."
-                # La advertencia ahora solo aparecerá si superas este límite mucho mayor
-                st.warning("El contexto combinado de las transcripciones es muy largo y ha sido truncado.", icon="⚠️")
-
-            # Construir el prompt para Gemini
-            chat_prompt = [
-                f"Actúa como un asistente experto en análisis cualitativo de transcripciones de entrevistas y focus groups. Tu tarea es responder la pregunta del usuario basándote únicamente en el texto de las transcripciones proporcionadas.",
-                f"\n\n**TRANSCRIPCIONES (Contexto Principal):**\n```\n{combined_context}\n```",
-                # Historial reciente del chat (opcional, puede ayudar en conversaciones largas)
-                # f"\n\n**Historial Reciente:**\n" + "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.transcript_chat_history[-5:-1]]), # Excluye último mensaje user
-                f"\n\n**Pregunta del Usuario:**\n{user_prompt}",
-                f"\n\n**Instrucciones:**",
-                f"- Responde de forma concisa y directa a la pregunta.",
-                f"- Basa tu respuesta **estrictamente** en la información contenida en las transcripciones.",
-                f"- Si la respuesta no se encuentra en el texto, indica claramente: 'La información solicitada no se encuentra en las transcripciones proporcionadas.'",
-                f"- Puedes citar extractos breves si ayuda a sustentar la respuesta, indicando opcionalmente el nombre del archivo si es relevante.",
-                f"\n\n**Respuesta:**"
-            ]
-
-            response = call_gemini_api(chat_prompt) # Tu función call_gemini_api ya maneja listas
-
-            if response:
-                message_placeholder.markdown(response)
-                st.session_state.transcript_chat_history.append({"role": "assistant", "content": response})
-                # Loggear el evento (ajusta el nombre del modo si es necesario)
-                log_query_event(user_prompt, mode="Análisis de Transcripciones")
-            else:
-                message_placeholder.error("Error al obtener respuesta del análisis.")
-                # Opcional: eliminar el último mensaje de usuario si la respuesta falla
-                # st.session_state.transcript_chat_history.pop()
-
-    # Botón para limpiar archivos y chat (opcional pero útil)
-    if st.session_state.uploaded_transcripts_text or st.session_state.transcript_chat_history:
-        if st.button("Limpiar Archivos y Chat", use_container_width=True, type="secondary"):
-            st.session_state.uploaded_transcripts_text = {}
-            st.session_state.transcript_chat_history = []
-            # Limpiar el file_uploader requiere un truco o rerun
-            st.rerun()
-
-def one_pager_ppt_mode(db, selected_files):
-    st.subheader("One-Pager Estratégico")
-    ppt_limit = st.session_state.plan_features.get('ppt_downloads_per_month', 0)
-    
-    if ppt_limit == float('inf'):
-        limit_text = "**Tu plan actual te permite generar One-Pagers ilimitados.**"
-    elif ppt_limit > 0: # Si no es infinito y es mayor que 0
-        limit_text = f"**Tu plan actual te permite generar {int(ppt_limit)} One-Pagers al mes.**"
-    else: # Si es 0 (aunque este caso no debería mostrar el modo, es bueno tenerlo)
-         limit_text = "**Tu plan actual no incluye la generación de One-Pagers.**"
-        
-    st.markdown(f"""
-        Sintetiza los hallazgos clave en una sola diapositiva de PowerPoint sobre un tema específico.
-        {limit_text}
-    """)
-
-    # Usar session_state para mantener los datos del PPT generado
-    if "generated_ppt_bytes" in st.session_state:
-        st.success("¡Tu diapositiva One-Pager está lista!")
-        st.download_button(
-            label="Descargar One-Pager (.pptx)",
-            data=st.session_state.generated_ppt_bytes,
-            file_name=f"one_pager_estrategico.pptx",
-            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            use_container_width=True
-        )
-        if st.button("Generar nuevo One-Pager", use_container_width=True, type="secondary"):
-            del st.session_state.generated_ppt_bytes
-            st.rerun()
-        return # Detener la ejecución si el archivo ya está generado
-
-    # --- Formulario de generación ---
-    tema_central = st.text_area(
-        "¿Cuál es el tema central o la pregunta clave para este One-Pager?", 
-        height=100, 
-        placeholder="Ej: Oportunidades para snacks saludables en adultos jóvenes"
-    )
-
-    if st.button("Generar One-Pager", use_container_width=True):
-        current_ppt_usage = get_monthly_usage(st.session_state.user, "Generador de One-Pager PPT")
-        
-        if current_ppt_usage >= ppt_limit and ppt_limit != float('inf'):
-            st.error(f"¡Límite de generación de PPT alcanzado! Tu plan permite {int(ppt_limit)} al mes.")
-            return # Detener la ejecución
-        
-        if not tema_central.strip():
-            st.warning("Por favor, describe el tema central.")
-            return
-
-        if not selected_files:
-            st.warning("No has seleccionado ningún estudio. Por favor, selecciona estudios en el filtro del sidebar.")
-            return
-
-        with st.spinner("Obteniendo contexto de los estudios..."):
-            relevant_info = get_relevant_info(db, tema_central, selected_files)
-        
-        # --- Prompt de Gemini para JSON ---
-        prompt_json = f"""
-        Actúa como un Director de Estrategia. Has analizado los siguientes hallazgos de investigación:
-        
-        --- CONTEXTO ---
-        {relevant_info}
-        --- FIN CONTEXTO ---
-
-        Tu tarea es sintetizar esta información para crear un "One-Pager" estratégico en una sola diapositiva de PowerPoint sobre el tema: "{tema_central}".
-
-        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
-
-        {{
-          "titulo_diapositiva": "Un título principal corto y potente (máx. 6 palabras) sobre '{tema_central}'",
-          "insight_clave": "El insight o 'verdad oculta' más importante que encontraste (1 frase concisa).",
-          "hallazgos_principales": [
-            "Hallazgo #1: Un punto clave sintetizado.",
-            "Hallazgo #2: Otro punto clave sintetizado.",
-            "Hallazgo #3: Un tercer punto clave sintetizado."
-          ],
-          "oportunidades": [
-            "Oportunidad #1: Una acción o área de innovación basada en los hallazgos.",
-            "Oportunidad #2: Otra acción o área de innovación.",
-            "Oportunidad #3: Otra acción o área de innovación."
-          ],
-          "recomendacion_estrategica": "Una recomendación final clara y accionable (máx. 2 líneas)."
-        }}
-        """
-
-        data_json = None
-        with st.spinner("Generando contenido con IA..."):
-            response = call_gemini_api(prompt_json)
-            if not response:
-                st.error("Error al contactar la API de Gemini.")
-                return
-
-            try:
-                # Limpiar la respuesta de Gemini (a veces añade '```json' y '```')
-                clean_response = response.strip().replace("```json", "").replace("```", "")
-                data_json = json.loads(clean_response)
-            except json.JSONDecodeError:
-                st.error("Error: La IA no devolvió un JSON válido. Reintentando...")
-                st.code(response) # Muestra la respuesta errónea para depuración
-                return
-        
-        if data_json:
-            with st.spinner("Ensamblando diapositiva .pptx..."):
-                ppt_bytes = crear_ppt_one_pager(data_json)
-            
-            if ppt_bytes:
-                st.session_state.generated_ppt_bytes = ppt_bytes
-                log_query_event(tema_central, mode="Generador de One-Pager PPT")
-                with st.spinner("Finalizando..."):
-                    st.rerun() # Recargar para mostrar el botón de descarga
-            else:
-                st.error("No se pudo crear el archivo PowerPoint.")
-
-# =====================================================
-# PANEL DE ADMINISTRACIÓN (CON EDICIÓN DE USUARIOS Y CORRECCIÓN INDENTACIÓN)
-# =====================================================
-def show_admin_dashboard():
-    st.subheader("Estadísticas de Uso", divider="grey")
-    with st.spinner("Cargando estadísticas..."):
-        try:
-            stats_response = supabase.table("queries").select("user_name, mode, timestamp, query").execute()
-            if stats_response.data:
-                df_stats = pd.DataFrame(stats_response.data); df_stats['timestamp'] = pd.to_datetime(df_stats['timestamp']).dt.tz_localize(None); df_stats['date'] = df_stats['timestamp'].dt.date
-                col1, col2 = st.columns(2)
-                with col1: st.write("**Consultas por Usuario (Total)**"); user_counts = df_stats.groupby('user_name')['mode'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False); st.dataframe(user_counts, use_container_width=True, hide_index=True)
-                with col2: st.write("**Consultas por Modo de Uso (Total)**"); mode_counts = df_stats.groupby('mode')['user_name'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False); st.dataframe(mode_counts, use_container_width=True, hide_index=True)
-                st.write("**Actividad Reciente (Últimas 50 consultas)**"); df_recent = df_stats[['timestamp', 'user_name', 'mode', 'query']].sort_values(by="timestamp", ascending=False).head(50); df_recent['timestamp'] = df_recent['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S'); st.dataframe(df_recent, use_container_width=True, hide_index=True)
-            else: st.info("Aún no hay datos de uso.")
-        except Exception as e: st.error(f"Error cargando estadísticas: {e}")
-
-    st.subheader("Gestión de Clientes (Invitaciones)", divider="grey")
-    try:
-        clients_response = supabase.table("clients").select("client_name, plan, invite_code, created_at").order("created_at", desc=True).execute()
-        if clients_response.data: st.write("**Clientes Actuales**"); df_clients = pd.DataFrame(clients_response.data); df_clients['created_at'] = pd.to_datetime(df_clients['created_at']).dt.strftime('%Y-%m-%d'); st.dataframe(df_clients, use_container_width=True, hide_index=True)
-        else: st.info("No hay clientes.")
-    except Exception as e: st.error(f"Error cargando clientes: {e}")
-
-    with st.expander("➕ Crear Nuevo Cliente y Código"):
-        with st.form("new_client_form"):
-            new_client_name = st.text_input("Nombre"); new_plan = st.selectbox("Plan", options=list(PLAN_FEATURES.keys()), index=0); new_invite_code = st.text_input("Código Invitación")
-            submitted = st.form_submit_button("Crear Cliente")
-            if submitted:
-                if not new_client_name or not new_plan or not new_invite_code: st.warning("Completa campos."); return
-                try: supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"]); supabase_admin_client.table("clients").insert({"client_name": new_client_name, "plan": new_plan, "invite_code": new_invite_code}).execute(); st.success(f"Cliente '{new_client_name}' creado. Código: {new_invite_code}")
-                except Exception as e: st.error(f"Error al crear: {e}")
-
-    st.subheader("Gestión de Usuarios", divider="grey")
-   
-    try: # Nivel 1
-        if "SUPABASE_SERVICE_KEY" not in st.secrets: # Nivel 2
-            st.error("Falta 'SUPABASE_SERVICE_KEY'"); st.stop() # Nivel 3
-
-        supabase_admin_client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"]) # Nivel 2
-        users_response = supabase_admin_client.table("users").select("id, email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute() # Nivel 2
-
-        if users_response.data: # Nivel 2
-            st.write("**Usuarios Registrados** (Puedes editar Rol)") # Nivel 3
-            user_list = [] # Nivel 3
-            for user in users_response.data: # Nivel 3
-                client_info = user.get('clients') # Nivel 4
-                client_name = "N/A"; client_plan = "N/A" # Nivel 4
-                if isinstance(client_info, dict): # Nivel 4
-                    client_name = client_info.get('client_name', "N/A") # Nivel 5
-                    client_plan = client_info.get('plan', "N/A") # Nivel 5
-                user_list.append({ # Nivel 4
-                    'id': user.get('id'), 'email': user.get('email'), 'creado_el': user.get('created_at'),
-                    'rol': user.get('rol', 'user'), 'cliente': client_name, 'plan': client_plan
-                })
-            original_df = pd.DataFrame(user_list); # Nivel 3
-            if 'original_users_df' not in st.session_state: st.session_state.original_users_df = original_df.copy() # Nivel 3
-            display_df = original_df.copy(); display_df['creado_el'] = pd.to_datetime(display_df['creado_el']).dt.strftime('%Y-%m-%d %H:%M') # Nivel 3
-            edited_df = st.data_editor( display_df, key="user_editor", column_config={"id": None, "rol": st.column_config.SelectboxColumn("Rol", options=["user", "admin"], required=True), "email": st.column_config.TextColumn("Email", disabled=True), "creado_el": st.column_config.TextColumn("Creado", disabled=True), "cliente": st.column_config.TextColumn("Cliente", disabled=True), "plan": st.column_config.TextColumn("Plan", disabled=True)}, use_container_width=True, hide_index=True, num_rows="fixed") # Nivel 3
-            if st.button("Guardar Cambios Usuarios", use_container_width=True): # Nivel 3
-                updates_to_make = []; original_users = st.session_state.original_users_df; edited_df_indexed = edited_df.set_index(original_df.index); edited_df_with_ids = original_df[['id']].join(edited_df_indexed) # Nivel 4
-                for index, original_row in original_users.iterrows(): # Nivel 4
-                    edited_rows_match = edited_df_with_ids[edited_df_with_ids['id'] == original_row['id']] # Nivel 5
-                    if not edited_rows_match.empty: # Nivel 5
-                        edited_row = edited_rows_match.iloc[0] # Nivel 6
-                        if original_row['rol'] != edited_row['rol']: updates_to_make.append({"id": original_row['id'], "email": original_row['email'], "new_rol": edited_row['rol']}) # Nivel 6
-                    else: print(f"Warn: Row ID {original_row['id']} not in edited df.") # Nivel 5
-                if updates_to_make: # Nivel 4
-                    success_count, error_count, errors = 0, 0, [] # Nivel 5
-                    with st.spinner(f"Guardando {len(updates_to_make)} cambio(s)..."): # Nivel 5
-                        for update in updates_to_make: # Nivel 6
-                            try: supabase_admin_client.table("users").update({"rol": update["new_rol"]}).eq("id", update["id"]).execute(); success_count += 1 # Nivel 7
-                            except Exception as e: errors.append(f"Error {update['email']} (ID: {update['id']}): {e}"); error_count += 1 # Nivel 7
-                    if success_count > 0: st.success(f"{success_count} actualizado(s).") # Nivel 5
-                    if error_count > 0: st.error(f"{error_count} error(es):"); [st.error(f"- {err}") for err in errors] # Nivel 5
-                    del st.session_state.original_users_df; st.rerun() # Nivel 5
-                else: # Nivel 4 (Alineado con 'if updates_to_make')
-                    st.info("No se detectaron cambios.") # Nivel 5
-        # --- ELSE CORREGIDO ---
-        else: # Nivel 2 (Alineado con 'if users_response.data:')
-            st.info("No hay usuarios registrados.") # Nivel 3
-    # --- EXCEPT CORREGIDO ---
-    except Exception as e: # Nivel 1 (Alineado con 'try:')
-        st.error(f"Error en la gestión de usuarios: {e}") # Nivel 2
+# Importar estilos y configuración
+from styles import apply_styles
+from config import PLAN_FEATURES, banner_file 
+
+# Importar servicios
+from services.storage import load_database
+from services.supabase_db import supabase # Solo el cliente normal es necesario aquí
+
+# Importar vistas de autenticación
+from auth import show_login_page, show_signup_page, show_reset_password_page
+
+# Importar panel de admin
+from admin.dashboard import show_admin_dashboard
+
+# Importar todos los modos de usuario
+from modes.report_mode import report_mode
+from modes.chat_mode import grounded_chat_mode
+from modes.ideation_mode import ideacion_mode
+from modes.concept_mode import concept_generation_mode
+from modes.idea_eval_mode import idea_evaluator_mode
+from modes.image_eval_mode import image_evaluation_mode
+from modes.video_eval_mode import video_evaluation_mode
+from modes.transcript_mode import transcript_analysis_mode
+# (Importamos el modo onepager que modificaste para incluir PDFs)
+from modes.onepager_mode import one_pager_ppt_mode
+
+# Importar utilidades
+from utils import (
+    extract_brand, reset_chat_workflow, reset_report_workflow 
+)
 
 # =====================================================
 # FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA)
@@ -1236,6 +46,7 @@ def run_user_mode(db_full, user_features, footer_html):
 
     db_filtered = db_full[:]
 
+    # Construir lista de modos disponibles según el plan del usuario
     modos_disponibles = ["Chat de Consulta Directa"]
     if user_features.get("has_report_generation"): modos_disponibles.insert(0, "Generar un reporte de reportes")
     if user_features.get("has_creative_conversation"): modos_disponibles.append("Conversaciones creativas")
@@ -1249,12 +60,14 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.sidebar.radio("Modos:", modos_disponibles, label_visibility="collapsed", key="main_mode_selector")
 
-    # Resetear estados específicos del modo si cambia (incluir nuevos estados)
+    # Resetear estados específicos del modo si cambia
     if 'current_mode' not in st.session_state: st.session_state.current_mode = modo
     if st.session_state.current_mode != modo:
-        reset_chat_workflow() # Resetea chat_history (usado por chat grounded y creativo)
-        st.session_state.pop("generated_concept", None); st.session_state.pop("evaluation_result", None)
-        st.session_state.pop("report", None); st.session_state.pop("last_question", None)
+        reset_chat_workflow() # Resetea chat_history
+        st.session_state.pop("generated_concept", None)
+        st.session_state.pop("evaluation_result", None)
+        st.session_state.pop("report", None)
+        st.session_state.pop("last_question", None)
         st.session_state.pop("image_evaluation_result", None)
         st.session_state.pop("video_evaluation_result", None)
         st.session_state.pop("uploaded_transcripts_text", None)
@@ -1265,8 +78,7 @@ def run_user_mode(db_full, user_features, footer_html):
 
     st.sidebar.header("Filtros de Búsqueda")
     # Aplicar filtros solo si el modo actual NO es Análisis de Transcripciones
-    # (Porque este modo usa archivos subidos, no el repositorio S3)
-    run_filters = modo not in ["Análisis de Transcripciones"] # <-- El modo PPT SÍ usa filtros
+    run_filters = modo not in ["Análisis de Transcripciones"] 
 
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
     selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas", disabled=not run_filters)
@@ -1281,15 +93,16 @@ def run_user_mode(db_full, user_features, footer_html):
     if run_filters and selected_brands: db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
-        supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
+        supabase.auth.sign_out()
+        st.session_state.clear()
+        st.rerun()
 
     st.sidebar.divider()
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
 
-    # --- LLAMAR A LA FUNCIÓN DEL MODO ---
-    selected_files = [d.get("nombre_archivo") for d in db_filtered] # Calcular aunque no se use en todos los modos
+    # --- ENRUTADOR DE MODOS ---
+    selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
-    # Mostrar advertencia si es necesario (ajustar condición)
     if run_filters and not selected_files and modo not in ["Generar un reporte de reportes", "Evaluación Visual", "Evaluación de Video"]:
          st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
 
@@ -1300,41 +113,61 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
     elif modo == "Evaluación Visual": image_evaluation_mode(db_filtered, selected_files)
     elif modo == "Evaluación de Video": video_evaluation_mode(db_filtered, selected_files)
-    elif modo == "Análisis de Transcripciones": transcript_analysis_mode() # No necesita db_filtered ni selected_files
+    elif modo == "Análisis de Transcripciones": transcript_analysis_mode() # No necesita db_filtered
     elif modo == "Generador de One-Pager PPT": one_pager_ppt_mode(db_filtered, selected_files)
 
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
 def main():
+    # Aplicar estilos CSS (desde styles.py)
+    apply_styles()
+
+    # Inicializar estado de sesión
     if 'page' not in st.session_state: st.session_state.page = "login"
+    if "api_key_index" not in st.session_state: st.session_state.api_key_index = 0
+    
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
+    # Lógica de autenticación
     if not st.session_state.get("logged_in"):
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
             st.image("LogoDataStudio.png")
+            # Llamar a las funciones de auth.py
             if st.session_state.page == "login": show_login_page()
             elif st.session_state.page == "signup": show_signup_page()
             elif st.session_state.page == "reset_password": show_reset_password_page()
-        st.divider() # Mantener el divider del footer general
+        st.divider() 
         st.markdown(footer_html, unsafe_allow_html=True)
         st.stop()
 
-    try: db_full = load_database(st.session_state.cliente)
-    except Exception as e: st.error(f"Error crítico al cargar BD: {e}"); st.stop()
+    # Carga de datos post-login
+    try: 
+        # Llamar a la función de storage.py
+        db_full = load_database(st.session_state.cliente) 
+    except Exception as e: 
+        st.error(f"Error crítico al cargar BD: {e}")
+        st.stop()
 
     user_features = st.session_state.plan_features
 
+    # Lógica de enrutamiento Admin/Usuario
     if st.session_state.get("is_admin", False):
         tab_user, tab_admin = st.tabs(["Modo Usuario", "Modo Administrador"])
-        with tab_user: run_user_mode(db_full, user_features, footer_html)
+        with tab_user: 
+            run_user_mode(db_full, user_features, footer_html)
         with tab_admin:
             st.title("Panel de Administración")
             st.write(f"Gestionando como: {st.session_state.user}")
-            show_admin_dashboard()
-    else: run_user_mode(db_full, user_features, footer_html)
+            # Llamar a la función de admin/dashboard.py
+            show_admin_dashboard() 
+    else: 
+        run_user_mode(db_full, user_features, footer_html)
 
+# ==============================
+# PUNTO DE ENTRADA
+# ==============================
 if __name__ == "__main__":
     main()
