@@ -113,7 +113,52 @@ PROMPTS_ONEPAGER = {
               "Frustración #2: Otro dolor."
           ]
         }}
+        """,
+    
+    # --- ¡NUEVAS PLANTILLAS AÑADIDAS AQUÍ! ---
+    "Mapa del Viaje (Journey Map)": """
+        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
+        {{
+          "template_type": "journey_map",
+          "titulo_diapositiva": "Customer Journey Map: {tema_central}",
+          "etapa_1": {{
+            "nombre_etapa": "Ej: Descubrimiento",
+            "acciones": ["Qué hace el cliente en esta etapa."],
+            "emociones": ["Qué siente (ej. Curiosidad, confusión)."],
+            "puntos_dolor": ["Qué problema enfrenta aquí."],
+            "oportunidades": ["Cómo podríamos mejorar su experiencia."]
+          }},
+          "etapa_2": {{
+            "nombre_etapa": "Ej: Consideración",
+            "acciones": ["..."], "emociones": ["..."], "puntos_dolor": ["..."], "oportunidades": ["..."]
+          }},
+          "etapa_3": {{
+            "nombre_etapa": "Ej: Compra/Uso",
+            "acciones": ["..."], "emociones": ["..."], "puntos_dolor": ["..."], "oportunidades": ["..."]
+          }},
+          "etapa_4": {{
+            "nombre_etapa": "Ej: Post-Uso",
+            "acciones": ["..."], "emociones": ["..."], "puntos_dolor": ["..."], "oportunidades": ["..."]
+          }}
+        }}
+        """,
+    "Matriz de Posicionamiento (2x2)": """
+        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
+        {{
+          "template_type": "matriz_2x2",
+          "titulo_diapositiva": "Matriz de Posicionamiento: {tema_central}",
+          "eje_x_positivo": "Ej: Moderno",
+          "eje_x_negativo": "Ej: Tradicional",
+          "eje_y_positivo": "Ej: Calidad Percibida Alta",
+          "eje_y_negativo": "Ej: Calidad Percibida Baja",
+          "items_cuadrante_sup_izq": ["Marca A", "Marca B (Estrategia de Retador)"],
+          "items_cuadrante_sup_der": ["Nuestra Marca (Líder Innovador)"],
+          "items_cuadrante_inf_izq": ["Marca C (Bajo Precio)"],
+          "items_cuadrante_inf_der": ["Marca D (Oportunista)"],
+          "conclusion_clave": "El principal insight visual de la matriz (ej. 'Existe un espacio vacío en el cuadrante Moderno y de Alta Calidad')."
+        }}
         """
+    # --- FIN DE LAS NUEVAS PLANTILLAS ---
 }
 
 
@@ -150,7 +195,7 @@ def one_pager_ppt_mode(db_filtered, selected_files):
 
     st.divider()
     st.markdown("#### 1. Selecciona la Plantilla")
-    template_options = list(PROMPTS_ONEPAGER.keys())
+    template_options = list(PROMPTS_ONEPAGER.keys()) # El menú ahora incluirá las nuevas plantillas
     selected_template_name = st.selectbox("Elige el tipo de diapositiva:", template_options)
 
     st.markdown("#### 2. Selecciona la Fuente de Datos")
@@ -225,5 +270,3 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                 st.rerun()
             else:
                 pass # El error ya se muestra desde crear_ppt_desde_json
-            
-            
