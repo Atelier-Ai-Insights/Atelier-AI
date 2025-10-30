@@ -6,7 +6,37 @@ from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN, MSO_AUTO_SIZE
 from pptx.dml.color import RGBColor
 import os
-import traceback # Importar traceback para errores
+import traceback
+
+# --- Funciones de Ayuda para Dibujar (CON ARREGLOS) ---
+
+def _crear_cuadrante_ppt(slide, left, top, width, height, title, items, title_size=Pt(22), item_size=Pt(12)): # Reducido a Pt(12)
+    """Añade un cuadro de texto con título y viñetas a una diapositiva."""
+    txBox = slide.shapes.add_textbox(left, top, width, height)
+    tf = txBox.text_frame
+    tf.word_wrap = True
+    
+    # --- ¡ARREGLO DE DISEÑO! ---
+    # Activa el auto-ajuste para que el texto no se desborde
+    tf.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT 
+    
+    # Título del cuadrante
+    p_title = tf.paragraphs[0]
+    p_title.text = title
+    p_title.font.bold = True
+    p_title.font.size = title_size
+    p_title.space_after = Pt(6)
+    
+    # Contenido (viñetas)
+    if not items:
+        items = ["N/A"]
+        
+    for item in items:
+        p_item = tf.add_paragraph()
+        p_item.text = item
+        p_item.font.size = item_size
+        p_item.level = 1
+        p_item.space_after = Pt(4)
 
 # --- Plantillas de Diapositivas ---
 
@@ -32,6 +62,7 @@ def _crear_slide_oportunidades(prs, data):
     # Contenido Principal
     txBox_content = slide.shapes.add_textbox(Inches(1.5), Inches(2.8), Inches(13), Inches(5.5))
     tf_content = txBox_content.text_frame; tf_content.word_wrap = True
+    tf_content.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT # Añadido por si acaso
 
     # Hallazgos
     p_h_title = tf_content.paragraphs[0]; p_h_title.text = "Hallazgos Principales"
@@ -69,64 +100,90 @@ def _crear_slide_dofa(prs, data):
     txBox_title.text_frame.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
 
     # --- Contenido en dos columnas ---
-    col1_left = Inches(1); col_width = Inches(6.5); col_top = Inches(1.8); col_height = Inches(6.5)
+    col1_left = Inches(1); col_width = Inches(6.5); col_top = Inches(1.8); col_height = Inches(6.8) # Un poco más de alto
     col2_left = Inches(1) + col_width + Inches(1)
 
     # Columna Izquierda (Fortalezas y Debilidades)
-    txBox_col1 = slide.shapes.add_textbox(col1_left, col_top, col_width, col_height)
-    tf_col1 = txBox_col1.text_frame; tf_col1.word_wrap = True
-
-    p_f_title = tf_col1.paragraphs[0]; p_f_title.text = "Fortalezas (+ Interno)"
-    p_f_title.font.bold = True; p_f_title.font.size = Pt(24); p_f_title.space_after = Pt(6)
-    for item in data.get("fortalezas", ["N/A"]):
-        p = tf_col1.add_paragraph(); p.text = item; p.font.size = Pt(14); p.level = 1; p.space_after = Pt(4)
-    tf_col1.add_paragraph().space_after = Pt(12) # Espacio
-
-    p_d_title = tf_col1.add_paragraph(); p_d_title.text = "Debilidades (- Interno)"
-    p_d_title.font.bold = True; p_d_title.font.size = Pt(24); p_d_title.space_after = Pt(6)
-    for item in data.get("debilidades", ["N/A"]):
-        p = tf_col1.add_paragraph(); p.text = item; p.font.size = Pt(14); p.level = 1; p.space_after = Pt(4)
+    _crear_cuadrante_ppt(slide, col1_left, col_top, col_width, col_height / 2.1, "Fortalezas (+ Interno)", data.get("fortalezas"), title_size=Pt(20), item_size=Pt(12))
+    _crear_cuadrante_ppt(slide, col1_left, col_top + (col_height / 2) + Inches(0.1), col_width, col_height / 2.1, "Debilidades (- Interno)", data.get("debilidades"), title_size=Pt(20), item_size=Pt(12))
 
     # Columna Derecha (Oportunidades y Amenazas)
-    txBox_col2 = slide.shapes.add_textbox(col2_left, col_top, col_width, col_height)
-    tf_col2 = txBox_col2.text_frame; tf_col2.word_wrap = True
-
-    p_o_title = tf_col2.paragraphs[0]; p_o_title.text = "Oportunidades (+ Externo)"
-    p_o_title.font.bold = True; p_o_title.font.size = Pt(24); p_o_title.space_after = Pt(6)
-    for item in data.get("oportunidades", ["N/A"]):
-        p = tf_col2.add_paragraph(); p.text = item; p.font.size = Pt(14); p.level = 1; p.space_after = Pt(4)
-    tf_col2.add_paragraph().space_after = Pt(12) # Espacio
-
-    p_a_title = tf_col2.add_paragraph(); p_a_title.text = "Amenazas (- Externo)"
-    p_a_title.font.bold = True; p_a_title.font.size = Pt(24); p_a_title.space_after = Pt(6)
-    for item in data.get("amenazas", ["N/A"]):
-        p = tf_col2.add_paragraph(); p.text = item; p.font.size = Pt(14); p.level = 1; p.space_after = Pt(4)
+    _crear_cuadrante_ppt(slide, col2_left, col_top, col_width, col_height / 2.1, "Oportunidades (+ Externo)", data.get("oportunidades"), title_size=Pt(20), item_size=Pt(12))
+    _crear_cuadrante_ppt(slide, col2_left, col_top + (col_height / 2) + Inches(0.1), col_width, col_height / 2.1, "Amenazas (- Externo)", data.get("amenazas"), title_size=Pt(20), item_size=Pt(12))
 
     return prs
 
 def _crear_slide_empatia(prs, data):
-     st.warning("Plantilla 'Mapa de Empatía' aún no implementada en el generador PPT.")
-     blank_slide_layout = prs.slide_layouts[6]
-     slide = prs.slides.add_slide(blank_slide_layout)
-     txBox = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(14), Inches(6))
-     tf = txBox.text_frame
-     tf.paragraphs[0].text = data.get('titulo_diapositiva', 'Mapa de Empatía')
-     tf.paragraphs[0].font.bold = True; tf.paragraphs[0].font.size = Pt(36)
-     p = tf.add_paragraph(); p.text = "(Implementación pendiente)"
-     p = tf.add_paragraph(); p.text = json.dumps(data, indent=2) # Mostrar el JSON
-     return prs
+    """Crea la diapositiva de Mapa de Empatía. (DISEÑO ARREGLADO)"""
+    blank_slide_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(blank_slide_layout)
+
+    # Título
+    txBox_title = slide.shapes.add_textbox(Inches(1), Inches(0.2), Inches(14), Inches(0.8))
+    p_title = txBox_title.text_frame.paragraphs[0]
+    p_title.text = data.get("titulo_diapositiva", "Mapa de Empatía")
+    p_title.font.bold = True; p_title.font.size = Pt(36); p_title.alignment = PP_ALIGN.CENTER
+    txBox_title.text_frame.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
+    
+    # --- ARREGLO DE DISEÑO (Nuevas Coordenadas) ---
+    top_y = Inches(1.0); box_w = Inches(7); box_h = Inches(2.8) # Cajas más bajas
+    left_x = Inches(0.5); right_x = Inches(8.5)
+    
+    _crear_cuadrante_ppt(slide, left_x, top_y, box_w, box_h, "Piensa y Siente", data.get("piensa_siente"), title_size=Pt(20), item_size=Pt(12))
+    _crear_cuadrante_ppt(slide, right_x, top_y, box_w, box_h, "Ve", data.get("ve"), title_size=Pt(20), item_size=Pt(12))
+
+    # --- Cuadrantes Medios ---
+    mid_y = top_y + box_h + Inches(0.2) # Espacio reducido
+    _crear_cuadrante_ppt(slide, left_x, mid_y, box_w, box_h, "Dice y Hace", data.get("dice_hace"), title_size=Pt(20), item_size=Pt(12))
+    _crear_cuadrante_ppt(slide, right_x, mid_y, box_w, box_h, "Oye", data.get("oye"), title_size=Pt(20), item_size=Pt(12))
+
+    # --- Secciones Inferiores (Pains/Gains) ---
+    bottom_y = mid_y + box_h + Inches(0.2) # Espacio reducido
+    bottom_h = Inches(1.8) # Un poco más de alto
+    _crear_cuadrante_ppt(slide, left_x, bottom_y, box_w, bottom_h, "Esfuerzos (Pains)", data.get("esfuerzos"), title_size=Pt(18), item_size=Pt(12))
+    _crear_cuadrante_ppt(slide, right_x, bottom_y, box_w, bottom_h, "Resultados (Gains)", data.get("resultados"), title_size=Pt(18), item_size=Pt(12))
+
+    return prs
 
 def _crear_slide_propuesta_valor(prs, data):
-     st.warning("Plantilla 'Propuesta de Valor' aún no implementada en el generador PPT.")
-     blank_slide_layout = prs.slide_layouts[6]
-     slide = prs.slides.add_slide(blank_slide_layout)
-     txBox = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(14), Inches(6))
-     tf = txBox.text_frame
-     tf.paragraphs[0].text = data.get('titulo_diapositiva', 'Propuesta de Valor')
-     tf.paragraphs[0].font.bold = True; tf.paragraphs[0].font.size = Pt(36)
-     p = tf.add_paragraph(); p.text = "(Implementación pendiente)"
-     p = tf.add_paragraph(); p.text = json.dumps(data, indent=2) # Mostrar el JSON
-     return prs
+    """Crea las DOS diapositivas de Propuesta de Valor. (DISEÑO ARREGLADO)"""
+    blank_slide_layout = prs.slide_layouts[6]
+    
+    # --- Diapositiva 1: Perfil del Cliente ---
+    slide1 = prs.slides.add_slide(blank_slide_layout)
+    
+    # Título
+    txBox_title1 = slide1.shapes.add_textbox(Inches(1), Inches(0.5), Inches(14), Inches(1))
+    p_title1 = txBox_title1.text_frame.paragraphs[0]
+    p_title1.text = data.get("titulo_diapositiva", "Propuesta de Valor") + ": Perfil del Cliente"
+    p_title1.font.bold = True; p_title1.font.size = Pt(40); p_title1.alignment = PP_ALIGN.CENTER
+    txBox_title1.text_frame.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
+
+    # Columnas
+    col_w = Inches(5); col_h = Inches(6.5); col_y = Inches(1.8)
+    _crear_cuadrante_ppt(slide1, Inches(0.5), col_y, col_w, col_h, "Trabajos del Cliente", data.get("trabajos_cliente"), title_size=Pt(20), item_size=Pt(12))
+    _crear_cuadrante_ppt(slide1, Inches(5.5), col_y, col_w, col_h, "Alegrías (Gains)", data.get("alegrias"), title_size=Pt(20), item_size=Pt(12))
+    _crear_cuadrante_ppt(slide1, Inches(10.5), col_y, col_w, col_h, "Frustraciones (Pains)", data.get("frustraciones"), title_size=Pt(20), item_size=Pt(12))
+
+    # --- Diapositiva 2: Mapa de Valor ---
+    slide2 = prs.slides.add_slide(blank_slide_layout)
+
+    # Título
+    txBox_title2 = slide2.shapes.add_textbox(Inches(1), Inches(0.5), Inches(14), Inches(1))
+    p_title2 = txBox_title2.text_frame.paragraphs[0]
+    p_title2.text = data.get("titulo_diapositiva", "Propuesta de Valor") + ": Mapa de Valor"
+    p_title2.font.bold = True; p_title2.font.size = Pt(40); p_title2.alignment = PP_ALIGN.CENTER
+    txBox_title2.text_frame.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
+
+    # Columnas
+    # Convertimos producto_servicio a lista para que el helper lo dibuje como viñeta
+    producto_lista = [data.get("producto_servicio", "N/A")]
+    
+    _crear_cuadrante_ppt(slide2, Inches(0.5), col_y, col_w, col_h, "Producto/Servicio", producto_lista, title_size=Pt(20), item_size=Pt(12))
+    _crear_cuadrante_ppt(slide2, Inches(5.5), col_y, col_w, col_h, "Creadores de Alegría", data.get("creadores_alegria"), title_size=Pt(20), item_size=Pt(12))
+    _crear_cuadrante_ppt(slide2, Inches(10.5), col_y, col_w, col_h, "Aliviadores de Frustración", data.get("aliviadores_frustracion"), title_size=Pt(20), item_size=Pt(12))
+
+    return prs
 
 # --- Función Principal ---
 
@@ -173,5 +230,3 @@ def crear_ppt_desde_json(data: dict):
         st.error("Detalles del error:")
         st.code(traceback.format_exc())
         return None
-    
-    
