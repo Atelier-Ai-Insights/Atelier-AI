@@ -9,11 +9,11 @@ from services.supabase_db import log_query_event
 # =====================================================
 
 def transcript_analysis_mode():
-    st.subheader("Análisis de Transcripciones (.docx)")
+    st.subheader("Análisis de Notas y Transcripciones")
     file_limit = st.session_state.plan_features.get('transcript_file_limit', 0)
     
     st.markdown(f"""
-        Sube uno o varios archivos Word (.docx) con transcripciones de entrevistas o
+        Sube uno o varios archivos Word con notas y transcripciones de entrevistas o
         focus groups. Luego, haz preguntas sobre el contenido en el chat.
         
         **Tu plan actual te permite cargar un máximo de {file_limit} archivo(s) a la vez.**
