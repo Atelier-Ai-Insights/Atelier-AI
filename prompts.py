@@ -57,9 +57,9 @@ def get_grounded_chat_prompt(conversation_history, relevant_info):
         "3. **Citas en Línea:** DEBES citar tus fuentes. Después de cada oración o párrafo que se base en una fuente, añade un marcador de cita, por ejemplo: `[1]`, `[2]`, etc.\n"
         "4. **Múltiples Fuentes:** Puedes usar múltiples citas para una sola oración si la información proviene de varios lugares, ej: `[1][3]`.\n"
         "5. **Crear Sección de Fuentes:** Al final de tu respuesta (después de un `---`), añade una sección llamada `## Fuentes`.\n"
-        "6. **Formato de Fuentes:** En la sección 'Fuentes', lista cada cita. La cita debe incluir el `Documento:` del que tomaste la información. Por ejemplo:\n"
-        "   - `[1] Documento: Informe Gelatina - Ecuador`\n"
-        "   - `[2] Documento: Estudio Bocatto Salvaje 2023`\n"
+        "6. **Formato de Fuentes:** En la sección 'Fuentes', lista CADA cita en una **línea separada con su propia viñeta (`*`)**. La cita debe incluir únicamente el `Documento:` del que tomaste la información. Por ejemplo:\n"
+        "   * `[1] Documento: Informe Gelatina - Ecuador`\n"
+        "   * `[2] Documento: Estudio Bocatto Salvaje 2023`\n"
         "7. **Sin Información:** Si la respuesta no se encuentra en la 'Información documentada', responde *únicamente* con: \"La información solicitada no se encuentra disponible en los documentos seleccionados.\"\n\n"
         "**Respuesta:**"
     )
