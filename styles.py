@@ -45,11 +45,35 @@ TABS_CSS = """
          display: none;
      }
 
-     /* Contenido debajo de las pestañas (asegurar que no haya espacio extra arriba) */
+     /* Contenido debajo de las pestañas (asegurar que no haya doble borde) */
      div[data-testid="stTabContent"] {
          padding-top: 20px; /* Ajustar según sea necesario */
          border-top: none; /* Asegurar que no haya doble borde */
      }
+
+    /* --- CSS PARA CITAS AZULES (MOVIDO AQUÍ) --- */
+
+    /* Estilo para las citas en el texto, ej: [1](#) */
+    div[data-testid="stMarkdown"] a[href="#"] {
+        color: #0068c9; /* Azul principal de la app */
+        font-weight: 600;
+        text-decoration: none; /* Sin subrayado */
+        display: inline-block; /* Evita saltos de línea extraños */
+        margin: 0 1px;
+    }
+
+    /* Estilo para las citas en la sección ## Fuentes */
+    div[data-testid="stMarkdown"] h2 + ul > li > a[href="#"] {
+        color: #333; /* Color oscuro normal en la lista */
+        font-weight: normal;
+    }
+
+    /* Efecto hover (opcional) */
+    div[data-testid="stMarkdown"] a[href="#"]:hover {
+        text-decoration: underline;
+        color: #004a8f; /* Un azul más oscuro */
+    }
+
 </style>
 """
 
