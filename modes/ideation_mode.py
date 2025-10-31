@@ -4,7 +4,7 @@ from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
-from prompts import get_ideation_prompt # <-- ¡IMPORTACIÓN AÑADIDA!
+from prompts import get_ideation_prompt
 
 # =====================================================
 # MODO: CONVERSACIONES CREATIVAS (IDEACIÓN)
@@ -35,10 +35,7 @@ def ideacion_mode(db, selected_files):
             relevant = get_relevant_info(db, user_input, selected_files)
             conv_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history[-10:])
             
-            # --- ¡CAMBIO AQUÍ! ---
-            # El prompt ahora se importa desde prompts.py
             conv_prompt = get_ideation_prompt(conv_history, relevant)
-            # --- FIN DEL CAMBIO ---
             
             resp = call_gemini_api(conv_prompt)
             
@@ -52,7 +49,17 @@ def ideacion_mode(db, selected_files):
     if st.session_state.chat_history:
         col1, col2 = st.columns([1,1])
         with col1:
-            pdf_bytes = generate_pdf_html("\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history), title="Historial Creativo", banner_path=banner_file)
+            # --- ¡ARREGLO AQUÍ! ---
+            # 1. Crear el historial de chat como un string
+            chat_content_raw = "\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history)
+            
+            # 2. Limpiar el string de los enlaces de Markdown
+            chat_content_for_pdf = chat_content_raw.replace("](#)", "]")
+
+            # 3. Enviar el string limpio al generador de PDF
+            pdf_bytes = generate_pdf_html(chat_content_for_pdf, title="Historial Creativo", banner_path=banner_file)
+            # --- FIN DEL ARREGLO ---
+            
             if pdf_bytes: 
                 st.download_button("Descargar Chat PDF", data=pdf_bytes, file_name="chat_creativo.pdf", mime="application/pdf", use_container_width=True)
         with col2: 
