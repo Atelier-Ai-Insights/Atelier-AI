@@ -2,6 +2,7 @@ import streamlit as st
 from utils import get_relevant_info
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event
+from prompts import get_concept_gen_prompt # <-- ¡IMPORTACIÓN AÑADIDA!
 
 # =====================================================
 # MODO: GENERACIÓN DE CONCEPTOS
@@ -28,27 +29,11 @@ def concept_generation_mode(db, selected_files):
                 
             with st.spinner("Generando concepto..."):
                 context_info = get_relevant_info(db, product_idea, selected_files)
-                prompt = (
-                    f"**Tarea:** Estratega Mkt/Innovación. Desarrolla concepto estructurado a partir de 'Idea' y 'Contexto'.\n\n"
-                    f"**Idea:**\n\"{product_idea}\"\n\n"
-                    f"**Contexto (Hallazgos):**\n\"{context_info}\"\n\n"
-                    f"**Instrucciones:**\nGenera Markdown con estructura exacta. Basa respuestas en contexto. Sé claro, conciso, accionable.\n\n"
-                    "---\n\n"
-                    "### 1. Necesidad Consumidor\n* Identifica tensiones/deseos clave del contexto. Conecta con oportunidad.\n\n"
-                    "### 2. Descripción Producto/Servicio\n* Basado en Idea y enriquecido por Contexto. Características, funcionamiento.\n\n"
-                    "### 3. Beneficios Clave (3-4)\n* Responde a necesidad (Pto 1). Sustentado en Contexto. Funcional/Racional/Emocional.\n\n"
-                    "### 4. Conceptos para Evaluar (2 Opc.)\n"
-                    "* **Opción A:**\n"
-                    "    * **Insight:** (Dolor + Deseo. Basado en contexto).\n"
-                    "    * **What:** (Características/Beneficios. Basado en contexto/descripción).\n"
-                    "    * **RTB:** (¿Por qué creíble? Basado en contexto).\n"
-                    "    * **Claim:** (Esencia memorable).\n\n"
-                    "* **Opción B:** (Alternativa)\n"
-                    "    * **Insight:**\n"
-                    "    * **What:**\n"
-                    "    * **RTB:**\n"
-                    "    * **Claim:**"
-                )
+                
+                # --- ¡CAMBIO AQUÍ! ---
+                # El prompt ahora se importa desde prompts.py
+                prompt = get_concept_gen_prompt(product_idea, context_info)
+                # --- FIN DEL CAMBIO ---
                 
                 response = call_gemini_api(prompt)
                 

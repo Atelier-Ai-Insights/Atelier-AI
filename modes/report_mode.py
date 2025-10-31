@@ -4,6 +4,8 @@ from services.gemini_api import call_gemini_api
 from services.supabase_db import get_monthly_usage, log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
+# --- ¡IMPORTACIONES AÑADIDAS! ---
+from prompts import get_report_prompt1, get_report_prompt2
 
 # =====================================================
 # MODO: GENERAR REPORTE DE REPORTES
@@ -11,11 +13,18 @@ from config import banner_file
 
 def generate_final_report(question, db, selected_files):
     relevant_info = get_relevant_info(db, question, selected_files)
-    prompt1 = ( f"Pregunta del Cliente: ***{question}***\n\nInstrucciones:\n1. Identifica marca/producto exacto.\n2. Reitera: ***{question}***.\n3. Usa contexto para hallazgos relevantes.\n4. Extractos breves, no citas completas.\n5. Metadatos y cita IEEE [1].\n6. Referencias completas asociadas a [1], usar título de proyecto.\n7. Enfócate en hallazgos positivos.\n\nContexto:\n{relevant_info}\n\nRespuesta:\n## Hallazgos Clave:\n- [Hallazgo 1 [1]]\n- [Hallazgo 2 [2]]\n## Referencias:\n- [1] [Referencia completa 1]\n- [2] [Referencia completa 2]" )
+    
+    # --- ¡CAMBIO AQUÍ! (Prompt 1) ---
+    prompt1 = get_report_prompt1(question, relevant_info)
+    # --- FIN DEL CAMBIO ---
+    
     result1 = call_gemini_api(prompt1)
     if result1 is None: return None
     
-    prompt2 = ( f"Pregunta: ***{question}***\n\nInstrucciones:\n1. Responde específico a marca/producto.\n2. Menciona que estudios son de Atelier.\n3. Rol: Analista experto (Ciencias Comportamiento, Mkt Research, Mkt Estratégico). Claridad, síntesis, estructura.\n4. Estilo: Claro, directo, conciso, memorable (Heath). Evita tecnicismos.\n\nEstructura Informe (breve y preciso):\n- Introducción: Contexto, pregunta, hallazgo cualitativo atractivo.\n- Hallazgos Principales: Hechos relevantes del contexto/resultados, respondiendo a pregunta. Solo info relevante de marca/producto. Citas IEEE [1] (título estudio).\n- Insights: Aprendizajes profundos, analogías. Frases cortas con significado.\n- Conclusiones: Síntesis, dirección clara basada en insights. No repetir.\n- Recomendaciones (3-4): Concretas, creativas, accionables, alineadas con insights/conclusiones.\n- Referencias: Título estudio [1].\n\n5. IMPORTANTE: Espaciar nombres de marcas/productos (ej: 'marca X debe...').\n\nUsa este Resumen y Contexto:\nResumen:\n{result1}\n\nContexto Adicional:\n{relevant_info}\n\nRedacta informe completo:" )
+    # --- ¡CAMBIO AQUÍ! (Prompt 2) ---
+    prompt2 = get_report_prompt2(question, result1, relevant_info)
+    # --- FIN DEL CAMBIO ---
+    
     result2 = call_gemini_api(prompt2)
     if result2 is None: return None
     

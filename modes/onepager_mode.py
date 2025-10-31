@@ -7,159 +7,15 @@ from services.gemini_api import configure_api_dynamically
 from reporting.ppt_generator import crear_ppt_desde_json
 from utils import get_relevant_info, extract_text_from_pdfs
 
+# --- ¡IMPORTACIONES ACTUALIZADAS! ---
+# Ahora importamos los prompts desde el nuevo archivo
+from prompts import PROMPTS_ONEPAGER, get_onepager_final_prompt
+
 # =====================================================
 # MODO: GENERADOR DE ONE-PAGER PPT (MEJORADO)
 # =====================================================
 
-# --- Diccionario de Plantillas y sus Prompts ---
-PROMPTS_ONEPAGER = {
-    "Definición de Oportunidades": """
-        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
-        {{
-          "template_type": "oportunidades",
-          "titulo_diapositiva": "Un título principal corto y potente (máx. 6 palabras) sobre '{tema_central}'",
-          "insight_clave": "El insight o 'verdad oculta' más importante que encontraste (1 frase concisa).",
-          "hallazgos_principales": [
-            "Hallazgo #1: Un punto clave sintetizado.",
-            "Hallazgo #2: Otro punto clave sintetizado.",
-            "Hallazgo #3: Un tercer punto clave sintetizado."
-          ],
-          "oportunidades": [
-            "Oportunidad #1: Una acción o área de innovación basada en los hallazgos.",
-            "Oportunidad #2: Otra acción o área de innovación.",
-            "Oportunidad #3: Otra acción o área de innovación."
-          ],
-          "recomendacion_estrategica": "Una recomendación final clara y accionable (máx. 2 líneas)."
-        }}
-        """,
-    "Análisis DOFA (SWOT)": """
-        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
-        {{
-          "template_type": "dofa",
-          "titulo_diapositiva": "Análisis DOFA: {tema_central}",
-          "fortalezas": [
-            "Fortaleza #1: Aspecto interno positivo clave extraído del contexto.",
-            "Fortaleza #2: Otro aspecto interno positivo."
-          ],
-          "oportunidades": [
-            "Oportunidad #1: Factor externo positivo clave extraído del contexto.",
-            "Oportunidad #2: Otro factor externo positivo."
-          ],
-          "debilidades": [
-            "Debilidad #1: Aspecto interno negativo clave extraído del contexto.",
-            "Debilidad #2: Otro aspecto interno negativo."
-          ],
-          "amenazas": [
-            "Amenaza #1: Factor externo negativo clave extraído del contexto.",
-            "Amenaza #2: Otro factor externo negativo."
-          ]
-        }}
-        """,
-    "Mapa de Empatía": """
-        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
-        {{
-          "template_type": "empatia",
-          "titulo_diapositiva": "Mapa de Empatía: {tema_central}",
-          "piensa_siente": [
-            "Pensamiento/Sentimiento #1: Creencia, preocupación o aspiración clave.",
-            "Pensamiento/Sentimiento #2: Otra emoción o idea relevante."
-          ],
-          "ve": [
-            "Observación #1: Algo que el usuario ve en su entorno.",
-            "Observación #2: Otra influencia visual."
-          ],
-          "dice_hace": [
-            "Acción/Dicho #1: Comportamiento o frase típica.",
-            "Acción/Dicho #2: Otra actitud observable."
-          ],
-          "oye": [
-            "Influencia Auditiva #1: Algo que escucha de amigos, medios, etc.",
-            "Influencia Auditiva #2: Otra fuente de información."
-          ],
-          "esfuerzos": [
-            "Dolor/Esfuerzo #1: Frustración, obstáculo o miedo.",
-            "Dolor/Esfuerzo #2: Otro desafío."
-          ],
-          "resultados": [
-            "Ganancia/Resultado #1: Deseo, necesidad o medida de éxito.",
-            "Ganancia/Resultado #2: Otra aspiración."
-           ]
-        }}
-        """,
-    "Propuesta de Valor (Value Proposition)": """
-        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
-        {{
-          "template_type": "propuesta_valor",
-          "titulo_diapositiva": "Propuesta de Valor: {tema_central}",
-          "producto_servicio": "Descripción breve del producto/servicio central.",
-          "creadores_alegria": [
-             "Creador de Alegría #1: Cómo el producto/servicio produce ganancias.",
-             "Creador de Alegría #2: Otra forma en que ayuda a obtener resultados."
-          ],
-          "aliviadores_frustracion": [
-             "Aliviador #1: Cómo el producto/servicio alivia dolores.",
-             "Aliviador #2: Otra forma en que soluciona problemas."
-          ],
-          "trabajos_cliente": [
-              "Trabajo #1: Tarea funcional, social o emocional que el cliente intenta hacer.",
-              "Trabajo #2: Otra tarea o problema a resolver."
-          ],
-          "alegrias": [
-              "Alegría #1: Resultado o beneficio deseado por el cliente.",
-              "Alegría #2: Otra aspiración."
-          ],
-          "frustraciones": [
-              "Frustración #1: Obstáculo, riesgo o emoción negativa del cliente.",
-              "Frustración #2: Otro dolor."
-          ]
-        }}
-        """,
-    
-    # --- ¡NUEVAS PLANTILLAS AÑADIDAS AQUÍ! ---
-    "Mapa del Viaje (Journey Map)": """
-        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
-        {{
-          "template_type": "journey_map",
-          "titulo_diapositiva": "Customer Journey Map: {tema_central}",
-          "etapa_1": {{
-            "nombre_etapa": "Ej: Descubrimiento",
-            "acciones": ["Qué hace el cliente en esta etapa."],
-            "emociones": ["Qué siente (ej. Curiosidad, confusión)."],
-            "puntos_dolor": ["Qué problema enfrenta aquí."],
-            "oportunidades": ["Cómo podríamos mejorar su experiencia."]
-          }},
-          "etapa_2": {{
-            "nombre_etapa": "Ej: Consideración",
-            "acciones": ["..."], "emociones": ["..."], "puntos_dolor": ["..."], "oportunidades": ["..."]
-          }},
-          "etapa_3": {{
-            "nombre_etapa": "Ej: Compra/Uso",
-            "acciones": ["..."], "emociones": ["..."], "puntos_dolor": ["..."], "oportunidades": ["..."]
-          }},
-          "etapa_4": {{
-            "nombre_etapa": "Ej: Post-Uso",
-            "acciones": ["..."], "emociones": ["..."], "puntos_dolor": ["..."], "oportunidades": ["..."]
-          }}
-        }}
-        """,
-    "Matriz de Posicionamiento (2x2)": """
-        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
-        {{
-          "template_type": "matriz_2x2",
-          "titulo_diapositiva": "Matriz de Posicionamiento: {tema_central}",
-          "eje_x_positivo": "Ej: Moderno",
-          "eje_x_negativo": "Ej: Tradicional",
-          "eje_y_positivo": "Ej: Calidad Percibida Alta",
-          "eje_y_negativo": "Ej: Calidad Percibida Baja",
-          "items_cuadrante_sup_izq": ["Marca A", "Marca B (Estrategia de Retador)"],
-          "items_cuadrante_sup_der": ["Nuestra Marca (Líder Innovador)"],
-          "items_cuadrante_inf_izq": ["Marca C (Bajo Precio)"],
-          "items_cuadrante_inf_der": ["Marca D (Oportunista)"],
-          "conclusion_clave": "El principal insight visual de la matriz (ej. 'Existe un espacio vacío en el cuadrante Moderno y de Alta Calidad')."
-        }}
-        """
-    # --- FIN DE LAS NUEVAS PLANTILLAS ---
-}
+# --- El diccionario PROMPTS_ONEPAGER ha sido BORRADO de aquí ---
 
 
 def one_pager_ppt_mode(db_filtered, selected_files):
@@ -195,7 +51,7 @@ def one_pager_ppt_mode(db_filtered, selected_files):
 
     st.divider()
     st.markdown("#### 1. Selecciona la Plantilla")
-    template_options = list(PROMPTS_ONEPAGER.keys()) # El menú ahora incluirá las nuevas plantillas
+    template_options = list(PROMPTS_ONEPAGER.keys()) 
     selected_template_name = st.selectbox("Elige el tipo de diapositiva:", template_options)
 
     st.markdown("#### 2. Selecciona la Fuente de Datos")
@@ -213,12 +69,14 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     st.divider()
 
     if st.button(f"Generar Diapositiva '{selected_template_name}'", use_container_width=True, type="primary"):
+        # ... (Verificaciones de límite, etc.) ...
         current_ppt_usage = get_monthly_usage(st.session_state.user, "Generador de One-Pager PPT")
         if current_ppt_usage >= ppt_limit and ppt_limit != float('inf'): st.error(f"¡Límite alcanzado!"); return
         if not tema_central.strip(): st.warning("Por favor, describe el tema central."); return
         if not use_repo and not use_uploads: st.error("Debes seleccionar al menos una fuente de datos."); return
         if use_uploads and not uploaded_files: st.error("Seleccionaste 'Usar Archivos Cargados', pero no has subido PDFs."); return
 
+        # ... (Lógica de `relevant_info` sin cambios) ...
         relevant_info = ""
         with st.spinner("Procesando fuentes de datos..."):
             if use_repo:
@@ -232,21 +90,11 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                     st.error(f"Error al procesar PDFs: {e}"); pdf_text = None
         if not relevant_info.strip(): st.error("No se pudo extraer ningún contexto."); return
 
-        prompt_template = PROMPTS_ONEPAGER.get(selected_template_name)
-        if not prompt_template:
-            st.error("Error interno: Plantilla de prompt no encontrada."); return
-
-        final_prompt_json = f"""
-        Actúa como un Analista Estratégico experto. Has analizado los siguientes hallazgos de investigación sobre '{tema_central}':
-
-        --- CONTEXTO ---
-        {relevant_info}
-        --- FIN CONTEXTO ---
-
-        Tu tarea es sintetizar esta información para completar la plantilla '{selected_template_name}'.
-        {prompt_template.format(tema_central=tema_central)}
-        """
-
+        # --- ¡PROMPT FORMATEADO! ---
+        # Ahora se llama a la función desde prompts.py
+        final_prompt_json = get_onepager_final_prompt(relevant_info, selected_template_name, tema_central)
+        
+        # ... (Lógica de llamada a Gemini y creación de PPT sin cambios) ...
         data_json = None
         with st.spinner(f"Generando contenido para '{selected_template_name}'..."):
             response_text = None
@@ -269,4 +117,4 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                 log_query_event(f"{selected_template_name}: {tema_central}", mode="Generador de One-Pager PPT")
                 st.rerun()
             else:
-                pass # El error ya se muestra desde crear_ppt_desde_json
+                pass

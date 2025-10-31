@@ -3,6 +3,7 @@ import docx
 from io import BytesIO
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event
+from prompts import get_transcript_prompt # <-- ¡IMPORTACIÓN AÑADIDA!
 
 # =====================================================
 # MODO: ANÁLISIS DE TRANSCRIPCIONES
@@ -88,39 +89,28 @@ def transcript_analysis_mode():
         # Verificar si hay texto cargado
         if not st.session_state.uploaded_transcripts_text:
             st.error("No hay transcripciones cargadas para analizar. Por favor, sube archivos .docx.")
-            # Borrar el último mensaje del usuario para que no quede colgado
             st.session_state.transcript_chat_history.pop()
-            return # Detener si no hay contexto
+            return
 
         # Preparar contexto y llamar a Gemini
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             message_placeholder.markdown("Analizando transcripciones...")
 
-            # Combinar el texto de todos los archivos subidos
             combined_context = "\n\n--- Nueva Transcripción ---\n\n".join(
                 f"**Archivo: {name}**\n\n{text}"
                 for name, text in st.session_state.uploaded_transcripts_text.items()
             )
 
-            # Límite de contexto
             MAX_CONTEXT_LENGTH = 800000 
             if len(combined_context) > MAX_CONTEXT_LENGTH:
                 combined_context = combined_context[:MAX_CONTEXT_LENGTH] + "\n\n...(contexto truncado)..."
                 st.warning("El contexto combinado de las transcripciones es muy largo y ha sido truncado.", icon="⚠️")
 
-            # Construir el prompt para Gemini
-            chat_prompt = [
-                f"Actúa como un asistente experto en análisis cualitativo de transcripciones de entrevistas y focus groups. Tu tarea es responder la pregunta del usuario basándote únicamente en el texto de las transcripciones proporcionadas.",
-                f"\n\n**TRANSCRIPCIONES (Contexto Principal):**\n```\n{combined_context}\n```",
-                f"\n\n**Pregunta del Usuario:**\n{user_prompt}",
-                f"\n\n**Instrucciones:**",
-                f"- Responde de forma concisa y directa a la pregunta.",
-                f"- Basa tu respuesta **estrictamente** en la información contenida en las transcripciones.",
-                f"- Si la respuesta no se encuentra en el texto, indica claramente: 'La información solicitada no se encuentra en las transcripciones proporcionadas.'",
-                f"- Puedes citar extractos breves si ayuda a sustentar la respuesta, indicando opcionalmente el nombre del archivo si es relevante.",
-                f"\n\n**Respuesta:**"
-            ]
+            # --- ¡CAMBIO AQUÍ! ---
+            # El prompt ahora se importa desde prompts.py
+            chat_prompt = get_transcript_prompt(combined_context, user_prompt)
+            # --- FIN DEL CAMBIO ---
 
             response = call_gemini_api(chat_prompt) 
 
@@ -130,7 +120,6 @@ def transcript_analysis_mode():
                 log_query_event(user_prompt, mode="Análisis de Transcripciones")
             else:
                 message_placeholder.error("Error al obtener respuesta del análisis.")
-                # Opcional: eliminar el último mensaje de usuario si la respuesta falla
                 st.session_state.transcript_chat_history.pop()
 
     # Botón para limpiar archivos y chat

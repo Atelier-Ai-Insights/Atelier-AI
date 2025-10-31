@@ -6,6 +6,7 @@ from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
+from prompts import get_image_eval_prompt_parts # <-- ¡IMPORTACIÓN AÑADIDA!
 
 # =====================================================
 # MODO: EVALUACIÓN VISUAL (IMAGEN)
@@ -49,31 +50,29 @@ def image_evaluation_mode(db, selected_files):
                 relevant_text_context = relevant_text_context[:MAX_CONTEXT_TEXT] + "\n\n...(contexto truncado)..."
                 st.warning("El contexto de los estudios es muy largo y ha sido truncado.", icon="⚠️")
                 
-            prompt_parts = [
-                "Actúa como director creativo/estratega mkt experto. Analiza la imagen en contexto de target/objetivos, usando hallazgos como referencia.",
-                f"\n\n**Target:**\n{target_audience}",
-                f"\n\n**Objetivos:**\n{comm_objectives}",
-                "\n\n**Imagen:**",
-                Image.open(BytesIO(image_bytes)),
-                f"\n\n**Contexto (Hallazgos Estudios):**\n```\n{relevant_text_context[:10000]}\n```",
-                "\n\n**Evaluación Detallada (Markdown):**",
-                "\n### 1. Notoriedad/Impacto Visual",
-                "* ¿Capta la atención? ¿Atractiva/disruptiva para target?",
-                "* Elementos visuales clave y su aporte (apóyate en contexto si hay insights visuales).",
-                "\n### 2. Mensaje Clave/Claridad",
-                "* Mensajes principal/secundarios vs objetivos?",
-                "* ¿Claro para target? ¿Ambigüedad?",
-                "* ¿Mensaje vs insights del contexto?",
-                "\n### 3. Branding/Identidad",
-                "* ¿Marca integrada efectivamente? ¿Reconocible?",
-                "* ¿Refuerza personalidad/valores marca (según contexto)?",
-                "\n### 4. Call to Action",
-                "* ¿Sugiere acción o genera emoción/pensamiento (curiosidad, deseo, etc.)?",
-                "* ¿Respuesta alineada con objetivos?",
-                "* ¿Contexto sugiere que motivará al target?",
-                "\n\n**Conclusión General:**",
-                "* Valoración efectividad (target/objetivos), fortalezas, mejoras (conectando con insights si aplica)."
-            ]
+            # --- ¡CAMBIO AQUÍ! ---
+            # 1. Obtener la lista de texto desde prompts.py
+            prompt_parts = get_image_eval_prompt_parts(
+                target_audience, 
+                comm_objectives, 
+                relevant_text_context
+            )
+            
+            # 2. Preparar el objeto de imagen
+            image_data = Image.open(BytesIO(image_bytes))
+            
+            # 3. Insertar el objeto de imagen en el lugar correcto
+            # (El prompt de prompts.py debe contener la etiqueta "\n\n**Imagen:**")
+            try:
+                image_label_index = prompt_parts.index("\n\n**Imagen:**")
+                # Insertar la imagen justo después de la etiqueta
+                prompt_parts.insert(image_label_index + 1, image_data)
+            except ValueError:
+                # Fallback por si la etiqueta no está: añadir al final
+                st.warning("Advertencia: Etiqueta de imagen no encontrada en el prompt. Añadiendo al final.")
+                prompt_parts.append("\n\n**Imagen:**")
+                prompt_parts.append(image_data)
+            # --- FIN DEL CAMBIO ---
             
             evaluation_result = call_gemini_api(prompt_parts)
             

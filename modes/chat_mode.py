@@ -4,6 +4,7 @@ from services.gemini_api import call_gemini_api
 from services.supabase_db import get_daily_usage, log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
+from prompts import get_grounded_chat_prompt # <-- ¡ARREGLO AÑADIDO AQUÍ!
 
 # =====================================================
 # MODO: CHAT DE CONSULTA DIRECTA (GROUNDED)
@@ -41,21 +42,11 @@ def grounded_chat_mode(db, selected_files):
             relevant_info = get_relevant_info(db, user_input, selected_files)
             conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history[-10:])
             
-            grounded_prompt = (
-                f"**Tarea:** Asistente IA. Responde **última pregunta** del Usuario usando **solo** 'Información documentada' e 'Historial'.\n\n"
-                f"**Historial (reciente):**\n{conversation_history}\n\n"
-                f"**Información documentada:**\n{relevant_info}\n\n"
-                f"**Instrucciones:**\n"
-                f"1. Enfócate en última pregunta.\n"
-                f"2. Sintetiza hallazgos relevantes.\n"
-                f"3. Respuesta corta, clara, basada en hallazgos (no metodología/objetivos).\n"
-                f"4. Fidelidad absoluta a info documentada.\n"
-                f"5. Si falta info: \"La información solicitada no se encuentra disponible...\".\n"
-                f"6. Especificidad marca/producto.\n"
-                f"7. Sin citas.\n\n"
-                f"**Respuesta:**"
-            )
-            
+            # --- CÓDIGO ACTUALIZADO ---
+            # Ahora llama a la función desde prompts.py
+            grounded_prompt = get_grounded_chat_prompt(conversation_history, relevant_info)
+            # --- FIN DEL CAMBIO ---
+          
             response = call_gemini_api(grounded_prompt)
             
             if response: 

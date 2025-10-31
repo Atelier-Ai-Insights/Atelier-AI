@@ -5,6 +5,7 @@ from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
+from prompts import get_video_eval_prompt_parts # <-- ¡IMPORTACIÓN AÑADIDA!
 
 # =====================================================
 # MODO: EVALUACIÓN DE VIDEO
@@ -49,35 +50,29 @@ def video_evaluation_mode(db, selected_files):
             if len(relevant_text_context) > MAX_CONTEXT_TEXT:
                 relevant_text_context = relevant_text_context[:MAX_CONTEXT_TEXT] + "\n\n...(contexto truncado)..."
                 st.warning("El contexto de los estudios es muy largo y ha sido truncado.", icon="⚠️")
-                
+
+            # --- ¡CAMBIO AQUÍ! ---
+            # 1. Preparar el objeto de video
             video_file_data = {'mime_type': uploaded_file.type, 'data': video_bytes}
             
-            prompt_parts = [
-                "Actúa como director creativo/estratega mkt experto audiovisual. Analiza el video (visual/audio) en contexto de target/objetivos, usando hallazgos como referencia.",
-                f"\n\n**Target:**\n{target_audience}",
-                f"\n\n**Objetivos:**\n{comm_objectives}",
-                "\n\n**Video:**",
-                video_file_data,
-                f"\n\n**Contexto (Hallazgos Estudios):**\n```\n{relevant_text_context[:8000]}\n```",
-                "\n\n**Evaluación Detallada (Markdown):**",
-                "\n### 1. Notoriedad/Impacto (Visual/Auditivo)",
-                "* ¿Capta la atención? ¿Memorable? ¿Destaca?",
-                "* Elementos clave (narrativa, ritmo, música, etc.) y su aporte (vs contexto).",
-                "* ¿Insights contexto sobre preferencias audiovisuales?",
-                "\n### 2. Mensaje Clave/Claridad",
-                "* Mensajes principal/secundarios vs objetivos?",
-                "* ¿Claro/relevante para target? ¿Audio+Video OK?",
-                "* ¿Mensaje vs insights contexto?",
-                "\n### 3. Branding/Identidad",
-                "* ¿Marca integrada natural/efectiva? ¿Cuándo/cómo?",
-                "* ¿Refuerza personalidad/valores marca?",
-                "\n### 4. Call to Action",
-                "* ¿Sugiere acción o genera emoción/pensamiento?",
-                "* ¿Respuesta alineada con objetivos?",
-                "* ¿Contexto sugiere que motivará?",
-                "\n\n**Conclusión General:**",
-                "* Valoración efectividad (target/objetivos), fortalezas, mejoras (conectando con insights si aplica)."
-            ]
+            # 2. Obtener la lista de texto desde prompts.py
+            prompt_parts = get_video_eval_prompt_parts(
+                target_audience,
+                comm_objectives,
+                relevant_text_context
+            )
+            
+            # 3. Insertar el objeto de video en el lugar correcto
+            try:
+                video_label_index = prompt_parts.index("\n\n**Video:**")
+                # Insertar el video justo después de la etiqueta
+                prompt_parts.insert(video_label_index + 1, video_file_data)
+            except ValueError:
+                # Fallback por si la etiqueta no está
+                st.warning("Advertencia: Etiqueta de video no encontrada en el prompt. Añadiendo al final.")
+                prompt_parts.append("\n\n**Video:**")
+                prompt_parts.append(video_file_data)
+            # --- FIN DEL CAMBIO ---
             
             evaluation_result = call_gemini_api(prompt_parts)
             
