@@ -67,37 +67,25 @@ def run_user_mode(db_full, user_features, footer_html):
                     st.session_state.clear()
                     st.rerun()
 
-                # 3. Intentar contactar a la base de datos
                 response = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute()
                 
-                # 4. SOLO si la consulta fue exitosa Y los datos están allí...
                 if response.data and 'active_session_id' in response.data:
                     db_session_id = response.data['active_session_id']
                     
-                    # 5. ...comparamos las IDs.
                     if db_session_id != st.session_state.session_id:
-                        # --- EXPULSIÓN (VALIDACIÓN FALLIDA) ---
-                        # 100% seguro de que otra sesión inició. Expulsar.
                         st.error("Tu sesión ha sido cerrada porque iniciaste sesión en otro dispositivo.")
                         st.session_state.clear()
                         st.rerun()
                     else:
-                        # --- ÉXITO ---
-                        # La sesión es válida. Reseteamos el temporizador.
                         print("Heartbeat exitoso.")
                         st.session_state.last_heartbeat_check = current_time
                 
                 else:
-                    # La consulta fue exitosa pero no trajo datos (ej. usuario borrado)
                     st.error("Error al verificar sesión (usuario no encontrado).")
                     st.session_state.clear()
                     st.rerun()
 
             except Exception as e:
-                # --- CHEQUEO FALLIDO (NO EXPULSAR) ---
-                # El chequeo falló (ej. red caída, lag de DB).
-                # NO HACEMOS NADA. Solo imprimimos el error y reseteamos el temporizador
-                # para que no intente de nuevo en el siguiente clic, sino en 60s.
                 print(f"Heartbeat check falló (ej. red), pero NO se expulsará al usuario. Error: {e}")
                 st.session_state.last_heartbeat_check = current_time
     
@@ -113,8 +101,6 @@ def run_user_mode(db_full, user_features, footer_html):
     
     modo = st.session_state.current_mode
 
-    # (El resto de tu código de app.py sigue exactamente igual)
-    # ... (all_categories, expanders, filtros, etc.) ...
     all_categories = {
         "Análisis": {
             "Chat de Consulta Directa": True, 
@@ -287,4 +273,7 @@ def main():
 # ==============================
 # PUNTO DE ENTRADA
 # ==============================
-if __name__
+
+# --- ¡LÍNEA CORREGIDA! ---
+if __name__ == "__main__":
+    main()
