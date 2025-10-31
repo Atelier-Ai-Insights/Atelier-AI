@@ -1,15 +1,13 @@
 import streamlit as st
 from services.supabase_db import supabase
 from config import PLAN_FEATURES
-import uuid
-import time # <-- ¡AÑADIDO!
+# Eliminamos import uuid y import time
 
 # ==============================
 # Autenticación con Supabase Auth
 # ==============================
 
 def show_signup_page():
-    # ... (Sin cambios) ...
     st.header("Crear Nueva Cuenta")
     email = st.text_input("Tu Correo Electrónico")
     password = st.text_input("Crea una Contraseña", type="password")
@@ -48,35 +46,27 @@ def show_login_page():
         try:
             response = supabase.auth.sign_in_with_password({"email": email, "password": password})
             user_id = response.user.id
-
-            new_session_id = str(uuid.uuid4())
+            
+            # --- LÓGICA DE LOGIN ORIGINAL (SIN SESSION ID) ---
             user_profile = supabase.table("users").select("*, rol, clients(client_name, plan)").eq("id", user_id).single().execute()
             
             if user_profile.data and user_profile.data.get('clients'):
-                
-                supabase.table("users").update({"active_session_id": new_session_id}).eq("id", user_id).execute()
-                
                 client_info = user_profile.data['clients']
                 st.session_state.logged_in = True
                 st.session_state.user = user_profile.data['email']
-                st.session_state.user_id = user_id
-                st.session_state.session_id = new_session_id
                 st.session_state.cliente = client_info['client_name'].lower()
                 st.session_state.plan = client_info.get('plan', 'Explorer')
                 st.session_state.plan_features = PLAN_FEATURES.get(st.session_state.plan, PLAN_FEATURES['Explorer'])
                 st.session_state.is_admin = (user_profile.data.get('rol', '') == 'admin')
-                
-                # --- ¡LÍNEA MODIFICADA! ---
-                st.session_state.login_timestamp = time.time() # Guardamos la hora de inicio de sesión
-                # --- FIN DE LA LÍNEA ---
-                
                 st.rerun()
+                # --- FIN DE LA LÓGICA ---
 
             else:
                 st.error("Perfil de usuario no encontrado. Contacta al administrador.")
         except Exception as e:
             st.error("Credenciales incorrectas o cuenta no confirmada.")
 
+    # Apilar botones verticalmente
     if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
         st.session_state.page = "signup"
         st.rerun()
@@ -86,7 +76,6 @@ def show_login_page():
         st.rerun()
 
 def show_reset_password_page():
-    # ... (Sin cambios) ...
     st.header("Restablecer Contraseña")
     st.write("Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.")
     email = st.text_input("Tu Correo Electrónico")

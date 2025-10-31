@@ -1,5 +1,5 @@
 import streamlit as st
-import time # Importar time
+# Eliminamos import time
 
 # ==============================
 # 1. IMPORTAR MÓDULOS
@@ -45,52 +45,9 @@ def set_mode_and_reset(new_mode):
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
     
-    # --- ¡BLOQUE DE HEARTBEAT CON "TEMPORIZADOR SUAVE"! ---
+    # --- BLOQUE DE HEARTBEAT ELIMINADO ---
+    # Ya no hay verificador de sesión.
     
-    GRACE_PERIOD_SECONDS = 5 # Período de gracia post-login
-    HEARTBEAT_INTERVAL_SECONDS = 60 # Chequear solo cada 60 segundos
-    current_time = time.time()
-    
-    # 1. Revisar si estamos en el período de gracia inicial
-    login_time = st.session_state.get("login_timestamp", 0)
-    if (current_time - login_time) > GRACE_PERIOD_SECONDS:
-        
-        # El período de gracia terminó. Ahora usamos el temporizador.
-        last_check = st.session_state.get("last_heartbeat_check", 0)
-        
-        # 2. Revisar si han pasado 60 segundos desde el último chequeo
-        if (current_time - last_check) > HEARTBEAT_INTERVAL_SECONDS:
-            print("--- Ejecutando Heartbeat de Sesión ---")
-            try:
-                if 'user_id' not in st.session_state or 'session_id' not in st.session_state:
-                    st.error("Error de sesión (faltan datos). Por favor, inicie sesión de nuevo.")
-                    st.session_state.clear()
-                    st.rerun()
-
-                response = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute()
-                
-                if response.data and 'active_session_id' in response.data:
-                    db_session_id = response.data['active_session_id']
-                    
-                    if db_session_id != st.session_state.session_id:
-                        st.error("Tu sesión ha sido cerrada porque iniciaste sesión en otro dispositivo.")
-                        st.session_state.clear()
-                        st.rerun()
-                    else:
-                        print("Heartbeat exitoso.")
-                        st.session_state.last_heartbeat_check = current_time
-                
-                else:
-                    st.error("Error al verificar sesión (usuario no encontrado).")
-                    st.session_state.clear()
-                    st.rerun()
-
-            except Exception as e:
-                print(f"Heartbeat check falló (ej. red), pero NO se expulsará al usuario. Error: {e}")
-                st.session_state.last_heartbeat_check = current_time
-    
-    # --- FIN DEL BLOQUE DE HEARTBEAT ---
-
     # El resto de la función continúa
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
@@ -179,16 +136,12 @@ def run_user_mode(db_full, user_features, footer_html):
         db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
 
+    # --- LÓGICA DE LOGOUT ORIGINAL (SIMPLIFICADA) ---
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
-        try:
-            if 'user_id' in st.session_state: 
-                supabase.table("users").update({"active_session_id": None}).eq("id", st.session_state.user_id).execute()
-        except Exception as e:
-            print(f"Error al limpiar sesión en DB: {e}")
-        
         supabase.auth.sign_out()
         st.session_state.clear()
         st.rerun()
+    # --- FIN LÓGICA DE LOGOUT ---
 
     st.sidebar.divider()
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
@@ -273,7 +226,5 @@ def main():
 # ==============================
 # PUNTO DE ENTRADA
 # ==============================
-
-# --- ¡LÍNEA CORREGIDA! ---
 if __name__ == "__main__":
     main()
