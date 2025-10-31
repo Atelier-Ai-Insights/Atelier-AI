@@ -1,5 +1,5 @@
 import streamlit as st
-import time #
+import time # Importar time
 
 # ==============================
 # 1. IMPORTAR MÓDULOS
@@ -45,37 +45,56 @@ def set_mode_and_reset(new_mode):
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
     
-    # --- ¡BLOQUE DE HEARTBEAT MODIFICADO CON PERÍODO DE GRACIA! ---
+    # --- ¡BLOQUE DE HEARTBEAT CON TEMPORIZADOR DE 60 SEGUNDOS! ---
     
-    # Definimos un período de gracia (ej. 5 segundos)
-    GRACE_PERIOD_SECONDS = 5
+    GRACE_PERIOD_SECONDS = 5 # Mantenemos el período de gracia de 5s post-login
+    HEARTBEAT_INTERVAL_SECONDS = 60 # Solo verificar la sesión cada 60 segundos
     current_time = time.time()
+    
+    # 1. Revisar si estamos en el período de gracia inicial
     login_time = st.session_state.get("login_timestamp", 0)
+    if (current_time - login_time) <= GRACE_PERIOD_SECONDS:
+        # Estamos en los 5 segundos después de iniciar sesión. No hacer nada.
+        pass
+    else:
+        # El período de gracia terminó. Ahora usamos el temporizador de 60s.
+        
+        # Inicializar el temporizador si no existe
+        if "last_heartbeat_check" not in st.session_state:
+            st.session_state.last_heartbeat_check = current_time
 
-    # Solo ejecutamos el heartbeat si han pasado más de 5 segundos desde el login
-    if (current_time - login_time) > GRACE_PERIOD_SECONDS:
-        try:
-            if 'user_id' not in st.session_state or 'session_id' not in st.session_state:
-                st.error("Error de sesión. Por favor, inicie sesión de nuevo.")
+        # 2. Revisar si han pasado 60 segundos desde el último chequeo
+        if (current_time - st.session_state.last_heartbeat_check) > HEARTBEAT_INTERVAL_SECONDS:
+            # ¡Pasaron 60 segundos! Es hora de chequear la sesión.
+            try:
+                if 'user_id' not in st.session_state or 'session_id' not in st.session_state:
+                    st.error("Error de sesión. Por favor, inicie sesión de nuevo.")
+                    st.session_state.clear()
+                    st.rerun()
+
+                db_session_id = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute().data['active_session_id']
+                
+                if db_session_id != st.session_state.session_id:
+                    st.error("Tu sesión ha sido cerrada porque iniciaste sesión en otro dispositivo.")
+                    st.session_state.clear()
+                    st.rerun()
+                
+                # Si el chequeo fue exitoso, reseteamos el temporizador
+                st.session_state.last_heartbeat_check = current_time
+                
+            except Exception as e:
+                # Si el chequeo falla (ej. sin internet), te saca por seguridad
+                st.error(f"Error de validación de sesión: {e}")
                 st.session_state.clear()
                 st.rerun()
-
-            db_session_id = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute().data['active_session_id']
-            
-            if db_session_id != st.session_state.session_id:
-                st.error("Tu sesión ha sido cerrada porque iniciaste sesión en otro dispositivo.")
-                st.session_state.clear()
-                st.rerun()
-        except Exception as e:
-            st.error(f"Error de validación de sesión: {e}")
-            st.session_state.clear()
-            st.rerun()
-    # --- FIN DEL BLOQUE DE HEARTBEAT MODIFICADO ---
+        
+        # Si no han pasado 60 segundos, no hace nada y la app sigue normal.
+        
+    # --- FIN DEL BLOQUE DE HEARTBEAT ---
 
     # El resto de la función continúa
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
-    # ... (El resto de tu función run_user_mode, incluyendo los expanders y la lógica de logout, sigue igual) ...
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
     st.sidebar.divider()
 
@@ -83,6 +102,8 @@ def run_user_mode(db_full, user_features, footer_html):
     
     modo = st.session_state.current_mode
 
+    # (El resto de tu código de app.py sigue exactamente igual)
+    # ... (all_categories, expanders, filtros, etc.) ...
     all_categories = {
         "Análisis": {
             "Chat de Consulta Directa": True, 
