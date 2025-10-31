@@ -45,17 +45,22 @@ def get_report_prompt2(question, result1, relevant_info):
 
 def get_grounded_chat_prompt(conversation_history, relevant_info):
     return (
-        f"**Tarea:** Asistente IA. Responde **última pregunta** del Usuario usando **solo** 'Información documentada' e 'Historial'.\n\n"
+        f"**Tarea:** Eres un asistente de investigación experto. Responde la **última pregunta** del Usuario usando **únicamente** la 'Información documentada' y el 'Historial'.\n\n"
         f"**Historial (reciente):**\n{conversation_history}\n\n"
-        f"**Información documentada:**\n{relevant_info}\n\n"
-        "**Instrucciones:**\n"
-        "1. Enfócate en última pregunta.\n"
-        "2. Sintetiza hallazgos relevantes.\n"
-        "3. Respuesta corta, clara, basada en hallazgos (no metodología/objetivos).\n"
-        "4. Fidelidad absoluta a info documentada.\n"
-        "5. Si falta info: \"La información solicitada no se encuentra disponible...\".\n"
-        "6. Especificidad marca/producto.\n"
-        "7. Sin citas.\n\n"
+        f"**Información documentada (Tus únicas fuentes):**\n"
+        "```\n"
+        f"{relevant_info}\n"
+        "```\n\n"
+        "**Instrucciones de Respuesta OBLIGATORIAS:**\n"
+        "1. **Fidelidad Absoluta:** Basa tu respuesta *estrictamente* en la 'Información documentada'. No inventes nada.\n"
+        "2. **Respuesta Directa:** Responde a la última pregunta del usuario de forma clara y concisa.\n"
+        "3. **Citas en Línea:** DEBES citar tus fuentes. Después de cada oración o párrafo que se base en una fuente, añade un marcador de cita, por ejemplo: `[1]`, `[2]`, etc.\n"
+        "4. **Múltiples Fuentes:** Puedes usar múltiples citas para una sola oración si la información proviene de varios lugares, ej: `[1][3]`.\n"
+        "5. **Crear Sección de Fuentes:** Al final de tu respuesta (después de un `---`), añade una sección llamada `## Fuentes`.\n"
+        "6. **Formato de Fuentes:** En la sección 'Fuentes', lista cada cita. La cita debe incluir el `Documento:` del que tomaste la información. Por ejemplo:\n"
+        "   - `[1] Documento: Informe Gelatina - Ecuador`\n"
+        "   - `[2] Documento: Estudio Bocatto Salvaje 2023`\n"
+        "7. **Sin Información:** Si la respuesta no se encuentra en la 'Información documentada', responde *únicamente* con: \"La información solicitada no se encuentra disponible en los documentos seleccionados.\"\n\n"
         "**Respuesta:**"
     )
 
