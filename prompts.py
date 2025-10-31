@@ -4,12 +4,12 @@ INSTRUCCIONES_DE_CITAS = """
 **Instrucciones de Respuesta OBLIGATORIAS:**
 1. **Fidelidad Absoluta:** Basa tu respuesta *estrictamente* en la 'Información documentada'. No inventes nada.
 2. **Respuesta Directa:** Responde a la última pregunta/tarea de forma clara y concisa.
-3. **Citas en Línea:** DEBES citar tus fuentes. Después de cada oración o párrafo que se base en una fuente, añade un marcador de cita formateado como un **link de markdown que no lleva a ninguna parte**, por ejemplo: [1](#), [2](#), etc.
-4. **Múltiples Fuentes:** Puedes usar múltiples citas, ej: [1](#)[3](#).
+3. **Citas en Línea:** DEBES citar tus fuentes. Después de cada oración o párrafo, añade un marcador de cita en texto plano, por ejemplo: [1], [2], etc.
+4. **Múltiples Fuentes:** Puedes usar múltiples citas, ej: [1][3].
 5. **Crear Sección de Fuentes:** Al final de tu respuesta (después de un `---`), añade una sección llamada `## Fuentes`.
 6. **Formato de Fuentes:** En la sección 'Fuentes', lista CADA cita en una **línea separada con su propia viñeta (`*`)**. La cita debe incluir únicamente el `Documento:` del que tomaste la información. Por ejemplo:
-   * [1](#) Documento: Informe Gelatina - Ecuador
-   * [2](#) Documento: Estudio Bocatto Salvaje 2023
+   * [1] Documento: Informe Gelatina - Ecuador
+   * [2] Documento: Estudio Bocatto Salvaje 2023
 7. **Sin Información:** Si la respuesta no se encuentra en la 'Información documentada', responde *únicamente* con: "La información solicitada no se encuentra disponible en los documentos seleccionados."
 """
 
@@ -24,12 +24,12 @@ def get_report_prompt1(question, relevant_info):
         f"{INSTRUCCIONES_DE_CITAS}\n\n" # <-- Instrucciones estandarizadas
         "**Respuesta (Solo Hallazgos y Fuentes):**\n"
         "## Hallazgos Clave:\n"
-        "* [Hallazgo 1... [1](#)]\n"
-        "* [Hallazgo 2... [2](#)]\n"
+        "* [Hallazgo 1... [1]]\n"
+        "* [Hallazgo 2... [2]]\n"
         "---\n"
         "## Fuentes\n"
-        "* [1](#) Documento: ...\n"
-        "* [2](#) Documento: ...\n"
+        "* [1] Documento: ...\n"
+        "* [2] Documento: ...\n"
     )
 
 def get_report_prompt2(question, result1, relevant_info):
@@ -39,7 +39,7 @@ def get_report_prompt2(question, result1, relevant_info):
         "**Tarea:** Actúa como un Analista experto. Redacta un informe completo y estructurado usando el Resumen de Hallazgos y el Contexto Adicional. Menciona que los estudios son de Atelier.\n\n"
         "**Estructura del Informe (breve y preciso):**\n"
         "- Introducción: Contexto y pregunta.\n"
-        "- Hallazgos Principales: Hechos relevantes respondiendo a la pregunta. DEBES citar las fuentes [1](#).\n"
+        "- Hallazgos Principales: Hechos relevantes respondiendo a la pregunta. DEBES citar las fuentes [1].\n"
         "- Insights: Aprendizajes profundos.\n"
         "- Conclusiones: Síntesis clara.\n"
         "- Recomendaciones (3-4): Accionables.\n\n"
@@ -90,7 +90,7 @@ def get_concept_gen_prompt(product_idea, context_info):
         f"**Idea:**\n\"{product_idea}\"\n\n"
         f"**Información documentada (Contexto/Hallazgos):**\n\"{context_info}\"\n\n"
         "**Instrucciones:**\n"
-        "Genera Markdown con estructura exacta. Basa tus respuestas en el contexto y **CITA TUS FUENTES** [1](#).\n\n"
+        "Genera Markdown con estructura exacta. Basa tus respuestas en el contexto y **CITA TUS FUENTES** [1].\n\n"
         "---\n\n"
         "### 1. Necesidad Consumidor\n* Identifica tensiones/deseos clave del contexto. Conecta con oportunidad. (Citar fuentes)\n\n"
         "### 2. Descripción Producto/Servicio\n* Basado en Idea y enriquecido por Contexto. (Citar fuentes)\n\n"
@@ -142,19 +142,19 @@ def get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
         "\n\n**Evaluación Detallada (Markdown):**",
         "\n### 1. Notoriedad/Impacto Visual",
         "* ¿Capta la atención? ¿Atractiva/disruptiva para target?",
-        "* Elementos visuales clave y su aporte (apóyate en contexto si hay insights visuales y cítalos [1](#)).",
+        "* Elementos visuales clave y su aporte (apóyate en contexto si hay insights visuales y cítalos [1]).",
         "\n### 2. Mensaje Clave/Claridad",
         "* Mensajes principal/secundarios vs objetivos?",
         "* ¿Claro para target? ¿Ambigüedad?",
-        "* ¿Mensaje vs insights del contexto? (Citar [1](#))",
+        "* ¿Mensaje vs insights del contexto? (Citar [1])",
         "\n### 3. Branding/Identidad",
         "* ¿Marca integrada efectivamente? ¿Reconocible?",
-        "* ¿Refuerza personalidad/valores marca (según contexto)? (Citar [1](#))",
+        "* ¿Refuerza personalidad/valores marca (según contexto)? (Citar [1])",
         "\n### 4. Call to Action",
         "* ¿Sugiere acción o genera emoción/pensamiento (curiosidad, deseo, etc.)?",
-        "* ¿Contexto sugiere que motivará al target? (Citar [1](#))",
+        "* ¿Contexto sugiere que motivará al target? (Citar [1])",
         "\n\n**Conclusión General:**",
-        "* Valoración efectividad, fortalezas, mejoras (conectando con insights si aplica [1](#)).",
+        "* Valoración efectividad, fortalezas, mejoras (conectando con insights si aplica [1]).",
         "\n\n---\n"
         f"{INSTRUCCIONES_DE_CITAS}\n" # <-- Instrucciones estandarizadas
     ]
@@ -171,20 +171,20 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
         "\n\n**Evaluación Detallada (Markdown):**",
         "\n### 1. Notoriedad/Impacto (Visual/Auditivo)",
         "* ¿Capta la atención? ¿Memorable? ¿Destaca?",
-        "* Elementos clave (narrativa, ritmo, música, etc.) y su aporte (vs contexto y citar [1](#)).",
-        "* ¿Insights contexto sobre preferencias audiovisuales? (Citar [1](#))",
+        "* Elementos clave (narrativa, ritmo, música, etc.) y su aporte (vs contexto y citar [1]).",
+        "* ¿Insights contexto sobre preferencias audiovisuales? (Citar [1])",
         "\n### 2. Mensaje Clave/Claridad",
         "* Mensajes principal/secundarios vs objetivos?",
         "* ¿Claro/relevante para target? ¿Audio+Video OK?",
-        "* ¿Mensaje vs insights contexto? (Citar [1](#))",
+        "* ¿Mensaje vs insights contexto? (Citar [1])",
         "\n### 3. Branding/Identidad",
         "* ¿Marca integrada natural/efectiva? ¿Cuándo/cómo?",
-        "* ¿Refuerza personalidad/valores marca? (Citar [1](#))",
+        "* ¿Refuerza personalidad/valores marca? (Citar [1])",
         "\n### 4. Call to Action",
         "* ¿Sugiere acción o genera emoción/pensamiento?",
-        "* ¿Contexto sugiere que motivará? (Citar [1](#))",
+        "* ¿Contexto sugiere que motivará? (Citar [1])",
         "\n\n**Conclusión General:**",
-        "* Valoración efectividad, fortalezas, mejoras (conectando con insights si aplica [1](#)).",
+        "* Valoración efectividad, fortalezas, mejoras (conectando con insights si aplica [1]).",
         "\n\n---\n"
         f"{INSTRUCCIONES_DE_CITAS}\n" # <-- Instrucciones estandarizadas
     ]
@@ -199,11 +199,11 @@ def get_transcript_prompt(combined_context, user_prompt):
         f"\n\n**Pregunta del Usuario:**\n{user_prompt}",
         "\n\n**Instrucciones OBLIGATORIAS:**",
         "1. **Fidelidad Absoluta:** Basa tu respuesta *estrictamente* en la información contenida en las transcripciones.",
-        "2. **Citas en Línea:** DEBES citar tus fuentes. Después de cada oración, añade un marcador de cita formateado como un **link de markdown que no lleva a ninguna parte**, por ejemplo: [1](#), [2](#), etc.",
+        "2. **Citas en Línea:** DEBES citar tus fuentes. Después de cada oración, añade un marcador de cita en texto plano, por ejemplo: [1], [2], etc.",
         "3. **Crear Sección de Fuentes:** Al final de tu respuesta (después de un `---`), añade una sección llamada `## Fuentes`.",
         "4. **Formato de Fuentes:** En la sección 'Fuentes', lista CADA cita en una **línea separada con su propia viñeta (`*`)**. La cita debe incluir el `Archivo:` del que tomaste la información (el nombre del archivo se provee en el contexto). Por ejemplo:\n"
-        "   * [1](#) Archivo: Entrevista_Usuario_1.docx\n"
-        "   * [2](#) Archivo: Focus_Group_A.docx\n"
+        "   * [1] Archivo: Entrevista_Usuario_1.docx\n"
+        "   * [2] Archivo: Focus_Group_A.docx\n"
         "5. **Sin Información:** Si la respuesta no se encuentra en el texto, indica claramente: 'La información solicitada no se encuentra en las transcripciones proporcionadas.'",
         "\n\n**Respuesta:**"
     ]
@@ -250,7 +250,7 @@ PROMPTS_ONEPAGER = {
         }}
         """,
     "Propuesta de Valor (Value Proposition)": """
-        Genera ÚNICYAMENTE un objeto JSON válido con la siguiente estructura exacta:
+        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
         {{
           "template_type": "propuesta_valor",
           "titulo_diapositiva": "Propuesta de Valor: {tema_central}",
