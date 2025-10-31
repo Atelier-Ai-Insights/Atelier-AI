@@ -4,21 +4,13 @@ import streamlit as st
 # 1. IMPORTAR MÓDULOS
 # ==============================
 
-# Importar estilos y configuración
+# (Tus imports van aquí, no cambian)
 from styles import apply_styles
 from config import PLAN_FEATURES, banner_file 
-
-# Importar servicios
 from services.storage import load_database
-from services.supabase_db import supabase # Solo el cliente normal es necesario aquí
-
-# Importar vistas de autenticación
+from services.supabase_db import supabase 
 from auth import show_login_page, show_signup_page, show_reset_password_page
-
-# Importar panel de admin
 from admin.dashboard import show_admin_dashboard
-
-# Importar todos los modos de usuario
 from modes.report_mode import report_mode
 from modes.chat_mode import grounded_chat_mode
 from modes.ideation_mode import ideacion_mode
@@ -28,16 +20,12 @@ from modes.image_eval_mode import image_evaluation_mode
 from modes.video_eval_mode import video_evaluation_mode
 from modes.transcript_mode import transcript_analysis_mode
 from modes.onepager_mode import one_pager_ppt_mode
-
-# Importar utilidades
 from utils import (
     extract_brand, reset_chat_workflow, reset_report_workflow 
 )
 
 def set_mode_and_reset(new_mode):
-    """
-    Actualiza el modo y resetea los flujos de trabajo si el modo cambia.
-    """
+    # (Esta función no cambia)
     if 'current_mode' not in st.session_state or st.session_state.current_mode != new_mode:
         reset_chat_workflow() 
         st.session_state.pop("generated_concept", None)
@@ -56,33 +44,35 @@ def set_mode_and_reset(new_mode):
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
     
-    # --- BLOQUE DE HEARTBEAT! ---
-    # En cada recarga de página, verifica si esta sesión sigue siendo la activa
-    try:
-        # 1. Asegurarse de que los datos de sesión existan
-        if 'user_id' not in st.session_state or 'session_id' not in st.session_state:
-            st.error("Error de sesión. Por favor, inicie sesión de nuevo.")
-            st.session_state.clear()
-            st.rerun()
+    # --- ¡BLOQUE DE HEARTBEAT MODIFICADO! ---
+    # Revisar la bandera "just_logged_in"
+    if st.session_state.get("just_logged_in") == True:
+        # Si acabamos de entrar, saltamos el check y bajamos la bandera.
+        st.session_state.just_logged_in = False
+    else:
+        # Esta NO es la primera carga, así que SÍ corremos el heartbeat.
+        try:
+            if 'user_id' not in st.session_state or 'session_id' not in st.session_state:
+                st.error("Error de sesión. Por favor, inicie sesión de nuevo.")
+                st.session_state.clear()
+                st.rerun()
 
-        # 2. Obtener el ID de sesión guardado en la base de datos
-        db_session_id = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute().data['active_session_id']
-        
-        # 3. Comparar con el ID de esta sesión
-        if db_session_id != st.session_state.session_id:
-            # 4. Si no coinciden, esta sesión es antigua. ¡Mátala!
-            st.error("Tu sesión ha sido cerrada porque iniciaste sesión en otro dispositivo.")
+            db_session_id = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute().data['active_session_id']
+            
+            if db_session_id != st.session_state.session_id:
+                st.error("Tu sesión ha sido cerrada porque iniciaste sesión en otro dispositivo.")
+                st.session_state.clear()
+                st.rerun()
+        except Exception as e:
+            st.error(f"Error de validación de sesión: {e}")
             st.session_state.clear()
             st.rerun()
-    except Exception as e:
-        # Si falla (ej. usuario borrado), cierra la sesión por seguridad
-        st.error(f"Error de validación de sesión: {e}")
-        st.session_state.clear()
-        st.rerun()
+    # --- FIN DEL BLOQUE DE HEARTBEAT MODIFICADO ---
 
     # El resto de la función continúa
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
+    # ... (El resto de tu función run_user_mode, incluyendo los expanders y la lógica de logout, sigue igual) ...
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
     st.sidebar.divider()
 
@@ -90,7 +80,6 @@ def run_user_mode(db_full, user_features, footer_html):
     
     modo = st.session_state.current_mode
 
-    # --- 1. Definir categorías y qué modos están permitidos ---
     all_categories = {
         "Análisis": {
             "Chat de Consulta Directa": True, 
@@ -110,8 +99,6 @@ def run_user_mode(db_full, user_features, footer_html):
             "Generación de conceptos": user_features.get("has_concept_generation")
         }
     }
-
-    # --- 2. Renderizar los expanders y botones ---
     
     default_expanded = ""
     for category, modes in all_categories.items():
@@ -119,7 +106,6 @@ def run_user_mode(db_full, user_features, footer_html):
             default_expanded = category
             break
 
-    # Expander de Análisis
     if any(all_categories["Análisis"].values()): 
         with st.sidebar.expander("Análisis", expanded=(default_expanded == "Análisis")):
             if all_categories["Análisis"]["Chat de Consulta Directa"]:
@@ -127,7 +113,6 @@ def run_user_mode(db_full, user_features, footer_html):
             if all_categories["Análisis"]["Análisis de Notas y Transcripciones"]:
                 st.button("Análisis de Notas y Transcripciones", on_click=set_mode_and_reset, args=("Análisis de Notas y Transcripciones",), use_container_width=True, type="primary" if modo == "Análisis de Notas y Transcripciones" else "secondary")
 
-    # Expander de Evaluación
     if any(all_categories["Evaluación"].values()):
         with st.sidebar.expander("Evaluación", expanded=(default_expanded == "Evaluación")):
             if all_categories["Evaluación"]["Evaluar una idea"]:
@@ -137,7 +122,6 @@ def run_user_mode(db_full, user_features, footer_html):
             if all_categories["Evaluación"]["Evaluación de Video"]:
                 st.button("Evaluación de Video", on_click=set_mode_and_reset, args=("Evaluación de Video",), use_container_width=True, type="primary" if modo == "Evaluación de Video" else "secondary")
 
-    # Expander de Reportes
     if any(all_categories["Reportes"].values()):
         with st.sidebar.expander("Reportes", expanded=(default_expanded == "Reportes")):
             if all_categories["Reportes"]["Generar un reporte de reportes"]:
@@ -145,7 +129,6 @@ def run_user_mode(db_full, user_features, footer_html):
             if all_categories["Reportes"]["Generador de One-Pager PPT"]:
                 st.button("Generador de One-Pager PPT", on_click=set_mode_and_reset, args=("Generador de One-Pager PPT",), use_container_width=True, type="primary" if modo == "Generador de One-Pager PPT" else "secondary")
 
-    # Expander de Creatividad
     if any(all_categories["Creatividad"].values()):
         with st.sidebar.expander("Creatividad", expanded=(default_expanded == "Creatividad")):
             if all_categories["Creatividad"]["Conversaciones creativas"]:
@@ -153,6 +136,7 @@ def run_user_mode(db_full, user_features, footer_html):
             if all_categories["Creatividad"]["Generación de conceptos"]:
                 st.button("Generación de conceptos", on_click=set_mode_and_reset, args=("Generación de conceptos",), use_container_width=True, type="primary" if modo == "Generación de conceptos" else "secondary")
 
+    
     st.sidebar.header("Filtros de Búsqueda")
     run_filters = modo not in ["Análisis de Notas y Transcripciones"] 
 
@@ -173,15 +157,14 @@ def run_user_mode(db_full, user_features, footer_html):
     if run_filters and selected_brands: 
         db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
+
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         try:
-            # Limpia el ID de sesión en la base de datos
-            if 'user_id' in st.session_state: # Solo intentar si tenemos user_id
+            if 'user_id' in st.session_state: 
                 supabase.table("users").update({"active_session_id": None}).eq("id", st.session_state.user_id).execute()
         except Exception as e:
             print(f"Error al limpiar sesión en DB: {e}")
         
-        # Cierra la sesión de Supabase y limpia el estado de Streamlit
         supabase.auth.sign_out()
         st.session_state.clear()
         st.rerun()
@@ -194,7 +177,6 @@ def run_user_mode(db_full, user_features, footer_html):
     if run_filters and not selected_files and modo not in ["Generar un reporte de reportes", "Evaluación Visual", "Evaluación de Video", "Generador de One-Pager PPT"]: 
          st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
 
-    # --- ENRUTADOR DE MODOS ---
     if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
     elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
     elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
@@ -225,19 +207,15 @@ def main():
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
-    # Lógica de autenticación
     if not st.session_state.get("logged_in"):
         
-        # Inyecta CSS para reducir el padding SÓLO en la página de login
         st.markdown("""
             <style>
-                /* Target the main app container */
                 [data-testid="stAppViewContainer"] > .main {
-                    padding-top: 2rem; /* Reduce el espacio superior */
+                    padding-top: 2rem; 
                 }
-                /* Target the specific block container holding the login form */
                 div[data-testid="stBlock"] {
-                    padding-top: 0rem; /* Elimina el padding del bloque */
+                    padding-top: 0rem; 
                 }
             </style>
             """, unsafe_allow_html=True)
