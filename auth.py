@@ -1,6 +1,7 @@
 import streamlit as st
 from services.supabase_db import supabase
 from config import PLAN_FEATURES
+import uuid
 
 # ==============================
 # Autenticación con Supabase Auth
@@ -45,16 +46,31 @@ def show_login_page():
         try:
             response = supabase.auth.sign_in_with_password({"email": email, "password": password})
             user_id = response.user.id
+
+            # 1. Generar un ID de sesión único
+            new_session_id = str(uuid.uuid4())
+            
+            # 2. Obtener el perfil del usuario
             user_profile = supabase.table("users").select("*, rol, clients(client_name, plan)").eq("id", user_id).single().execute()
+            
             if user_profile.data and user_profile.data.get('clients'):
+                
+                # 3. Forzar la actualización de la sesión activa en la base de datos
+                # Esto "mata" cualquier otra sesión que esté usando un ID antiguo.
+                supabase.table("users").update({"active_session_id": new_session_id}).eq("id", user_id).execute()
+                
+                # 4. Cargar datos en el estado de Streamlit
                 client_info = user_profile.data['clients']
                 st.session_state.logged_in = True
                 st.session_state.user = user_profile.data['email']
+                st.session_state.user_id = user_id  # <-- ¡IMPORTANTE! Guardamos el user_id
+                st.session_state.session_id = new_session_id # <-- ¡IMPORTANTE! Guardamos el ID de sesión
                 st.session_state.cliente = client_info['client_name'].lower()
                 st.session_state.plan = client_info.get('plan', 'Explorer')
                 st.session_state.plan_features = PLAN_FEATURES.get(st.session_state.plan, PLAN_FEATURES['Explorer'])
                 st.session_state.is_admin = (user_profile.data.get('rol', '') == 'admin')
                 st.rerun()
+
             else:
                 st.error("Perfil de usuario no encontrado. Contacta al administrador.")
         except Exception as e:

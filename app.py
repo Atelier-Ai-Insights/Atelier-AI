@@ -55,6 +55,32 @@ def set_mode_and_reset(new_mode):
 # FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA CON EXPANDERS)
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
+    
+    # --- BLOQUE DE HEARTBEAT! ---
+    # En cada recarga de página, verifica si esta sesión sigue siendo la activa
+    try:
+        # 1. Asegurarse de que los datos de sesión existan
+        if 'user_id' not in st.session_state or 'session_id' not in st.session_state:
+            st.error("Error de sesión. Por favor, inicie sesión de nuevo.")
+            st.session_state.clear()
+            st.rerun()
+
+        # 2. Obtener el ID de sesión guardado en la base de datos
+        db_session_id = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute().data['active_session_id']
+        
+        # 3. Comparar con el ID de esta sesión
+        if db_session_id != st.session_state.session_id:
+            # 4. Si no coinciden, esta sesión es antigua. ¡Mátala!
+            st.error("Tu sesión ha sido cerrada porque iniciaste sesión en otro dispositivo.")
+            st.session_state.clear()
+            st.rerun()
+    except Exception as e:
+        # Si falla (ej. usuario borrado), cierra la sesión por seguridad
+        st.error(f"Error de validación de sesión: {e}")
+        st.session_state.clear()
+        st.rerun()
+
+    # El resto de la función continúa
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
@@ -127,8 +153,6 @@ def run_user_mode(db_full, user_features, footer_html):
             if all_categories["Creatividad"]["Generación de conceptos"]:
                 st.button("Generación de conceptos", on_click=set_mode_and_reset, args=("Generación de conceptos",), use_container_width=True, type="primary" if modo == "Generación de conceptos" else "secondary")
 
-    
-    # --- FILTROS DE BÚSQUEDA (CON ARREGLO) ---
     st.sidebar.header("Filtros de Búsqueda")
     run_filters = modo not in ["Análisis de Notas y Transcripciones"] 
 
@@ -149,9 +173,15 @@ def run_user_mode(db_full, user_features, footer_html):
     if run_filters and selected_brands: 
         db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
-    # --- FIN SECCIÓN DE FILTROS ---
-
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
+        try:
+            # Limpia el ID de sesión en la base de datos
+            if 'user_id' in st.session_state: # Solo intentar si tenemos user_id
+                supabase.table("users").update({"active_session_id": None}).eq("id", st.session_state.user_id).execute()
+        except Exception as e:
+            print(f"Error al limpiar sesión en DB: {e}")
+        
+        # Cierra la sesión de Supabase y limpia el estado de Streamlit
         supabase.auth.sign_out()
         st.session_state.clear()
         st.rerun()
@@ -246,4 +276,3 @@ def main():
 # ==============================
 if __name__ == "__main__":
     main()
-    
