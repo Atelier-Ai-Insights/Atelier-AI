@@ -1,13 +1,15 @@
 import streamlit as st
 from services.supabase_db import supabase
 from config import PLAN_FEATURES
-# Eliminamos import uuid y import time
+import uuid
+import time # Necesario para el timestamp
 
 # ==============================
 # Autenticación con Supabase Auth
 # ==============================
 
 def show_signup_page():
+    # ... (Esta función no cambia) ...
     st.header("Crear Nueva Cuenta")
     email = st.text_input("Tu Correo Electrónico")
     password = st.text_input("Crea una Contraseña", type="password")
@@ -15,7 +17,7 @@ def show_signup_page():
 
     if st.button("Registrarse", use_container_width=True):
         if not email or not password or not invite_code:
-            st.error("Por favor, completa todos los campos.")
+            st.error("Por favor, completa todos loscampos.")
             return
 
         try:
@@ -39,43 +41,120 @@ def show_signup_page():
 
 def show_login_page():
     st.header("Iniciar Sesión")
-    email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
-    password = st.text_input("Contraseña", type="password", placeholder="password")
 
-    if st.button("Ingresar", use_container_width=True):
-        try:
-            response = supabase.auth.sign_in_with_password({"email": email, "password": password})
-            user_id = response.user.id
-            
-            # --- LÓGICA DE LOGIN ORIGINAL (SIN SESSION ID) ---
-            user_profile = supabase.table("users").select("*, rol, clients(client_name, plan)").eq("id", user_id).single().execute()
-            
-            if user_profile.data and user_profile.data.get('clients'):
-                client_info = user_profile.data['clients']
-                st.session_state.logged_in = True
-                st.session_state.user = user_profile.data['email']
-                st.session_state.cliente = client_info['client_name'].lower()
-                st.session_state.plan = client_info.get('plan', 'Explorer')
-                st.session_state.plan_features = PLAN_FEATURES.get(st.session_state.plan, PLAN_FEATURES['Explorer'])
-                st.session_state.is_admin = (user_profile.data.get('rol', '') == 'admin')
+    # --- ¡NUEVA LÓGICA DE LOGIN EN DOS PASOS! ---
+    
+    # PASO 2.1: MOSTRAR CONFIRMACIÓN SI HAY UN LOGIN PENDIENTE
+    if 'pending_login_info' in st.session_state:
+        st.warning("**Este usuario ya tiene una sesión activa en otro dispositivo.**")
+        st.write("¿Qué deseas hacer?")
+        
+        col1, col2 = st.columns(2)
+        
+        # Botón para forzar el inicio de sesión
+        with col1:
+            if st.button("Cerrar la otra sesión e iniciar aquí", use_container_width=True, type="primary"):
+                try:
+                    # Recuperamos los datos del usuario
+                    pending_info = st.session_state.pending_login_info
+                    user_id = pending_info['user_id']
+                    
+                    # Generamos el NUEVO ID de sesión
+                    new_session_id = str(uuid.uuid4())
+                    
+                    # Forzamos la actualización en la DB, "matando" la sesión antigua
+                    supabase.table("users").update({"active_session_id": new_session_id}).eq("id", user_id).execute()
+                    
+                    # Obtenemos el perfil (¡ya está autenticado!)
+                    user_profile = supabase.table("users").select("*, rol, clients(client_name, plan)").eq("id", user_id).single().execute()
+                    
+                    # Guardamos todos los datos en el session_state
+                    client_info = user_profile.data['clients']
+                    st.session_state.logged_in = True
+                    st.session_state.user = user_profile.data['email']
+                    st.session_state.user_id = user_id
+                    st.session_state.session_id = new_session_id
+                    st.session_state.cliente = client_info['client_name'].lower()
+                    st.session_state.plan = client_info.get('plan', 'Explorer')
+                    st.session_state.plan_features = PLAN_FEATURES.get(st.session_state.plan, PLAN_FEATURES['Explorer'])
+                    st.session_state.is_admin = (user_profile.data.get('rol', '') == 'admin')
+                    st.session_state.login_timestamp = time.time() # Guardamos la hora de inicio de sesión
+                    
+                    # Limpiamos el estado pendiente y recargamos la app
+                    st.session_state.pop('pending_login_info')
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"Error al forzar inicio de sesión: {e}")
+
+        # Botón para cancelar
+        with col2:
+            if st.button("Cancelar", use_container_width=True, type="secondary"):
+                # Simplemente limpiamos el estado pendiente y recargamos
+                st.session_state.pop('pending_login_info')
                 st.rerun()
-                # --- FIN DE LA LÓGICA ---
 
-            else:
-                st.error("Perfil de usuario no encontrado. Contacta al administrador.")
-        except Exception as e:
-            st.error("Credenciales incorrectas o cuenta no confirmada.")
+    # PASO 2.2: MOSTRAR FORMULARIO DE LOGIN NORMAL
+    else:
+        email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
+        password = st.text_input("Contraseña", type="password", placeholder="password")
 
-    # Apilar botones verticalmente
-    if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
-        st.session_state.page = "signup"
-        st.rerun()
+        if st.button("Ingresar", use_container_width=True):
+            try:
+                # 1. Autenticar al usuario
+                response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+                user_id = response.user.id
+                
+                # 2. Revisar la sesión activa en la DB
+                user_profile_check = supabase.table("users").select("active_session_id").eq("id", user_id).single().execute()
 
-    if st.button("¿Olvidaste tu contraseña?", type="secondary", use_container_width=True):
-        st.session_state.page = "reset_password"
-        st.rerun()
+                if user_profile_check.data and user_profile_check.data.get('active_session_id'):
+                    # --- ¡SESIÓN ACTIVA DETECTADA! ---
+                    # No iniciamos sesión. Guardamos los datos y recargamos para mostrar los botones de confirmación.
+                    st.session_state.pending_login_info = {'user_id': user_id}
+                    st.rerun()
+                else:
+                    # --- NO HAY SESIÓN ACTIVA (LOGIN NORMAL) ---
+                    # Generamos un ID de sesión único
+                    new_session_id = str(uuid.uuid4())
+                    
+                    # Obtenemos el perfil completo
+                    user_profile = supabase.table("users").select("*, rol, clients(client_name, plan)").eq("id", user_id).single().execute()
+                    
+                    if user_profile.data and user_profile.data.get('clients'):
+                        # Guardamos el nuevo ID en la DB
+                        supabase.table("users").update({"active_session_id": new_session_id}).eq("id", user_id).execute()
+                        
+                        # Guardamos todo en el estado de Streamlit
+                        client_info = user_profile.data['clients']
+                        st.session_state.logged_in = True
+                        st.session_state.user = user_profile.data['email']
+                        st.session_state.user_id = user_id
+                        st.session_state.session_id = new_session_id
+                        st.session_state.cliente = client_info['client_name'].lower()
+                        st.session_state.plan = client_info.get('plan', 'Explorer')
+                        st.session_state.plan_features = PLAN_FEATURES.get(st.session_state.plan, PLAN_FEATURES['Explorer'])
+                        st.session_state.is_admin = (user_profile.data.get('rol', '') == 'admin')
+                        st.session_state.login_timestamp = time.time() # Guardamos la hora
+                        
+                        st.rerun()
+                    else:
+                        st.error("Perfil de usuario no encontrado. Contacta al administrador.")
+                        
+            except Exception as e:
+                st.error("Credenciales incorrectas o cuenta no confirmada.")
+
+        # Botones de registro y reseteo
+        if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
+            st.session_state.page = "signup"
+            st.rerun()
+
+        if st.button("¿Olvidaste tu contraseña?", type="secondary", use_container_width=True):
+            st.session_state.page = "reset_password"
+            st.rerun()
 
 def show_reset_password_page():
+    # ... (Esta función no cambia) ...
     st.header("Restablecer Contraseña")
     st.write("Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.")
     email = st.text_input("Tu Correo Electrónico")
