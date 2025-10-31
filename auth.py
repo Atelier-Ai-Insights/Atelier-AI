@@ -2,12 +2,14 @@ import streamlit as st
 from services.supabase_db import supabase
 from config import PLAN_FEATURES
 import uuid
+import time # <-- ¡AÑADIDO!
 
 # ==============================
 # Autenticación con Supabase Auth
 # ==============================
 
 def show_signup_page():
+    # ... (Sin cambios) ...
     st.header("Crear Nueva Cuenta")
     email = st.text_input("Tu Correo Electrónico")
     password = st.text_input("Crea una Contraseña", type="password")
@@ -47,7 +49,6 @@ def show_login_page():
             response = supabase.auth.sign_in_with_password({"email": email, "password": password})
             user_id = response.user.id
 
-            # --- ¡NUEVA LÓGICA DE SESIÓN! ---
             new_session_id = str(uuid.uuid4())
             user_profile = supabase.table("users").select("*, rol, clients(client_name, plan)").eq("id", user_id).single().execute()
             
@@ -65,9 +66,9 @@ def show_login_page():
                 st.session_state.plan_features = PLAN_FEATURES.get(st.session_state.plan, PLAN_FEATURES['Explorer'])
                 st.session_state.is_admin = (user_profile.data.get('rol', '') == 'admin')
                 
-                # --- ¡AÑADE ESTA LÍNEA DE ARREGLO! ---
-                st.session_state.just_logged_in = True # Bandera para saltar el primer heartbeat
-                # --- FIN DE LA LÍNEA DE ARREGLO ---
+                # --- ¡LÍNEA MODIFICADA! ---
+                st.session_state.login_timestamp = time.time() # Guardamos la hora de inicio de sesión
+                # --- FIN DE LA LÍNEA ---
                 
                 st.rerun()
 
@@ -76,7 +77,6 @@ def show_login_page():
         except Exception as e:
             st.error("Credenciales incorrectas o cuenta no confirmada.")
 
-    # Apilar botones verticalmente
     if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
         st.session_state.page = "signup"
         st.rerun()
@@ -86,7 +86,7 @@ def show_login_page():
         st.rerun()
 
 def show_reset_password_page():
-    # ... (esta función no cambia) ...
+    # ... (Sin cambios) ...
     st.header("Restablecer Contraseña")
     st.write("Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.")
     email = st.text_input("Tu Correo Electrónico")

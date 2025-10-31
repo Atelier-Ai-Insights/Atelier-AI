@@ -1,4 +1,5 @@
 import streamlit as st
+import time #
 
 # ==============================
 # 1. IMPORTAR MÓDULOS
@@ -44,13 +45,15 @@ def set_mode_and_reset(new_mode):
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
     
-    # --- ¡BLOQUE DE HEARTBEAT MODIFICADO! ---
-    # Revisar la bandera "just_logged_in"
-    if st.session_state.get("just_logged_in") == True:
-        # Si acabamos de entrar, saltamos el check y bajamos la bandera.
-        st.session_state.just_logged_in = False
-    else:
-        # Esta NO es la primera carga, así que SÍ corremos el heartbeat.
+    # --- ¡BLOQUE DE HEARTBEAT MODIFICADO CON PERÍODO DE GRACIA! ---
+    
+    # Definimos un período de gracia (ej. 5 segundos)
+    GRACE_PERIOD_SECONDS = 5
+    current_time = time.time()
+    login_time = st.session_state.get("login_timestamp", 0)
+
+    # Solo ejecutamos el heartbeat si han pasado más de 5 segundos desde el login
+    if (current_time - login_time) > GRACE_PERIOD_SECONDS:
         try:
             if 'user_id' not in st.session_state or 'session_id' not in st.session_state:
                 st.error("Error de sesión. Por favor, inicie sesión de nuevo.")
