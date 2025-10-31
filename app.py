@@ -45,51 +45,50 @@ def set_mode_and_reset(new_mode):
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
     
-    # --- ¡BLOQUE DE HEARTBEAT CON TEMPORIZADOR DE 60 SEGUNDOS! ---
+    # --- ¡BLOQUE DE HEARTBEAT CON "TEMPORIZADOR SUAVE"! ---
     
-    GRACE_PERIOD_SECONDS = 5 # Mantenemos el período de gracia de 5s post-login
-    HEARTBEAT_INTERVAL_SECONDS = 60 # Solo verificar la sesión cada 60 segundos
+    GRACE_PERIOD_SECONDS = 5 # Período de gracia post-login
+    HEARTBEAT_INTERVAL_SECONDS = 60 # Chequear solo cada 60 segundos
     current_time = time.time()
     
     # 1. Revisar si estamos en el período de gracia inicial
     login_time = st.session_state.get("login_timestamp", 0)
-    if (current_time - login_time) <= GRACE_PERIOD_SECONDS:
-        # Estamos en los 5 segundos después de iniciar sesión. No hacer nada.
-        pass
-    else:
-        # El período de gracia terminó. Ahora usamos el temporizador de 60s.
+    if (current_time - login_time) > GRACE_PERIOD_SECONDS:
         
-        # Inicializar el temporizador si no existe
-        if "last_heartbeat_check" not in st.session_state:
-            st.session_state.last_heartbeat_check = current_time
-
+        # El período de gracia terminó. Ahora usamos el temporizador.
+        last_check = st.session_state.get("last_heartbeat_check", 0)
+        
         # 2. Revisar si han pasado 60 segundos desde el último chequeo
-        if (current_time - st.session_state.last_heartbeat_check) > HEARTBEAT_INTERVAL_SECONDS:
+        if (current_time - last_check) > HEARTBEAT_INTERVAL_SECONDS:
             # ¡Pasaron 60 segundos! Es hora de chequear la sesión.
+            print("--- Ejecutando Heartbeat de Sesión ---")
             try:
                 if 'user_id' not in st.session_state or 'session_id' not in st.session_state:
-                    st.error("Error de sesión. Por favor, inicie sesión de nuevo.")
+                    st.error("Error de sesión (faltan datos). Por favor, inicie sesión de nuevo.")
                     st.session_state.clear()
                     st.rerun()
 
                 db_session_id = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute().data['active_session_id']
                 
                 if db_session_id != st.session_state.session_id:
+                    # --- EXPULSIÓN ---
+                    # 100% seguro de que otra sesión inició. Expulsar.
                     st.error("Tu sesión ha sido cerrada porque iniciaste sesión en otro dispositivo.")
                     st.session_state.clear()
                     st.rerun()
                 
-                # Si el chequeo fue exitoso, reseteamos el temporizador
+                # Si llegamos aquí, el chequeo fue exitoso y las IDs coinciden.
+                # Reseteamos el temporizador para el próximo chequeo.
                 st.session_state.last_heartbeat_check = current_time
-                
+
             except Exception as e:
-                # Si el chequeo falla (ej. sin internet), te saca por seguridad
-                st.error(f"Error de validación de sesión: {e}")
-                st.session_state.clear()
-                st.rerun()
-        
-        # Si no han pasado 60 segundos, no hace nada y la app sigue normal.
-        
+                # --- CHEQUEO FALLIDO (NO EXPULSAR) ---
+                # El chequeo falló (ej. red, lag de DB).
+                # NO hacemos nada. Solo imprimimos el error y reseteamos el temporizador.
+                print(f"Heartbeat check falló, pero NO se expulsará al usuario. Error: {e}")
+                # Reseteamos el temporizador para que no intente en cada clic, sino en 60s.
+                st.session_state.last_heartbeat_check = current_time
+    
     # --- FIN DEL BLOQUE DE HEARTBEAT ---
 
     # El resto de la función continúa
