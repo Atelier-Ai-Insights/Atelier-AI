@@ -60,7 +60,6 @@ def run_user_mode(db_full, user_features, footer_html):
         
         # 2. Revisar si han pasado 60 segundos desde el último chequeo
         if (current_time - last_check) > HEARTBEAT_INTERVAL_SECONDS:
-            # ¡Pasaron 60 segundos! Es hora de chequear la sesión.
             print("--- Ejecutando Heartbeat de Sesión ---")
             try:
                 if 'user_id' not in st.session_state or 'session_id' not in st.session_state:
@@ -68,25 +67,38 @@ def run_user_mode(db_full, user_features, footer_html):
                     st.session_state.clear()
                     st.rerun()
 
-                db_session_id = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute().data['active_session_id']
+                # 3. Intentar contactar a la base de datos
+                response = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute()
                 
-                if db_session_id != st.session_state.session_id:
-                    # --- EXPULSIÓN ---
-                    # 100% seguro de que otra sesión inició. Expulsar.
-                    st.error("Tu sesión ha sido cerrada porque iniciaste sesión en otro dispositivo.")
+                # 4. SOLO si la consulta fue exitosa Y los datos están allí...
+                if response.data and 'active_session_id' in response.data:
+                    db_session_id = response.data['active_session_id']
+                    
+                    # 5. ...comparamos las IDs.
+                    if db_session_id != st.session_state.session_id:
+                        # --- EXPULSIÓN (VALIDACIÓN FALLIDA) ---
+                        # 100% seguro de que otra sesión inició. Expulsar.
+                        st.error("Tu sesión ha sido cerrada porque iniciaste sesión en otro dispositivo.")
+                        st.session_state.clear()
+                        st.rerun()
+                    else:
+                        # --- ÉXITO ---
+                        # La sesión es válida. Reseteamos el temporizador.
+                        print("Heartbeat exitoso.")
+                        st.session_state.last_heartbeat_check = current_time
+                
+                else:
+                    # La consulta fue exitosa pero no trajo datos (ej. usuario borrado)
+                    st.error("Error al verificar sesión (usuario no encontrado).")
                     st.session_state.clear()
                     st.rerun()
-                
-                # Si llegamos aquí, el chequeo fue exitoso y las IDs coinciden.
-                # Reseteamos el temporizador para el próximo chequeo.
-                st.session_state.last_heartbeat_check = current_time
 
             except Exception as e:
                 # --- CHEQUEO FALLIDO (NO EXPULSAR) ---
-                # El chequeo falló (ej. red, lag de DB).
-                # NO hacemos nada. Solo imprimimos el error y reseteamos el temporizador.
-                print(f"Heartbeat check falló, pero NO se expulsará al usuario. Error: {e}")
-                # Reseteamos el temporizador para que no intente en cada clic, sino en 60s.
+                # El chequeo falló (ej. red caída, lag de DB).
+                # NO HACEMOS NADA. Solo imprimimos el error y reseteamos el temporizador
+                # para que no intente de nuevo en el siguiente clic, sino en 60s.
+                print(f"Heartbeat check falló (ej. red), pero NO se expulsará al usuario. Error: {e}")
                 st.session_state.last_heartbeat_check = current_time
     
     # --- FIN DEL BLOQUE DE HEARTBEAT ---
