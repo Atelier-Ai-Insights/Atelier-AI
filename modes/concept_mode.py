@@ -1,8 +1,9 @@
 import streamlit as st
 from utils import get_relevant_info
 from services.gemini_api import call_gemini_api
-from services.supabase_db import log_query_event
-from prompts import get_concept_gen_prompt # <-- ¡IMPORTACIÓN AÑADIDA!
+# --- ¡IMPORTACIÓN ACTUALIZADA! ---
+from services.supabase_db import log_query_event, log_query_feedback
+from prompts import get_concept_gen_prompt
 
 # =====================================================
 # MODO: GENERACIÓN DE CONCEPTOS
@@ -11,13 +12,39 @@ from prompts import get_concept_gen_prompt # <-- ¡IMPORTACIÓN AÑADIDA!
 def concept_generation_mode(db, selected_files):
     st.subheader("Generación de Conceptos")
     st.markdown("Genera concepto de producto/servicio a partir de idea y hallazgos.")
+
+    # --- FUNCIÓN DE CALLBACK PARA EL FEEDBACK ---
+    def concept_feedback_callback(feedback):
+        query_id = st.session_state.get("last_concept_query_id")
+        if query_id:
+            score = 1 if feedback['score'] == 'thumbs_up' else 0
+            log_query_feedback(query_id, score)
+            st.toast("¡Gracias por tu feedback!")
+            # Oculta los botones después de votar
+            st.session_state.voted_on_last_concept = True
+        else:
+            st.toast("Error: No se encontró el ID de la consulta.")
+    # --- FIN DEL CALLBACK ---
     
     if "generated_concept" in st.session_state:
         st.markdown("---")
         st.markdown("### Concepto Generado")
         st.markdown(st.session_state.generated_concept)
+
+        # --- ¡NUEVA SECCIÓN DE FEEDBACK! ---
+        query_id = st.session_state.get("last_concept_query_id")
+        if query_id and not st.session_state.get("voted_on_last_concept", False):
+            st.experimental_user_feedback(
+                key=query_id, 
+                on_submit=concept_feedback_callback
+            )
+        # --- FIN DE LA SECCIÓN DE FEEDBACK ---
+
         if st.button("Generar nuevo concepto", use_container_width=True): 
             st.session_state.pop("generated_concept")
+            # Limpiamos las variables de feedback
+            st.session_state.pop("last_concept_query_id", None)
+            st.session_state.pop("voted_on_last_concept", None)
             st.rerun()
     else:
         product_idea = st.text_area("Describe tu idea:", height=150, placeholder="Ej: Snack saludable...")
@@ -30,16 +57,21 @@ def concept_generation_mode(db, selected_files):
             with st.spinner("Generando concepto..."):
                 context_info = get_relevant_info(db, product_idea, selected_files)
                 
-                # --- ¡CAMBIO AQUÍ! ---
-                # El prompt ahora se importa desde prompts.py
                 prompt = get_concept_gen_prompt(product_idea, context_info)
-                # --- FIN DEL CAMBIO ---
                 
                 response = call_gemini_api(prompt)
                 
                 if response: 
                     st.session_state.generated_concept = response
-                    log_query_event(product_idea, mode="Generación de conceptos")
+                    
+                    # --- ¡CAMBIO AQUÍ! ---
+                    # 1. Loguear la consulta y obtener el ID
+                    query_id = log_query_event(product_idea, mode="Generación de conceptos")
+                    # 2. Guardar el ID y el estado del voto
+                    st.session_state["last_concept_query_id"] = query_id
+                    st.session_state["voted_on_last_concept"] = False # Resetear el estado de voto
+                    # --- FIN DEL CAMBIO ---
+                    
                     st.rerun()
                 else: 
                     st.error("No se pudo generar concepto.")

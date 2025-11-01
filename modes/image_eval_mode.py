@@ -3,10 +3,11 @@ from PIL import Image
 from io import BytesIO
 from utils import get_relevant_info
 from services.gemini_api import call_gemini_api
-from services.supabase_db import log_query_event
+# --- ¡IMPORTACIÓN ACTUALIZADA! ---
+from services.supabase_db import log_query_event, log_query_feedback
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
-from prompts import get_image_eval_prompt_parts # <-- ¡IMPORTACIÓN AÑADIDA!
+from prompts import get_image_eval_prompt_parts
 
 # =====================================================
 # MODO: EVALUACIÓN VISUAL (IMAGEN)
@@ -19,6 +20,19 @@ def image_evaluation_mode(db, selected_files):
     El asistente evaluará la imagen basándose en criterios de marketing y utilizará los 
     hallazgos de los estudios seleccionados como contexto.
     """)
+
+    # --- FUNCIÓN DE CALLBACK PARA EL FEEDBACK ---
+    def image_feedback_callback(feedback):
+        query_id = st.session_state.get("last_image_query_id")
+        if query_id:
+            score = 1 if feedback['score'] == 'thumbs_up' else 0
+            log_query_feedback(query_id, score)
+            st.toast("¡Gracias por tu feedback!")
+            # Oculta los botones después de votar
+            st.session_state.voted_on_last_image = True
+        else:
+            st.toast("Error: No se encontró el ID de la consulta.")
+    # --- FIN DEL CALLBACK ---
     
     uploaded_file = st.file_uploader("Sube tu imagen aquí:", type=["jpg", "png", "jpeg"])
     target_audience = st.text_area("Describe el público objetivo (Target):", height=100, placeholder="Ej: Mujeres jóvenes, 25-35 años...")
@@ -50,35 +64,35 @@ def image_evaluation_mode(db, selected_files):
                 relevant_text_context = relevant_text_context[:MAX_CONTEXT_TEXT] + "\n\n...(contexto truncado)..."
                 st.warning("El contexto de los estudios es muy largo y ha sido truncado.", icon="⚠️")
                 
-            # --- ¡CAMBIO AQUÍ! ---
-            # 1. Obtener la lista de texto desde prompts.py
             prompt_parts = get_image_eval_prompt_parts(
                 target_audience, 
                 comm_objectives, 
                 relevant_text_context
             )
             
-            # 2. Preparar el objeto de imagen
             image_data = Image.open(BytesIO(image_bytes))
             
-            # 3. Insertar el objeto de imagen en el lugar correcto
-            # (El prompt de prompts.py debe contener la etiqueta "\n\n**Imagen:**")
             try:
                 image_label_index = prompt_parts.index("\n\n**Imagen:**")
-                # Insertar la imagen justo después de la etiqueta
                 prompt_parts.insert(image_label_index + 1, image_data)
             except ValueError:
-                # Fallback por si la etiqueta no está: añadir al final
                 st.warning("Advertencia: Etiqueta de imagen no encontrada en el prompt. Añadiendo al final.")
                 prompt_parts.append("\n\n**Imagen:**")
                 prompt_parts.append(image_data)
-            # --- FIN DEL CAMBIO ---
             
             evaluation_result = call_gemini_api(prompt_parts)
             
             if evaluation_result: 
                 st.session_state.image_evaluation_result = evaluation_result
-                log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode="Evaluación Visual")
+                
+                # --- ¡CAMBIO AQUÍ! ---
+                # 1. Loguear la consulta y obtener el ID
+                query_id = log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode="Evaluación Visual")
+                # 2. Guardar el ID y el estado del voto
+                st.session_state["last_image_query_id"] = query_id
+                st.session_state["voted_on_last_image"] = False # Resetear el estado de voto
+                # --- FIN DEL CAMBIO ---
+                
             else: 
                 st.error("No se pudo generar evaluación.")
                 st.session_state.pop("image_evaluation_result", None)
@@ -87,6 +101,15 @@ def image_evaluation_mode(db, selected_files):
         st.markdown("---")
         st.markdown("### Resultados Evaluación:")
         st.markdown(st.session_state.image_evaluation_result)
+        
+        # --- ¡NUEVA SECCIÓN DE FEEDBACK! ---
+        query_id = st.session_state.get("last_image_query_id")
+        if query_id and not st.session_state.get("voted_on_last_image", False):
+            st.experimental_user_feedback(
+                key=query_id, 
+                on_submit=image_feedback_callback
+            )
+        # --- FIN DE LA SECCIÓN DE FEEDBACK ---
         
         col1, col2 = st.columns(2)
         with col1:
@@ -98,4 +121,7 @@ def image_evaluation_mode(db, selected_files):
         with col2:
             if st.button("Evaluar Otra Imagen", use_container_width=True): 
                 st.session_state.pop("image_evaluation_result", None)
+                # Limpiamos las variables de feedback
+                st.session_state.pop("last_image_query_id", None)
+                st.session_state.pop("voted_on_last_image", None)
                 st.rerun()

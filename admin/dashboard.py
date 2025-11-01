@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from services.supabase_db import supabase, supabase_admin_client
 from config import PLAN_FEATURES
-from supabase import create_client # Necesario para el form de crear cliente
+from supabase import create_client 
 
 # =====================================================
 # PANEL DE ADMINISTRACIÓN
@@ -158,3 +158,27 @@ def show_admin_dashboard():
             st.info("No hay usuarios registrados.")
     except Exception as e:
         st.error(f"Error en la gestión de usuarios: {e}")
+
+    # --- NUEVO BLOQUE DE FEEDBACK ---
+    st.subheader("Consultas con Feedback Negativo", divider="grey")
+    st.markdown("Últimas 20 consultas marcadas como 'No Útil' (rating = 0) por los usuarios.")
+    
+    try:
+        # El 'import pandas as pd' ya está al inicio del archivo
+        
+        # Usamos el cliente admin para leer la tabla de queries
+        response = supabase_admin_client.table("queries").select("timestamp, user_name, mode, query, rating") \
+                         .eq("rating", 0) \
+                         .order("timestamp", desc=True) \
+                         .limit(20) \
+                         .execute()
+                         
+        if response.data:
+            df_negative = pd.DataFrame(response.data)
+            df_negative['timestamp'] = pd.to_datetime(df_negative['timestamp']).dt.strftime('%Y-%m-%d %H:%M')
+            st.dataframe(df_negative, use_container_width=True, hide_index=True)
+        else:
+            st.info("¡Buenas noticias! No hay consultas con feedback negativo registradas.")
+            
+    except Exception as e:
+        st.error(f"Error al cargar feedback negativo: {e}")

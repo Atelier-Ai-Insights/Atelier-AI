@@ -1,6 +1,7 @@
 import streamlit as st
 import json
-from services.supabase_db import get_monthly_usage, log_query_event
+# --- ¡IMPORTACIÓN ACTUALIZADA! ---
+from services.supabase_db import get_monthly_usage, log_query_event, log_query_feedback
 import google.generativeai as genai
 from config import safety_settings
 from services.gemini_api import configure_api_dynamically
@@ -8,19 +9,28 @@ from reporting.ppt_generator import crear_ppt_desde_json
 from utils import get_relevant_info, extract_text_from_pdfs
 
 # --- ¡IMPORTACIONES ACTUALIZADAS! ---
-# Ahora importamos los prompts desde el nuevo archivo
 from prompts import PROMPTS_ONEPAGER, get_onepager_final_prompt
 
 # =====================================================
 # MODO: GENERADOR DE ONE-PAGER PPT (MEJORADO)
 # =====================================================
 
-# --- El diccionario PROMPTS_ONEPAGER ha sido BORRADO de aquí ---
-
-
 def one_pager_ppt_mode(db_filtered, selected_files):
     st.subheader("Generador de Diapositivas Estratégicas")
     ppt_limit = st.session_state.plan_features.get('ppt_downloads_per_month', 0)
+
+    # --- FUNCIÓN DE CALLBACK PARA EL FEEDBACK ---
+    def onepager_feedback_callback(feedback):
+        query_id = st.session_state.get("last_onepager_query_id")
+        if query_id:
+            score = 1 if feedback['score'] == 'thumbs_up' else 0
+            log_query_feedback(query_id, score)
+            st.toast("¡Gracias por tu feedback!")
+            # Oculta los botones después de votar
+            st.session_state.voted_on_last_onepager = True
+        else:
+            st.toast("Error: No se encontró el ID de la consulta.")
+    # --- FIN DEL CALLBACK ---
 
     if ppt_limit == float('inf'):
         limit_text = "**Tu plan actual te permite generar One-Pagers ilimitados.**"
@@ -36,6 +46,16 @@ def one_pager_ppt_mode(db_filtered, selected_files):
 
     if "generated_ppt_bytes" in st.session_state:
         st.success(f"¡Tu diapositiva '{st.session_state.get('generated_ppt_template_name', 'Estratégica')}' está lista!")
+        
+        # --- ¡NUEVA SECCIÓN DE FEEDBACK! ---
+        query_id = st.session_state.get("last_onepager_query_id")
+        if query_id and not st.session_state.get("voted_on_last_onepager", False):
+            st.experimental_user_feedback(
+                key=query_id, 
+                on_submit=onepager_feedback_callback
+            )
+        # --- FIN DE LA SECCIÓN DE FEEDBACK ---
+        
         st.download_button(
             label=f"Descargar Diapositiva (.pptx)",
             data=st.session_state.generated_ppt_bytes,
@@ -46,6 +66,9 @@ def one_pager_ppt_mode(db_filtered, selected_files):
         if st.button("Generar nueva Diapositiva", use_container_width=True, type="secondary"):
             del st.session_state.generated_ppt_bytes
             st.session_state.pop('generated_ppt_template_name', None)
+            # Limpiamos las variables de feedback
+            st.session_state.pop("last_onepager_query_id", None)
+            st.session_state.pop("voted_on_last_onepager", None)
             st.rerun()
         return
 
@@ -69,14 +92,12 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     st.divider()
 
     if st.button(f"Generar Diapositiva '{selected_template_name}'", use_container_width=True, type="primary"):
-        # ... (Verificaciones de límite, etc.) ...
         current_ppt_usage = get_monthly_usage(st.session_state.user, "Generador de One-Pager PPT")
         if current_ppt_usage >= ppt_limit and ppt_limit != float('inf'): st.error(f"¡Límite alcanzado!"); return
         if not tema_central.strip(): st.warning("Por favor, describe el tema central."); return
         if not use_repo and not use_uploads: st.error("Debes seleccionar al menos una fuente de datos."); return
         if use_uploads and not uploaded_files: st.error("Seleccionaste 'Usar Archivos Cargados', pero no has subido PDFs."); return
 
-        # ... (Lógica de `relevant_info` sin cambios) ...
         relevant_info = ""
         with st.spinner("Procesando fuentes de datos..."):
             if use_repo:
@@ -90,11 +111,8 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                     st.error(f"Error al procesar PDFs: {e}"); pdf_text = None
         if not relevant_info.strip(): st.error("No se pudo extraer ningún contexto."); return
 
-        # --- ¡PROMPT FORMATEADO! ---
-        # Ahora se llama a la función desde prompts.py
         final_prompt_json = get_onepager_final_prompt(relevant_info, selected_template_name, tema_central)
         
-        # ... (Lógica de llamada a Gemini y creación de PPT sin cambios) ...
         data_json = None
         with st.spinner(f"Generando contenido para '{selected_template_name}'..."):
             response_text = None
@@ -114,7 +132,16 @@ def one_pager_ppt_mode(db_filtered, selected_files):
             if ppt_bytes:
                 st.session_state.generated_ppt_bytes = ppt_bytes
                 st.session_state.generated_ppt_template_name = selected_template_name
-                log_query_event(f"{selected_template_name}: {tema_central}", mode="Generador de One-Pager PPT")
+                
+                # --- ¡CAMBIO AQUÍ! ---
+                # 1. Loguear la consulta y obtener el ID
+                query_text = f"{selected_template_name}: {tema_central}"
+                query_id = log_query_event(query_text, mode="Generador de One-Pager PPT")
+                # 2. Guardar el ID y el estado del voto
+                st.session_state["last_onepager_query_id"] = query_id
+                st.session_state["voted_on_last_onepager"] = False # Resetear el estado de voto
+                # --- FIN DEL CAMBIO ---
+                
                 st.rerun()
             else:
                 pass

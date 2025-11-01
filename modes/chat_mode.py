@@ -1,7 +1,7 @@
 import streamlit as st
 from utils import get_relevant_info, reset_chat_workflow
 from services.gemini_api import call_gemini_api
-from services.supabase_db import get_daily_usage, log_query_event
+from services.supabase_db import get_daily_usage, log_query_event, log_query_feedback
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 from prompts import get_grounded_chat_prompt
@@ -16,10 +16,30 @@ def grounded_chat_mode(db, selected_files):
     
     if "chat_history" not in st.session_state: 
         st.session_state.chat_history = []
+    
+    # --- FUNCIÓN DE CALLBACK PARA EL FEEDBACK ---
+    def chat_feedback_callback(feedback):
+        # El 'key' del feedback es el query_id
+        query_id = feedback['key']
+        # El 'score' es 'thumbs_up' (1) o 'thumbs_down' (0)
+        score = 1 if feedback['score'] == 'thumbs_up' else 0
         
+        log_query_feedback(query_id, score)
+        st.toast("¡Gracias por tu feedback!")
+        
+    # --- BUCLE DE VISUALIZACIÓN DE CHAT (MODIFICADO) ---
     for msg in st.session_state.chat_history:
-        with st.chat_message(msg['role']): 
-            st.markdown(msg['message'])
+        if msg['role'] == "Asistente":
+            with st.chat_message("Asistente"):
+                st.markdown(msg['message'])
+                if msg.get('query_id'):
+                    st.experimental_user_feedback(
+                        key=msg['query_id'], 
+                        on_submit=chat_feedback_callback
+                    )
+        else:
+            with st.chat_message("Usuario"):
+                st.markdown(msg['message'])
             
     user_input = st.chat_input("Escribe tu pregunta...")
     
@@ -32,8 +52,7 @@ def grounded_chat_mode(db, selected_files):
         current_queries = get_daily_usage(st.session_state.user, "Chat de Consulta Directa")
         
         if current_queries >= query_limit and query_limit != float('inf'): 
-            st.error(f"Límite de {int(query_limit)} consultas diarias alcanzado.")
-            return
+            st.error(f"Límite de {int(query_limit)} consultas diarias alcanzado."); return
             
         with st.chat_message("Asistente"):
             message_placeholder = st.empty()
@@ -41,32 +60,27 @@ def grounded_chat_mode(db, selected_files):
             
             relevant_info = get_relevant_info(db, user_input, selected_files)
             conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history[-10:])
-            
             grounded_prompt = get_grounded_chat_prompt(conversation_history, relevant_info)
-          
             response = call_gemini_api(grounded_prompt)
             
             if response: 
                 message_placeholder.markdown(response)
-                st.session_state.chat_history.append({"role": "Asistente", "message": response})
-                log_query_event(user_input, mode="Chat de Consulta Directa")
+                # Logueamos la consulta y obtenemos el ID
+                query_id = log_query_event(user_input, mode="Chat de Consulta Directa")
+                st.session_state.chat_history.append({
+                    "role": "Asistente", 
+                    "message": response,
+                    "query_id": query_id # Guardamos el ID con el mensaje
+                })
             else: 
                 message_placeholder.error("Error al generar respuesta.")
                 
     if st.session_state.chat_history:
         col1, col2 = st.columns([1,1])
         with col1:
-            # --- ¡ARREGLO AQUÍ! ---
-            # 1. Crear el historial de chat como un string
             chat_content_raw = "\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history)
-            
-            # 2. Limpiar el string de los enlaces de Markdown
             chat_content_for_pdf = chat_content_raw.replace("](#)", "]")
-            
-            # 3. Enviar el string limpio al generador de PDF
             pdf_bytes = generate_pdf_html(chat_content_for_pdf, title="Historial Consulta", banner_path=banner_file)
-            # --- FIN DEL ARREGLO ---
-
             if pdf_bytes: 
                 st.download_button("Descargar Chat PDF", data=pdf_bytes, file_name="chat_consulta.pdf", mime="application/pdf", use_container_width=True)
         with col2: 

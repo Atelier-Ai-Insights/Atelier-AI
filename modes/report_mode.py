@@ -1,33 +1,36 @@
 import streamlit as st
 from utils import get_relevant_info, reset_report_workflow
 from services.gemini_api import call_gemini_api
-from services.supabase_db import get_monthly_usage, log_query_event
+from services.supabase_db import get_monthly_usage, log_query_event, log_query_feedback
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
-# --- ¡IMPORTACIONES AÑADIDAS! ---
 from prompts import get_report_prompt1, get_report_prompt2
 
 # =====================================================
 # MODO: GENERAR REPORTE DE REPORTES
 # =====================================================
 
+# --- FUNCIÓN DE CALLBACK PARA EL FEEDBACK ---
+def report_feedback_callback(feedback):
+    query_id = st.session_state.get("last_report_query_id")
+    if query_id:
+        score = 1 if feedback['score'] == 'thumbs_up' else 0
+        log_query_feedback(query_id, score)
+        st.toast("¡Gracias por tu feedback!")
+        # Para ocultar los botones después de votar
+        st.session_state.voted_on_last_report = True
+    else:
+        st.toast("Error: No se encontró el ID de la consulta.")
+
 def generate_final_report(question, db, selected_files):
+    # ... (Esta función no cambia) ...
     relevant_info = get_relevant_info(db, question, selected_files)
-    
-    # --- ¡CAMBIO AQUÍ! (Prompt 1) ---
     prompt1 = get_report_prompt1(question, relevant_info)
-    # --- FIN DEL CAMBIO ---
-    
     result1 = call_gemini_api(prompt1)
     if result1 is None: return None
-    
-    # --- ¡CAMBIO AQUÍ! (Prompt 2) ---
     prompt2 = get_report_prompt2(question, result1, relevant_info)
-    # --- FIN DEL CAMBIO ---
-    
     result2 = call_gemini_api(prompt2)
     if result2 is None: return None
-    
     return result2
 
 def report_mode(db, selected_files):
@@ -51,9 +54,25 @@ def report_mode(db, selected_files):
         if report is None: 
             st.error("No se pudo generar."); st.session_state.pop("report", None)
         else: 
-            st.session_state["report"] = report; log_query_event(question, mode="Generar un reporte de reportes"); st.rerun()
+            st.session_state["report"] = report
+            # Logueamos la consulta y guardamos el ID
+            query_id = log_query_event(question, mode="Generar un reporte de reportes")
+            st.session_state["last_report_query_id"] = query_id
+            st.session_state["voted_on_last_report"] = False # Reseteamos el estado de voto
+            st.rerun()
             
     if "report" in st.session_state and st.session_state["report"]:
+        
+        # --- ¡NUEVA SECCIÓN DE FEEDBACK! ---
+        query_id = st.session_state.get("last_report_query_id")
+        if query_id and not st.session_state.get("voted_on_last_report", False):
+            st.experimental_user_feedback(
+                key=query_id, 
+                on_submit=report_feedback_callback
+            )
+        # --- FIN DE LA SECCIÓN DE FEEDBACK ---
+
+        # (Botones de descarga y nueva consulta)
         pdf_bytes = generate_pdf_html(st.session_state["report"], title="Informe Final", banner_path=banner_file)
         col1, col2 = st.columns(2)
         with col1:
