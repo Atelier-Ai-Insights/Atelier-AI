@@ -44,8 +44,9 @@ def set_mode_and_reset(new_mode):
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
     
+    st.sidebar.write(f"Streamlit v{st.__version__}")
+
     # --- ¡BLOQUE DE HEARTBEAT CON "TEMPORIZADOR SUAVE"! ---
-    # (Este código es el correcto y no necesita cambios)
     
     GRACE_PERIOD_SECONDS = 5 # Período de gracia post-login
     HEARTBEAT_INTERVAL_SECONDS = 60 # Chequear solo cada 60 segundos
