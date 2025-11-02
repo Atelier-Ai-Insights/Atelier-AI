@@ -43,8 +43,6 @@ def set_mode_and_reset(new_mode):
 # FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA CON EXPANDERS)
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
-    
-    st.sidebar.write(f"Streamlit v{st.__version__}")
 
     # --- ¡BLOQUE DE HEARTBEAT CON "TEMPORIZADOR SUAVE"! ---
     
