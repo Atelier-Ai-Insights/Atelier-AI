@@ -16,7 +16,7 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     st.subheader("Generador de Diapositivas Estratégicas")
     ppt_limit = st.session_state.plan_features.get('ppt_downloads_per_month', 0)
 
-    # --- CAMBIO 1: El Callback AHORA ACEPTA el query_id ---
+    # --- (Callback de Feedback - Corregido) ---
     def onepager_feedback_callback(feedback, query_id):
         if query_id:
             score = 1 if feedback.get('score') == 'thumbs_up' else 0
@@ -42,15 +42,14 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     if "generated_ppt_bytes" in st.session_state:
         st.success(f"¡Tu diapositiva '{st.session_state.get('generated_ppt_template_name', 'Estratégica')}' está lista!")
         
-        # --- ¡SECCIÓN DE FEEDBACK CORREGIDA! ---
+        # --- (Sección de Feedback - Corregida) ---
         query_id = st.session_state.get("last_onepager_query_id")
         if query_id and not st.session_state.get("voted_on_last_onepager", False):
             st.feedback(
-                key=f"feedback_{query_id}", # Key única
+                key=f"feedback_{query_id}", 
                 on_submit=onepager_feedback_callback,
-                args=(query_id,) # Pasar el query_id como argumento
+                args=(query_id,) 
             )
-        # --- FIN DE LA SECCIÓN DE FEEDBACK ---
         
         st.download_button(
             label=f"Descargar Diapositiva (.pptx)",
@@ -87,12 +86,14 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     st.divider()
 
     if st.button(f"Generar Diapositiva '{selected_template_name}'", use_container_width=True, type="primary"):
+        # ... (Verificaciones de límite, etc.) ...
         current_ppt_usage = get_monthly_usage(st.session_state.user, "Generador de One-Pager PPT")
         if current_ppt_usage >= ppt_limit and ppt_limit != float('inf'): st.error(f"¡Límite alcanzado!"); return
         if not tema_central.strip(): st.warning("Por favor, describe el tema central."); return
         if not use_repo and not use_uploads: st.error("Debes seleccionar al menos una fuente de datos."); return
         if use_uploads and not uploaded_files: st.error("Seleccionaste 'Usar Archivos Cargados', pero no has subido PDFs."); return
 
+        # ... (Lógica de `relevant_info` sin cambios) ...
         relevant_info = ""
         with st.spinner("Procesando fuentes de datos..."):
             if use_repo:
@@ -133,7 +134,10 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                 st.session_state["last_onepager_query_id"] = query_id
                 st.session_state["voted_on_last_onepager"] = False 
                 
-                # --- ¡CAMBIO AQUÍ! ---
-                # st.rerun() # <-- LÍNEA ELIMINADA
+                # --- ¡ARREGLO AQUÍ! ---
+                # Volvemos a añadir st.rerun() para que la página se 
+                # recargue y muestre el resultado inmediatamente.
+                st.rerun()
+                # --- FIN DEL ARREGLO ---
             else:
                 pass
