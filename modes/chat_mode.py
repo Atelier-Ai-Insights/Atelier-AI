@@ -31,7 +31,6 @@ def grounded_chat_mode(db, selected_files):
             with st.chat_message("Asistente", avatar="✨"):
                 st.markdown(msg['message'])
                 
-                # --- ¡CAMBIO 2 Y 3! ---
                 if msg.get('query_id'):
                     # 2. Usamos el nombre oficial st.feedback
                     st.feedback( 
@@ -40,7 +39,7 @@ def grounded_chat_mode(db, selected_files):
                         # 3. Pasamos el query_id como un argumento (args)
                         args=(msg.get('query_id'),) 
                     )
-                # --- FIN DE LOS CAMBIOS ---
+               
         else:
             with st.chat_message("Usuario", avatar="👤"):
                 st.markdown(msg['message'])
