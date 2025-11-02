@@ -5,6 +5,7 @@ from services.supabase_db import get_monthly_usage, log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 from prompts import get_report_prompt1, get_report_prompt2
+import constants as c # <--- IMPORTACIÓN AÑADIDA
 
 # =====================================================
 # MODO: GENERAR REPORTE DE REPORTES
@@ -31,7 +32,8 @@ def report_mode(db, selected_files):
     question = st.text_area("Escribe tu consulta para el reporte…", value=st.session_state.get("last_question", ""), height=150, key="report_question")
     
     if st.button("Generar Reporte", use_container_width=True):
-        report_limit = st.session_state.plan_features.get('reports_per_month', 0); current_reports = get_monthly_usage(st.session_state.user, "Generar un reporte de reportes")
+        report_limit = st.session_state.plan_features.get('reports_per_month', 0)
+        current_reports = get_monthly_usage(st.session_state.user, c.MODE_REPORT) # <-- MODIFICADO
         if current_reports >= report_limit and report_limit != float('inf'): st.error(f"Límite de {int(report_limit)} reportes alcanzado."); return
         if not question.strip(): st.warning("Ingresa una consulta."); return
         
@@ -44,7 +46,7 @@ def report_mode(db, selected_files):
         else: 
             st.session_state["report"] = report
             # --- Lógica de guardado REVERTIDA ---
-            log_query_event(question, mode="Generar un reporte de reportes")
+            log_query_event(question, mode=c.MODE_REPORT) # <-- MODIFICADO
             
             st.rerun() 
             

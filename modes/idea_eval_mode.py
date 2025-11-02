@@ -3,6 +3,7 @@ from utils import get_relevant_info
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event
 from prompts import get_idea_eval_prompt 
+import constants as c # <--- IMPORTACIÓN AÑADIDA
 
 # =====================================================
 # MODO: EVALUACIÓN DE PRE-IDEAS
@@ -35,7 +36,7 @@ def idea_evaluator_mode(db, selected_files):
                 if response: 
                     st.session_state.evaluation_result = response
                     # --- Lógica de guardado REVERTIDA ---
-                    log_query_event(idea_input, mode="Evaluación de Idea")
+                    log_query_event(idea_input, mode=c.MODE_IDEA_EVAL) # <-- MODIFICADO
                     st.rerun()
                 else: 
                     st.error("No se pudo generar evaluación.")

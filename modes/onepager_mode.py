@@ -7,6 +7,7 @@ from services.gemini_api import configure_api_dynamically
 from reporting.ppt_generator import crear_ppt_desde_json
 from utils import get_relevant_info, extract_text_from_pdfs
 from prompts import PROMPTS_ONEPAGER, get_onepager_final_prompt
+import constants as c # <--- IMPORTACIÓN AÑADIDA
 
 # =====================================================
 # MODO: GENERADOR DE ONE-PAGER PPT (MEJORADO)
@@ -64,7 +65,7 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     st.divider()
 
     if st.button(f"Generar Diapositiva '{selected_template_name}'", use_container_width=True, type="primary"):
-        current_ppt_usage = get_monthly_usage(st.session_state.user, "Generador de One-Pager PPT")
+        current_ppt_usage = get_monthly_usage(st.session_state.user, c.MODE_ONEPAGER) # <-- MODIFICADO
         if current_ppt_usage >= ppt_limit and ppt_limit != float('inf'): st.error(f"¡Límite alcanzado!"); return
         if not tema_central.strip(): st.warning("Por favor, describe el tema central."); return
         if not use_repo and not use_uploads: st.error("Debes seleccionar al menos una fuente de datos."); return
@@ -107,7 +108,7 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                 
                 # --- Lógica de guardado REVERTIDA ---
                 query_text = f"{selected_template_name}: {tema_central}"
-                log_query_event(query_text, mode="Generador de One-Pager PPT")
+                log_query_event(query_text, mode=c.MODE_ONEPAGER) # <-- MODIFICADO
                 
                 st.rerun()
             else:

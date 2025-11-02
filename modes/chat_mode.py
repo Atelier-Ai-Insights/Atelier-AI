@@ -5,6 +5,7 @@ from services.supabase_db import get_daily_usage, log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 from prompts import get_grounded_chat_prompt
+import constants as c # <--- IMPORTACIÓN AÑADIDA
 
 # =====================================================
 # MODO: CHAT DE CONSULTA DIRECTA (GROUNDED)
@@ -30,7 +31,7 @@ def grounded_chat_mode(db, selected_files):
             st.markdown(user_input)
             
         query_limit = st.session_state.plan_features.get('chat_queries_per_day', 0)
-        current_queries = get_daily_usage(st.session_state.user, "Chat de Consulta Directa")
+        current_queries = get_daily_usage(st.session_state.user, c.MODE_CHAT) # <-- MODIFICADO
         
         if current_queries >= query_limit and query_limit != float('inf'): 
             st.error(f"Límite de {int(query_limit)} consultas diarias alcanzado."); return
@@ -47,7 +48,7 @@ def grounded_chat_mode(db, selected_files):
             if response: 
                 message_placeholder.markdown(response)
                 # --- Lógica de guardado REVERTIDA ---
-                log_query_event(user_input, mode="Chat de Consulta Directa") # Ya no se captura el ID
+                log_query_event(user_input, mode=c.MODE_CHAT) # <-- MODIFICADO
                 st.session_state.chat_history.append({
                     "role": "Asistente", 
                     "message": response

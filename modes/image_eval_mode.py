@@ -7,6 +7,7 @@ from services.supabase_db import log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 from prompts import get_image_eval_prompt_parts
+import constants as c # <--- IMPORTACIÓN AÑADIDA
 
 # =====================================================
 # MODO: EVALUACIÓN VISUAL (IMAGEN)
@@ -44,6 +45,8 @@ def image_evaluation_mode(db, selected_files):
             image_data = Image.open(BytesIO(image_bytes))
             
             try:
+                # Esta es la lógica frágil que mencioné (Punto 1 de mi análisis)
+                # La dejamos por ahora, ya que esta tarea solo cubre el Punto 5.
                 image_label_index = prompt_parts.index("\n\n**Imagen:**")
                 prompt_parts.insert(image_label_index + 1, image_data)
             except ValueError:
@@ -55,7 +58,7 @@ def image_evaluation_mode(db, selected_files):
             if evaluation_result: 
                 st.session_state.image_evaluation_result = evaluation_result
                 # --- Lógica de guardado REVERTIDA ---
-                log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode="Evaluación Visual")
+                log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode=c.MODE_IMAGE_EVAL) # <-- MODIFICADO
                 st.rerun()
             else: 
                 st.error("No se pudo generar evaluación.")

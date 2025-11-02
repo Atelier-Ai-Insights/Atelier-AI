@@ -3,6 +3,7 @@ from utils import get_relevant_info
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event
 from prompts import get_concept_gen_prompt
+import constants as c # <--- IMPORTACIÓN AÑADIDA
 
 # =====================================================
 # MODO: GENERACIÓN DE CONCEPTOS
@@ -35,7 +36,7 @@ def concept_generation_mode(db, selected_files):
                 if response: 
                     st.session_state.generated_concept = response
                     # --- Lógica de guardado REVERTIDA ---
-                    log_query_event(product_idea, mode="Generación de conceptos")
+                    log_query_event(product_idea, mode=c.MODE_CONCEPT) # <-- MODIFICADO
                     st.rerun()
                 else: 
                     st.error("No se pudo generar concepto.")

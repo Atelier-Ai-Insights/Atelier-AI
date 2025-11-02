@@ -4,6 +4,7 @@ from io import BytesIO
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event
 from prompts import get_transcript_prompt
+import constants as c # <--- IMPORTACIÓN AÑADIDA
 
 # =====================================================
 # MODO: ANÁLISIS DE TRANSCRIPCIONES
@@ -90,7 +91,7 @@ def transcript_analysis_mode():
             if response:
                 message_placeholder.markdown(response)
                 # --- Lógica de guardado REVERTIDA ---
-                log_query_event(user_prompt, mode="Análisis de Transcripciones")
+                log_query_event(user_prompt, mode=c.MODE_TRANSCRIPT) # <-- MODIFICADO
                 st.session_state.transcript_chat_history.append({
                     "role": "assistant", 
                     "content": response

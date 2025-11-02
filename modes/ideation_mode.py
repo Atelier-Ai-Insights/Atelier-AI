@@ -5,6 +5,7 @@ from services.supabase_db import log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 from prompts import get_ideation_prompt
+import constants as c # <--- IMPORTACIÓN AÑADIDA
 
 # =====================================================
 # MODO: CONVERSACIONES CREATIVAS (IDEACIÓN)
@@ -44,7 +45,7 @@ def ideacion_mode(db, selected_files):
             if resp: 
                 message_placeholder.markdown(resp)
                 # --- Lógica de guardado REVERTIDA ---
-                log_query_event(user_input, mode="Conversaciones creativas")
+                log_query_event(user_input, mode=c.MODE_IDEATION) # <-- MODIFICADO
                 st.session_state.chat_history.append({
                     "role": "Asistente", 
                     "message": resp

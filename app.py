@@ -23,6 +23,7 @@ from modes.onepager_mode import one_pager_ppt_mode
 from utils import (
     extract_brand, reset_chat_workflow, reset_report_workflow 
 )
+import constants as c # <--- IMPORTACIÓN AÑADIDA
 
 def set_mode_and_reset(new_mode):
     # (Esta función no cambia)
@@ -97,23 +98,24 @@ def run_user_mode(db_full, user_features, footer_html):
     
     modo = st.session_state.current_mode
 
+    # --- SECCIÓN MODIFICADA CON CONSTANTES ---
     all_categories = {
         "Análisis": {
-            "Chat de Consulta Directa": True, 
-            "Análisis de Notas y Transcripciones": user_features.get("transcript_file_limit", 0) > 0
+            c.MODE_CHAT: True, 
+            c.MODE_TRANSCRIPT: user_features.get("transcript_file_limit", 0) > 0
         },
         "Evaluación": {
-            "Evaluar una idea": user_features.get("has_idea_evaluation"),
-            "Evaluación Visual": user_features.get("has_image_evaluation"),
-            "Evaluación de Video": user_features.get("has_video_evaluation")
+            c.MODE_IDEA_EVAL: user_features.get("has_idea_evaluation"),
+            c.MODE_IMAGE_EVAL: user_features.get("has_image_evaluation"),
+            c.MODE_VIDEO_EVAL: user_features.get("has_video_evaluation")
         },
         "Reportes": {
-            "Generar un reporte de reportes": user_features.get("has_report_generation"),
-            "Generador de One-Pager PPT": user_features.get("ppt_downloads_per_month", 0) > 0
+            c.MODE_REPORT: user_features.get("has_report_generation"),
+            c.MODE_ONEPAGER: user_features.get("ppt_downloads_per_month", 0) > 0
         },
         "Creatividad": {
-            "Conversaciones creativas": user_features.get("has_creative_conversation"),
-            "Generación de conceptos": user_features.get("has_concept_generation")
+            c.MODE_IDEATION: user_features.get("has_creative_conversation"),
+            c.MODE_CONCEPT: user_features.get("has_concept_generation")
         }
     }
     
@@ -125,37 +127,38 @@ def run_user_mode(db_full, user_features, footer_html):
 
     if any(all_categories["Análisis"].values()): 
         with st.sidebar.expander("Análisis", expanded=(default_expanded == "Análisis")):
-            if all_categories["Análisis"]["Chat de Consulta Directa"]:
-                st.button("Chat de Consulta Directa", on_click=set_mode_and_reset, args=("Chat de Consulta Directa",), use_container_width=True, type="primary" if modo == "Chat de Consulta Directa" else "secondary")
-            if all_categories["Análisis"]["Análisis de Notas y Transcripciones"]:
-                st.button("Análisis de Notas y Transcripciones", on_click=set_mode_and_reset, args=("Análisis de Notas y Transcripciones",), use_container_width=True, type="primary" if modo == "Análisis de Notas y Transcripciones" else "secondary")
+            if all_categories["Análisis"][c.MODE_CHAT]:
+                st.button(c.MODE_CHAT, on_click=set_mode_and_reset, args=(c.MODE_CHAT,), use_container_width=True, type="primary" if modo == c.MODE_CHAT else "secondary")
+            if all_categories["Análisis"][c.MODE_TRANSCRIPT]:
+                st.button(c.MODE_TRANSCRIPT, on_click=set_mode_and_reset, args=(c.MODE_TRANSCRIPT,), use_container_width=True, type="primary" if modo == c.MODE_TRANSCRIPT else "secondary")
 
     if any(all_categories["Evaluación"].values()):
         with st.sidebar.expander("Evaluación", expanded=(default_expanded == "Evaluación")):
-            if all_categories["Evaluación"]["Evaluar una idea"]:
-                st.button("Evaluar una idea", on_click=set_mode_and_reset, args=("Evaluar una idea",), use_container_width=True, type="primary" if modo == "Evaluar una idea" else "secondary")
-            if all_categories["Evaluación"]["Evaluación Visual"]:
-                st.button("Evaluación Visual", on_click=set_mode_and_reset, args=("Evaluación Visual",), use_container_width=True, type="primary" if modo == "Evaluación Visual" else "secondary")
-            if all_categories["Evaluación"]["Evaluación de Video"]:
-                st.button("Evaluación de Video", on_click=set_mode_and_reset, args=("Evaluación de Video",), use_container_width=True, type="primary" if modo == "Evaluación de Video" else "secondary")
+            if all_categories["Evaluación"][c.MODE_IDEA_EVAL]:
+                st.button(c.MODE_IDEA_EVAL, on_click=set_mode_and_reset, args=(c.MODE_IDEA_EVAL,), use_container_width=True, type="primary" if modo == c.MODE_IDEA_EVAL else "secondary")
+            if all_categories["Evaluación"][c.MODE_IMAGE_EVAL]:
+                st.button(c.MODE_IMAGE_EVAL, on_click=set_mode_and_reset, args=(c.MODE_IMAGE_EVAL,), use_container_width=True, type="primary" if modo == c.MODE_IMAGE_EVAL else "secondary")
+            if all_categories["Evaluación"][c.MODE_VIDEO_EVAL]:
+                st.button(c.MODE_VIDEO_EVAL, on_click=set_mode_and_reset, args=(c.MODE_VIDEO_EVAL,), use_container_width=True, type="primary" if modo == c.MODE_VIDEO_EVAL else "secondary")
 
     if any(all_categories["Reportes"].values()):
         with st.sidebar.expander("Reportes", expanded=(default_expanded == "Reportes")):
-            if all_categories["Reportes"]["Generar un reporte de reportes"]:
-                st.button("Generar un reporte de reportes", on_click=set_mode_and_reset, args=("Generar un reporte de reportes",), use_container_width=True, type="primary" if modo == "Generar un reporte de reportes" else "secondary")
-            if all_categories["Reportes"]["Generador de One-Pager PPT"]:
-                st.button("Generador de One-Pager PPT", on_click=set_mode_and_reset, args=("Generador de One-Pager PPT",), use_container_width=True, type="primary" if modo == "Generador de One-Pager PPT" else "secondary")
+            if all_categories["Reportes"][c.MODE_REPORT]:
+                st.button(c.MODE_REPORT, on_click=set_mode_and_reset, args=(c.MODE_REPORT,), use_container_width=True, type="primary" if modo == c.MODE_REPORT else "secondary")
+            if all_categories["Reportes"][c.MODE_ONEPAGER]:
+                st.button(c.MODE_ONEPAGER, on_click=set_mode_and_reset, args=(c.MODE_ONEPAGER,), use_container_width=True, type="primary" if modo == c.MODE_ONEPAGER else "secondary")
 
     if any(all_categories["Creatividad"].values()):
         with st.sidebar.expander("Creatividad", expanded=(default_expanded == "Creatividad")):
-            if all_categories["Creatividad"]["Conversaciones creativas"]:
-                st.button("Conversaciones creativas", on_click=set_mode_and_reset, args=("Conversaciones creativas",), use_container_width=True, type="primary" if modo == "Conversaciones creativas" else "secondary")
-            if all_categories["Creatividad"]["Generación de conceptos"]:
-                st.button("Generación de conceptos", on_click=set_mode_and_reset, args=("Generación de conceptos",), use_container_width=True, type="primary" if modo == "Generación de conceptos" else "secondary")
+            if all_categories["Creatividad"][c.MODE_IDEATION]:
+                st.button(c.MODE_IDEATION, on_click=set_mode_and_reset, args=(c.MODE_IDEATION,), use_container_width=True, type="primary" if modo == c.MODE_IDEATION else "secondary")
+            if all_categories["Creatividad"][c.MODE_CONCEPT]:
+                st.button(c.MODE_CONCEPT, on_click=set_mode_and_reset, args=(c.MODE_CONCEPT,), use_container_width=True, type="primary" if modo == c.MODE_CONCEPT else "secondary")
 
+    # --- FIN DE SECCIÓN MODIFICADA ---
     
     st.sidebar.header("Filtros de Búsqueda")
-    run_filters = modo not in ["Análisis de Notas y Transcripciones"] 
+    run_filters = modo not in [c.MODE_TRANSCRIPT] # <-- MODIFICADO
 
     db_filtered = db_full[:] 
 
@@ -191,18 +194,20 @@ def run_user_mode(db_full, user_features, footer_html):
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
-    if run_filters and not selected_files and modo not in ["Generar un reporte de reportes", "Evaluación Visual", "Evaluación de Video", "Generador de One-Pager PPT"]: 
+    # --- SECCIÓN MODIFICADA CON CONSTANTES ---
+    if run_filters and not selected_files and modo not in [c.MODE_REPORT, c.MODE_IMAGE_EVAL, c.MODE_VIDEO_EVAL, c.MODE_ONEPAGER]: 
          st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
 
-    if modo == "Generar un reporte de reportes": report_mode(db_filtered, selected_files)
-    elif modo == "Conversaciones creativas": ideacion_mode(db_filtered, selected_files)
-    elif modo == "Generación de conceptos": concept_generation_mode(db_filtered, selected_files)
-    elif modo == "Chat de Consulta Directa": grounded_chat_mode(db_filtered, selected_files)
-    elif modo == "Evaluar una idea": idea_evaluator_mode(db_filtered, selected_files)
-    elif modo == "Evaluación Visual": image_evaluation_mode(db_filtered, selected_files)
-    elif modo == "Evaluación de Video": video_evaluation_mode(db_filtered, selected_files)
-    elif modo == "Análisis de Notas y Transcripciones": transcript_analysis_mode()
-    elif modo == "Generador de One-Pager PPT": one_pager_ppt_mode(db_filtered, selected_files)
+    if modo == c.MODE_REPORT: report_mode(db_filtered, selected_files)
+    elif modo == c.MODE_IDEATION: ideacion_mode(db_filtered, selected_files)
+    elif modo == c.MODE_CONCEPT: concept_generation_mode(db_filtered, selected_files)
+    elif modo == c.MODE_CHAT: grounded_chat_mode(db_filtered, selected_files)
+    elif modo == c.MODE_IDEA_EVAL: idea_evaluator_mode(db_filtered, selected_files)
+    elif modo == c.MODE_IMAGE_EVAL: image_evaluation_mode(db_filtered, selected_files)
+    elif modo == c.MODE_VIDEO_EVAL: video_evaluation_mode(db_filtered, selected_files)
+    elif modo == c.MODE_TRANSCRIPT: transcript_analysis_mode()
+    elif modo == c.MODE_ONEPAGER: one_pager_ppt_mode(db_filtered, selected_files)
+    # --- FIN DE SECCIÓN MODIFICADA ---
 
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
@@ -219,7 +224,7 @@ def main():
     if 'page' not in st.session_state: st.session_state.page = "login"
     if "api_key_index" not in st.session_state: st.session_state.api_key_index = 0
     if 'current_mode' not in st.session_state:
-        st.session_state.current_mode = "Chat de Consulta Directa"
+        st.session_state.current_mode = c.MODE_CHAT # <-- MODIFICADO
         
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"

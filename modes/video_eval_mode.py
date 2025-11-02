@@ -6,6 +6,7 @@ from services.supabase_db import log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 from prompts import get_video_eval_prompt_parts
+import constants as c # <--- IMPORTACIÓN AÑADIDA
 
 # =====================================================
 # MODO: EVALUACIÓN DE VIDEO
@@ -44,6 +45,8 @@ def video_evaluation_mode(db, selected_files):
             prompt_parts = get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context)
             
             try:
+                # Esta es la lógica frágil que mencioné (Punto 1 de mi análisis)
+                # La dejamos por ahora, ya que esta tarea solo cubre el Punto 5.
                 video_label_index = prompt_parts.index("\n\n**Video:**")
                 prompt_parts.insert(video_label_index + 1, video_file_data)
             except ValueError:
@@ -55,7 +58,7 @@ def video_evaluation_mode(db, selected_files):
             if evaluation_result: 
                 st.session_state.video_evaluation_result = evaluation_result
                 # --- Lógica de guardado REVERTIDA ---
-                log_query_event(f"Evaluación Video: {uploaded_file.name}", mode="Evaluación de Video")
+                log_query_event(f"Evaluación Video: {uploaded_file.name}", mode=c.MODE_VIDEO_EVAL) # <-- MODIFICADO
                 st.rerun()
             else: 
                 st.error("No se pudo generar evaluación video.")
