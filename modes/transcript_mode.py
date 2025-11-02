@@ -2,8 +2,7 @@ import streamlit as st
 import docx
 from io import BytesIO
 from services.gemini_api import call_gemini_api
-# --- ¡IMPORTACIÓN ACTUALIZADA! ---
-from services.supabase_db import log_query_event, log_query_feedback
+from services.supabase_db import log_query_event
 from prompts import get_transcript_prompt
 
 # =====================================================
@@ -15,27 +14,11 @@ def transcript_analysis_mode():
     file_limit = st.session_state.plan_features.get('transcript_file_limit', 0)
     
     st.markdown(f"""
-        Sube uno o varios archivos Word con notas y transcripciones de entrevistas o
-        focus groups. Luego, haz preguntas sobre el contenido en el chat.
-        
+        Sube uno o varios archivos Word con notas y transcripciones...
         **Tu plan actual te permite cargar un máximo de {file_limit} archivo(s) a la vez.**
     """)
     
-    # --- ¡CAMBIO 1: El Callback ahora SOLO acepta 'feedback'! ---
-    def transcript_feedback_callback(feedback):
-        # Obtenemos el key que pasamos a st.feedback
-        key = feedback['key']
-        # El key tiene el formato "feedback_transcript_QUERYID". Extraemos el ID.
-        query_id = key.split("feedback_transcript_")[-1] # Obtenemos la parte del ID
-
-        if query_id:
-            # Usar .get() para seguridad y score=0 para 'thumbs_down'
-            score = 1 if feedback.get('score') == 'thumbs_up' else 0
-            log_query_feedback(query_id, score)
-            st.toast("¡Gracias por tu feedback!")
-        else:
-            st.toast("Error: No se encontró el ID de la consulta.")
-    # --- FIN DEL CALLBACK ---
+    # --- Lógica de feedback eliminada ---
     
     # --- Sección de Carga y Procesamiento de Archivos ---
     uploaded_files = st.file_uploader(
@@ -47,15 +30,13 @@ def transcript_analysis_mode():
 
     if uploaded_files:
         if len(uploaded_files) > file_limit:
-            st.error(f"¡Límite de archivos excedido! Tu plan permite {file_limit} archivo(s), pero has subido {len(uploaded_files)}. Por favor, deselecciona los archivos sobrantes.")
-            return
+            st.error(f"¡Límite de archivos excedido! Tu plan permite {file_limit}..."); return
             
-    if 'uploaded_transcripts_text' not in st.session_state:
-        st.session_state.uploaded_transcripts_text = {} 
-    if 'transcript_chat_history' not in st.session_state:
-        st.session_state.transcript_chat_history = []
+    if 'uploaded_transcripts_text' not in st.session_state: st.session_state.uploaded_transcripts_text = {} 
+    if 'transcript_chat_history' not in st.session_state: st.session_state.transcript_chat_history = []
 
     if uploaded_files:
+        # ... (Lógica de procesamiento de archivos sin cambios) ...
         newly_processed = False
         with st.spinner("Procesando archivos .docx..."):
             current_texts = {}
@@ -69,42 +50,24 @@ def transcript_analysis_mode():
                         newly_processed = True
                 except Exception as e:
                     st.error(f"Error al procesar '{uploaded_file.name}': {e}")
-
             if newly_processed or set(current_texts.keys()) != set(st.session_state.uploaded_transcripts_text.keys()):
                 st.session_state.uploaded_transcripts_text = current_texts
                 st.session_state.transcript_chat_history = [] 
                 st.info(f"Se procesaron {len(current_texts)} archivo(s). El chat se ha reiniciado.")
 
     if st.session_state.uploaded_transcripts_text:
-        st.write("**Archivos cargados para análisis:**")
-        for filename in st.session_state.uploaded_transcripts_text.keys():
-            st.caption(f"- {filename}")
-        st.markdown("---")
+        st.write("**Archivos cargados para análisis:**"); [st.caption(f"- {filename}") for filename in st.session_state.uploaded_transcripts_text.keys()]; st.markdown("---")
     else:
         st.info("Sube uno o más archivos .docx para comenzar a chatear.")
 
-    # --- Sección de Chat ---
     st.write("**Chat con Transcripciones:**")
 
-    # --- BUCLE DE VISUALIZACIÓN DE CHAT (MODIFICADO) ---
+    # --- Bucle de visualización REVERTIDO ---
     for msg in st.session_state.transcript_chat_history:
-        if msg["role"] == "assistant":
-            with st.chat_message("assistant", avatar="✨"):
-                st.markdown(msg["content"])
-                
-                # --- ¡CAMBIO 2: Eliminamos 'args'! ---
-                if msg.get('query_id'):
-                    st.feedback(
-                        key=f"feedback_transcript_{msg['query_id']}", # Key única
-                        on_submit=transcript_feedback_callback
-                        # Se elimina: args=(msg.get('query_id'),)
-                    )
-                # --- FIN DEL CAMBIO 2 ---
-        else: # role == "user"
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(msg["content"])
+        with st.chat_message(msg["role"], avatar="✨" if msg['role'] == "assistant" else "👤"):
+            st.markdown(msg["content"])
+            # Se eliminó la llamada a st.feedback()
 
-    # Input del usuario
     user_prompt = st.chat_input("Haz una pregunta sobre las transcripciones...")
 
     if user_prompt:
@@ -113,49 +76,33 @@ def transcript_analysis_mode():
             st.markdown(user_prompt)
 
         if not st.session_state.uploaded_transcripts_text:
-            st.error("No hay transcripciones cargadas para analizar. Por favor, sube archivos .docx.")
-            st.session_state.transcript_chat_history.pop()
-            return
+            st.error("No hay transcripciones cargadas..."); st.session_state.transcript_chat_history.pop(); return
 
         with st.chat_message("assistant", avatar="✨"):
-            message_placeholder = st.empty()
-            message_placeholder.markdown("Analizando transcripciones...")
-
-            combined_context = "\n\n--- Nueva Transcripción ---\n\n".join(
-                f"**Archivo: {name}**\n\n{text}"
-                for name, text in st.session_state.uploaded_transcripts_text.items()
-            )
-
+            message_placeholder = st.empty(); message_placeholder.markdown("Analizando...")
+            combined_context = "\n\n".join(f"**Archivo: {name}**\n\n{text}" for name, text in st.session_state.uploaded_transcripts_text.items())
+            
             MAX_CONTEXT_LENGTH = 800000 
             if len(combined_context) > MAX_CONTEXT_LENGTH:
                 combined_context = combined_context[:MAX_CONTEXT_LENGTH] + "\n\n...(contexto truncado)..."
-                st.warning("El contexto combinado de las transcripciones es muy largo y ha sido truncado.", icon="⚠️")
-
+                st.warning("Contexto truncado.", icon="⚠️")
+                
             chat_prompt = get_transcript_prompt(combined_context, user_prompt)
-
             response = call_gemini_api(chat_prompt) 
 
             if response:
                 message_placeholder.markdown(response)
-                
-                query_id = log_query_event(user_prompt, mode="Análisis de Transcripciones")
+                # --- Lógica de guardado REVERTIDA ---
+                log_query_event(user_prompt, mode="Análisis de Transcripciones")
                 st.session_state.transcript_chat_history.append({
                     "role": "assistant", 
-                    "content": response,
-                    "query_id": query_id
+                    "content": response
+                    # Ya no se guarda el query_id
                 })
-                
-                # --- ¡CAMBIO 3: st.rerun() AÑADIDO! ---
-                # Forzamos un rerun para que el bucle de visualización (arriba)
-                # se ejecute y dibuje el nuevo mensaje CON los íconos de feedback.
-                st.rerun()
-                # --- FIN DEL CAMBIO 3 ---
+                st.rerun() # Se mantiene el rerun
             else:
-                message_placeholder.error("Error al obtener respuesta del análisis.")
-                st.session_state.transcript_chat_history.pop()
+                message_placeholder.error("Error al obtener respuesta."); st.session_state.transcript_chat_history.pop()
 
     if st.session_state.uploaded_transcripts_text or st.session_state.transcript_chat_history:
         if st.button("Limpiar Archivos y Chat", use_container_width=True, type="secondary"):
-            st.session_state.uploaded_transcripts_text = {}
-            st.session_state.transcript_chat_history = []
-            st.rerun()
+            st.session_state.uploaded_transcripts_text = {}; st.session_state.transcript_chat_history = []; st.rerun()

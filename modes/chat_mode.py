@@ -1,7 +1,7 @@
 import streamlit as st
 from utils import get_relevant_info, reset_chat_workflow
 from services.gemini_api import call_gemini_api
-from services.supabase_db import get_daily_usage, log_query_event, log_query_feedback
+from services.supabase_db import get_daily_usage, log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 from prompts import get_grounded_chat_prompt
@@ -17,30 +17,13 @@ def grounded_chat_mode(db, selected_files):
     if "chat_history" not in st.session_state: 
         st.session_state.chat_history = []
     
-    # --- ¡CALLBACK CORREGIDO! ---
-    def chat_feedback_callback(feedback):
-        score = 1 if feedback.get('score') == 'thumbs_up' else 0
-        key = feedback['key']
-        query_id = key.split("feedback_")[-1] 
-        log_query_feedback(query_id, score)
-        st.toast("¡Gracias por tu feedback!")
+    # --- Lógica de feedback eliminada ---
         
-    # --- Bucle de visualización ---
+    # --- Bucle de visualización REVERTIDO ---
     for msg in st.session_state.chat_history:
-        if msg['role'] == "Asistente":
-            with st.chat_message("Asistente", avatar="✨"):
-                st.markdown(msg['message'])
-                
-                # --- ¡LLAMADA A FEEDBACK CORREGIDA! ---
-                if msg.get('query_id'):
-                    st.feedback( 
-                        key=f"feedback_{msg['query_id']}", # La key DEBE contener el ID
-                        on_submit=chat_feedback_callback
-                        # Se elimina 'args'
-                    )
-        else:
-            with st.chat_message("Usuario", avatar="👤"):
-                st.markdown(msg['message'])
+        with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
+            st.markdown(msg['message'])
+            # Se eliminó la llamada a st.feedback()
             
     user_input = st.chat_input("Escribe tu pregunta...")
     
@@ -65,13 +48,15 @@ def grounded_chat_mode(db, selected_files):
             response = call_gemini_api(grounded_prompt)
             
             if response: 
-                query_id = log_query_event(user_input, mode="Chat de Consulta Directa")
+                message_placeholder.markdown(response)
+                # --- Lógica de guardado REVERTIDA ---
+                log_query_event(user_input, mode="Chat de Consulta Directa") # Ya no se captura el ID
                 st.session_state.chat_history.append({
                     "role": "Asistente", 
-                    "message": response,
-                    "query_id": query_id 
+                    "message": response
+                    # Ya no se guarda el query_id
                 })
-                st.rerun() # <- Esta línea es correcta
+                st.rerun() # Se mantiene el rerun para actualizar el historial
             else: 
                 message_placeholder.error("Error al generar respuesta.")
                 

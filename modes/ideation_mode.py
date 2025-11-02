@@ -1,8 +1,7 @@
 import streamlit as st
 from utils import get_relevant_info, reset_chat_workflow
 from services.gemini_api import call_gemini_api
-# --- ¡IMPORTACIÓN ACTUALIZADA! ---
-from services.supabase_db import log_query_event, log_query_feedback
+from services.supabase_db import log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 from prompts import get_ideation_prompt
@@ -18,40 +17,13 @@ def ideacion_mode(db, selected_files):
     if "chat_history" not in st.session_state: 
         st.session_state.chat_history = []
         
-    # --- ¡CAMBIO 1: El Callback ahora SOLO acepta 'feedback'! ---
-    def ideation_feedback_callback(feedback):
-        # Obtenemos el key que pasamos a st.feedback
-        key = feedback['key']
-        # El key tiene el formato "feedback_QUERYID". Extraemos el ID.
-        query_id = key.split("feedback_")[-1] # Obtenemos la parte del ID
-
-        if query_id:
-            # Usar .get() para seguridad y score=0 para 'thumbs_down'
-            score = 1 if feedback.get('score') == 'thumbs_up' else 0
-            log_query_feedback(query_id, score)
-            st.toast("¡Gracias por tu feedback!")
-        else:
-            st.toast("Error: No se encontró el ID de la consulta.")
-    # --- FIN DEL CAMBIO 1 ---
+    # --- Lógica de feedback eliminada ---
         
-    # --- BUCLE DE VISUALIZACIÓN DE CHAT (MODIFICADO) ---
+    # --- Bucle de visualización REVERTIDO ---
     for msg in st.session_state.chat_history:
-        if msg['role'] == "Asistente":
-            with st.chat_message("Asistente", avatar="✨"):
-                st.markdown(msg['message'])
-                
-                # --- ¡CAMBIOS 2 y 3! ---
-                if msg.get('query_id'):
-                    # 2. Usamos el nombre oficial st.feedback
-                    st.feedback( 
-                        key=f"feedback_{msg['query_id']}", # 3. Key única
-                        on_submit=ideation_feedback_callback
-                        # Se elimina: args=(msg.get('query_id'),)
-                    )
-                # --- FIN DE LOS CAMBIOS ---
-        else: # Mensajes del usuario
-            with st.chat_message("Usuario", avatar="👤"):
-                st.markdown(msg['message'])
+        with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
+            st.markdown(msg['message'])
+            # Se eliminó la llamada a st.feedback()
             
     user_input = st.chat_input("Lanza una idea o pregunta...")
     
@@ -72,27 +44,21 @@ def ideacion_mode(db, selected_files):
             resp = call_gemini_api(conv_prompt)
             
             if resp: 
-                # (Esta parte ya estaba correcta)
-                query_id = log_query_event(user_input, mode="Conversaciones creativas")
+                message_placeholder.markdown(resp)
+                # --- Lógica de guardado REVERTIDA ---
+                log_query_event(user_input, mode="Conversaciones creativas")
                 st.session_state.chat_history.append({
                     "role": "Asistente", 
-                    "message": resp,
-                    "query_id": query_id # El ID se usa como 'key' para el feedback
+                    "message": resp
+                    # Ya no se guarda el query_id
                 })
-                
-                # --- ¡CAMBIO 4: st.rerun() AÑADIDO! ---
-                # Forzamos un rerun para que el bucle de visualización (arriba)
-                # se ejecute y dibuje el nuevo mensaje CON los íconos de feedback.
-                st.rerun()
-                # --- FIN DEL CAMBIO 4 ---
-                
+                st.rerun() # Se mantiene el rerun
             else: 
                 message_placeholder.error("Error generando respuesta.")
                 
     if st.session_state.chat_history:
         col1, col2 = st.columns([1,1])
         with col1:
-            # (La lógica de PDF se mantiene igual, ya estaba corregida)
             chat_content_raw = "\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history)
             chat_content_for_pdf = chat_content_raw.replace("](#)", "]")
             pdf_bytes = generate_pdf_html(chat_content_for_pdf, title="Historial Creativo", banner_path=banner_file)

@@ -1,7 +1,7 @@
 import streamlit as st
 from utils import get_relevant_info, reset_report_workflow
 from services.gemini_api import call_gemini_api
-from services.supabase_db import get_monthly_usage, log_query_event, log_query_feedback
+from services.supabase_db import get_monthly_usage, log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 from prompts import get_report_prompt1, get_report_prompt2
@@ -10,22 +10,7 @@ from prompts import get_report_prompt1, get_report_prompt2
 # MODO: GENERAR REPORTE DE REPORTES
 # =====================================================
 
-# --- ¡CAMBIO 1: El Callback ahora SOLO acepta 'feedback'! ---
-def report_feedback_callback(feedback):
-    # Obtenemos el key que pasamos a st.feedback
-    key = feedback['key']
-    # El key tiene el formato "feedback_report_QUERYID". Extraemos el ID.
-    query_id = key.split("feedback_report_")[-1] # Obtenemos la parte del ID
-
-    if query_id:
-        # Usar .get() para seguridad y score=0 para 'thumbs_down'
-        score = 1 if feedback.get('score') == 'thumbs_up' else 0
-        log_query_feedback(query_id, score)
-        st.toast("¡Gracias por tu feedback!")
-        # Para ocultar los botones después de votar
-        st.session_state.voted_on_last_report = True
-    else:
-        st.toast("Error: No se encontró el ID de la consulta.")
+# --- Lógica de feedback eliminada ---
 
 def generate_final_report(question, db, selected_files):
     # (Esta función no cambia)
@@ -60,25 +45,15 @@ def report_mode(db, selected_files):
             st.error("No se pudo generar."); st.session_state.pop("report", None)
         else: 
             st.session_state["report"] = report
-            query_id = log_query_event(question, mode="Generar un reporte de reportes")
-            st.session_state["last_report_query_id"] = query_id
-            st.session_state["voted_on_last_report"] = False
+            # --- Lógica de guardado REVERTIDA ---
+            log_query_event(question, mode="Generar un reporte de reportes")
             
-            # El st.rerun() aquí es correcto para mostrar el reporte
-            st.rerun()
+            # --- st.rerun() RE-AÑADIDO ---
+            st.rerun() 
             
     if "report" in st.session_state and st.session_state["report"]:
         
-        # --- ¡SECCIÓN DE FEEDBACK CORREGIDA! ---
-        query_id = st.session_state.get("last_report_query_id")
-        if query_id and not st.session_state.get("voted_on_last_report", False):
-            # CAMBIO 2: Usar st.feedback (nombre oficial)
-            st.feedback(
-                key=f"feedback_report_{query_id}", # CAMBIO 3: La key DEBE contener el ID
-                on_submit=report_feedback_callback
-                # Se elimina: args=(query_id,)
-            )
-        # --- FIN DE LA SECCIÓN DE FEEDBACK ---
+        # --- Sección de feedback eliminada ---
 
         # (Botones de descarga y nueva consulta)
         pdf_bytes = generate_pdf_html(st.session_state["report"], title="Informe Final", banner_path=banner_file)

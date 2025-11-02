@@ -10,13 +10,12 @@ from supabase import create_client
 def show_admin_dashboard():
     # Asegurarnos que el cliente admin exista
     if not supabase_admin_client:
-        st.error("Error: La 'SUPABASE_SERVICE_KEY' no está configurada. No se puede cargar la gestión de usuarios.")
+        st.error("Error: La 'SUPABASE_SERVICE_KEY' no está configurada...")
         return
 
     st.subheader("Estadísticas de Uso", divider="grey")
     with st.spinner("Cargando estadísticas..."):
         try:
-            # Usamos el cliente normal (o admin) para leer estadísticas
             stats_response = supabase.table("queries").select("user_name, mode, timestamp, query").execute()
             if stats_response.data:
                 df_stats = pd.DataFrame(stats_response.data)
@@ -44,7 +43,6 @@ def show_admin_dashboard():
 
     st.subheader("Gestión de Clientes (Invitaciones)", divider="grey")
     try:
-        # Usamos el cliente admin para leer clientes
         clients_response = supabase_admin_client.table("clients").select("client_name, plan, invite_code, created_at").order("created_at", desc=True).execute()
         if clients_response.data: 
             st.write("**Clientes Actuales**")
@@ -68,7 +66,6 @@ def show_admin_dashboard():
                     st.warning("Completa campos.")
                 else:
                     try: 
-                        # Usamos el cliente admin para insertar
                         supabase_admin_client.table("clients").insert({"client_name": new_client_name, "plan": new_plan, "invite_code": new_invite_code}).execute()
                         st.success(f"Cliente '{new_client_name}' creado. Código: {new_invite_code}")
                     except Exception as e: 
@@ -77,7 +74,6 @@ def show_admin_dashboard():
     st.subheader("Gestión de Usuarios", divider="grey")
     
     try:
-        # Usamos el cliente admin para leer usuarios
         users_response = supabase_admin_client.table("users").select("id, email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute()
 
         if users_response.data:
@@ -85,8 +81,7 @@ def show_admin_dashboard():
             user_list = []
             for user in users_response.data:
                 client_info = user.get('clients')
-                client_name = "N/A"
-                client_plan = "N/A"
+                client_name = "N/A"; client_plan = "N/A"
                 if isinstance(client_info, dict):
                     client_name = client_info.get('client_name', "N/A")
                     client_plan = client_info.get('plan', "N/A")
@@ -138,7 +133,6 @@ def show_admin_dashboard():
                     with st.spinner(f"Guardando {len(updates_to_make)} cambio(s)..."):
                         for update in updates_to_make:
                             try: 
-                                # Usamos el cliente admin para actualizar
                                 supabase_admin_client.table("users").update({"rol": update["new_rol"]}).eq("id", update["id"]).execute()
                                 success_count += 1
                             except Exception as e: 
@@ -147,8 +141,7 @@ def show_admin_dashboard():
                                 
                     if success_count > 0: st.success(f"{success_count} actualizado(s).")
                     if error_count > 0: 
-                        st.error(f"{error_count} error(es):")
-                        [st.error(f"- {err}") for err in errors]
+                        st.error(f"{error_count} error(es):"); [st.error(f"- {err}") for err in errors]
                         
                     del st.session_state.original_users_df
                     st.rerun()
@@ -159,26 +152,4 @@ def show_admin_dashboard():
     except Exception as e:
         st.error(f"Error en la gestión de usuarios: {e}")
 
-    # --- NUEVO BLOQUE DE FEEDBACK ---
-    st.subheader("Consultas con Feedback Negativo", divider="grey")
-    st.markdown("Últimas 20 consultas marcadas como 'No Útil' (rating = 0) por los usuarios.")
-    
-    try:
-        # El 'import pandas as pd' ya está al inicio del archivo
-        
-        # Usamos el cliente admin para leer la tabla de queries
-        response = supabase_admin_client.table("queries").select("timestamp, user_name, mode, query, rating") \
-                         .eq("rating", 0) \
-                         .order("timestamp", desc=True) \
-                         .limit(20) \
-                         .execute()
-                         
-        if response.data:
-            df_negative = pd.DataFrame(response.data)
-            df_negative['timestamp'] = pd.to_datetime(df_negative['timestamp']).dt.strftime('%Y-%m-%d %H:%M')
-            st.dataframe(df_negative, use_container_width=True, hide_index=True)
-        else:
-            st.info("¡Buenas noticias! No hay consultas con feedback negativo registradas.")
-            
-    except Exception as e:
-        st.error(f"Error al cargar feedback negativo: {e}")
+    # --- Sección de feedback eliminada ---

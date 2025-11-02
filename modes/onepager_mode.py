@@ -1,14 +1,11 @@
 import streamlit as st
 import json
-# --- ¡IMPORTACIÓN ACTUALIZADA! ---
-from services.supabase_db import get_monthly_usage, log_query_event, log_query_feedback
+from services.supabase_db import get_monthly_usage, log_query_event
 import google.generativeai as genai
 from config import safety_settings
 from services.gemini_api import configure_api_dynamically
 from reporting.ppt_generator import crear_ppt_desde_json
 from utils import get_relevant_info, extract_text_from_pdfs
-
-# --- ¡IMPORTACIONES ACTUALIZADAS! ---
 from prompts import PROMPTS_ONEPAGER, get_onepager_final_prompt
 
 # =====================================================
@@ -19,23 +16,7 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     st.subheader("Generador de Diapositivas Estratégicas")
     ppt_limit = st.session_state.plan_features.get('ppt_downloads_per_month', 0)
 
-    # --- ¡CALLBACK CORREGIDO! ---
-    def onepager_feedback_callback(feedback):
-        # Obtenemos el key que pasamos a st.feedback
-        key = feedback['key']
-        # El key tiene el formato "feedback_QUERYID". Extraemos el ID.
-        query_id = key.split("feedback_")[-1] # Obtenemos la parte del ID
-
-        if query_id:
-            # Usar .get() para seguridad y score=0 para 'thumbs_down'
-            score = 1 if feedback.get('score') == 'thumbs_up' else 0
-            log_query_feedback(query_id, score)
-            st.toast("¡Gracias por tu feedback!")
-            # Oculta los botones después de votar
-            st.session_state.voted_on_last_onepager = True
-        else:
-            st.toast("Error: No se encontró el ID de la consulta.")
-    # --- FIN DEL CALLBACK ---
+    # --- Lógica de feedback eliminada ---
 
     if ppt_limit == float('inf'):
         limit_text = "**Tu plan actual te permite generar One-Pagers ilimitados.**"
@@ -52,15 +33,7 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     if "generated_ppt_bytes" in st.session_state:
         st.success(f"¡Tu diapositiva '{st.session_state.get('generated_ppt_template_name', 'Estratégica')}' está lista!")
         
-        # --- ¡SECCIÓN DE FEEDBACK CORREGIDA! ---
-        query_id = st.session_state.get("last_onepager_query_id")
-        if query_id and not st.session_state.get("voted_on_last_onepager", False):
-            st.feedback(
-                key=f"feedback_{query_id}", # Key única
-                on_submit=onepager_feedback_callback
-                # Se elimina 'args'
-            )
-        # --- FIN DE LA SECCIÓN DE FEEDBACK ---
+        # --- Sección de feedback eliminada ---
         
         st.download_button(
             label=f"Descargar Diapositiva (.pptx)",
@@ -72,9 +45,6 @@ def one_pager_ppt_mode(db_filtered, selected_files):
         if st.button("Generar nueva Diapositiva", use_container_width=True, type="secondary"):
             del st.session_state.generated_ppt_bytes
             st.session_state.pop('generated_ppt_template_name', None)
-            # Limpiamos las variables de feedback
-            st.session_state.pop("last_onepager_query_id", None)
-            st.session_state.pop("voted_on_last_onepager", None)
             st.rerun()
         return
 
@@ -139,15 +109,11 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                 st.session_state.generated_ppt_bytes = ppt_bytes
                 st.session_state.generated_ppt_template_name = selected_template_name
                 
+                # --- Lógica de guardado REVERTIDA ---
                 query_text = f"{selected_template_name}: {tema_central}"
-                query_id = log_query_event(query_text, mode="Generador de One-Pager PPT")
-                st.session_state["last_onepager_query_id"] = query_id
-                st.session_state["voted_on_last_onepager"] = False 
+                log_query_event(query_text, mode="Generador de One-Pager PPT")
                 
-                # --- ¡ARREGLO AQUÍ! ---
-                # Volvemos a añadir st.rerun() para que la página se 
-                # recargue y muestre el resultado inmediatamente.
+                # --- st.rerun() RE-AÑADIDO ---
                 st.rerun()
-                # --- FIN DEL ARREGLO ---
             else:
                 pass

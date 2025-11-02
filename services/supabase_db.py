@@ -17,11 +17,10 @@ if "SUPABASE_SERVICE_KEY" in st.secrets:
 
 def log_query_event(query_text, mode, rating=None):
     """
-    Registra una consulta y DEVUELVE el ID de la fila creada.
-    (Versión corregida para tu schema de ID de TEXTO manual)
+    Registra una consulta. (Versión revertida: no devuelve ID)
     """
     try:
-        # 1. Generamos el ID de texto manualmente, como en tu schema original.
+        # Generamos el ID de texto manualmente, como en tu schema original.
         generated_id = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
         
         data = {
@@ -30,29 +29,17 @@ def log_query_event(query_text, mode, rating=None):
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "mode": mode,
             "query": query_text,
-            "rating": rating
+            "rating": None # La columna 'rating' simplemente quedará en NULL
         }
         
-        # 2. Insertamos los datos.
+        # Insertamos los datos (sin .select() y sin return)
         supabase.table("queries").insert(data).execute()
-        
-        # 3. Devolvemos el ID que acabamos de generar.
-        return generated_id 
         
     except Exception as e: 
         print(f"Error log query: {e}")
-    return None # Devuelve None si falla
+    # No devuelve nada
 
-def log_query_feedback(query_id, rating_value):
-    """
-    Actualiza una consulta existente con el feedback (1 para like, 0 para dislike).
-    """
-    try:
-        supabase.table("queries").update({"rating": rating_value}).eq("id", query_id).execute()
-        return True
-    except Exception as e:
-        print(f"Error logging feedback: {e}")
-        return False
+# --- La función log_query_feedback ha sido eliminada ---
 
 def get_monthly_usage(username, action_type):
     try: 
