@@ -17,29 +17,23 @@ def grounded_chat_mode(db, selected_files):
     if "chat_history" not in st.session_state: 
         st.session_state.chat_history = []
     
-    # --- CAMBIO 1: La función de callback AHORA ACEPTA el query_id ---
+    # --- (Función de callback - Ya está correcta) ---
     def chat_feedback_callback(feedback, query_id):
-        # El 'score' es 'thumbs_up' (1) o 'thumbs_down' (0)
         score = 1 if feedback.get('score') == 'thumbs_up' else 0
-        
         log_query_feedback(query_id, score)
         st.toast("¡Gracias por tu feedback!")
         
-    # --- BUCLE DE VISUALIZACIÓN DE CHAT (MODIFICADO) ---
+    # --- (Bucle de visualización - Ya está correcto) ---
     for msg in st.session_state.chat_history:
         if msg['role'] == "Asistente":
             with st.chat_message("Asistente", avatar="✨"):
                 st.markdown(msg['message'])
-                
                 if msg.get('query_id'):
-                    # 2. Usamos el nombre oficial st.feedback
                     st.feedback( 
-                        key=f"feedback_{msg['query_id']}", # Una key única para el estado de Streamlit
+                        key=f"feedback_{msg['query_id']}", 
                         on_submit=chat_feedback_callback,
-                        # 3. Pasamos el query_id como un argumento (args)
                         args=(msg.get('query_id'),) 
                     )
-               
         else:
             with st.chat_message("Usuario", avatar="👤"):
                 st.markdown(msg['message'])
@@ -67,13 +61,20 @@ def grounded_chat_mode(db, selected_files):
             response = call_gemini_api(grounded_prompt)
             
             if response: 
-                message_placeholder.markdown(response)
+                # message_placeholder.markdown(response) # Opcional: lo quitamos para evitar un "doble render"
                 query_id = log_query_event(user_input, mode="Chat de Consulta Directa")
                 st.session_state.chat_history.append({
                     "role": "Asistente", 
                     "message": response,
                     "query_id": query_id 
                 })
+                
+                # --- ¡ARREGLO AQUÍ! ---
+                # Forzamos un rerun para que el bucle de visualización (arriba)
+                # se ejecute y dibuje el nuevo mensaje CON los íconos de feedback.
+                st.rerun()
+                # --- FIN DEL ARREGLO ---
+
             else: 
                 message_placeholder.error("Error al generar respuesta.")
                 
