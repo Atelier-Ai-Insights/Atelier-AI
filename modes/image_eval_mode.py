@@ -7,7 +7,7 @@ from services.supabase_db import log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 from prompts import get_image_eval_prompt_parts
-import constants as c # <--- IMPORTACIÓN AÑADIDA
+import constants as c
 
 # =====================================================
 # MODO: EVALUACIÓN VISUAL (IMAGEN)
@@ -44,21 +44,19 @@ def image_evaluation_mode(db, selected_files):
             prompt_parts = get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context)
             image_data = Image.open(BytesIO(image_bytes))
             
-            try:
-                # Esta es la lógica frágil que mencioné (Punto 1 de mi análisis)
-                # La dejamos por ahora, ya que esta tarea solo cubre el Punto 5.
-                image_label_index = prompt_parts.index("\n\n**Imagen:**")
-                prompt_parts.insert(image_label_index + 1, image_data)
-            except ValueError:
-                st.warning("Advertencia: Etiqueta no encontrada. Añadiendo al final.")
-                prompt_parts.append("\n\n**Imagen:**"); prompt_parts.append(image_data)
+            # --- MODIFICADO ---
+            # Eliminamos la lógica 'try...except' que generaba la advertencia.
+            # Simplemente añadimos la imagen al final de la lista de partes del prompt.
+            prompt_parts.append("\n\n**Imagen para evaluar:**")
+            prompt_parts.append(image_data)
+            # --- FIN DE LA MODIFICACIÓN ---
             
             evaluation_result = call_gemini_api(prompt_parts)
             
             if evaluation_result: 
                 st.session_state.image_evaluation_result = evaluation_result
                 # --- Lógica de guardado REVERTIDA ---
-                log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode=c.MODE_IMAGE_EVAL) # <-- MODIFICADO
+                log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode=c.MODE_IMAGE_EVAL)
                 st.rerun()
             else: 
                 st.error("No se pudo generar evaluación.")

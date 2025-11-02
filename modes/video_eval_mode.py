@@ -6,7 +6,7 @@ from services.supabase_db import log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 from prompts import get_video_eval_prompt_parts
-import constants as c # <--- IMPORTACIÓN AÑADIDA
+import constants as c
 
 # =====================================================
 # MODO: EVALUACIÓN DE VIDEO
@@ -44,21 +44,19 @@ def video_evaluation_mode(db, selected_files):
             video_file_data = {'mime_type': uploaded_file.type, 'data': video_bytes}
             prompt_parts = get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context)
             
-            try:
-                # Esta es la lógica frágil que mencioné (Punto 1 de mi análisis)
-                # La dejamos por ahora, ya que esta tarea solo cubre el Punto 5.
-                video_label_index = prompt_parts.index("\n\n**Video:**")
-                prompt_parts.insert(video_label_index + 1, video_file_data)
-            except ValueError:
-                st.warning("Advertencia: Etiqueta no encontrada. Añadiendo al final.")
-                prompt_parts.append("\n\n**Video:**"); prompt_parts.append(video_file_data)
+            # --- MODIFICADO ---
+            # Eliminamos la lógica 'try...except' que generaba la advertencia.
+            # Simplemente añadimos el video al final de la lista de partes del prompt.
+            prompt_parts.append("\n\n**Video para evaluar:**")
+            prompt_parts.append(video_file_data)
+            # --- FIN DE LA MODIFICACIÓN ---
             
             evaluation_result = call_gemini_api(prompt_parts)
             
             if evaluation_result: 
                 st.session_state.video_evaluation_result = evaluation_result
                 # --- Lógica de guardado REVERTIDA ---
-                log_query_event(f"Evaluación Video: {uploaded_file.name}", mode=c.MODE_VIDEO_EVAL) # <-- MODIFICADO
+                log_query_event(f"Evaluación Video: {uploaded_file.name}", mode=c.MODE_VIDEO_EVAL)
                 st.rerun()
             else: 
                 st.error("No se pudo generar evaluación video.")

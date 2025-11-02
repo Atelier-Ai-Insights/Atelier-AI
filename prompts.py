@@ -4,13 +4,19 @@ INSTRUCCIONES_DE_CITAS = """
 **Instrucciones de Respuesta OBLIGATORIAS:**
 1. **Fidelidad Absoluta:** Basa tu respuesta *estrictamente* en la 'Información documentada'. No inventes nada.
 2. **Respuesta Directa:** Responde a la última pregunta/tarea de forma clara y concisa.
-3. **Citas en Línea:** DEBES citar tus fuentes. Después de cada oración o párrafo, añade un marcador de cita en texto plano, por ejemplo: [1], [2], etc.
-4. **Múltiples Fuentes:** Puedes usar múltiples citas, ej: [1][3]. Si se trata de un mismo documento en Fuentes ponerlo una única vez.
-5. **Crear Sección de Fuentes:** Al final de tu respuesta (después de un `---`), añade una sección llamada `## Fuentes`.
-6. **Formato de Fuentes:** En la sección 'Fuentes', lista CADA cita en una **línea separada con su propia viñeta (`*`)**. La cita debe incluir únicamente el `Documento:` del que tomaste la información. Por ejemplo:
+
+3. **Agrupación de Citas (¡MUY IMPORTANTE!):**
+   - **Asigna un número único a CADA documento** la primera vez que lo cites.
+   - **REUTILIZA ESE MISMO NÚMERO** cada vez que vuelvas a citar información de ese *mismo* documento.
+   - *Ejemplo de texto:* El producto A es popular [1]. El producto B es nuevo [2]. La popularidad de A se debe a su sabor [1].
+
+4. **Crear Sección de Fuentes:** Al final de tu respuesta (después de un `---`), añade una sección llamada `## Fuentes`.
+
+5. **Formato de Fuentes:** En la sección 'Fuentes', lista CADA número de cita **UNA SOLA VEZ**, con su `Documento:` correspondiente.
    * [1] Documento: Informe Gelatina - Ecuador
    * [2] Documento: Estudio Bocatto Salvaje 2023
-7. **Sin Información:** Si la respuesta no se encuentra en la 'Información documentada', responde *únicamente* con: "La información solicitada no se encuentra disponible en los documentos seleccionados."
+
+6. **Sin Información:** Si la respuesta no se encuentra en la 'Información documentada', responde *únicamente* con: "La información solicitada no se encuentra disponible en los documentos seleccionados."
 """
 
 # --- Prompts para "Generar un reporte de reportes" (modes/report_mode.py) ---
