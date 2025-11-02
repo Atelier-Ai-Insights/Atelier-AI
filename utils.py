@@ -48,8 +48,6 @@ def get_relevant_info(db, question, selected_files):
         doc_name = pres.get('nombre_archivo')
         if doc_name and doc_name in selected_files_set:
             try:
-                # --- INICIO DE MODIFICACIÓN (Título y Año) ---
-                
                 # 1. Obtenemos el título, si no existe, usamos el nombre del archivo
                 titulo = pres.get('titulo_estudio', doc_name)
                 
@@ -60,19 +58,25 @@ def get_relevant_info(db, question, selected_files):
                 citation_header = f"{titulo} - {ano}" if ano else titulo
 
                 all_text += f"Documento: {citation_header}\n"
-                # --- FIN DE MODIFICACIÓN (Título y Año) ---
                 
                 for grupo in pres.get("grupos", []):
-                    grupo_index = grupo.get('grupo_index', 'N/A'); contenido = str(grupo.get('contenido_texto', '')); metadatos = json.dumps(grupo.get('metadatos', {}), ensure_ascii=False) if grupo.get('metadatos') else ""; hechos = json.dumps(grupo.get('hechos', []), ensure_ascii=False) if grupo.get('hechos') else ""
+                    # --- INICIO DE MODIFICACIÓN (Eliminar "Grupo X") ---
                     
-                    all_text += f" Grupo {grupo_index}: {contenido}\n";
+                    contenido = str(grupo.get('contenido_texto', ''))
+                    metadatos = json.dumps(grupo.get('metadatos', {}), ensure_ascii=False) if grupo.get('metadatos') else ""
+                    hechos = json.dumps(grupo.get('hechos', []), ensure_ascii=False) if grupo.get('hechos') else ""
                     
-                    # --- INICIO DE MODIFICACIÓN (Metadatos y Hechos) ---
+                    # Ya no añadimos "Grupo X:", solo el contenido como una viñeta
+                    if contenido:
+                        all_text += f"  - {contenido}\n";
+                    
+                    # También simplificamos estas etiquetas
                     if metadatos: 
-                        all_text += f"  (Contexto adicional del grupo: {metadatos})\n"
+                        all_text += f"  (Contexto adicional: {metadatos})\n"
                     if hechos: 
-                        all_text += f"  (Datos clave del grupo: {hechos})\n"
-                    # --- FIN DE MODIFICACIÓN (Metadatos y Hechos) ---
+                        all_text += f"  (Datos clave: {hechos})\n"
+                        
+                    # --- FIN DE MODIFICACIÓN ---
                         
                 all_text += "\n---\n\n"
             except Exception as e: 
