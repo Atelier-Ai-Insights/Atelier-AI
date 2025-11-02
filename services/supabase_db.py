@@ -18,10 +18,15 @@ if "SUPABASE_SERVICE_KEY" in st.secrets:
 def log_query_event(query_text, mode, rating=None):
     """
     Registra una consulta y DEVUELVE el ID de la fila creada.
+    (Versión corregida para tu schema de ID de TEXTO manual)
     """
     try:
+        # --- ¡ARREGLO AQUÍ! ---
+        # 1. Generamos el ID de texto manualmente, como en tu schema original.
+        generated_id = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
+        
         data = {
-            "id": datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f"),
+            "id": generated_id, # Usamos el ID de texto generado
             "user_name": st.session_state.user,
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "mode": mode,
@@ -29,19 +34,17 @@ def log_query_event(query_text, mode, rating=None):
             "rating": rating
         }
         
-        # --- ¡CAMBIO AQUÍ! ---
-        # Usamos .select() para que Supabase nos devuelva los datos insertados
-        response = supabase.table("queries").insert(data).select("id").execute()
+        # 2. Insertamos los datos.
+        supabase.table("queries").insert(data).execute()
         
-        if response.data:
-            return response.data[0]['id'] # Devuelve el ID de la nueva consulta
-        # --- FIN DEL CAMBIO ---
+        # 3. Devolvemos el ID que acabamos de generar.
+        return generated_id 
+        # --- FIN DEL ARREGLO ---
         
     except Exception as e: 
         print(f"Error log query: {e}")
     return None # Devuelve None si falla
 
-# --- ¡NUEVA FUNCIÓN AÑADIDA! ---
 def log_query_feedback(query_id, rating_value):
     """
     Actualiza una consulta existente con el feedback (1 para like, 0 para dislike).
@@ -52,7 +55,6 @@ def log_query_feedback(query_id, rating_value):
     except Exception as e:
         print(f"Error logging feedback: {e}")
         return False
-# --- FIN DE LA NUEVA FUNCIÓN ---
 
 def get_monthly_usage(username, action_type):
     # ... (esta función no cambia)
