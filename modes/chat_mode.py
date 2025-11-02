@@ -17,34 +17,27 @@ def grounded_chat_mode(db, selected_files):
     if "chat_history" not in st.session_state: 
         st.session_state.chat_history = []
     
-    # --- ¡CAMBIO 1: El Callback ahora SOLO acepta 'feedback'! ---
+    # --- Callback de Feedback CORREGIDO ---
     def chat_feedback_callback(feedback):
-        # El 'score' es 'thumbs_up' (1) o 'thumbs_down' (0)
         score = 1 if feedback.get('score') == 'thumbs_up' else 0
-        
-        # Obtenemos el key que pasamos a st.feedback
         key = feedback['key']
-        # El key tiene el formato "feedback_QUERYID". Extraemos el ID.
-        query_id = key.split("feedback_")[-1] # Obtenemos la parte del ID
-        
+        query_id = key.split("feedback_")[-1] 
         log_query_feedback(query_id, score)
         st.toast("¡Gracias por tu feedback!")
-    # --- FIN DEL CAMBIO 1 ---
         
-    # --- Bucle de visualización de chat ---
+    # --- Bucle de visualización ---
     for msg in st.session_state.chat_history:
         if msg['role'] == "Asistente":
             with st.chat_message("Asistente", avatar="✨"):
                 st.markdown(msg['message'])
                 
-                # --- ¡CAMBIO 2: Eliminamos 'args'! ---
+                # --- ¡LLAMADA A FEEDBACK CORREGIDA! ---
                 if msg.get('query_id'):
                     st.feedback( 
                         key=f"feedback_{msg['query_id']}", # La key DEBE contener el ID
                         on_submit=chat_feedback_callback
-                        # Se elimina: args=(msg.get('query_id'),)
+                        # Se elimina 'args'
                     )
-                # --- FIN DEL CAMBIO 2 ---
         else:
             with st.chat_message("Usuario", avatar="👤"):
                 st.markdown(msg['message'])
