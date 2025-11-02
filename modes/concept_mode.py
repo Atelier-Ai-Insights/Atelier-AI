@@ -11,15 +11,11 @@ from prompts import get_concept_gen_prompt
 def concept_generation_mode(db, selected_files):
     st.subheader("Generación de Conceptos")
     st.markdown("Genera concepto de producto/servicio a partir de idea y hallazgos.")
-
-    # --- Lógica de feedback eliminada ---
     
     if "generated_concept" in st.session_state:
         st.markdown("---")
         st.markdown("### Concepto Generado")
         st.markdown(st.session_state.generated_concept)
-
-        # --- Sección de feedback eliminada ---
 
         if st.button("Generar nuevo concepto", use_container_width=True): 
             st.session_state.pop("generated_concept")
@@ -40,6 +36,6 @@ def concept_generation_mode(db, selected_files):
                     st.session_state.generated_concept = response
                     # --- Lógica de guardado REVERTIDA ---
                     log_query_event(product_idea, mode="Generación de conceptos")
-                    st.rerun() # Se mantiene el rerun
+                    st.rerun()
                 else: 
                     st.error("No se pudo generar concepto.")

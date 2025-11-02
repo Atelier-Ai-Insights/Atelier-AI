@@ -21,7 +21,7 @@ def get_report_prompt1(question, relevant_info):
         f"Pregunta del Cliente: ***{question}***\n\n"
         f"Contexto (Información documentada):\n```\n{relevant_info}\n```\n\n"
         "**Tarea:** Extrae los hallazgos más relevantes del contexto para responder la pregunta.\n\n"
-        f"{INSTRUCCIONES_DE_CITAS}\n\n" # <-- Instrucciones estandarizadas
+        f"{INSTRUCCIONES_DE_CITAS}\n\n"
         "**Respuesta (Solo Hallazgos y Fuentes):**\n"
         "## Hallazgos Clave:\n"
         "* [Hallazgo 1... [1]]\n"
@@ -46,7 +46,7 @@ def get_report_prompt2(question, result1, relevant_info):
         f"**Información documentada (Resumen y Contexto):**\n"
         f"Resumen de Hallazgos:\n{result1}\n\n"
         f"Contexto Adicional:\n{relevant_info}\n\n"
-        f"{INSTRUCCIONES_DE_CITAS}\n" # <-- Instrucciones estandarizadas
+        f"{INSTRUCCIONES_DE_CITAS}\n"
         "\n**Redacta el informe completo:**"
     )
 
@@ -61,7 +61,7 @@ def get_grounded_chat_prompt(conversation_history, relevant_info):
         "```\n"
         f"{relevant_info}\n"
         "```\n\n"
-        f"{INSTRUCCIONES_DE_CITAS}\n\n" # <-- Instrucciones estandarizadas
+        f"{INSTRUCCIONES_DE_CITAS}\n\n"
         "**Respuesta:**"
     )
 
@@ -77,7 +77,7 @@ def get_ideation_prompt(conv_history, relevant):
         "1. Rol: Experto creativo.\n"
         "2. Objetivo: Ayudar a explorar soluciones creativas conectando datos.\n"
         "3. Estilo: Claro, sintético, inspirador.\n\n"
-        f"{INSTRUCCIONES_DE_CITAS}\n\n" # <-- Instrucciones estandarizadas
+        f"{INSTRUCCIONES_DE_CITAS}\n\n"
         "**Respuesta creativa:**"
     )
 
@@ -106,7 +106,7 @@ def get_concept_gen_prompt(product_idea, context_info):
         "    * **What:** ...\n"
         "    * **RTB:** ...\n"
         "    * **Claim:** ...\n\n"
-        f"{INSTRUCCIONES_DE_CITAS}\n" # <-- Instrucciones estandarizadas
+        f"{INSTRUCCIONES_DE_CITAS}\n"
     )
 
 # --- Prompt para "Evaluar una idea" (modes/idea_eval_mode.py) ---
@@ -156,7 +156,7 @@ def get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
         "\n\n**Conclusión General:**",
         "* Valoración efectividad, fortalezas, mejoras (conectando con insights si aplica [1]).",
         "\n\n---\n"
-        f"{INSTRUCCIONES_DE_CITAS}\n" # <-- Instrucciones estandarizadas
+        f"{INSTRUCCIONES_DE_CITAS}\n"
     ]
 
 # --- Prompt para "Evaluación de Video" (modes/video_eval_mode.py) ---
@@ -186,7 +186,7 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
         "\n\n**Conclusión General:**",
         "* Valoración efectividad, fortalezas, mejoras (conectando con insights si aplica [1]).",
         "\n\n---\n"
-        f"{INSTRUCCIONES_DE_CITAS}\n" # <-- Instrucciones estandarizadas
+        f"{INSTRUCCIONES_DE_CITAS}\n"
     ]
 
 # --- Prompt para "Análisis de Notas y Transcripciones" (modes/transcript_mode.py) ---

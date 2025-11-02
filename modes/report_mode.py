@@ -10,8 +10,6 @@ from prompts import get_report_prompt1, get_report_prompt2
 # MODO: GENERAR REPORTE DE REPORTES
 # =====================================================
 
-# --- Lógica de feedback eliminada ---
-
 def generate_final_report(question, db, selected_files):
     # (Esta función no cambia)
     relevant_info = get_relevant_info(db, question, selected_files)
@@ -48,12 +46,10 @@ def report_mode(db, selected_files):
             # --- Lógica de guardado REVERTIDA ---
             log_query_event(question, mode="Generar un reporte de reportes")
             
-            # --- st.rerun() RE-AÑADIDO ---
             st.rerun() 
             
     if "report" in st.session_state and st.session_state["report"]:
         
-        # --- Sección de feedback eliminada ---
 
         # (Botones de descarga y nueva consulta)
         pdf_bytes = generate_pdf_html(st.session_state["report"], title="Informe Final", banner_path=banner_file)

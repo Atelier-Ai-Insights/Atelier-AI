@@ -12,10 +12,8 @@ from prompts import get_video_eval_prompt_parts
 # =====================================================
 
 def video_evaluation_mode(db, selected_files):
-    st.subheader("Evaluación de Video (Comerciales/Publicidad)")
+    st.subheader("Evaluación de Video")
     st.markdown("...") # Descripción
-
-    # --- Lógica de feedback eliminada ---
     
     uploaded_file = st.file_uploader("Sube tu video aquí:", type=["mp4", "mov", "avi", "wmv", "mkv"])
     target_audience = st.text_area("Describe el público objetivo (Target) [Video]:", height=100, placeholder="Ej: Adultos jóvenes 18-30...")
@@ -58,7 +56,7 @@ def video_evaluation_mode(db, selected_files):
                 st.session_state.video_evaluation_result = evaluation_result
                 # --- Lógica de guardado REVERTIDA ---
                 log_query_event(f"Evaluación Video: {uploaded_file.name}", mode="Evaluación de Video")
-                st.rerun() # Se mantiene el rerun
+                st.rerun()
             else: 
                 st.error("No se pudo generar evaluación video.")
                 st.session_state.pop("video_evaluation_result", None)
@@ -66,8 +64,6 @@ def video_evaluation_mode(db, selected_files):
     if "video_evaluation_result" in st.session_state:
         st.markdown("---"); st.markdown("### Resultados Evaluación:")
         st.markdown(st.session_state.video_evaluation_result)
-        
-        # --- Sección de feedback eliminada ---
         
         col1, col2 = st.columns(2)
         with col1:

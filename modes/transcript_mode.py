@@ -18,8 +18,6 @@ def transcript_analysis_mode():
         **Tu plan actual te permite cargar un máximo de {file_limit} archivo(s) a la vez.**
     """)
     
-    # --- Lógica de feedback eliminada ---
-    
     # --- Sección de Carga y Procesamiento de Archivos ---
     uploaded_files = st.file_uploader(
         "Sube tus archivos .docx aquí:",
@@ -66,7 +64,6 @@ def transcript_analysis_mode():
     for msg in st.session_state.transcript_chat_history:
         with st.chat_message(msg["role"], avatar="✨" if msg['role'] == "assistant" else "👤"):
             st.markdown(msg["content"])
-            # Se eliminó la llamada a st.feedback()
 
     user_prompt = st.chat_input("Haz una pregunta sobre las transcripciones...")
 
@@ -97,9 +94,8 @@ def transcript_analysis_mode():
                 st.session_state.transcript_chat_history.append({
                     "role": "assistant", 
                     "content": response
-                    # Ya no se guarda el query_id
                 })
-                st.rerun() # Se mantiene el rerun
+                st.rerun()
             else:
                 message_placeholder.error("Error al obtener respuesta."); st.session_state.transcript_chat_history.pop()
 

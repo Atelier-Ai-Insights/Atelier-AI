@@ -11,15 +11,11 @@ from prompts import get_idea_eval_prompt
 def idea_evaluator_mode(db, selected_files):
     st.subheader("Evaluación de Pre-Ideas")
     st.markdown("Evalúa potencial de idea contra hallazgos.")
-
-    # --- Lógica de feedback eliminada ---
     
     if "evaluation_result" in st.session_state:
         st.markdown("---")
         st.markdown("### Evaluación")
         st.markdown(st.session_state.evaluation_result)
-
-        # --- Sección de feedback eliminada ---
 
         if st.button("Evaluar otra idea", use_container_width=True): 
             del st.session_state["evaluation_result"]
@@ -40,6 +36,6 @@ def idea_evaluator_mode(db, selected_files):
                     st.session_state.evaluation_result = response
                     # --- Lógica de guardado REVERTIDA ---
                     log_query_event(idea_input, mode="Evaluación de Idea")
-                    st.rerun() # Se mantiene el rerun
+                    st.rerun()
                 else: 
                     st.error("No se pudo generar evaluación.")

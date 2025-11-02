@@ -13,10 +13,8 @@ from prompts import get_image_eval_prompt_parts
 # =====================================================
 
 def image_evaluation_mode(db, selected_files):
-    st.subheader("Evaluación Visual de Creatividades")
+    st.subheader("Evaluación Visual")
     st.markdown("...") # Descripción
-
-    # --- Lógica de feedback eliminada ---
     
     uploaded_file = st.file_uploader("Sube tu imagen aquí:", type=["jpg", "png", "jpeg"])
     target_audience = st.text_area("Describe el público objetivo (Target):", height=100, placeholder="Ej: Mujeres jóvenes...")
@@ -58,7 +56,7 @@ def image_evaluation_mode(db, selected_files):
                 st.session_state.image_evaluation_result = evaluation_result
                 # --- Lógica de guardado REVERTIDA ---
                 log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode="Evaluación Visual")
-                st.rerun() # Se mantiene el rerun
+                st.rerun()
             else: 
                 st.error("No se pudo generar evaluación.")
                 st.session_state.pop("image_evaluation_result", None)
@@ -66,8 +64,6 @@ def image_evaluation_mode(db, selected_files):
     if "image_evaluation_result" in st.session_state:
         st.markdown("---"); st.markdown("### Resultados Evaluación:")
         st.markdown(st.session_state.image_evaluation_result)
-        
-        # --- Sección de feedback eliminada ---
         
         col1, col2 = st.columns(2)
         with col1:

@@ -17,8 +17,6 @@ def ideacion_mode(db, selected_files):
     if "chat_history" not in st.session_state: 
         st.session_state.chat_history = []
         
-    # --- Lógica de feedback eliminada ---
-        
     # --- Bucle de visualización REVERTIDO ---
     for msg in st.session_state.chat_history:
         with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
@@ -50,9 +48,8 @@ def ideacion_mode(db, selected_files):
                 st.session_state.chat_history.append({
                     "role": "Asistente", 
                     "message": resp
-                    # Ya no se guarda el query_id
                 })
-                st.rerun() # Se mantiene el rerun
+                st.rerun()
             else: 
                 message_placeholder.error("Error generando respuesta.")
                 

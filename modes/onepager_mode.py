@@ -16,8 +16,6 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     st.subheader("Generador de Diapositivas Estratégicas")
     ppt_limit = st.session_state.plan_features.get('ppt_downloads_per_month', 0)
 
-    # --- Lógica de feedback eliminada ---
-
     if ppt_limit == float('inf'):
         limit_text = "**Tu plan actual te permite generar One-Pagers ilimitados.**"
     elif ppt_limit > 0:
@@ -32,8 +30,6 @@ def one_pager_ppt_mode(db_filtered, selected_files):
 
     if "generated_ppt_bytes" in st.session_state:
         st.success(f"¡Tu diapositiva '{st.session_state.get('generated_ppt_template_name', 'Estratégica')}' está lista!")
-        
-        # --- Sección de feedback eliminada ---
         
         st.download_button(
             label=f"Descargar Diapositiva (.pptx)",
@@ -113,7 +109,6 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                 query_text = f"{selected_template_name}: {tema_central}"
                 log_query_event(query_text, mode="Generador de One-Pager PPT")
                 
-                # --- st.rerun() RE-AÑADIDO ---
                 st.rerun()
             else:
                 pass

@@ -16,14 +16,11 @@ def grounded_chat_mode(db, selected_files):
     
     if "chat_history" not in st.session_state: 
         st.session_state.chat_history = []
-    
-    # --- Lógica de feedback eliminada ---
         
     # --- Bucle de visualización REVERTIDO ---
     for msg in st.session_state.chat_history:
         with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
             st.markdown(msg['message'])
-            # Se eliminó la llamada a st.feedback()
             
     user_input = st.chat_input("Escribe tu pregunta...")
     
@@ -54,9 +51,8 @@ def grounded_chat_mode(db, selected_files):
                 st.session_state.chat_history.append({
                     "role": "Asistente", 
                     "message": response
-                    # Ya no se guarda el query_id
                 })
-                st.rerun() # Se mantiene el rerun para actualizar el historial
+                st.rerun()
             else: 
                 message_placeholder.error("Error al generar respuesta.")
                 
