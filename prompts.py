@@ -5,7 +5,7 @@ INSTRUCCIONES_DE_CITAS = """
 1. **Fidelidad Absoluta:** Basa tu respuesta *estrictamente* en la 'Información documentada'. No inventes nada.
 2. **Respuesta Directa:** Responde a la última pregunta/tarea de forma clara y concisa.
 3. **Citas en Línea:** DEBES citar tus fuentes. Después de cada oración o párrafo, añade un marcador de cita en texto plano, por ejemplo: [1], [2], etc.
-4. **Múltiples Fuentes:** Puedes usar múltiples citas, ej: [1][3].
+4. **Múltiples Fuentes:** Puedes usar múltiples citas, ej: [1][3]. Si se trata de un mismo documento en Fuentes ponerlo una única vez.
 5. **Crear Sección de Fuentes:** Al final de tu respuesta (después de un `---`), añade una sección llamada `## Fuentes`.
 6. **Formato de Fuentes:** En la sección 'Fuentes', lista CADA cita en una **línea separada con su propia viñeta (`*`)**. La cita debe incluir únicamente el `Documento:` del que tomaste la información. Por ejemplo:
    * [1] Documento: Informe Gelatina - Ecuador
