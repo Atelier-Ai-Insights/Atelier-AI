@@ -69,11 +69,9 @@ def grounded_chat_mode(db, selected_files):
                     "query_id": query_id 
                 })
                 
-                # --- ¡ARREGLO AQUÍ! ---
                 # Forzamos un rerun para que el bucle de visualización (arriba)
                 # se ejecute y dibuje el nuevo mensaje CON los íconos de feedback.
                 st.rerun()
-                # --- FIN DEL ARREGLO ---
 
             else: 
                 message_placeholder.error("Error al generar respuesta.")
