@@ -10,14 +10,12 @@ from prompts import get_report_prompt1, get_report_prompt2
 # MODO: GENERAR REPORTE DE REPORTES
 # =====================================================
 
-# --- CAMBIO 1: El Callback AHORA ACEPTA el query_id ---
+# --- El Callback (Corregido para pasar query_id) ---
 def report_feedback_callback(feedback, query_id):
     if query_id:
-        # Usar .get() para seguridad y score=0 para 'thumbs_down'
         score = 1 if feedback.get('score') == 'thumbs_up' else 0
         log_query_feedback(query_id, score)
         st.toast("¡Gracias por tu feedback!")
-        # Para ocultar los botones después de votar
         st.session_state.voted_on_last_report = True
     else:
         st.toast("Error: No se encontró el ID de la consulta.")
@@ -59,19 +57,21 @@ def report_mode(db, selected_files):
             st.session_state["last_report_query_id"] = query_id
             st.session_state["voted_on_last_report"] = False
             
-            # --- ¡CAMBIO 2: st.rerun() ELIMINADO! ---
-            # st.rerun() # <-- Esta línea se borra
+            # --- ¡ARREGLO AQUÍ! ---
+            # Volvemos a añadir st.rerun() para que la página se 
+            # recargue y muestre el informe inmediatamente.
+            st.rerun()
+            # --- FIN DEL ARREGLO ---
             
     if "report" in st.session_state and st.session_state["report"]:
         
-        # --- ¡SECCIÓN DE FEEDBACK CORREGIDA! ---
+        # --- SECCIÓN DE FEEDBACK (Corregida) ---
         query_id = st.session_state.get("last_report_query_id")
         if query_id and not st.session_state.get("voted_on_last_report", False):
-            # CAMBIO 3: Usar st.feedback (nombre oficial)
             st.feedback(
-                key=f"feedback_{query_id}", # CAMBIO 4: Key única
+                key=f"feedback_report_{query_id}", # Key única
                 on_submit=report_feedback_callback,
-                args=(query_id,) # CAMBIO 5: Pasar el query_id como argumento
+                args=(query_id,) # Pasar el query_id como argumento
             )
         # --- FIN DE LA SECCIÓN DE FEEDBACK ---
 

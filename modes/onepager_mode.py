@@ -1,14 +1,11 @@
 import streamlit as st
 import json
-# --- ¡IMPORTACIÓN ACTUALIZADA! ---
 from services.supabase_db import get_monthly_usage, log_query_event, log_query_feedback
 import google.generativeai as genai
 from config import safety_settings
 from services.gemini_api import configure_api_dynamically
 from reporting.ppt_generator import crear_ppt_desde_json
 from utils import get_relevant_info, extract_text_from_pdfs
-
-# --- ¡IMPORTACIONES ACTUALIZADAS! ---
 from prompts import PROMPTS_ONEPAGER, get_onepager_final_prompt
 
 # =====================================================
@@ -22,11 +19,9 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     # --- CAMBIO 1: El Callback AHORA ACEPTA el query_id ---
     def onepager_feedback_callback(feedback, query_id):
         if query_id:
-            # Usar .get() para seguridad y score=0 para 'thumbs_down'
             score = 1 if feedback.get('score') == 'thumbs_up' else 0
             log_query_feedback(query_id, score)
             st.toast("¡Gracias por tu feedback!")
-            # Oculta los botones después de votar
             st.session_state.voted_on_last_onepager = True
         else:
             st.toast("Error: No se encontró el ID de la consulta.")
@@ -50,11 +45,10 @@ def one_pager_ppt_mode(db_filtered, selected_files):
         # --- ¡SECCIÓN DE FEEDBACK CORREGIDA! ---
         query_id = st.session_state.get("last_onepager_query_id")
         if query_id and not st.session_state.get("voted_on_last_onepager", False):
-            # CAMBIO 2: Usar st.feedback (nombre oficial)
             st.feedback(
-                key=f"feedback_{query_id}", # CAMBIO 3: Key única
+                key=f"feedback_{query_id}", # Key única
                 on_submit=onepager_feedback_callback,
-                args=(query_id,) # CAMBIO 4: Pasar el query_id como argumento
+                args=(query_id,) # Pasar el query_id como argumento
             )
         # --- FIN DE LA SECCIÓN DE FEEDBACK ---
         
@@ -68,7 +62,6 @@ def one_pager_ppt_mode(db_filtered, selected_files):
         if st.button("Generar nueva Diapositiva", use_container_width=True, type="secondary"):
             del st.session_state.generated_ppt_bytes
             st.session_state.pop('generated_ppt_template_name', None)
-            # Limpiamos las variables de feedback
             st.session_state.pop("last_onepager_query_id", None)
             st.session_state.pop("voted_on_last_onepager", None)
             st.rerun()
@@ -142,7 +135,5 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                 
                 # --- ¡CAMBIO AQUÍ! ---
                 # st.rerun() # <-- LÍNEA ELIMINADA
-                # Al eliminar el rerun, la página se recarga sola y 
-                # las variables de session_state persisten, permitiendo que el widget de feedback aparezca.
             else:
                 pass
