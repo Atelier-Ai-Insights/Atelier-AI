@@ -18,10 +18,11 @@ def ideacion_mode(db, selected_files):
     if "chat_history" not in st.session_state: 
         st.session_state.chat_history = []
         
-    # --- FUNCIÓN DE CALLBACK PARA EL FEEDBACK ---
-    def ideation_feedback_callback(feedback):
-        query_id = feedback['key']
-        score = 1 if feedback['score'] == 'thumbs_up' else 0
+    # --- CAMBIO 1: El Callback AHORA ACEPTA el query_id ---
+    def ideation_feedback_callback(feedback, query_id):
+        # Usar .get() para seguridad y score=0 para 'thumbs_down'
+        score = 1 if feedback.get('score') == 'thumbs_up' else 0
+        
         log_query_feedback(query_id, score)
         st.toast("¡Gracias por tu feedback!")
         
@@ -30,11 +31,16 @@ def ideacion_mode(db, selected_files):
         if msg['role'] == "Asistente":
             with st.chat_message("Asistente", avatar="✨"):
                 st.markdown(msg['message'])
+                
+                # --- ¡CAMBIOS 2 y 3! ---
                 if msg.get('query_id'):
-                    st.experimental_user_feedback(
-                        key=msg['query_id'], 
-                        on_submit=ideation_feedback_callback
+                    # 2. Usamos el nombre oficial st.feedback
+                    st.feedback( 
+                        key=f"feedback_{msg['query_id']}", # 3. Key única
+                        on_submit=ideation_feedback_callback,
+                        args=(msg.get('query_id'),) # 4. Pasar el query_id como argumento
                     )
+                # --- FIN DE LOS CAMBIOS ---
         else: # Mensajes del usuario
             with st.chat_message("Usuario", avatar="👤"):
                 st.markdown(msg['message'])
@@ -60,7 +66,7 @@ def ideacion_mode(db, selected_files):
             if resp: 
                 message_placeholder.markdown(resp)
                 
-                # --- ¡CAMBIO AQUÍ! ---
+                # (Esta parte ya estaba correcta)
                 # 1. Logueamos la consulta y obtenemos el ID
                 query_id = log_query_event(user_input, mode="Conversaciones creativas")
                 
@@ -70,7 +76,6 @@ def ideacion_mode(db, selected_files):
                     "message": resp,
                     "query_id": query_id # El ID se usa como 'key' para el feedback
                 })
-                # --- FIN DEL CAMBIO ---
                 
             else: 
                 message_placeholder.error("Error generando respuesta.")

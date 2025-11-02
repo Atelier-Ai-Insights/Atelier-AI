@@ -17,12 +17,10 @@ def grounded_chat_mode(db, selected_files):
     if "chat_history" not in st.session_state: 
         st.session_state.chat_history = []
     
-    # --- FUNCIÓN DE CALLBACK PARA EL FEEDBACK ---
-    def chat_feedback_callback(feedback):
-        # El 'key' del feedback es el query_id
-        query_id = feedback['key']
+    # --- CAMBIO 1: La función de callback AHORA ACEPTA el query_id ---
+    def chat_feedback_callback(feedback, query_id):
         # El 'score' es 'thumbs_up' (1) o 'thumbs_down' (0)
-        score = 1 if feedback['score'] == 'thumbs_up' else 0
+        score = 1 if feedback.get('score') == 'thumbs_up' else 0
         
         log_query_feedback(query_id, score)
         st.toast("¡Gracias por tu feedback!")
@@ -30,22 +28,28 @@ def grounded_chat_mode(db, selected_files):
     # --- BUCLE DE VISUALIZACIÓN DE CHAT (MODIFICADO) ---
     for msg in st.session_state.chat_history:
         if msg['role'] == "Asistente":
-            with st.chat_message("Asistente"):
+            with st.chat_message("Asistente", avatar="✨"):
                 st.markdown(msg['message'])
+                
+                # --- ¡CAMBIO 2 Y 3! ---
                 if msg.get('query_id'):
-                    st.experimental_user_feedback(
-                        key=msg['query_id'], 
-                        on_submit=chat_feedback_callback
+                    # 2. Usamos el nombre oficial st.feedback
+                    st.feedback( 
+                        key=f"feedback_{msg['query_id']}", # Una key única para el estado de Streamlit
+                        on_submit=chat_feedback_callback,
+                        # 3. Pasamos el query_id como un argumento (args)
+                        args=(msg.get('query_id'),) 
                     )
+                # --- FIN DE LOS CAMBIOS ---
         else:
-            with st.chat_message("Usuario"):
+            with st.chat_message("Usuario", avatar="👤"):
                 st.markdown(msg['message'])
             
     user_input = st.chat_input("Escribe tu pregunta...")
     
     if user_input:
         st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
-        with st.chat_message("Usuario"): 
+        with st.chat_message("Usuario", avatar="👤"): 
             st.markdown(user_input)
             
         query_limit = st.session_state.plan_features.get('chat_queries_per_day', 0)
@@ -54,7 +58,7 @@ def grounded_chat_mode(db, selected_files):
         if current_queries >= query_limit and query_limit != float('inf'): 
             st.error(f"Límite de {int(query_limit)} consultas diarias alcanzado."); return
             
-        with st.chat_message("Asistente"):
+        with st.chat_message("Asistente", avatar="✨"):
             message_placeholder = st.empty()
             message_placeholder.markdown("Pensando...")
             
@@ -65,12 +69,11 @@ def grounded_chat_mode(db, selected_files):
             
             if response: 
                 message_placeholder.markdown(response)
-                # Logueamos la consulta y obtenemos el ID
                 query_id = log_query_event(user_input, mode="Chat de Consulta Directa")
                 st.session_state.chat_history.append({
                     "role": "Asistente", 
                     "message": response,
-                    "query_id": query_id # Guardamos el ID con el mensaje
+                    "query_id": query_id 
                 })
             else: 
                 message_placeholder.error("Error al generar respuesta.")

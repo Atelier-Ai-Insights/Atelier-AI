@@ -10,11 +10,11 @@ from prompts import get_report_prompt1, get_report_prompt2
 # MODO: GENERAR REPORTE DE REPORTES
 # =====================================================
 
-# --- FUNCIÓN DE CALLBACK PARA EL FEEDBACK ---
-def report_feedback_callback(feedback):
-    query_id = st.session_state.get("last_report_query_id")
+# --- CAMBIO 1: El Callback AHORA ACEPTA el query_id ---
+def report_feedback_callback(feedback, query_id):
     if query_id:
-        score = 1 if feedback['score'] == 'thumbs_up' else 0
+        # Usar .get() para seguridad y score=0 para 'thumbs_down'
+        score = 1 if feedback.get('score') == 'thumbs_up' else 0
         log_query_feedback(query_id, score)
         st.toast("¡Gracias por tu feedback!")
         # Para ocultar los botones después de votar
@@ -23,7 +23,7 @@ def report_feedback_callback(feedback):
         st.toast("Error: No se encontró el ID de la consulta.")
 
 def generate_final_report(question, db, selected_files):
-    # ... (Esta función no cambia) ...
+    # (Esta función no cambia)
     relevant_info = get_relevant_info(db, question, selected_files)
     prompt1 = get_report_prompt1(question, relevant_info)
     result1 = call_gemini_api(prompt1)
@@ -55,20 +55,23 @@ def report_mode(db, selected_files):
             st.error("No se pudo generar."); st.session_state.pop("report", None)
         else: 
             st.session_state["report"] = report
-            # Logueamos la consulta y guardamos el ID
             query_id = log_query_event(question, mode="Generar un reporte de reportes")
             st.session_state["last_report_query_id"] = query_id
-            st.session_state["voted_on_last_report"] = False # Reseteamos el estado de voto
-            st.rerun()
+            st.session_state["voted_on_last_report"] = False
+            
+            # --- ¡CAMBIO 2: st.rerun() ELIMINADO! ---
+            # st.rerun() # <-- Esta línea se borra
             
     if "report" in st.session_state and st.session_state["report"]:
         
-        # --- ¡NUEVA SECCIÓN DE FEEDBACK! ---
+        # --- ¡SECCIÓN DE FEEDBACK CORREGIDA! ---
         query_id = st.session_state.get("last_report_query_id")
         if query_id and not st.session_state.get("voted_on_last_report", False):
-            st.experimental_user_feedback(
-                key=query_id, 
-                on_submit=report_feedback_callback
+            # CAMBIO 3: Usar st.feedback (nombre oficial)
+            st.feedback(
+                key=f"feedback_{query_id}", # CAMBIO 4: Key única
+                on_submit=report_feedback_callback,
+                args=(query_id,) # CAMBIO 5: Pasar el query_id como argumento
             )
         # --- FIN DE LA SECCIÓN DE FEEDBACK ---
 

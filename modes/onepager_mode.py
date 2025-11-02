@@ -19,11 +19,11 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     st.subheader("Generador de Diapositivas Estratégicas")
     ppt_limit = st.session_state.plan_features.get('ppt_downloads_per_month', 0)
 
-    # --- FUNCIÓN DE CALLBACK PARA EL FEEDBACK ---
-    def onepager_feedback_callback(feedback):
-        query_id = st.session_state.get("last_onepager_query_id")
+    # --- CAMBIO 1: El Callback AHORA ACEPTA el query_id ---
+    def onepager_feedback_callback(feedback, query_id):
         if query_id:
-            score = 1 if feedback['score'] == 'thumbs_up' else 0
+            # Usar .get() para seguridad y score=0 para 'thumbs_down'
+            score = 1 if feedback.get('score') == 'thumbs_up' else 0
             log_query_feedback(query_id, score)
             st.toast("¡Gracias por tu feedback!")
             # Oculta los botones después de votar
@@ -47,12 +47,14 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     if "generated_ppt_bytes" in st.session_state:
         st.success(f"¡Tu diapositiva '{st.session_state.get('generated_ppt_template_name', 'Estratégica')}' está lista!")
         
-        # --- ¡NUEVA SECCIÓN DE FEEDBACK! ---
+        # --- ¡SECCIÓN DE FEEDBACK CORREGIDA! ---
         query_id = st.session_state.get("last_onepager_query_id")
         if query_id and not st.session_state.get("voted_on_last_onepager", False):
-            st.experimental_user_feedback(
-                key=query_id, 
-                on_submit=onepager_feedback_callback
+            # CAMBIO 2: Usar st.feedback (nombre oficial)
+            st.feedback(
+                key=f"feedback_{query_id}", # CAMBIO 3: Key única
+                on_submit=onepager_feedback_callback,
+                args=(query_id,) # CAMBIO 4: Pasar el query_id como argumento
             )
         # --- FIN DE LA SECCIÓN DE FEEDBACK ---
         
@@ -133,15 +135,14 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                 st.session_state.generated_ppt_bytes = ppt_bytes
                 st.session_state.generated_ppt_template_name = selected_template_name
                 
-                # --- ¡CAMBIO AQUÍ! ---
-                # 1. Loguear la consulta y obtener el ID
                 query_text = f"{selected_template_name}: {tema_central}"
                 query_id = log_query_event(query_text, mode="Generador de One-Pager PPT")
-                # 2. Guardar el ID y el estado del voto
                 st.session_state["last_onepager_query_id"] = query_id
-                st.session_state["voted_on_last_onepager"] = False # Resetear el estado de voto
-                # --- FIN DEL CAMBIO ---
+                st.session_state["voted_on_last_onepager"] = False 
                 
-                st.rerun()
+                # --- ¡CAMBIO AQUÍ! ---
+                # st.rerun() # <-- LÍNEA ELIMINADA
+                # Al eliminar el rerun, la página se recarga sola y 
+                # las variables de session_state persisten, permitiendo que el widget de feedback aparezca.
             else:
                 pass

@@ -21,11 +21,11 @@ def image_evaluation_mode(db, selected_files):
     hallazgos de los estudios seleccionados como contexto.
     """)
 
-    # --- FUNCIÓN DE CALLBACK PARA EL FEEDBACK ---
-    def image_feedback_callback(feedback):
-        query_id = st.session_state.get("last_image_query_id")
+    # --- CAMBIO 1: El Callback AHORA ACEPTA el query_id ---
+    def image_feedback_callback(feedback, query_id):
         if query_id:
-            score = 1 if feedback['score'] == 'thumbs_up' else 0
+            # Usar .get() para seguridad y score=0 para 'thumbs_down'
+            score = 1 if feedback.get('score') == 'thumbs_up' else 0
             log_query_feedback(query_id, score)
             st.toast("¡Gracias por tu feedback!")
             # Oculta los botones después de votar
@@ -85,13 +85,11 @@ def image_evaluation_mode(db, selected_files):
             if evaluation_result: 
                 st.session_state.image_evaluation_result = evaluation_result
                 
-                # --- ¡CAMBIO AQUÍ! ---
-                # 1. Loguear la consulta y obtener el ID
                 query_id = log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode="Evaluación Visual")
-                # 2. Guardar el ID y el estado del voto
                 st.session_state["last_image_query_id"] = query_id
-                st.session_state["voted_on_last_image"] = False # Resetear el estado de voto
-                # --- FIN DEL CAMBIO ---
+                st.session_state["voted_on_last_image"] = False
+                
+                # No necesitamos st.rerun() aquí
                 
             else: 
                 st.error("No se pudo generar evaluación.")
@@ -102,12 +100,14 @@ def image_evaluation_mode(db, selected_files):
         st.markdown("### Resultados Evaluación:")
         st.markdown(st.session_state.image_evaluation_result)
         
-        # --- ¡NUEVA SECCIÓN DE FEEDBACK! ---
+        # --- ¡SECCIÓN DE FEEDBACK CORREGIDA! ---
         query_id = st.session_state.get("last_image_query_id")
         if query_id and not st.session_state.get("voted_on_last_image", False):
-            st.experimental_user_feedback(
-                key=query_id, 
-                on_submit=image_feedback_callback
+            # CAMBIO 2: Usar st.feedback (nombre oficial)
+            st.feedback(
+                key=f"feedback_{query_id}", # CAMBIO 3: Key única
+                on_submit=image_feedback_callback,
+                args=(query_id,) # CAMBIO 4: Pasar el query_id como argumento
             )
         # --- FIN DE LA SECCIÓN DE FEEDBACK ---
         
