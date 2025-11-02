@@ -18,13 +18,21 @@ def ideacion_mode(db, selected_files):
     if "chat_history" not in st.session_state: 
         st.session_state.chat_history = []
         
-    # --- CAMBIO 1: El Callback AHORA ACEPTA el query_id ---
-    def ideation_feedback_callback(feedback, query_id):
-        # Usar .get() para seguridad y score=0 para 'thumbs_down'
-        score = 1 if feedback.get('score') == 'thumbs_up' else 0
-        
-        log_query_feedback(query_id, score)
-        st.toast("¡Gracias por tu feedback!")
+    # --- ¡CAMBIO 1: El Callback ahora SOLO acepta 'feedback'! ---
+    def ideation_feedback_callback(feedback):
+        # Obtenemos el key que pasamos a st.feedback
+        key = feedback['key']
+        # El key tiene el formato "feedback_QUERYID". Extraemos el ID.
+        query_id = key.split("feedback_")[-1] # Obtenemos la parte del ID
+
+        if query_id:
+            # Usar .get() para seguridad y score=0 para 'thumbs_down'
+            score = 1 if feedback.get('score') == 'thumbs_up' else 0
+            log_query_feedback(query_id, score)
+            st.toast("¡Gracias por tu feedback!")
+        else:
+            st.toast("Error: No se encontró el ID de la consulta.")
+    # --- FIN DEL CAMBIO 1 ---
         
     # --- BUCLE DE VISUALIZACIÓN DE CHAT (MODIFICADO) ---
     for msg in st.session_state.chat_history:
@@ -37,8 +45,8 @@ def ideacion_mode(db, selected_files):
                     # 2. Usamos el nombre oficial st.feedback
                     st.feedback( 
                         key=f"feedback_{msg['query_id']}", # 3. Key única
-                        on_submit=ideation_feedback_callback,
-                        args=(msg.get('query_id'),) # 4. Pasar el query_id como argumento
+                        on_submit=ideation_feedback_callback
+                        # Se elimina: args=(msg.get('query_id'),)
                     )
                 # --- FIN DE LOS CAMBIOS ---
         else: # Mensajes del usuario
@@ -64,18 +72,19 @@ def ideacion_mode(db, selected_files):
             resp = call_gemini_api(conv_prompt)
             
             if resp: 
-                message_placeholder.markdown(resp)
-                
                 # (Esta parte ya estaba correcta)
-                # 1. Logueamos la consulta y obtenemos el ID
                 query_id = log_query_event(user_input, mode="Conversaciones creativas")
-                
-                # 2. Guardamos el ID junto con el mensaje del asistente
                 st.session_state.chat_history.append({
                     "role": "Asistente", 
                     "message": resp,
                     "query_id": query_id # El ID se usa como 'key' para el feedback
                 })
+                
+                # --- ¡CAMBIO 4: st.rerun() AÑADIDO! ---
+                # Forzamos un rerun para que el bucle de visualización (arriba)
+                # se ejecute y dibuje el nuevo mensaje CON los íconos de feedback.
+                st.rerun()
+                # --- FIN DEL CAMBIO 4 ---
                 
             else: 
                 message_placeholder.error("Error generando respuesta.")

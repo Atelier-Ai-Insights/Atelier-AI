@@ -1,11 +1,14 @@
 import streamlit as st
 import json
+# --- ¡IMPORTACIÓN ACTUALIZADA! ---
 from services.supabase_db import get_monthly_usage, log_query_event, log_query_feedback
 import google.generativeai as genai
 from config import safety_settings
 from services.gemini_api import configure_api_dynamically
 from reporting.ppt_generator import crear_ppt_desde_json
 from utils import get_relevant_info, extract_text_from_pdfs
+
+# --- ¡IMPORTACIONES ACTUALIZADAS! ---
 from prompts import PROMPTS_ONEPAGER, get_onepager_final_prompt
 
 # =====================================================
@@ -16,12 +19,19 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     st.subheader("Generador de Diapositivas Estratégicas")
     ppt_limit = st.session_state.plan_features.get('ppt_downloads_per_month', 0)
 
-    # --- (Callback de Feedback - Corregido) ---
-    def onepager_feedback_callback(feedback, query_id):
+    # --- ¡CALLBACK CORREGIDO! ---
+    def onepager_feedback_callback(feedback):
+        # Obtenemos el key que pasamos a st.feedback
+        key = feedback['key']
+        # El key tiene el formato "feedback_QUERYID". Extraemos el ID.
+        query_id = key.split("feedback_")[-1] # Obtenemos la parte del ID
+
         if query_id:
+            # Usar .get() para seguridad y score=0 para 'thumbs_down'
             score = 1 if feedback.get('score') == 'thumbs_up' else 0
             log_query_feedback(query_id, score)
             st.toast("¡Gracias por tu feedback!")
+            # Oculta los botones después de votar
             st.session_state.voted_on_last_onepager = True
         else:
             st.toast("Error: No se encontró el ID de la consulta.")
@@ -42,14 +52,15 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     if "generated_ppt_bytes" in st.session_state:
         st.success(f"¡Tu diapositiva '{st.session_state.get('generated_ppt_template_name', 'Estratégica')}' está lista!")
         
-        # --- (Sección de Feedback - Corregida) ---
+        # --- ¡SECCIÓN DE FEEDBACK CORREGIDA! ---
         query_id = st.session_state.get("last_onepager_query_id")
         if query_id and not st.session_state.get("voted_on_last_onepager", False):
             st.feedback(
-                key=f"feedback_{query_id}", 
-                on_submit=onepager_feedback_callback,
-                args=(query_id,) 
+                key=f"feedback_{query_id}", # Key única
+                on_submit=onepager_feedback_callback
+                # Se elimina 'args'
             )
+        # --- FIN DE LA SECCIÓN DE FEEDBACK ---
         
         st.download_button(
             label=f"Descargar Diapositiva (.pptx)",
@@ -61,6 +72,7 @@ def one_pager_ppt_mode(db_filtered, selected_files):
         if st.button("Generar nueva Diapositiva", use_container_width=True, type="secondary"):
             del st.session_state.generated_ppt_bytes
             st.session_state.pop('generated_ppt_template_name', None)
+            # Limpiamos las variables de feedback
             st.session_state.pop("last_onepager_query_id", None)
             st.session_state.pop("voted_on_last_onepager", None)
             st.rerun()
@@ -86,14 +98,12 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     st.divider()
 
     if st.button(f"Generar Diapositiva '{selected_template_name}'", use_container_width=True, type="primary"):
-        # ... (Verificaciones de límite, etc.) ...
         current_ppt_usage = get_monthly_usage(st.session_state.user, "Generador de One-Pager PPT")
         if current_ppt_usage >= ppt_limit and ppt_limit != float('inf'): st.error(f"¡Límite alcanzado!"); return
         if not tema_central.strip(): st.warning("Por favor, describe el tema central."); return
         if not use_repo and not use_uploads: st.error("Debes seleccionar al menos una fuente de datos."); return
         if use_uploads and not uploaded_files: st.error("Seleccionaste 'Usar Archivos Cargados', pero no has subido PDFs."); return
 
-        # ... (Lógica de `relevant_info` sin cambios) ...
         relevant_info = ""
         with st.spinner("Procesando fuentes de datos..."):
             if use_repo:

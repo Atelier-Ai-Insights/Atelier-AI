@@ -21,8 +21,13 @@ def transcript_analysis_mode():
         **Tu plan actual te permite cargar un máximo de {file_limit} archivo(s) a la vez.**
     """)
     
-    # --- FUNCIÓN DE CALLBACK PARA EL FEEDBACK ---
-    def transcript_feedback_callback(feedback, query_id):
+    # --- ¡CAMBIO 1: El Callback ahora SOLO acepta 'feedback'! ---
+    def transcript_feedback_callback(feedback):
+        # Obtenemos el key que pasamos a st.feedback
+        key = feedback['key']
+        # El key tiene el formato "feedback_transcript_QUERYID". Extraemos el ID.
+        query_id = key.split("feedback_transcript_")[-1] # Obtenemos la parte del ID
+
         if query_id:
             # Usar .get() para seguridad y score=0 para 'thumbs_down'
             score = 1 if feedback.get('score') == 'thumbs_up' else 0
@@ -83,16 +88,18 @@ def transcript_analysis_mode():
 
     # --- BUCLE DE VISUALIZACIÓN DE CHAT (MODIFICADO) ---
     for msg in st.session_state.transcript_chat_history:
-        if msg['role'] == "assistant":
+        if msg["role"] == "assistant":
             with st.chat_message("assistant", avatar="✨"):
                 st.markdown(msg["content"])
-                # Añadir widget de feedback
+                
+                # --- ¡CAMBIO 2: Eliminamos 'args'! ---
                 if msg.get('query_id'):
                     st.feedback(
                         key=f"feedback_transcript_{msg['query_id']}", # Key única
-                        on_submit=transcript_feedback_callback,
-                        args=(msg.get('query_id'),) # Pasar el query_id
+                        on_submit=transcript_feedback_callback
+                        # Se elimina: args=(msg.get('query_id'),)
                     )
+                # --- FIN DEL CAMBIO 2 ---
         else: # role == "user"
             with st.chat_message("user", avatar="👤"):
                 st.markdown(msg["content"])
@@ -130,16 +137,19 @@ def transcript_analysis_mode():
 
             if response:
                 message_placeholder.markdown(response)
-                # --- ¡CAMBIO AQUÍ! ---
-                # 1. Loguear la consulta y obtener el ID
+                
                 query_id = log_query_event(user_prompt, mode="Análisis de Transcripciones")
-                # 2. Guardar el ID con el mensaje
                 st.session_state.transcript_chat_history.append({
                     "role": "assistant", 
                     "content": response,
                     "query_id": query_id
                 })
-                # --- FIN DEL CAMBIO ---
+                
+                # --- ¡CAMBIO 3: st.rerun() AÑADIDO! ---
+                # Forzamos un rerun para que el bucle de visualización (arriba)
+                # se ejecute y dibuje el nuevo mensaje CON los íconos de feedback.
+                st.rerun()
+                # --- FIN DEL CAMBIO 3 ---
             else:
                 message_placeholder.error("Error al obtener respuesta del análisis.")
                 st.session_state.transcript_chat_history.pop()

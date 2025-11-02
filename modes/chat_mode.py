@@ -17,7 +17,7 @@ def grounded_chat_mode(db, selected_files):
     if "chat_history" not in st.session_state: 
         st.session_state.chat_history = []
     
-    # --- Callback de Feedback CORREGIDO ---
+    # --- ¡CALLBACK CORREGIDO! ---
     def chat_feedback_callback(feedback):
         score = 1 if feedback.get('score') == 'thumbs_up' else 0
         key = feedback['key']

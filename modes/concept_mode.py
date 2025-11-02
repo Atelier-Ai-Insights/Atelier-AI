@@ -13,8 +13,13 @@ def concept_generation_mode(db, selected_files):
     st.subheader("Generación de Conceptos")
     st.markdown("Genera concepto de producto/servicio a partir de idea y hallazgos.")
 
-    # --- CAMBIO 1: El Callback AHORA ACEPTA el query_id ---
-    def concept_feedback_callback(feedback, query_id):
+    # --- ¡CAMBIO 1: El Callback ahora SOLO acepta 'feedback'! ---
+    def concept_feedback_callback(feedback):
+        # Obtenemos el key que pasamos a st.feedback
+        key = feedback['key']
+        # El key tiene el formato "feedback_QUERYID". Extraemos el ID.
+        query_id = key.split("feedback_")[-1] # Obtenemos la parte del ID
+
         if query_id:
             # Usar .get() para seguridad y score=0 para 'thumbs_down'
             score = 1 if feedback.get('score') == 'thumbs_up' else 0
@@ -36,9 +41,9 @@ def concept_generation_mode(db, selected_files):
         if query_id and not st.session_state.get("voted_on_last_concept", False):
             # CAMBIO 2: Usar st.feedback (nombre oficial)
             st.feedback(
-                key=f"feedback_{query_id}", # CAMBIO 3: Key única
-                on_submit=concept_feedback_callback,
-                args=(query_id,) # CAMBIO 4: Pasar el query_id como argumento
+                key=f"feedback_{query_id}", # CAMBIO 3: La key DEBE contener el ID
+                on_submit=concept_feedback_callback
+                # Se elimina: args=(query_id,)
             )
         # --- FIN DE LA SECCIÓN DE FEEDBACK ---
 

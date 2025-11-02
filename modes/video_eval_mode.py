@@ -20,8 +20,13 @@ def video_evaluation_mode(db, selected_files):
     utilizará los hallazgos de los estudios seleccionados como contexto.
     """)
 
-    # --- CAMBIO 1: El Callback AHORA ACEPTA el query_id ---
-    def video_feedback_callback(feedback, query_id):
+    # --- ¡CAMBIO 1: El Callback ahora SOLO acepta 'feedback'! ---
+    def video_feedback_callback(feedback):
+        # Obtenemos el key que pasamos a st.feedback
+        key = feedback['key']
+        # El key tiene el formato "feedback_QUERYID". Extraemos el ID.
+        query_id = key.split("feedback_")[-1] # Obtenemos la parte del ID
+
         if query_id:
             # Usar .get() para seguridad y score=0 para 'thumbs_down'
             score = 1 if feedback.get('score') == 'thumbs_up' else 0
@@ -87,6 +92,8 @@ def video_evaluation_mode(db, selected_files):
                 st.session_state["last_video_query_id"] = query_id
                 st.session_state["voted_on_last_video"] = False 
                 
+                st.rerun() # <-- ¡st.rerun() AÑADIDO!
+                
             else: 
                 st.error("No se pudo generar evaluación video.")
                 st.session_state.pop("video_evaluation_result", None)
@@ -101,9 +108,9 @@ def video_evaluation_mode(db, selected_files):
         if query_id and not st.session_state.get("voted_on_last_video", False):
             # CAMBIO 2: Usar st.feedback (nombre oficial)
             st.feedback(
-                key=f"feedback_{query_id}", # CAMBIO 3: Key única
-                on_submit=video_feedback_callback,
-                args=(query_id,) # CAMBIO 4: Pasar el query_id como argumento
+                key=f"feedback_{query_id}", # CAMBIO 3: La key DEBE contener el ID
+                on_submit=video_feedback_callback
+                # Se elimina: args=(query_id,)
             )
         # --- FIN DE LA SECCIÓN DE FEEDBACK ---
         
