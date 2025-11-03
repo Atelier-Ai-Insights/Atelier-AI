@@ -39,7 +39,7 @@ def get_stopwords():
         spanish_stopwords = ['de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'las', 'un', 'para', 'con', 'no', 'una', 'su', 'que', 'se', 'por', 'es', 'más', 'lo', 'pero', 'me', 'mi', 'al', 'le', 'si', 'este', 'esta']
     
     # Añade palabras comunes de encuestas que no aportan valor
-    custom_list = ['...', 'p', 'r', 'rta', 'respuesta', 'si', 'no', 'na', 'ninguno', 'ninguna']
+    custom_list = ['...', 'p', 'r', 'rta', 'respuesta', 'si', 'no', 'na', 'ninguno', 'ninguna', 'nan']
     spanish_stopwords.extend(custom_list)
     return set(spanish_stopwords)
 
@@ -79,7 +79,6 @@ def data_analysis_mode(db, selected_files):
         
         st.markdown(f"### Analizando: **{st.session_state.data_analysis_file_name}**")
         
-        # --- MODIFICADO: Añadida "Nube de Palabras" ---
         tab1, tab2, tab_cloud, tab_chat = st.tabs([
             "Análisis Rápido", 
             "Tabla Dinámica", 
@@ -211,12 +210,11 @@ def data_analysis_mode(db, selected_files):
                 except Exception as e:
                     st.error(f"Error al crear la tabla: {e}")
 
-        # --- PESTAÑA 3: NUBE DE PALABRAS (NUEVA) ---
+        # --- PESTAÑA 3: NUBE DE PALABRAS (MODIFICADA) ---
         with tab_cloud:
             st.header("Nube de Palabras (Preguntas Abiertas)")
             st.markdown("Genera una nube de palabras a partir de una columna de texto.")
             
-            # Reutilizamos la lista de columnas categóricas/texto
             text_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
             
             if not text_cols:
@@ -225,35 +223,70 @@ def data_analysis_mode(db, selected_files):
                 col_to_cloud = st.selectbox("Selecciona una columna de texto:", text_cols, key="cloud_select")
                 
                 if col_to_cloud:
-                    with st.spinner("Generando nube de palabras..."):
+                    with st.spinner("Generando nube de palabras y tabla..."):
                         try:
                             # 1. Obtener stopwords
                             stopwords = get_stopwords()
                         
-                            # 2. Combinar todo el texto, quitar NAs y convertir a string
+                            # 2. Combinar todo el texto
                             text = " ".join(str(review) for review in df[col_to_cloud].dropna())
                             
                             if not text.strip():
                                 st.warning("La columna seleccionada está vacía o no contiene texto.")
                             else:
-                                # 3. Crear la nube
-                                wordcloud = WordCloud(
+                                # 3. Crear el objeto WordCloud
+                                wc = WordCloud(
                                     width=800, 
                                     height=400, 
                                     background_color='white',
                                     stopwords=stopwords,
                                     min_font_size=10,
                                     collocations=False # Evita que se repitan pares de palabras
-                                ).generate(text)
+                                )
                                 
-                                # 4. Mostrar la nube con Matplotlib
-                                fig, ax = plt.subplots(figsize=(10, 5))
-                                ax.imshow(wordcloud, interpolation='bilinear')
-                                ax.axis('off')
-                                st.pyplot(fig)
+                                # 4. Procesar el texto para obtener las frecuencias (conteos)
+                                # Esto devuelve un diccionario: {'palabra': 5, 'otra': 3}
+                                frequencies = wc.process_text(text)
                                 
-                                # 5. (Opcional) Añadir al contexto del chat
-                                st.session_state.data_analysis_stats_context += f"\nPalabras clave de '{col_to_cloud}': {', '.join(wordcloud.words_.keys())[:150]}...\n\n"
+                                if not frequencies:
+                                    st.warning("No se encontraron palabras para la nube (probablemente todas son 'stopwords').")
+                                else:
+                                    # 5. Generar la nube DESDE las frecuencias
+                                    wc.generate_from_frequencies(frequencies)
+                                
+                                    # 6. Mostrar la nube
+                                    fig, ax = plt.subplots(figsize=(10, 5))
+                                    ax.imshow(wc, interpolation='bilinear')
+                                    ax.axis('off')
+                                    st.pyplot(fig)
+                                    
+                                    # --- INICIO DE LA NUEVA IMPLEMENTACIÓN ---
+                                    
+                                    st.subheader("Tabla de Frecuencias")
+                                    
+                                    # 1. Convertir el dict de frecuencias a DataFrame
+                                    df_freq = pd.DataFrame(
+                                        frequencies.items(), 
+                                        columns=['Palabra', 'Frecuencia']
+                                    ).sort_values(by='Frecuencia', ascending=False).reset_index(drop=True)
+                                    
+                                    # 2. Mostrar la tabla
+                                    st.dataframe(df_freq, use_container_width=True)
+                                    
+                                    # 3. Botón de descarga
+                                    excel_bytes = to_excel(df_freq)
+                                    st.download_button(
+                                        label="📥 Descargar Frecuencias como Excel",
+                                        data=excel_bytes,
+                                        file_name=f"frecuencias_{col_to_cloud}.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                        use_container_width=True
+                                    )
+                                    # --- FIN DE LA NUEVA IMPLEMENTACIÓN ---
+                                    
+                                    # 5. (Opcional) Añadir al contexto del chat
+                                    top_words = ', '.join(df_freq['Palabra'].head(10))
+                                    st.session_state.data_analysis_stats_context += f"\nPalabras clave de '{col_to_cloud}': {top_words}...\n\n"
                                 
                         except Exception as e:
                             st.error(f"Error al generar la nube de palabras: {e}")
