@@ -2,18 +2,18 @@
 
 # --- Modos de Análisis ---
 MODE_CHAT = "Chat de Consulta Directa"
-MODE_TRANSCRIPT = "Análisis de Notas y Transcripciones"
-MODE_DATA_ANALYSIS = "Análisis Numérico (Excel)"
+MODE_TEXT_ANALYSIS = "Análisis de Textos"
+MODE_DATA_ANALYSIS = "Análisis Numérico"
 
 # --- Modos de Evaluación ---
 MODE_IDEA_EVAL = "Evaluar una idea"
-MODE_IMAGE_EVAL = "Evaluar un Visual"
-MODE_VIDEO_EVAL = "Evaluar un Video"
+MODE_IMAGE_EVAL = "Evaluación Visual"
+MODE_VIDEO_EVAL = "Evaluación de Video"
 
 # --- Modos de Reportes ---
-MODE_REPORT = "Reporte de reportes"
-MODE_ONEPAGER = "One-Pager en PPT"
+MODE_REPORT = "Generar un reporte de reportes"
+MODE_ONEPAGER = "Generador de One-Pager PPT"
 
 # --- Modos de Creatividad ---
-MODE_IDEATION = "Conversaciones Creativas"
-MODE_CONCEPT = "Generación de Conceptos"
+MODE_IDEATION = "Conversaciones creativas"
+MODE_CONCEPT = "Generación de conceptos"

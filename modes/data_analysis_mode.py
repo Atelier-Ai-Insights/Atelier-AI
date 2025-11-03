@@ -21,10 +21,10 @@ from pptx.dml.color import RGBColor
 
 # --- Importaciones para Significancia ---
 import scipy.stats as stats
-import numpy as np # <-- ¡NUEVA IMPORTACIÓN!
+import numpy as np
 
 # =====================================================
-# MODO: ANÁLISIS DE DATOS (EXCEL)
+# MODO: ANÁLISIS NUMÉRICO (EXCEL)
 # =====================================================
 
 @st.cache_data
@@ -119,8 +119,8 @@ def add_table_slide(prs, title_text, df):
 
 
 def data_analysis_mode(db, selected_files):
-    st.subheader(c.MODE_DATA_ANALYSIS)
-    st.markdown("Carga una base de datos (ventas, encuestas, etc.) para analizarla y articularla con el repositorio.")
+    st.subheader(c.MODE_DATA_ANALYSIS) # <-- Esto tomará el nuevo nombre
+    st.markdown("Carga un archivo Excel (.xlsx) para realizar análisis numéricos (tablas dinámicas, frecuencias) y articularlos con el repositorio.") # <-- Texto modificado
 
     # --- 1. CARGADOR DE ARCHIVOS ---
     uploaded_file = st.file_uploader("Sube tu archivo .xlsx o .xls", type=["xlsx", "xls"], key="data_uploader")
@@ -223,7 +223,7 @@ def data_analysis_mode(db, selected_files):
             st.session_state.data_analysis_stats_context = context_buffer.getvalue()
             context_buffer.close()
 
-        # --- PESTAÑA 2: TABLA DINÁMICA (MODIFICADA) ---
+        # --- PESTAÑA 2: TABLA DINÁMICA ---
         with tab2:
             st.header("Generador de Tabla Dinámica")
             st.markdown("Crea tablas cruzadas para explorar relaciones entre variables.")
@@ -294,7 +294,6 @@ def data_analysis_mode(db, selected_files):
                         else:
                             st.dataframe(display_df.fillna(0).style.format("{:.1%}"), use_container_width=True)
                         
-                        # --- ¡INICIO DE LA MODIFICACIÓN (LÓGICA CHI-SQUARED)! ---
                         if show_sig and agg_func == 'count':
                             st.markdown("---")
                             st.subheader("Prueba de Significación (Chi-Squared)")
@@ -314,23 +313,18 @@ def data_analysis_mode(db, selected_files):
                                     if p_value < 0.05:
                                         st.success("✅ **Resultado Significativo (p < 0.05)**. Las diferencias en la tabla son reales y no se deben al azar.")
                                         
-                                        # --- ¡INICIO DE NUEVA LÓGICA (RESIDUOS)! ---
                                         st.markdown("##### Análisis de Residuos (Celdas Significativas)")
                                         
-                                        # Calcular residuos estandarizados: (Observado - Esperado) / sqrt(Esperado)
                                         std_residuals = (df_testable - expected) / np.sqrt(expected)
                                         
-                                        # Mostrar tabla de calor
                                         st.dataframe(std_residuals.style.applymap(style_residuals).format("{:.2f}"), use_container_width=True)
                                         st.caption("Verde (>1.96): Significativamente MÁS alto de lo esperado. Rojo (<-1.96): Significativamente MÁS BAJO de lo esperado.")
-                                        # --- ¡FIN DE NUEVA LÓGICA (RESIDUOS)! ---
                                         
                                     else:
                                         st.info("ℹ️ **Resultado No Significativo (p > 0.05)**. Las diferencias observadas en la tabla son probablemente producto del azar.")
                                 
                                 except Exception as e:
                                     st.error(f"Error al calcular Chi-Squared: {e}")
-                        # --- FIN DE LA MODIFICACIÓN ---
 
                         excel_bytes = to_excel(pivot_df_raw)
                         st.download_button(
