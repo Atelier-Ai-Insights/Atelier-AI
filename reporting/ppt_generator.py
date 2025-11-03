@@ -264,6 +264,52 @@ def _crear_slide_matriz_2x2(prs, data):
 
     return prs
 
+# --- ¡INICIO DE LA NUEVA FUNCIÓN! ---
+def _crear_slide_persona(prs, data):
+    """Crea la diapositiva de Perfil de Buyer Persona."""
+    blank_slide_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(blank_slide_layout)
+
+    # Título
+    txBox_title = slide.shapes.add_textbox(Inches(1), Inches(0.2), Inches(14), Inches(0.8))
+    p_title = txBox_title.text_frame.paragraphs[0]
+    p_title.text = data.get("titulo_diapositiva", "Perfil de Buyer Persona")
+    p_title.font.bold = True; p_title.font.size = Pt(36); p_title.alignment = PP_ALIGN.CENTER
+    txBox_title.text_frame.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
+
+    # Perfil (Nombre y Demografía)
+    txBox_profile = slide.shapes.add_textbox(Inches(1), Inches(1.0), Inches(14), Inches(1.5))
+    tf_profile = txBox_profile.text_frame
+    tf_profile.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
+    tf_profile.word_wrap = True
+    
+    p_name = tf_profile.paragraphs[0]
+    p_name.text = data.get("perfil_nombre", "Nombre de Persona N/A")
+    p_name.font.bold = True
+    p_name.font.size = Pt(24)
+    p_name.space_after = Pt(6)
+    
+    p_demo = tf_profile.add_paragraph()
+    p_demo.text = data.get("perfil_demografia", "Demografía N/A")
+    p_demo.font.italic = True
+    p_demo.font.size = Pt(16)
+    
+    # Cuadrantes de Atributos
+    col1_left = Inches(1); col_width = Inches(7)
+    col2_left = Inches(8.5);
+    top_y = Inches(2.8); box_h = Inches(2.8)
+    
+    _crear_cuadrante_ppt(slide, col1_left, top_y, col_width, box_h, "Necesidades / Jobs to be Done", data.get("necesidades_jtbd"), title_size=Pt(18), item_size=Pt(12))
+    _crear_cuadrante_ppt(slide, col2_left, top_y, col_width, box_h, "Deseos / Motivaciones", data.get("deseos_motivaciones"), title_size=Pt(18), item_size=Pt(12))
+
+    bottom_y = top_y + box_h + Inches(0.2)
+    _crear_cuadrante_ppt(slide, col1_left, bottom_y, col_width, box_h, "Puntos de Dolor / Frustraciones", data.get("puntos_dolor_frustraciones"), title_size=Pt(18), item_size=Pt(12))
+    _crear_cuadrante_ppt(slide, col2_left, bottom_y, col_width, box_h, "Citas Clave", data.get("citas_clave"), title_size=Pt(18), item_size=Pt(12))
+    
+    return prs
+# --- ¡FIN DE LA NUEVA FUNCIÓN! ---
+
+
 # --- Función Principal (ACTUALIZADA) ---
 
 def crear_ppt_desde_json(data: dict):
@@ -292,11 +338,16 @@ def crear_ppt_desde_json(data: dict):
             prs = _crear_slide_empatia(prs, data)
         elif template_type == "propuesta_valor":
             prs = _crear_slide_propuesta_valor(prs, data)
-        # --- (NUEVAS RUTAS) ---
         elif template_type == "journey_map":
             prs = _crear_slide_journey_map(prs, data)
         elif template_type == "matriz_2x2":
             prs = _crear_slide_matriz_2x2(prs, data)
+        
+        # --- ¡INICIO DEL NUEVO ENRUTADOR! ---
+        elif template_type == "buyer_persona":
+            prs = _crear_slide_persona(prs, data)
+        # --- ¡FIN DEL NUEVO ENRUTADOR! ---
+            
         else:
             st.error(f"Error: Tipo de plantilla desconocido '{template_type}' en el JSON.")
             # Crear una diapositiva de error

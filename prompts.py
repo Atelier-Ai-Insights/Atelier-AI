@@ -214,6 +214,32 @@ def get_transcript_prompt(combined_context, user_prompt):
         "\n\n**Respuesta:**"
     ]
 
+# --- (NUEVA FUNCIÓN PARA EL MODO DE ANÁLISIS DE DATOS) ---
+
+def get_survey_articulation_prompt(survey_context, repository_context, conversation_history):
+    """
+    Crea un prompt que articula datos de encuestas (cuanti) con
+    datos del repositorio (cuali) para un chat.
+    """
+    return (
+        f"**Tarea:** Eres un asistente experto en investigación de mercados. Tu tarea es responder la **última pregunta** del Usuario.\n\n"
+        f"**¡IMPORTANTE!** Debes articular tu respuesta usando AMBAS fuentes de información:\n"
+        f"1. **Contexto de Análisis de Datos (Cuantitativo):** Datos clave de un archivo Excel recién cargado. Úsalo como el 'QUÉ'.\n"
+        f"2. **Información documentada (Cualitativo):** Hallazgos del repositorio histórico (estudios). Úsalo como el 'PORQUÉ'.\n\n"
+        f"--- CONTEXTO DE ANÁLISIS DE DATOS (CUANTITATIVO) ---\n"
+        f"```\n{survey_context}\n```\n\n"
+        f"--- HISTORIAL DEL CHAT (RECIENTE) ---\n"
+        f"{conversation_history}\n\n"
+        f"--- INFORMACIÓN DOCUMENTADA (CUALITATIVO / REPOSITORIO) ---\n"
+        f"```\n{repository_context}\n```\n\n"
+        f"**Instrucciones de Articulación:**\n"
+        f"- Responde al usuario conectando los datos de la encuesta (ej. 'El 70% prefiere X...') con los hallazgos del repositorio (ej. '...esto se alinea con el estudio Y que dice que X se percibe como... [1]').\n"
+        f"- Si la pregunta solo se puede responder con una fuente, usa esa, pero prioriza la articulación.\n"
+        f"- Cita tus fuentes del repositorio cualitativo como siempre.\n\n"
+        f"{INSTRUCCIONES_DE_CITAS}\n\n"
+        f"**Respuesta Articulada:**"
+    )
+
 # --- Prompts para "Generador de One-Pager PPT" (modes/onepager_mode.py) ---
 
 # (Estos prompts generan JSON, no Markdown para el usuario, por lo que no deben tener citas)
@@ -294,7 +320,23 @@ PROMPTS_ONEPAGER = {
           "items_cuadrante_inf_der": ["..."],
           "conclusion_clave": "El principal insight visual de la matriz."
         }}
+        """,
+    
+    # --- ¡INICIO DEL NUEVO BLOQUE! ---
+    "Perfil de Buyer Persona": """
+        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
+        {{
+          "template_type": "buyer_persona",
+          "titulo_diapositiva": "Perfil de Buyer Persona: {tema_central}",
+          "perfil_nombre": "Un nombre ficticio y arquetipo (ej. 'Ana, la Profesional Ocupada')",
+          "perfil_demografia": "Un breve resumen demográfico/psicográfico (ej. 'Mujer, 30-40, urbana, valora la conveniencia...')",
+          "necesidades_jtbd": ["... (2-3 'Jobs to be Done' o necesidades clave del contexto) ..."],
+          "puntos_dolor_frustraciones": ["... (2-3 frustraciones o 'pain points' principales del contexto) ..."],
+          "deseos_motivaciones": ["... (2-3 deseos, ganancias o 'drivers' de decisión del contexto) ..."],
+          "citas_clave": ["... (1-2 citas literales IMPACTANTES del contexto que resumen su sentir) ..."]
+        }}
         """
+    # --- ¡FIN DEL NUEVO BLOQUE! ---
 }
 
 # 2. El formateador del prompt final
@@ -313,29 +355,3 @@ def get_onepager_final_prompt(relevant_info, selected_template_name, tema_centra
     Tu tarea es sintetizar esta información para completar la plantilla '{selected_template_name}'.
     {prompt_template.format(tema_central=tema_central)}
     """
-
-# --- (NUEVA FUNCIÓN PARA EL MODO DE ANÁLISIS DE DATOS) ---
-
-def get_survey_articulation_prompt(survey_context, repository_context, conversation_history):
-    """
-    Crea un prompt que articula datos de encuestas (cuanti) con
-    datos del repositorio (cuali) para un chat.
-    """
-    return (
-        f"**Tarea:** Eres un asistente experto en investigación de mercados. Tu tarea es responder la **última pregunta** del Usuario.\n\n"
-        f"**¡IMPORTANTE!** Debes articular tu respuesta usando AMBAS fuentes de información:\n"
-        f"1. **Contexto de Análisis de Datos (Cuantitativo):** Datos clave de un archivo Excel recién cargado. Úsalo como el 'QUÉ'.\n"
-        f"2. **Información documentada (Cualitativo):** Hallazgos del repositorio histórico (estudios). Úsalo como el 'PORQUÉ'.\n\n"
-        f"--- CONTEXTO DE ANÁLISIS DE DATOS (CUANTITATIVO) ---\n"
-        f"```\n{survey_context}\n```\n\n"
-        f"--- HISTORIAL DEL CHAT (RECIENTE) ---\n"
-        f"{conversation_history}\n\n"
-        f"--- INFORMACIÓN DOCUMENTADA (CUALITATIVO / REPOSITORIO) ---\n"
-        f"```\n{repository_context}\n```\n\n"
-        f"**Instrucciones de Articulación:**\n"
-        f"- Responde al usuario conectando los datos de la encuesta (ej. 'El 70% prefiere X...') con los hallazgos del repositorio (ej. '...esto se alinea con el estudio Y que dice que X se percibe como... [1]').\n"
-        f"- Si la pregunta solo se puede responder con una fuente, usa esa, pero prioriza la articulación.\n"
-        f"- Cita tus fuentes del repositorio cualitativo como siempre.\n\n"
-        f"{INSTRUCCIONES_DE_CITAS}\n\n"
-        f"**Respuesta Articulada:**"
-    )
