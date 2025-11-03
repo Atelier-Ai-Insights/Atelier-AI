@@ -4,9 +4,6 @@ from services.supabase_db import supabase, supabase_admin_client
 from config import PLAN_FEATURES
 from supabase import create_client 
 
-# --- Importaciones de Nube de Palabras (eliminadas) ---
-# WordCloud, matplotlib, get_stopwords ya no son necesarias aquí.
-
 # =====================================================
 # FUNCIÓN DEL DASHBOARD DEL REPOSITORIO (MODIFICADA)
 # =====================================================
@@ -24,7 +21,7 @@ def show_repository_dashboard(db_full):
         # Limpiar datos para los gráficos
         df['marca'] = df['marca'].fillna('Sin Año').astype(str)
         df['filtro'] = df['filtro'].fillna('Sin Marca').astype(str)
-        df['cliente'] = df['cliente'].fillna('Sin Cliente').astype(str) # <-- LÍNEA NUEVA
+        df['cliente'] = df['cliente'].fillna('Sin Cliente').astype(str)
         
     except Exception as e:
         st.error(f"Error al procesar los datos del repositorio: {e}")
@@ -43,21 +40,17 @@ def show_repository_dashboard(db_full):
     col1, col2 = st.columns(2)
     
     with col1:
-        # Gráfico de Marca (Horizontal)
+        # Gráfico de Cliente (Pie Chart)
+        st.markdown("**Estudios por Cliente (campo 'cliente')**")
+        cliente_counts = df['cliente'].value_counts()
+        st.pie_chart(cliente_counts)
+
+    with col2:
+        # Gráfico de Marca (Tabla)
         st.markdown("**Estudios por Marca (campo 'filtro')**")
         filtro_counts = df['filtro'].value_counts().reset_index()
         filtro_counts.columns = ['Marca', 'Conteo']
-        st.bar_chart(filtro_counts, x='Conteo', y='Marca')
-
-    with col2:
-        # Gráfico de Cliente (Horizontal)
-        st.markdown("**Estudios por Cliente (campo 'cliente')**")
-        cliente_counts = df['cliente'].value_counts().reset_index()
-        cliente_counts.columns = ['Cliente', 'Conteo']
-        st.bar_chart(cliente_counts, x='Conteo', y='Cliente')
-
-
-    # --- 3. Nube de Palabras Maestra (ELIMINADA) ---
+        st.dataframe(filtro_counts.set_index('Marca'), use_container_width=True)
 
 
 # =====================================================
