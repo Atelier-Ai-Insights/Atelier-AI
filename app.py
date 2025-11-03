@@ -20,10 +20,11 @@ from modes.image_eval_mode import image_evaluation_mode
 from modes.video_eval_mode import video_evaluation_mode
 from modes.transcript_mode import transcript_analysis_mode
 from modes.onepager_mode import one_pager_ppt_mode
+from modes.data_analysis_mode import data_analysis_mode # <--- LÍNEA MODIFICADA
 from utils import (
     extract_brand, reset_chat_workflow, reset_report_workflow 
 )
-import constants as c # <--- IMPORTACIÓN AÑADIDA
+import constants as c
 
 def set_mode_and_reset(new_mode):
     # (Esta función no cambia)
@@ -38,6 +39,8 @@ def set_mode_and_reset(new_mode):
         st.session_state.pop("uploaded_transcripts_text", None)
         st.session_state.pop("transcript_chat_history", None)
         st.session_state.pop("generated_ppt_bytes", None)
+        st.session_state.pop("data_analysis_df", None) # <--- LÍNEA MODIFICADA
+        st.session_state.pop("data_analysis_chat_history", None) # <--- LÍNEA MODIFICADA
         st.session_state.current_mode = new_mode
 
 # =====================================================
@@ -102,7 +105,8 @@ def run_user_mode(db_full, user_features, footer_html):
     all_categories = {
         "Análisis": {
             c.MODE_CHAT: True, 
-            c.MODE_TRANSCRIPT: user_features.get("transcript_file_limit", 0) > 0
+            c.MODE_TRANSCRIPT: user_features.get("transcript_file_limit", 0) > 0,
+            c.MODE_DATA_ANALYSIS: True # <--- LÍNEA MODIFICADA
         },
         "Evaluación": {
             c.MODE_IDEA_EVAL: user_features.get("has_idea_evaluation"),
@@ -131,6 +135,8 @@ def run_user_mode(db_full, user_features, footer_html):
                 st.button(c.MODE_CHAT, on_click=set_mode_and_reset, args=(c.MODE_CHAT,), use_container_width=True, type="primary" if modo == c.MODE_CHAT else "secondary")
             if all_categories["Análisis"][c.MODE_TRANSCRIPT]:
                 st.button(c.MODE_TRANSCRIPT, on_click=set_mode_and_reset, args=(c.MODE_TRANSCRIPT,), use_container_width=True, type="primary" if modo == c.MODE_TRANSCRIPT else "secondary")
+            if all_categories["Análisis"][c.MODE_DATA_ANALYSIS]: # <--- BLOQUE MODIFICADO
+                st.button(c.MODE_DATA_ANALYSIS, on_click=set_mode_and_reset, args=(c.MODE_DATA_ANALYSIS,), use_container_width=True, type="primary" if modo == c.MODE_DATA_ANALYSIS else "secondary")
 
     if any(all_categories["Evaluación"].values()):
         with st.sidebar.expander("Evaluación", expanded=(default_expanded == "Evaluación")):
@@ -155,10 +161,11 @@ def run_user_mode(db_full, user_features, footer_html):
             if all_categories["Creatividad"][c.MODE_CONCEPT]:
                 st.button(c.MODE_CONCEPT, on_click=set_mode_and_reset, args=(c.MODE_CONCEPT,), use_container_width=True, type="primary" if modo == c.MODE_CONCEPT else "secondary")
 
-    # --- FIN DE SECCIÓN MODIFICADA ---
     
     st.sidebar.header("Filtros de Búsqueda")
-    run_filters = modo not in [c.MODE_TRANSCRIPT] # <-- MODIFICADO
+    # --- MODIFICADO ---
+    # Los filtros se aplican al repositorio, no al modo encuesta.
+    run_filters = modo not in [c.MODE_TRANSCRIPT, c.MODE_DATA_ANALYSIS] 
 
     db_filtered = db_full[:] 
 
@@ -207,6 +214,7 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == c.MODE_VIDEO_EVAL: video_evaluation_mode(db_filtered, selected_files)
     elif modo == c.MODE_TRANSCRIPT: transcript_analysis_mode()
     elif modo == c.MODE_ONEPAGER: one_pager_ppt_mode(db_filtered, selected_files)
+    elif modo == c.MODE_DATA_ANALYSIS: data_analysis_mode(db_filtered, selected_files) # <--- LÍNEA MODIFICADA
     # --- FIN DE SECCIÓN MODIFICADA ---
 
 # =====================================================
@@ -224,7 +232,7 @@ def main():
     if 'page' not in st.session_state: st.session_state.page = "login"
     if "api_key_index" not in st.session_state: st.session_state.api_key_index = 0
     if 'current_mode' not in st.session_state:
-        st.session_state.current_mode = c.MODE_CHAT # <-- MODIFICADO
+        st.session_state.current_mode = c.MODE_CHAT
         
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"

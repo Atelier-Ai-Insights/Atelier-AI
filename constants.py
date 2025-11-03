@@ -3,6 +3,7 @@
 # --- Modos de Análisis ---
 MODE_CHAT = "Chat de Consulta Directa"
 MODE_TRANSCRIPT = "Análisis de Notas y Transcripciones"
+MODE_DATA_ANALYSIS = "Análisis de Datos (Excel)"
 
 # --- Modos de Evaluación ---
 MODE_IDEA_EVAL = "Evaluar una idea"
