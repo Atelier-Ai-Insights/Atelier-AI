@@ -7,6 +7,11 @@ from prompts import get_survey_articulation_prompt
 import constants as c
 import io # Necesario para la descarga de Excel
 
+# --- Nuevas importaciones para Nube de Palabras ---
+from wordcloud import WordCloud
+import matplotlib.pyplot as plt
+import nltk
+
 # =====================================================
 # MODO: ANÁLISIS DE DATOS (EXCEL)
 # =====================================================
@@ -18,6 +23,26 @@ def to_excel(df):
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, sheet_name='Pivot', index=True)
     return output.getvalue()
+
+@st.cache_resource
+def get_stopwords():
+    """Descarga y cachea las stopwords en español de NLTK."""
+    try:
+        nltk.download('stopwords')
+    except Exception as e:
+        print(f"Error descargando stopwords de NLTK (se usarán las básicas): {e}")
+    
+    try:
+        spanish_stopwords = nltk.corpus.stopwords.words('spanish')
+    except:
+        # Lista fallback por si NLTK falla
+        spanish_stopwords = ['de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'las', 'un', 'para', 'con', 'no', 'una', 'su', 'que', 'se', 'por', 'es', 'más', 'lo', 'pero', 'me', 'mi', 'al', 'le', 'si', 'este', 'esta']
+    
+    # Añade palabras comunes de encuestas que no aportan valor
+    custom_list = ['...', 'p', 'r', 'rta', 'respuesta', 'si', 'no', 'na', 'ninguno', 'ninguna']
+    spanish_stopwords.extend(custom_list)
+    return set(spanish_stopwords)
+
 
 def data_analysis_mode(db, selected_files):
     st.subheader(c.MODE_DATA_ANALYSIS)
@@ -49,19 +74,23 @@ def data_analysis_mode(db, selected_files):
             st.session_state.pop("data_analysis_df", None)
 
     # --- 2. LÓGICA DE ANÁLISIS Y CHAT ---
-    # Todo el panel solo se muestra si tenemos un DataFrame cargado en memoria.
-    
     if "data_analysis_df" in st.session_state:
         df = st.session_state.data_analysis_df
         
         st.markdown(f"### Analizando: **{st.session_state.data_analysis_file_name}**")
         
-        tab1, tab2, tab3 = st.tabs(["Análisis Rápido", "Tabla Dinámica", "Chat de Articulación"])
+        # --- MODIFICADO: Añadida "Nube de Palabras" ---
+        tab1, tab2, tab_cloud, tab_chat = st.tabs([
+            "Análisis Rápido", 
+            "Tabla Dinámica", 
+            "Nube de Palabras", 
+            "Chat de Articulación"
+        ])
         
         if "data_analysis_stats_context" not in st.session_state:
             st.session_state.data_analysis_stats_context = ""
 
-        # --- PESTAÑA 1: ANÁLISIS RÁPIDO (Medias y Porcentajes) ---
+        # --- PESTAÑA 1: ANÁLISIS RÁPIDO ---
         with tab1:
             st.header("Análisis Rápido")
             st.markdown("Calcula métricas clave de columnas individuales.")
@@ -113,7 +142,7 @@ def data_analysis_mode(db, selected_files):
             st.session_state.data_analysis_stats_context = context_buffer.getvalue()
             context_buffer.close()
 
-        # --- PESTAÑA 2: TABLA DINÁMICA (MODIFICADA) ---
+        # --- PESTAÑA 2: TABLA DINÁMICA ---
         with tab2:
             st.header("Generador de Tabla Dinámica")
             st.markdown("Crea tablas cruzadas para explorar relaciones entre variables.")
@@ -131,16 +160,13 @@ def data_analysis_mode(db, selected_files):
                 val_col = c1.selectbox("Valores (Dato a calcular)", numeric_cols_pivot, key="pivot_val")
                 agg_func = c2.selectbox("Operación", ["sum", "count", "mean", "median", "min", "max"], key="pivot_agg")
 
-                # --- INICIO DE LA MODIFICACIÓN (NUEVO DROPDOWN) ---
                 display_mode = st.selectbox(
                     "Mostrar valores como:",
                     ["Valores Absolutos", "% del Total General", "% del Total de Fila", "% del Total de Columna"],
                     key="pivot_display"
                 )
-                # --- FIN DE LA MODIFICACIÓN ---
 
-                # --- Lógica de Creación ---
-                pivot_df_raw = None # Para guardar la tabla con números brutos
+                pivot_df_raw = None 
                 
                 try:
                     if index_col != "(Ninguno)" and col_col != "(Ninguno)":
@@ -150,19 +176,16 @@ def data_analysis_mode(db, selected_files):
                     else:
                         st.info("Selecciona al menos una 'Fila (Index)' para generar una tabla.")
                         
-                    # --- Si se generó una tabla, la mostramos y aplicamos % ---
                     if pivot_df_raw is not None:
                         pivot_df_raw = pivot_df_raw.fillna(0)
                         
-                        # Guardar contexto para el chat (siempre los números brutos)
                         context_title = f"Tabla ({val_col} por {index_col})"
                         if col_col != "(Ninguno)": context_title += f"/{col_col}"
                         st.session_state.data_analysis_stats_context += f"\n{context_title}:\n{pivot_df_raw.to_string()}\n\n"
 
-                        # --- Lógica de Visualización (Absolutos vs %) ---
                         st.markdown("#### Resultado de la Tabla Dinámica")
                         
-                        display_df = pivot_df_raw.copy() # Copiamos para no modificar el original
+                        display_df = pivot_df_raw.copy() 
                         
                         if display_mode == "% del Total General":
                             total_sum = display_df.sum().sum()
@@ -172,13 +195,11 @@ def data_analysis_mode(db, selected_files):
                         elif display_mode == "% del Total de Columna":
                             display_df = display_df.apply(lambda x: x / x.sum(), axis=0)
 
-                        # Formatear la tabla para mostrar
                         if display_mode == "Valores Absolutos":
                             st.dataframe(display_df.style.format("{:,.2f}"), use_container_width=True)
                         else:
                             st.dataframe(display_df.fillna(0).style.format("{:.1%}"), use_container_width=True)
                         
-                        # --- Botón de Descarga (Siempre descarga los números brutos) ---
                         excel_bytes = to_excel(pivot_df_raw)
                         st.download_button(
                             label="📥 Descargar Tabla como Excel",
@@ -190,9 +211,56 @@ def data_analysis_mode(db, selected_files):
                 except Exception as e:
                     st.error(f"Error al crear la tabla: {e}")
 
+        # --- PESTAÑA 3: NUBE DE PALABRAS (NUEVA) ---
+        with tab_cloud:
+            st.header("Nube de Palabras (Preguntas Abiertas)")
+            st.markdown("Genera una nube de palabras a partir de una columna de texto.")
+            
+            # Reutilizamos la lista de columnas categóricas/texto
+            text_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+            
+            if not text_cols:
+                st.warning("El archivo no contiene columnas de texto/categoría para este análisis.")
+            else:
+                col_to_cloud = st.selectbox("Selecciona una columna de texto:", text_cols, key="cloud_select")
+                
+                if col_to_cloud:
+                    with st.spinner("Generando nube de palabras..."):
+                        try:
+                            # 1. Obtener stopwords
+                            stopwords = get_stopwords()
+                        
+                            # 2. Combinar todo el texto, quitar NAs y convertir a string
+                            text = " ".join(str(review) for review in df[col_to_cloud].dropna())
+                            
+                            if not text.strip():
+                                st.warning("La columna seleccionada está vacía o no contiene texto.")
+                            else:
+                                # 3. Crear la nube
+                                wordcloud = WordCloud(
+                                    width=800, 
+                                    height=400, 
+                                    background_color='white',
+                                    stopwords=stopwords,
+                                    min_font_size=10,
+                                    collocations=False # Evita que se repitan pares de palabras
+                                ).generate(text)
+                                
+                                # 4. Mostrar la nube con Matplotlib
+                                fig, ax = plt.subplots(figsize=(10, 5))
+                                ax.imshow(wordcloud, interpolation='bilinear')
+                                ax.axis('off')
+                                st.pyplot(fig)
+                                
+                                # 5. (Opcional) Añadir al contexto del chat
+                                st.session_state.data_analysis_stats_context += f"\nPalabras clave de '{col_to_cloud}': {', '.join(wordcloud.words_.keys())[:150]}...\n\n"
+                                
+                        except Exception as e:
+                            st.error(f"Error al generar la nube de palabras: {e}")
+                            st.error("Asegúrate de tener las librerías 'wordcloud' y 'matplotlib' instaladas.")
 
-        # --- PESTAÑA 3: CHAT DE ARTICULACIÓN ---
-        with tab3:
+        # --- PESTAÑA 4: CHAT DE ARTICULACIÓN ---
+        with tab_chat:
             st.header("Chat de Articulación (Cuanti + Cuali)")
             
             if "data_analysis_chat_history" not in st.session_state:
@@ -215,7 +283,7 @@ def data_analysis_mode(db, selected_files):
                     message_placeholder = st.empty()
                     message_placeholder.markdown("Articulando...")
                     
-                    # 1. Obtener Contexto Cuantitativo (del Excel, Pestañas 1 y 2)
+                    # 1. Obtener Contexto Cuantitativo (de las otras pestañas)
                     survey_context = st.session_state.get("data_analysis_stats_context", "No hay datos de encuesta analizados.")
                     if not survey_context.strip():
                         survey_context = "El usuario está viendo los datos de la encuesta pero no ha seleccionado un análisis específico."
