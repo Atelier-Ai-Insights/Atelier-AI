@@ -272,7 +272,7 @@ PROMPTS_ONEPAGER = {
         Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
         {{
           "template_type": "empatia",
-          "titulo_diapositiva": "Mapa de Empatía: {tema_central}",
+          "titulo_diapapositiva": "Mapa de Empatía: {tema_central}",
           "piensa_siente": ["... (2-3 puntos) ..."],
           "ve": ["... (2-3 puntos) ..."],
           "dice_hace": ["... (2-3 puntos) ..."],
@@ -334,7 +334,6 @@ PROMPTS_ONEPAGER = {
           "citas_clave": ["... (1-2 citas literales IMPACTANTES del contexto que resumen su sentir) ..."]
         }}
         """,
-    # --- ¡FIN DEL NUEVO BLOQUE! ---
 }
 
 # 2. El formateador del prompt final
@@ -354,34 +353,46 @@ def get_onepager_final_prompt(relevant_info, selected_template_name, tema_centra
     {prompt_template.format(tema_central=tema_central)}
     """
 
-# --- ¡INICIO DEL NUEVO BLOQUE! ---
+# --- ¡INICIO DEL BLOQUE CORREGIDO! ---
 
 def get_autocode_prompt(context, main_topic):
     """
     Crea un prompt para que la IA lea múltiples transcripciones e identifique
     temas clave (códigos) con citas de respaldo.
     """
-    return (
-        f"**Tarea:** Eres un investigador cualitativo experto. Tu trabajo es analizar las transcripciones de entrevistas/focus groups proporcionadas sobre el tema '{main_topic}'.\n"
-        f"Debes identificar los **temas emergentes (códigos)** más importantes y respaldar cada tema con **citas textuales** de las transcripciones.\n\n"
-        f"--- TRANSCRIPCIONES (INFORMACIÓN DOCUMENTADA) ---\n"
-        f"```\n{context}\n```\n\n"
-        f"**Formato de Salida OBLIGATORIO (Markdown):**\n"
-        "Debes seguir esta estructura de Markdown exactamente:\n\n"
-        "## Resumen de Temas Clave\n"
-        "Un párrafo corto (2-3 frases) que resuma los principales hallazgos.\n\n"
-        "## Temas Emergentes y Citas\n\n"
-        "### 1. [Nombre del Tema 1]\n"
-        "> *\"[Cita textual 1 que ilustre este tema]\"* - (Fuente: [Nombre del Archivo de la cita])\n\n"
-        "> *\"[Cita textual 2 que ilustre este tema]\"* - (Fuente: [Nombre del Archivo de la cita])\n\n"
-        "### 2. [Nombre del Tema 2]\n"
-        "> *\"[Cita textual 1 que ilustre este tema]\"* - (Fuente: [Nombre del Archivo de la cita])\n\n"
-        "### 3. [Nombre del Tema 3]\n"
-        "> *\"[Cita textual 1 que ilustre este tema]\"* - (Fuente: [Nombre del Archivo de la cita])\n\n"
-        "(...continuar con más temas si son relevantes...)\n\n"
-        "**Instrucciones Adicionales:**\n"
-        "- **Identifica Temas:** Los temas deben ser *insights* (ej. "Preferencia por la practicidad") no solo palabras (ej. "Empaque").\n"
-        "- **Citas Textuales:** Las citas DEBEN ser copiadas palabra por palabra de las transcripciones.\n"
-        "- **Fuente de la Cita:** DEBES indicar de qué archivo (ej. `(Fuente: Entrevista_Usuario_1.docx)`) proviene cada cita.\n"
-    )
-# --- ¡FIN DEL NUEVO BLOQUE! ---
+    # Se ha cambiado de múltiples f-strings separadas a un solo bloque f"""..."""
+    # Esto corrige el SyntaxError.
+    return f"""
+**Tarea:** Eres un investigador cualitativo experto. Tu trabajo es analizar las transcripciones de entrevistas/focus groups proporcionadas sobre el tema '{main_topic}'.
+Debes identificar los **temas emergentes (códigos)** más importantes y respaldar cada tema con **citas textuales** de las transcripciones.
+
+--- TRANSCRIPCIONES (INFORMACIÓN DOCUMENTADA) ---
+```{context}```
+
+**Formato de Salida OBLIGATORIO (Markdown):**
+Debes seguir esta estructura de Markdown exactamente:
+
+## Resumen de Temas Clave
+Un párrafo corto (2-3 frases) que resuma los principales hallazgos.
+
+## Temas Emergentes y Citas
+
+### 1. [Nombre del Tema 1]
+> *"[Cita textual 1 que ilustre este tema]"* - (Fuente: [Nombre del Archivo de la cita])
+
+> *"[Cita textual 2 que ilustre este tema]"* - (Fuente: [Nombre del Archivo de la cita])
+
+### 2. [Nombre del Tema 2]
+> *"[Cita textual 1 que ilustre este tema]"* - (Fuente: [Nombre del Archivo de la cita])
+
+### 3. [Nombre del Tema 3]
+> *"[Cita textual 1 que ilustre este tema]"* - (Fuente: [Nombre del Archivo de la cita])
+
+(...continuar con más temas si son relevantes...)
+
+**Instrucciones Adicionales:**
+- **Identifica Temas:** Los temas deben ser *insights* (ej. "Preferencia por la practicidad") no solo palabras (ej. "Empaque").
+- **Citas Textuales:** Las citas DEBEN ser copiadas palabra por palabra de las transcripciones.
+- **Fuente de la Cita:** DEBES indicar de qué archivo (ej. `(Fuente: Entrevista_Usuario_1.docx)`) proviene cada cita.
+"""
+# --- ¡FIN DEL BLOQUE CORREGIDO! ---
