@@ -20,7 +20,7 @@ from modes.image_eval_mode import image_evaluation_mode
 from modes.video_eval_mode import video_evaluation_mode
 from modes.transcript_mode import transcript_analysis_mode
 from modes.onepager_mode import one_pager_ppt_mode
-from modes.data_analysis_mode import data_analysis_mode # <--- LÍNEA MODIFICADA
+from modes.data_analysis_mode import data_analysis_mode 
 from utils import (
     extract_brand, reset_chat_workflow, reset_report_workflow 
 )
@@ -39,8 +39,8 @@ def set_mode_and_reset(new_mode):
         st.session_state.pop("uploaded_transcripts_text", None)
         st.session_state.pop("transcript_chat_history", None)
         st.session_state.pop("generated_ppt_bytes", None)
-        st.session_state.pop("data_analysis_df", None) # <--- LÍNEA MODIFICADA
-        st.session_state.pop("data_analysis_chat_history", None) # <--- LÍNEA MODIFICADA
+        st.session_state.pop("data_analysis_df", None)
+        st.session_state.pop("data_analysis_chat_history", None)
         st.session_state.current_mode = new_mode
 
 # =====================================================
@@ -106,7 +106,7 @@ def run_user_mode(db_full, user_features, footer_html):
         "Análisis": {
             c.MODE_CHAT: True, 
             c.MODE_TRANSCRIPT: user_features.get("transcript_file_limit", 0) > 0,
-            c.MODE_DATA_ANALYSIS: True # <--- LÍNEA MODIFICADA
+            c.MODE_DATA_ANALYSIS: True
         },
         "Evaluación": {
             c.MODE_IDEA_EVAL: user_features.get("has_idea_evaluation"),
@@ -135,7 +135,7 @@ def run_user_mode(db_full, user_features, footer_html):
                 st.button(c.MODE_CHAT, on_click=set_mode_and_reset, args=(c.MODE_CHAT,), use_container_width=True, type="primary" if modo == c.MODE_CHAT else "secondary")
             if all_categories["Análisis"][c.MODE_TRANSCRIPT]:
                 st.button(c.MODE_TRANSCRIPT, on_click=set_mode_and_reset, args=(c.MODE_TRANSCRIPT,), use_container_width=True, type="primary" if modo == c.MODE_TRANSCRIPT else "secondary")
-            if all_categories["Análisis"][c.MODE_DATA_ANALYSIS]: # <--- BLOQUE MODIFICADO
+            if all_categories["Análisis"][c.MODE_DATA_ANALYSIS]:
                 st.button(c.MODE_DATA_ANALYSIS, on_click=set_mode_and_reset, args=(c.MODE_DATA_ANALYSIS,), use_container_width=True, type="primary" if modo == c.MODE_DATA_ANALYSIS else "secondary")
 
     if any(all_categories["Evaluación"].values()):
@@ -163,9 +163,14 @@ def run_user_mode(db_full, user_features, footer_html):
 
     
     st.sidebar.header("Filtros de Búsqueda")
-    # --- MODIFICADO ---
-    # Los filtros se aplican al repositorio, no al modo encuesta.
-    run_filters = modo not in [c.MODE_TRANSCRIPT, c.MODE_DATA_ANALYSIS] 
+    
+    # --- INICIO DE LA MODIFICACIÓN ---
+    # ANTES: run_filters = modo not in [c.MODE_TRANSCRIPT, c.MODE_DATA_ANALYSIS]
+    # AHORA: (Quitamos c.MODE_DATA_ANALYSIS de la lista de exclusión)
+    
+    run_filters = modo not in [c.MODE_TRANSCRIPT] 
+
+    # --- FIN DE LA MODIFICACIÓN ---
 
     db_filtered = db_full[:] 
 
@@ -201,7 +206,6 @@ def run_user_mode(db_full, user_features, footer_html):
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
-    # --- SECCIÓN MODIFICADA CON CONSTANTES ---
     if run_filters and not selected_files and modo not in [c.MODE_REPORT, c.MODE_IMAGE_EVAL, c.MODE_VIDEO_EVAL, c.MODE_ONEPAGER]: 
          st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
 
@@ -214,8 +218,8 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == c.MODE_VIDEO_EVAL: video_evaluation_mode(db_filtered, selected_files)
     elif modo == c.MODE_TRANSCRIPT: transcript_analysis_mode()
     elif modo == c.MODE_ONEPAGER: one_pager_ppt_mode(db_filtered, selected_files)
-    elif modo == c.MODE_DATA_ANALYSIS: data_analysis_mode(db_filtered, selected_files) # <--- LÍNEA MODIFICADA
-    # --- FIN DE SECCIÓN MODIFICADA ---
+    elif modo == c.MODE_DATA_ANALYSIS: data_analysis_mode(db_filtered, selected_files)
+    
 
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
