@@ -3,6 +3,7 @@ import unicodedata
 import json
 import io
 import fitz  # PyMuPDF
+import nltk # <-- ¡NUEVA IMPORTACIÓN!
 
 # ==============================
 # Funciones de Reset
@@ -37,6 +38,28 @@ def clean_text(text):
     if not isinstance(text, str): text = str(text)
     return text
 
+# --- ¡INICIO DE NUEVA FUNCIÓN MOVILIZADA! ---
+@st.cache_resource
+def get_stopwords():
+    """Descarga y cachea las stopwords en español de NLTK."""
+    try:
+        nltk.download('stopwords')
+    except Exception as e:
+        print(f"Error descargando stopwords de NLTK (se usarán las básicas): {e}")
+    
+    try:
+        spanish_stopwords = nltk.corpus.stopwords.words('spanish')
+    except:
+        # Lista fallback por si NLTK falla
+        spanish_stopwords = ['de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'las', 'un', 'para', 'con', 'no', 'una', 'su', 'que', 'se', 'por', 'es', 'más', 'lo', 'pero', 'me', 'mi', 'al', 'le', 'si', 'este', 'esta']
+    
+    # Añade palabras comunes de encuestas que no aportan valor
+    custom_list = ['...', 'p', 'r', 'rta', 'respuesta', 'si', 'no', 'na', 'ninguno', 'ninguna', 'nan']
+    spanish_stopwords.extend(custom_list)
+    return set(spanish_stopwords)
+# --- ¡FIN DE NUEVA FUNCIÓN MOVILIZADA! ---
+
+
 # ==============================
 # FUNCIÓN RAG (Recuperación de Información S3)
 # ==============================
@@ -48,35 +71,24 @@ def get_relevant_info(db, question, selected_files):
         doc_name = pres.get('nombre_archivo')
         if doc_name and doc_name in selected_files_set:
             try:
-                # 1. Obtenemos el título, si no existe, usamos el nombre del archivo
                 titulo = pres.get('titulo_estudio', doc_name)
-                
-                # 2. Obtenemos el año (del campo 'marca' que usas en el filtro)
                 ano = pres.get('marca')
-                
-                # 3. Construimos la cabecera de la cita
                 citation_header = f"{titulo} - {ano}" if ano else titulo
 
                 all_text += f"Documento: {citation_header}\n"
                 
                 for grupo in pres.get("grupos", []):
-                    # --- INICIO DE MODIFICACIÓN (Eliminar "Grupo X") ---
-                    
                     contenido = str(grupo.get('contenido_texto', ''))
                     metadatos = json.dumps(grupo.get('metadatos', {}), ensure_ascii=False) if grupo.get('metadatos') else ""
                     hechos = json.dumps(grupo.get('hechos', []), ensure_ascii=False) if grupo.get('hechos') else ""
                     
-                    # Ya no añadimos "Grupo X:", solo el contenido como una viñeta
                     if contenido:
                         all_text += f"  - {contenido}\n";
                     
-                    # También simplificamos estas etiquetas
                     if metadatos: 
                         all_text += f"  (Contexto adicional: {metadatos})\n"
                     if hechos: 
                         all_text += f"  (Datos clave: {hechos})\n"
-                        
-                    # --- FIN DE MODIFICACIÓN ---
                         
                 all_text += "\n---\n\n"
             except Exception as e: 
@@ -98,15 +110,10 @@ def extract_text_from_pdfs(uploaded_files):
 
     for file in uploaded_files:
         try:
-            # Leer los bytes del archivo subido
             file_bytes = file.getvalue()
-            
-            # Abrir el PDF desde los bytes
             pdf_document = fitz.open(stream=file_bytes, filetype="pdf")
-            
             combined_text += f"\n\n--- INICIO DOCUMENTO: {file.name} ---\n\n"
             
-            # Extraer texto de cada página
             for page in pdf_document:
                 combined_text += page.get_text() + "\n"
                 

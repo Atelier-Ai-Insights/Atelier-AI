@@ -20,13 +20,14 @@ from modes.image_eval_mode import image_evaluation_mode
 from modes.video_eval_mode import video_evaluation_mode
 from modes.text_analysis_mode import text_analysis_mode # <--- LÍNEA MODIFICADA
 from modes.onepager_mode import one_pager_ppt_mode
-from modes.data_analysis_mode import data_analysis_mode
+from modes.data_analysis_mode import data_analysis_mode # <--- LÍNEA MODIFICADA
 from utils import (
     extract_brand, reset_chat_workflow, reset_report_workflow 
 )
 import constants as c
 
 def set_mode_and_reset(new_mode):
+    # (Esta función no cambia)
     if 'current_mode' not in st.session_state or st.session_state.current_mode != new_mode:
         reset_chat_workflow() 
         st.session_state.pop("generated_concept", None)
@@ -36,8 +37,8 @@ def set_mode_and_reset(new_mode):
         st.session_state.pop("image_evaluation_result", None)
         st.session_state.pop("video_evaluation_result", None)
         st.session_state.pop("generated_ppt_bytes", None)
-        st.session_state.pop("data_analysis_df", None)
-        st.session_state.pop("data_analysis_chat_history", None)
+        st.session_state.pop("data_analysis_df", None) # <--- LÍNEA MODIFICADA
+        st.session_state.pop("data_analysis_chat_history", None) # <--- LÍNEA MODIFICADA
         
         # --- LÓGICA MODIFICADA ---
         st.session_state.pop("uploaded_transcripts_text", None)
@@ -47,7 +48,7 @@ def set_mode_and_reset(new_mode):
         st.session_state.pop("text_analysis_combined_context", None)
         st.session_state.pop("text_analysis_file_names", None)
         # --- FIN LÓGICA MODIFICADA ---
-
+        
         st.session_state.current_mode = new_mode
 
 # =====================================================
@@ -55,36 +56,50 @@ def set_mode_and_reset(new_mode):
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
 
-    # --- Bloque de Heartbeat (sin cambios) ---
-    GRACE_PERIOD_SECONDS = 5 
-    HEARTBEAT_INTERVAL_SECONDS = 60 
+    # --- ¡BLOQUE DE HEARTBEAT CON "TEMPORIZADOR SUAVE"! ---
+    
+    GRACE_PERIOD_SECONDS = 5 # Período de gracia post-login
+    HEARTBEAT_INTERVAL_SECONDS = 60 # Chequear solo cada 60 segundos
     current_time = time.time()
+    
     login_time = st.session_state.get("login_timestamp", 0)
     if (current_time - login_time) > GRACE_PERIOD_SECONDS:
+        
         last_check = st.session_state.get("last_heartbeat_check", 0)
+        
         if (current_time - last_check) > HEARTBEAT_INTERVAL_SECONDS:
             print("--- Ejecutando Heartbeat de Sesión ---")
             try:
                 if 'user_id' not in st.session_state or 'session_id' not in st.session_state:
                     st.error("Error de sesión (faltan datos). Por favor, inicie sesión de nuevo.")
-                    st.session_state.clear(); st.rerun()
+                    st.session_state.clear()
+                    st.rerun()
+
                 response = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute()
+                
                 if response.data and 'active_session_id' in response.data:
                     db_session_id = response.data['active_session_id']
+                    
                     if db_session_id != st.session_state.session_id:
                         st.error("Tu sesión ha sido cerrada porque iniciaste sesión en otro dispositivo.")
-                        st.session_state.clear(); st.rerun()
+                        st.session_state.clear()
+                        st.rerun()
                     else:
                         print("Heartbeat exitoso.")
                         st.session_state.last_heartbeat_check = current_time
+                
                 else:
                     st.error("Error al verificar sesión (usuario no encontrado).")
-                    st.session_state.clear(); st.rerun()
+                    st.session_state.clear()
+                    st.rerun()
+
             except Exception as e:
                 print(f"Heartbeat check falló (ej. red), pero NO se expulsará al usuario. Error: {e}")
                 st.session_state.last_heartbeat_check = current_time
+    
     # --- FIN DEL BLOQUE DE HEARTBEAT ---
 
+    # El resto de la función continúa
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")

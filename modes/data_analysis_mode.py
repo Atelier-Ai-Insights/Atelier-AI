@@ -1,17 +1,17 @@
 import streamlit as st
 import pandas as pd
-from utils import get_relevant_info
+from utils import get_relevant_info, get_stopwords # <--- MODIFICADO
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event
 from prompts import get_survey_articulation_prompt
 import constants as c
-import io # Necesario para la descarga de Excel
-import os # Necesario para chequear la plantilla
+import io 
+import os 
 
 # --- Nuevas importaciones para Nube de Palabras ---
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
-import nltk
+# import nltk # <--- Ya no es necesario aquí
 
 # --- Nuevas importaciones para PPTX ---
 from pptx import Presentation
@@ -35,24 +35,8 @@ def to_excel(df):
         df.to_excel(writer, sheet_name='Pivot', index=True)
     return output.getvalue()
 
-@st.cache_resource
-def get_stopwords():
-    """Descarga y cachea las stopwords en español de NLTK."""
-    try:
-        nltk.download('stopwords')
-    except Exception as e:
-        print(f"Error descargando stopwords de NLTK (se usarán las básicas): {e}")
-    
-    try:
-        spanish_stopwords = nltk.corpus.stopwords.words('spanish')
-    except:
-        spanish_stopwords = ['de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'las', 'un', 'para', 'con', 'no', 'una', 'su', 'que', 'se', 'por', 'es', 'más', 'lo', 'pero', 'me', 'mi', 'al', 'le', 'si', 'este', 'esta']
-    
-    custom_list = ['...', 'p', 'r', 'rta', 'respuesta', 'si', 'no', 'na', 'ninguno', 'ninguna', 'nan']
-    spanish_stopwords.extend(custom_list)
-    return set(spanish_stopwords)
+# --- LA FUNCIÓN get_stopwords() SE HA MOVILIZADO A UTILS.PY ---
 
-# --- ¡NUEVA FUNCIÓN HELPER PARA ESTILOS! ---
 def style_residuals(val):
     """Aplica color a los residuos estandarizados significativos."""
     if val > 1.96:
@@ -119,8 +103,8 @@ def add_table_slide(prs, title_text, df):
 
 
 def data_analysis_mode(db, selected_files):
-    st.subheader(c.MODE_DATA_ANALYSIS) # <-- Esto tomará el nuevo nombre
-    st.markdown("Carga un archivo Excel (.xlsx) para realizar análisis numéricos (tablas dinámicas, frecuencias) y articularlos con el repositorio.") # <-- Texto modificado
+    st.subheader(c.MODE_DATA_ANALYSIS)
+    st.markdown("Carga un archivo Excel (.xlsx) para realizar análisis numéricos (tablas dinámicas, frecuencias) y articularlos con el repositorio.")
 
     # --- 1. CARGADOR DE ARCHIVOS ---
     uploaded_file = st.file_uploader("Sube tu archivo .xlsx o .xls", type=["xlsx", "xls"], key="data_uploader")
@@ -352,7 +336,10 @@ def data_analysis_mode(db, selected_files):
                 if col_to_cloud:
                     with st.spinner("Generando nube de palabras y tabla..."):
                         try:
+                            # 1. Obtener stopwords (ahora desde utils)
                             stopwords = get_stopwords()
+                        
+                            # 2. Combinar todo el texto
                             text = " ".join(str(review) for review in df[col_to_cloud].dropna())
                             
                             if not text.strip():
