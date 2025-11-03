@@ -333,7 +333,8 @@ PROMPTS_ONEPAGER = {
           "deseos_motivaciones": ["... (2-3 deseos, ganancias o 'drivers' de decisión del contexto) ..."],
           "citas_clave": ["... (1-2 citas literales IMPACTANTES del contexto que resumen su sentir) ..."]
         }}
-        """
+        """,
+    # --- ¡FIN DEL NUEVO BLOQUE! ---
 }
 
 # 2. El formateador del prompt final
@@ -353,7 +354,7 @@ def get_onepager_final_prompt(relevant_info, selected_template_name, tema_centra
     {prompt_template.format(tema_central=tema_central)}
     """
 
-# --- ¡NUEVA FUNCIÓN QUE FALTABA! ---
+# --- ¡INICIO DEL NUEVO BLOQUE! ---
 
 def get_autocode_prompt(context, main_topic):
     """
@@ -383,3 +384,4 @@ def get_autocode_prompt(context, main_topic):
         "- **Citas Textuales:** Las citas DEBEN ser copiadas palabra por palabra de las transcripciones.\n"
         "- **Fuente de la Cita:** DEBES indicar de qué archivo (ej. `(Fuente: Entrevista_Usuario_1.docx)`) proviene cada cita.\n"
     )
+# --- ¡FIN DEL NUEVO BLOQUE! ---
