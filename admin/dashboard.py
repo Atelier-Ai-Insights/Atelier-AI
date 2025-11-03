@@ -43,19 +43,26 @@ def show_repository_dashboard(db_full):
         # Gráfico de Cliente (Pie Chart)
         st.markdown("**Estudios por Cliente (campo 'cliente')**")
         
-        # --- ¡INICIO DE LA CORRECCIÓN DEFINITIVA! ---
-        # 1. Contar los valores (devuelve una Serie)
-        cliente_counts_series = df['cliente'].value_counts()
+        # --- ¡INICIO DE LA CORRECCIÓN A PRUEBA DE BALAS! ---
+        try:
+            # 1. Contar los valores
+            cliente_counts_series = df['cliente'].value_counts()
+            
+            # 2. Convertir la Serie a un DataFrame y RESETEAR EL ÍNDICE
+            cliente_counts_df = cliente_counts_series.reset_index()
+            
+            # 3. Renombrar las columnas explícitamente
+            cliente_counts_df.columns = ['Cliente', 'Conteo']
+            
+            # 4. ¡NUEVA VERIFICACIÓN! Asegurarse de que el DF no esté vacío.
+            if not cliente_counts_df.empty:
+                # 5. Graficar, especificando la columna 'x' (etiquetas) y 'y' (valores)
+                st.pie_chart(cliente_counts_df, x='Cliente', y='Conteo')
+            else:
+                st.info("No hay datos de clientes para mostrar en el gráfico.")
         
-        # 2. Convertir la Serie a un DataFrame y RESETEAR EL ÍNDICE
-        # Esto crea dos columnas: 'index' (con los nombres) y 0 (con los conteos)
-        cliente_counts_df = cliente_counts_series.reset_index()
-        
-        # 3. Renombrar las columnas explícitamente
-        cliente_counts_df.columns = ['Cliente', 'Conteo']
-        
-        # 4. Graficar, especificando la columna 'x' (etiquetas) y 'y' (valores)
-        st.pie_chart(cliente_counts_df, x='Cliente', y='Conteo')
+        except Exception as e:
+            st.error(f"Se produjo un error al generar el gráfico de pastel: {e}")
         # --- ¡FIN DE LA CORRECCIÓN! ---
 
     with col2:
