@@ -155,7 +155,7 @@ def get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
         "* ¿Mensaje vs insights del contexto? (Citar [1])",
         "\n### 3. Branding/Identidad",
         "* ¿Marca integrada efectivamente? ¿Reconocible?",
-        "* ¿Refuerza personalidad/valores marca (según contexto)? (Citar [1])",
+        "* ¿Refuerza personalidad/valores marca (según contexto)? (Citar [l1])",
         "\n### 4. Call to Action",
         "* ¿Sugiere acción o genera emoción/pensamiento (curiosidad, deseo, etc.)?",
         "* ¿Contexto sugiere que motivará al target? (Citar [1])",
@@ -214,7 +214,7 @@ def get_transcript_prompt(combined_context, user_prompt):
         "\n\n**Respuesta:**"
     ]
 
-# --- (NUEVA FUNCIÓN PARA EL MODO DE ANÁLISIS DE DATOS) ---
+# --- Prompt para "Análisis de Datos (Excel)" ---
 
 def get_survey_articulation_prompt(survey_context, repository_context, conversation_history):
     """
@@ -321,8 +321,6 @@ PROMPTS_ONEPAGER = {
           "conclusion_clave": "El principal insight visual de la matriz."
         }}
         """,
-    
-    # --- ¡INICIO DEL NUEVO BLOQUE! ---
     "Perfil de Buyer Persona": """
         Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
         {{
@@ -336,7 +334,6 @@ PROMPTS_ONEPAGER = {
           "citas_clave": ["... (1-2 citas literales IMPACTANTES del contexto que resumen su sentir) ..."]
         }}
         """
-    # --- ¡FIN DEL NUEVO BLOQUE! ---
 }
 
 # 2. El formateador del prompt final
@@ -355,3 +352,34 @@ def get_onepager_final_prompt(relevant_info, selected_template_name, tema_centra
     Tu tarea es sintetizar esta información para completar la plantilla '{selected_template_name}'.
     {prompt_template.format(tema_central=tema_central)}
     """
+
+# --- ¡NUEVA FUNCIÓN QUE FALTABA! ---
+
+def get_autocode_prompt(context, main_topic):
+    """
+    Crea un prompt para que la IA lea múltiples transcripciones e identifique
+    temas clave (códigos) con citas de respaldo.
+    """
+    return (
+        f"**Tarea:** Eres un investigador cualitativo experto. Tu trabajo es analizar las transcripciones de entrevistas/focus groups proporcionadas sobre el tema '{main_topic}'.\n"
+        f"Debes identificar los **temas emergentes (códigos)** más importantes y respaldar cada tema con **citas textuales** de las transcripciones.\n\n"
+        f"--- TRANSCRIPCIONES (INFORMACIÓN DOCUMENTADA) ---\n"
+        f"```\n{context}\n```\n\n"
+        f"**Formato de Salida OBLIGATORIO (Markdown):**\n"
+        "Debes seguir esta estructura de Markdown exactamente:\n\n"
+        "## Resumen de Temas Clave\n"
+        "Un párrafo corto (2-3 frases) que resuma los principales hallazgos.\n\n"
+        "## Temas Emergentes y Citas\n\n"
+        "### 1. [Nombre del Tema 1]\n"
+        "> *\"[Cita textual 1 que ilustre este tema]\"* - (Fuente: [Nombre del Archivo de la cita])\n\n"
+        "> *\"[Cita textual 2 que ilustre este tema]\"* - (Fuente: [Nombre del Archivo de la cita])\n\n"
+        "### 2. [Nombre del Tema 2]\n"
+        "> *\"[Cita textual 1 que ilustre este tema]\"* - (Fuente: [Nombre del Archivo de la cita])\n\n"
+        "### 3. [Nombre del Tema 3]\n"
+        "> *\"[Cita textual 1 que ilustre este tema]\"* - (Fuente: [Nombre del Archivo de la cita])\n\n"
+        "(...continuar con más temas si son relevantes...)\n\n"
+        "**Instrucciones Adicionales:**\n"
+        "- **Identifica Temas:** Los temas deben ser *insights* (ej. "Preferencia por la practicidad") no solo palabras (ej. "Empaque").\n"
+        "- **Citas Textuales:** Las citas DEBEN ser copiadas palabra por palabra de las transcripciones.\n"
+        "- **Fuente de la Cita:** DEBES indicar de qué archivo (ej. `(Fuente: Entrevista_Usuario_1.docx)`) proviene cada cita.\n"
+    )

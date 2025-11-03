@@ -18,16 +18,15 @@ from modes.concept_mode import concept_generation_mode
 from modes.idea_eval_mode import idea_evaluator_mode
 from modes.image_eval_mode import image_evaluation_mode
 from modes.video_eval_mode import video_evaluation_mode
-from modes.transcript_mode import transcript_analysis_mode
+from modes.text_analysis_mode import text_analysis_mode # <--- LÍNEA MODIFICADA
 from modes.onepager_mode import one_pager_ppt_mode
-from modes.data_analysis_mode import data_analysis_mode 
+from modes.data_analysis_mode import data_analysis_mode
 from utils import (
     extract_brand, reset_chat_workflow, reset_report_workflow 
 )
 import constants as c
 
 def set_mode_and_reset(new_mode):
-    # (Esta función no cambia)
     if 'current_mode' not in st.session_state or st.session_state.current_mode != new_mode:
         reset_chat_workflow() 
         st.session_state.pop("generated_concept", None)
@@ -36,11 +35,19 @@ def set_mode_and_reset(new_mode):
         st.session_state.pop("last_question", None)
         st.session_state.pop("image_evaluation_result", None)
         st.session_state.pop("video_evaluation_result", None)
-        st.session_state.pop("uploaded_transcripts_text", None)
-        st.session_state.pop("transcript_chat_history", None)
         st.session_state.pop("generated_ppt_bytes", None)
         st.session_state.pop("data_analysis_df", None)
         st.session_state.pop("data_analysis_chat_history", None)
+        
+        # --- LÓGICA MODIFICADA ---
+        st.session_state.pop("uploaded_transcripts_text", None)
+        st.session_state.pop("transcript_chat_history", None)
+        st.session_state.pop("autocode_result", None)
+        st.session_state.pop("text_analysis_files_dict", None)
+        st.session_state.pop("text_analysis_combined_context", None)
+        st.session_state.pop("text_analysis_file_names", None)
+        # --- FIN LÓGICA MODIFICADA ---
+
         st.session_state.current_mode = new_mode
 
 # =====================================================
@@ -48,50 +55,36 @@ def set_mode_and_reset(new_mode):
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
 
-    # --- ¡BLOQUE DE HEARTBEAT CON "TEMPORIZADOR SUAVE"! ---
-    
-    GRACE_PERIOD_SECONDS = 5 # Período de gracia post-login
-    HEARTBEAT_INTERVAL_SECONDS = 60 # Chequear solo cada 60 segundos
+    # --- Bloque de Heartbeat (sin cambios) ---
+    GRACE_PERIOD_SECONDS = 5 
+    HEARTBEAT_INTERVAL_SECONDS = 60 
     current_time = time.time()
-    
     login_time = st.session_state.get("login_timestamp", 0)
     if (current_time - login_time) > GRACE_PERIOD_SECONDS:
-        
         last_check = st.session_state.get("last_heartbeat_check", 0)
-        
         if (current_time - last_check) > HEARTBEAT_INTERVAL_SECONDS:
             print("--- Ejecutando Heartbeat de Sesión ---")
             try:
                 if 'user_id' not in st.session_state or 'session_id' not in st.session_state:
                     st.error("Error de sesión (faltan datos). Por favor, inicie sesión de nuevo.")
-                    st.session_state.clear()
-                    st.rerun()
-
+                    st.session_state.clear(); st.rerun()
                 response = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute()
-                
                 if response.data and 'active_session_id' in response.data:
                     db_session_id = response.data['active_session_id']
-                    
                     if db_session_id != st.session_state.session_id:
                         st.error("Tu sesión ha sido cerrada porque iniciaste sesión en otro dispositivo.")
-                        st.session_state.clear()
-                        st.rerun()
+                        st.session_state.clear(); st.rerun()
                     else:
                         print("Heartbeat exitoso.")
                         st.session_state.last_heartbeat_check = current_time
-                
                 else:
                     st.error("Error al verificar sesión (usuario no encontrado).")
-                    st.session_state.clear()
-                    st.rerun()
-
+                    st.session_state.clear(); st.rerun()
             except Exception as e:
                 print(f"Heartbeat check falló (ej. red), pero NO se expulsará al usuario. Error: {e}")
                 st.session_state.last_heartbeat_check = current_time
-    
     # --- FIN DEL BLOQUE DE HEARTBEAT ---
 
-    # El resto de la función continúa
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
@@ -101,11 +94,11 @@ def run_user_mode(db_full, user_features, footer_html):
     
     modo = st.session_state.current_mode
 
-    # --- SECCIÓN MODIFICADA CON CONSTANTES ---
+    # --- SECCIÓN MODIFICADA ---
     all_categories = {
         "Análisis": {
             c.MODE_CHAT: True, 
-            c.MODE_TRANSCRIPT: user_features.get("transcript_file_limit", 0) > 0,
+            c.MODE_TEXT_ANALYSIS: user_features.get("transcript_file_limit", 0) > 0, # <-- MODIFICADO
             c.MODE_DATA_ANALYSIS: True
         },
         "Evaluación": {
@@ -133,10 +126,11 @@ def run_user_mode(db_full, user_features, footer_html):
         with st.sidebar.expander("Análisis", expanded=(default_expanded == "Análisis")):
             if all_categories["Análisis"][c.MODE_CHAT]:
                 st.button(c.MODE_CHAT, on_click=set_mode_and_reset, args=(c.MODE_CHAT,), use_container_width=True, type="primary" if modo == c.MODE_CHAT else "secondary")
-            if all_categories["Análisis"][c.MODE_TRANSCRIPT]:
-                st.button(c.MODE_TRANSCRIPT, on_click=set_mode_and_reset, args=(c.MODE_TRANSCRIPT,), use_container_width=True, type="primary" if modo == c.MODE_TRANSCRIPT else "secondary")
+            if all_categories["Análisis"][c.MODE_TEXT_ANALYSIS]: # <-- MODIFICADO
+                st.button(c.MODE_TEXT_ANALYSIS, on_click=set_mode_and_reset, args=(c.MODE_TEXT_ANALYSIS,), use_container_width=True, type="primary" if modo == c.MODE_TEXT_ANALYSIS else "secondary")
             if all_categories["Análisis"][c.MODE_DATA_ANALYSIS]:
                 st.button(c.MODE_DATA_ANALYSIS, on_click=set_mode_and_reset, args=(c.MODE_DATA_ANALYSIS,), use_container_width=True, type="primary" if modo == c.MODE_DATA_ANALYSIS else "secondary")
+    # --- FIN SECCIÓN MODIFICADA ---
 
     if any(all_categories["Evaluación"].values()):
         with st.sidebar.expander("Evaluación", expanded=(default_expanded == "Evaluación")):
@@ -164,13 +158,8 @@ def run_user_mode(db_full, user_features, footer_html):
     
     st.sidebar.header("Filtros de Búsqueda")
     
-    # --- INICIO DE LA MODIFICACIÓN ---
-    # ANTES: run_filters = modo not in [c.MODE_TRANSCRIPT, c.MODE_DATA_ANALYSIS]
-    # AHORA: (Quitamos c.MODE_DATA_ANALYSIS de la lista de exclusión)
-    
-    run_filters = modo not in [c.MODE_TRANSCRIPT] 
-
-    # --- FIN DE LA MODIFICACIÓN ---
+    # --- MODIFICADO ---
+    run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS] 
 
     db_filtered = db_full[:] 
 
@@ -209,6 +198,7 @@ def run_user_mode(db_full, user_features, footer_html):
     if run_filters and not selected_files and modo not in [c.MODE_REPORT, c.MODE_IMAGE_EVAL, c.MODE_VIDEO_EVAL, c.MODE_ONEPAGER]: 
          st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
 
+    # --- SECCIÓN MODIFICADA ---
     if modo == c.MODE_REPORT: report_mode(db_filtered, selected_files)
     elif modo == c.MODE_IDEATION: ideacion_mode(db_filtered, selected_files)
     elif modo == c.MODE_CONCEPT: concept_generation_mode(db_filtered, selected_files)
@@ -216,9 +206,10 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == c.MODE_IDEA_EVAL: idea_evaluator_mode(db_filtered, selected_files)
     elif modo == c.MODE_IMAGE_EVAL: image_evaluation_mode(db_filtered, selected_files)
     elif modo == c.MODE_VIDEO_EVAL: video_evaluation_mode(db_filtered, selected_files)
-    elif modo == c.MODE_TRANSCRIPT: transcript_analysis_mode()
+    elif modo == c.MODE_TEXT_ANALYSIS: text_analysis_mode() # <-- MODIFICADO
     elif modo == c.MODE_ONEPAGER: one_pager_ppt_mode(db_filtered, selected_files)
     elif modo == c.MODE_DATA_ANALYSIS: data_analysis_mode(db_filtered, selected_files)
+    # --- FIN SECCIÓN MODIFICADA ---
     
 
 # =====================================================
