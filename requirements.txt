@@ -110,3 +110,4 @@ Pillow
 python-docx
 python-pptx
 pymupdf
+openpyxl
