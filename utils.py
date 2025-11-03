@@ -38,26 +38,41 @@ def clean_text(text):
     if not isinstance(text, str): text = str(text)
     return text
 
-# --- ¡INICIO DE NUEVA FUNCIÓN MOVILIZADA! ---
+# --- ¡INICIO DE FUNCIÓN MODIFICADA! ---
 @st.cache_resource
 def get_stopwords():
-    """Descarga y cachea las stopwords en español de NLTK."""
+    """Descarga y cachea las stopwords en español Y EN INGLÉS de NLTK."""
     try:
         nltk.download('stopwords')
     except Exception as e:
         print(f"Error descargando stopwords de NLTK (se usarán las básicas): {e}")
     
+    # Cargar stopwords en español
     try:
         spanish_stopwords = nltk.corpus.stopwords.words('spanish')
     except:
-        # Lista fallback por si NLTK falla
         spanish_stopwords = ['de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'las', 'un', 'para', 'con', 'no', 'una', 'su', 'que', 'se', 'por', 'es', 'más', 'lo', 'pero', 'me', 'mi', 'al', 'le', 'si', 'este', 'esta']
     
-    # Añade palabras comunes de encuestas que no aportan valor
-    custom_list = ['...', 'p', 'r', 'rta', 'respuesta', 'si', 'no', 'na', 'ninguno', 'ninguna', 'nan']
-    spanish_stopwords.extend(custom_list)
-    return set(spanish_stopwords)
-# --- ¡FIN DE NUEVA FUNCIÓN MOVILIZADA! ---
+    # Cargar stopwords en inglés
+    try:
+        english_stopwords = nltk.corpus.stopwords.words('english')
+    except:
+        english_stopwords = ['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', 'her', 'hers', 'herself', 'it', 'its', 'itself', 'they', 'them', 'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom', 'this', 'that', 'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or', 'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't', 'can', 'will', 'just', 'don', 'should', 'now']
+
+    # Lista de ruido meta (de tu captura de pantalla)
+    custom_list = [
+        '...', 'p', 'r', 'rta', 'respuesta', 'respuestas', 'si', 'no', 'na', 'ninguno', 'ninguna', 'nan',
+        'document', 'presentation', 'python', 'warning', 'created', 'page',
+        'objetivo', 'tecnica', 'investigacion', 'investigación', 'participante', 'participantes',
+        'sesiones', 'sesión', 'proyecto', 'análisis', 'analisis', 'ficha', 'tecnica', 'slide',
+        'bogotá', 'colombia', 'atelier', 'insights', 'cliente', 'consumidor', 'consumidores',
+        'evaluación', 'evaluacion', 'entrevistado', 'entrevistados', 'pregunta', 'focus', 'group'
+    ]
+    
+    # Combinar todas las listas
+    final_stopwords = set(spanish_stopwords) | set(english_stopwords) | set(custom_list)
+    return final_stopwords
+# --- ¡FIN DE FUNCIÓN MODIFICADA! ---
 
 
 # ==============================
