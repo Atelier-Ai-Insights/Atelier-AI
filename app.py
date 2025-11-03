@@ -36,8 +36,14 @@ def set_mode_and_reset(new_mode):
         st.session_state.pop("image_evaluation_result", None)
         st.session_state.pop("video_evaluation_result", None)
         st.session_state.pop("generated_ppt_bytes", None)
+        
+        # --- LÓGICA MODIFICADA ---
         st.session_state.pop("data_analysis_df", None)
         st.session_state.pop("data_analysis_chat_history", None)
+        st.session_state.pop("da_selected_project_id", None) # <-- LÍNEA NUEVA
+        st.session_state.pop("da_selected_project_name", None) # <-- LÍNEA NUEVA
+        # --- FIN LÓGICA MODIFICADA ---
+        
         st.session_state.pop("text_analysis_files_dict", None)
         st.session_state.pop("text_analysis_combined_context", None)
         st.session_state.pop("text_analysis_file_names", None)
@@ -258,9 +264,7 @@ def main():
         with tab_admin:
             st.title("Panel de Administración")
             st.write(f"Gestionando como: {st.session_state.user}")
-            # --- ¡INICIO DE LA MODIFICACIÓN! ---
-            show_admin_dashboard(db_full) # Pasamos la BD completa
-            # --- ¡FIN DE LA MODIFICACIÓN! ---
+            show_admin_dashboard(db_full)
     else: 
         run_user_mode(db_full, user_features, footer_html)
 
