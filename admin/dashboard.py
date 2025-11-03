@@ -3,6 +3,7 @@ import pandas as pd
 from services.supabase_db import supabase, supabase_admin_client
 from config import PLAN_FEATURES
 from supabase import create_client 
+import altair as alt # <-- ¡NUEVA IMPORTACIÓN!
 
 # =====================================================
 # FUNCIÓN DEL DASHBOARD DEL REPOSITORIO (MODIFICADA)
@@ -43,21 +44,35 @@ def show_repository_dashboard(db_full):
         # Gráfico de Cliente (Pie Chart)
         st.markdown("**Estudios por Cliente (campo 'cliente')**")
         
-        # --- ¡INICIO DE LA CORRECCIÓN A PRUEBA DE BALAS! ---
+        # --- ¡INICIO DE LA CORRECCIÓN (con Altair)! ---
         try:
-            # 1. Contar los valores
             cliente_counts_series = df['cliente'].value_counts()
-            
-            # 2. Convertir la Serie a un DataFrame y RESETEAR EL ÍNDICE
             cliente_counts_df = cliente_counts_series.reset_index()
-            
-            # 3. Renombrar las columnas explícitamente
             cliente_counts_df.columns = ['Cliente', 'Conteo']
             
-            # 4. ¡NUEVA VERIFICACIÓN! Asegurarse de que el DF no esté vacío.
             if not cliente_counts_df.empty:
-                # 5. Graficar, especificando la columna 'x' (etiquetas) y 'y' (valores)
-                st.pie_chart(cliente_counts_df, x='Cliente', y='Conteo')
+                # 1. Crear el gráfico base
+                base = alt.Chart(cliente_counts_df).encode(
+                   theta=alt.Theta("Conteo:Q", stack=True)
+                )
+
+                # 2. Definir el gráfico de pastel
+                pie = base.mark_arc(outerRadius=120).encode(
+                    color=alt.Color("Cliente:N"),
+                    order=alt.Order("Conteo:Q", sort="descending"),
+                    tooltip=["Cliente", "Conteo"]
+                )
+
+                # 3. Añadir el texto (porcentajes)
+                text = base.mark_text(radius=140).encode(
+                    text=alt.Text("Conteo:Q", format=".1%"),
+                    order=alt.Order("Conteo:Q", sort="descending"),
+                    color=alt.value("black")  # Color del texto
+                )
+
+                # 4. Combinar y mostrar
+                chart = pie + text
+                st.altair_chart(chart, use_container_width=True)
             else:
                 st.info("No hay datos de clientes para mostrar en el gráfico.")
         
