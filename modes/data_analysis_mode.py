@@ -213,7 +213,7 @@ def data_analysis_mode(db, selected_files):
             st.session_state.data_analysis_stats_context = context_buffer.getvalue()
             context_buffer.close()
 
-        # --- PESTAÑA 2: TABLA DINÁMICA (MODIFICADA) ---
+        # --- PESTAÑA 2: TABLA DINÁMICA ---
         with tab2:
             st.header("Generador de Tabla Dinámica")
             st.markdown("Crea tablas cruzadas para explorar relaciones entre variables.")
@@ -237,18 +237,16 @@ def data_analysis_mode(db, selected_files):
                     key="pivot_display"
                 )
                 
-                # --- ¡INICIO DE LA MODIFICACIÓN (SIGNIFICANCIA)! ---
                 show_sig = st.checkbox(
                     "Calcular significancia (Chi-Squared)", 
                     key="pivot_sig",
-                    disabled=(agg_func != "count"), # Solo se activa si la operación es 'count'
+                    disabled=(agg_func != "count"), 
                     help="Calcula si las diferencias en la tabla son estadísticamente significativas. Solo funciona con la operación 'count'."
                 )
                 
                 if agg_func != "count" and show_sig:
                     st.warning("La significancia Chi-Squared solo se puede calcular con la operación 'count'.")
                     show_sig = False
-                # --- FIN DE LA MODIFICACIÓN ---
 
                 pivot_df_raw = None 
                 
@@ -286,16 +284,13 @@ def data_analysis_mode(db, selected_files):
                         else:
                             st.dataframe(display_df.fillna(0).style.format("{:.1%}"), use_container_width=True)
                         
-                        # --- ¡INICIO DE LA MODIFICACIÓN (LÓGICA CHI-SQUARED)! ---
                         if show_sig and agg_func == 'count':
                             st.markdown("---")
                             st.subheader("Prueba de Significación (Chi-Squared)")
-                            if pivot_df_raw.shape[0] < 2 or pivot_df_raw.shape[1] < 2:
+                            if pivot_df_raw.shape[0] < 2 or (pivot_df_raw.ndim == 2 and pivot_df_raw.shape[1] < 2):
                                 st.warning("La prueba Chi-Squared requiere al menos 2 filas y 2 columnas.")
                             else:
                                 try:
-                                    # La prueba no funciona si hay 0 en alguna celda (común)
-                                    # Añadimos +1 a toda la tabla para suavizar (Laplace Smoothing)
                                     df_testable = pivot_df_raw + 1
                                     
                                     chi2, p_value, dof, expected = stats.chi2_contingency(df_testable)
@@ -308,7 +303,6 @@ def data_analysis_mode(db, selected_files):
                                 
                                 except Exception as e:
                                     st.error(f"Error al calcular Chi-Squared: {e}")
-                        # --- FIN DE LA MODIFICACIÓN ---
 
                         excel_bytes = to_excel(pivot_df_raw)
                         st.download_button(
@@ -463,16 +457,22 @@ def data_analysis_mode(db, selected_files):
                     )
 
 
-        # --- PESTAÑA 5: CHAT DE ARTICULACIÓN ---
+        # --- PESTAÑA 5: CHAT DE ARTICULACIÓN (CORREGIDO) ---
         with tab_chat:
             st.header("Chat de Articulación (Cuanti + Cuali)")
             
             if "data_analysis_chat_history" not in st.session_state:
                 st.session_state.data_analysis_chat_history = []
                 
+            # Mostrar historial de chat
             for msg in st.session_state.data_analysis_chat_history:
                 with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
                     st.markdown(msg['message'])
+            
+            # --- INICIO DE LA CORRECCIÓN ---
+            # Definir el chat_input ANTES de usar la variable user_prompt
+            user_prompt = st.chat_input("Haz una pregunta sobre estos datos y el repositorio...")
+            # --- FIN DE LA CORRECCIÓN ---
             
             if user_prompt:
                 st.session_state.data_analysis_chat_history.append({"role": "Usuario", "message": user_prompt})
