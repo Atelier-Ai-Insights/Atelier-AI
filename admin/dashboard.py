@@ -4,13 +4,11 @@ from services.supabase_db import supabase, supabase_admin_client
 from config import PLAN_FEATURES
 from supabase import create_client 
 
-# --- ¡NUEVAS IMPORTACIONES! ---
-from wordcloud import WordCloud
-import matplotlib.pyplot as plt
-from utils import get_stopwords
+# --- Importaciones de Nube de Palabras (eliminadas) ---
+# WordCloud, matplotlib, get_stopwords ya no son necesarias aquí.
 
 # =====================================================
-# FUNCIÓN DEL DASHBOARD DEL REPOSITORIO (NUEVA)
+# FUNCIÓN DEL DASHBOARD DEL REPOSITORIO (MODIFICADA)
 # =====================================================
 def show_repository_dashboard(db_full):
     st.subheader("Dashboard de Tendencias del Repositorio")
@@ -21,64 +19,45 @@ def show_repository_dashboard(db_full):
         return
 
     # --- 1. Preparar Datos ---
-    with st.spinner("Analizando todo el repositorio..."):
-        try:
-            df = pd.DataFrame(db_full)
-            # Limpiar datos para los gráficos
-            df['marca'] = df['marca'].fillna('Sin Año').astype(str)
-            df['filtro'] = df['filtro'].fillna('Sin Filtro').astype(str)
-            
-            # Preparar texto para la nube de palabras
-            all_text = ""
-            for doc in db_full:
-                for grupo in doc.get("grupos", []):
-                    all_text += str(grupo.get('contenido_texto', '')) + " "
-            
-            stopwords = get_stopwords()
-
-        except Exception as e:
-            st.error(f"Error al procesar los datos del repositorio: {e}")
-            return
+    try:
+        df = pd.DataFrame(db_full)
+        # Limpiar datos para los gráficos
+        df['marca'] = df['marca'].fillna('Sin Año').astype(str)
+        df['filtro'] = df['filtro'].fillna('Sin Marca').astype(str)
+        df['cliente'] = df['cliente'].fillna('Sin Cliente').astype(str) # <-- LÍNEA NUEVA
+        
+    except Exception as e:
+        st.error(f"Error al procesar los datos del repositorio: {e}")
+        return
             
     # --- 2. Mostrar Gráficos ---
     st.markdown("#### Distribución de Estudios")
+    
+    # Gráfico de Año (Vertical)
+    st.markdown("**Estudios por Año (campo 'marca')**")
+    year_counts = df['marca'].value_counts().sort_index()
+    st.bar_chart(year_counts)
+
+    st.divider()
+    
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("**Estudios por Año (campo 'marca')**")
-        year_counts = df['marca'].value_counts().sort_index()
-        st.bar_chart(year_counts)
+        # Gráfico de Marca (Horizontal)
+        st.markdown("**Estudios por Marca (campo 'filtro')**")
+        filtro_counts = df['filtro'].value_counts().reset_index()
+        filtro_counts.columns = ['Marca', 'Conteo']
+        st.bar_chart(filtro_counts, x='Conteo', y='Marca')
 
     with col2:
-        st.markdown("**Estudios por Marca (campo 'filtro')**")
-        filtro_counts = df['filtro'].value_counts()
-        st.bar_chart(filtro_counts)
+        # Gráfico de Cliente (Horizontal)
+        st.markdown("**Estudios por Cliente (campo 'cliente')**")
+        cliente_counts = df['cliente'].value_counts().reset_index()
+        cliente_counts.columns = ['Cliente', 'Conteo']
+        st.bar_chart(cliente_counts, x='Conteo', y='Cliente')
 
-    st.divider()
 
-    # --- 3. Mostrar Nube de Palabras Maestra ---
-    st.markdown("#### Nube de Palabras Maestra (Temas Recurrentes)")
-    if not all_text.strip():
-        st.info("No se encontró texto en los hallazgos para generar una nube de palabras.")
-    else:
-        with st.spinner("Generando nube de palabras maestra..."):
-            try:
-                wc = WordCloud(
-                    width=800, 
-                    height=400, 
-                    background_color='white',
-                    stopwords=stopwords,
-                    min_font_size=10,
-                    collocations=False
-                )
-                wc.generate(all_text)
-
-                fig, ax = plt.subplots(figsize=(10, 5))
-                ax.imshow(wc, interpolation='bilinear')
-                ax.axis('off')
-                st.pyplot(fig)
-            except Exception as e:
-                st.error(f"Error al generar la nube de palabras: {e}")
+    # --- 3. Nube de Palabras Maestra (ELIMINADA) ---
 
 
 # =====================================================
@@ -166,7 +145,7 @@ def show_admin_dashboard(db_full): # <-- ACEPTA db_full
                     client_name = "N/A"; client_plan = "N/A"
                     if isinstance(client_info, dict):
                         client_name = client_info.get('client_name', "N/A")
-                        client_plan = client_info.get('plan', "N/IA")
+                        client_plan = client_info.get('plan', "N/A")
                     user_list.append({
                         'id': user.get('id'), 'email': user.get('email'), 'creado_el': user.get('created_at'),
                         'rol': user.get('rol', 'user'), 'cliente': client_name, 'plan': client_plan
