@@ -7,7 +7,7 @@ from prompts import get_survey_articulation_prompt
 import constants as c
 import io 
 import os 
-import uuid # Para nombres de archivo únicos
+import uuid 
 from datetime import datetime
 
 # --- Importaciones de Análisis ---
@@ -23,25 +23,22 @@ import numpy as np
 # MODO: ANÁLISIS NUMÉRICO (EXCEL) - VERSIÓN PROYECTOS
 # =====================================================
 
-# Constante para el bucket de Supabase
 PROJECT_BUCKET = "project_files"
 
-# --- Funciones Helper para Análisis (las que ya teníamos) ---
+# --- Funciones Helper (sin cambios) ---
 
 @st.cache_data
 def to_excel(df):
-    """Convierte un DF a bytes de Excel en caché."""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, sheet_name='Pivot', index=True)
     return output.getvalue()
 
 def style_residuals(val):
-    """Aplica color a los residuos estandarizados significativos."""
     if val > 1.96:
-        return 'background-color: #d4edda; color: #155724' # Verde
+        return 'background-color: #d4edda; color: #155724' 
     elif val < -1.96:
-        return 'background-color: #f8d7da; color: #721c24' # Rojo
+        return 'background-color: #f8d7da; color: #721c24' 
     else:
         return 'color: #333'
 
@@ -93,20 +90,13 @@ def add_table_slide(prs, title_text, df):
     except Exception as e:
         print(f"Error al añadir slide de tabla: {e}")
 
-# --- Funciones de Gestión de Proyectos (NUEVAS) ---
+# --- Funciones de Gestión de Proyectos (sin cambios) ---
 
-@st.cache_data(ttl=600) # Cachear el DF por 10 minutos
+@st.cache_data(ttl=600)
 def load_project_data(storage_path):
-    """
-    Descarga un archivo de Excel desde Supabase Storage
-    y lo carga en un DataFrame de pandas.
-    """
     try:
-        # Obtener una URL de descarga firmada (temporal y segura)
         response = supabase.storage.from_(PROJECT_BUCKET).create_signed_url(storage_path, 60)
         signed_url = response['signedURL']
-        
-        # Leer el Excel directamente desde la URL
         df = pd.read_excel(signed_url)
         return df
     except Exception as e:
@@ -114,10 +104,8 @@ def load_project_data(storage_path):
         return None
 
 def show_project_creator(user_id, plan_limit):
-    """Muestra el formulario para crear un nuevo proyecto."""
     st.subheader("Crear Nuevo Proyecto")
     
-    # 1. Verificar límite del plan
     try:
         response = supabase.table("projects").select("id", count='exact').eq("user_id", user_id).execute()
         project_count = response.count
@@ -129,7 +117,6 @@ def show_project_creator(user_id, plan_limit):
         st.warning(f"Has alcanzado el límite de {int(plan_limit)} proyectos para tu plan actual. Deberás eliminar un proyecto existente para crear uno nuevo.")
         return
 
-    # 2. Mostrar formulario
     with st.form("new_project_form"):
         project_name = st.text_input("Nombre del Proyecto*", placeholder="Ej: Tracking de Ventas Q1 2024")
         project_brand = st.text_input("Marca*", placeholder="Ej: Marca X")
@@ -145,10 +132,9 @@ def show_project_creator(user_id, plan_limit):
 
         with st.spinner("Creando proyecto y subiendo archivo..."):
             try:
-                # 1. Subir archivo a Supabase Storage
                 file_bytes = uploaded_file.getvalue()
                 file_ext = os.path.splitext(uploaded_file.name)[1]
-                storage_path = f"{user_id}/{uuid.uuid4()}{file_ext}" # Ruta única y segura
+                storage_path = f"{user_id}/{uuid.uuid4()}{file_ext}" 
                 
                 supabase.storage.from_(PROJECT_BUCKET).upload(
                     path=storage_path,
@@ -156,7 +142,6 @@ def show_project_creator(user_id, plan_limit):
                     file_options={"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
                 )
 
-                # 2. Insertar metadatos en la DB
                 project_data = {
                     "user_id": user_id,
                     "project_name": project_name,
@@ -171,14 +156,12 @@ def show_project_creator(user_id, plan_limit):
 
             except Exception as e:
                 st.error(f"Error al crear el proyecto: {e}")
-                # Intento de limpieza: si la DB falló, borrar el archivo subido
                 try:
                     supabase.storage.from_(PROJECT_BUCKET).remove([storage_path])
                 except:
                     pass
 
 def show_project_list(user_id):
-    """Muestra la lista de proyectos existentes del usuario."""
     st.subheader("Mis Proyectos")
     
     try:
@@ -192,7 +175,6 @@ def show_project_list(user_id):
         st.info("Aún no has creado ningún proyecto. Usa el formulario de arriba para empezar.")
         return
 
-    # Mostrar lista
     for proj in projects:
         proj_id = proj['id']
         proj_name = proj['project_name']
@@ -217,9 +199,7 @@ def show_project_list(user_id):
                 if st.button("Eliminar", key=f"eliminar_{proj_id}", use_container_width=True):
                     with st.spinner("Eliminando proyecto..."):
                         try:
-                            # 1. Eliminar archivo de Storage
                             supabase.storage.from_(PROJECT_BUCKET).remove([storage_path])
-                            # 2. Eliminar registro de la DB
                             supabase.table("projects").delete().eq("id", proj_id).execute()
                             st.success(f"Proyecto '{proj_name}' eliminado.")
                             st.rerun()
@@ -228,38 +208,46 @@ def show_project_list(user_id):
 
 def show_project_analyzer(df, db_filtered, selected_files):
     """
-    Muestra la UI de análisis completa (las 5 pestañas)
-    Esta es la lógica que ya teníamos, ahora contenida en una función.
+    Muestra la UI de análisis completa (ahora con st.radio)
     """
     st.markdown(f"### Analizando: **{st.session_state.da_selected_project_name}**")
     
     if st.button("← Volver a la lista de proyectos"):
-        # Limpiar el estado del proyecto seleccionado
         st.session_state.pop("data_analysis_df", None)
         st.session_state.pop("da_selected_project_id", None)
         st.session_state.pop("da_selected_project_name", None)
         st.session_state.pop("da_storage_path", None)
-        # Limpiar resultados
         st.session_state.pop("da_freq_table", None)
         st.session_state.pop("da_pivot_table", None)
         st.session_state.pop("da_wordcloud_fig", None)
         st.session_state.pop("da_freq_table_cloud", None)
         st.rerun()
         
-    tab1, tab2, tab_cloud, tab_export, tab_chat = st.tabs([
+    # --- ¡INICIO DE LA MODIFICACIÓN (st.tabs -> st.radio)! ---
+    
+    tab_names = [
         "Análisis Rápido", 
         "Tabla Dinámica", 
         "Nube de Palabras", 
         "Exportar a PPT",
         "Chat de Articulación"
-    ])
+    ]
     
+    # Usamos 'key' para que Streamlit recuerde la selección entre reruns
+    selected_tab = st.radio(
+        "Selecciona una función de análisis:",
+        tab_names,
+        horizontal=True,
+        key="data_analysis_active_tab" 
+    )
+    
+    # --- FIN DE LA MODIFICACIÓN ---
+        
     if "data_analysis_stats_context" not in st.session_state:
         st.session_state.data_analysis_stats_context = ""
     
     # --- PESTAÑA 1: ANÁLISIS RÁPIDO ---
-    with tab1:
-        # (El código de esta pestaña no cambia)
+    if selected_tab == "Análisis Rápido":
         st.header("Análisis Rápido")
         st.markdown("Calcula métricas clave de columnas individuales.")
         context_buffer = io.StringIO() 
@@ -298,8 +286,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
         context_buffer.close()
 
     # --- PESTAÑA 2: TABLA DINÁMICA ---
-    with tab2:
-        # (El código de esta pestaña no cambia)
+    if selected_tab == "Tabla Dinámica":
         st.header("Generador de Tabla Dinámica")
         st.markdown("Crea tablas cruzadas para explorar relaciones entre variables.")
         all_cols = ["(Ninguno)"] + df.columns.tolist()
@@ -372,8 +359,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                 st.error(f"Error al crear la tabla: {e}")
 
     # --- PESTAÑA 3: NUBE DE PALABRAS ---
-    with tab_cloud:
-        # (El código de esta pestaña no cambia)
+    if selected_tab == "Nube de Palabras":
         st.header("Nube de Palabras (Preguntas Abiertas)")
         st.markdown("Genera una nube de palabras a partir de una columna de texto.")
         text_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
@@ -412,10 +398,9 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 st.session_state.data_analysis_stats_context += f"\nPalabras clave de '{col_to_cloud}': {top_words}...\n\n"
                     except Exception as e:
                         st.error(f"Error al generar la nube de palabras: {e}")
-
+    
     # --- PESTAÑA 4: EXPORTAR A PPT ---
-    with tab_export:
-        # (El código de esta pestaña no cambia)
+    if selected_tab == "Exportar a PPT":
         st.header("Exportar a Presentación (.pptx)")
         st.markdown("Selecciona los análisis que has generado y descárgalos en una diapositiva de PowerPoint.")
         template_file = "Plantilla_PPT_ATL.pptx"
@@ -448,11 +433,10 @@ def show_project_analyzer(df, db_filtered, selected_files):
                     except Exception as e:
                         st.error(f"Error al generar la presentación: {e}")
             if "generated_data_ppt" in st.session_state:
-                st.download_button(label="📥 Descargar Presentación (.pptx)", data=st.session_state.generated_data_ppt, file_name=f"analisis_{st.session_state.data_analysis_file_name}.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation", use_container_width=True)
+                st.download_button(label="📥 Descargar Presentación (.pptx)", data=st.session_state.generated_data_ppt, file_name=f"analisis_{st.session_state.da_selected_project_name}.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation", use_container_width=True)
 
     # --- PESTAÑA 5: CHAT DE ARTICULACIÓN ---
-    with tab_chat:
-        # (El código de esta pestaña no cambia)
+    if selected_tab == "Chat de Articulación":
         st.header("Chat de Articulación (Cuanti + Cuali)")
         if "data_analysis_chat_history" not in st.session_state:
             st.session_state.data_analysis_chat_history = []
@@ -489,14 +473,11 @@ def data_analysis_mode(db, selected_files):
     st.markdown("Carga, gestiona y analiza tus proyectos de datos (Excel). Articula tus hallazgos cuantitativos con el repositorio cualitativo.")
     st.divider()
 
-    # Obtener el user_id y el límite del plan
     user_id = st.session_state.user_id
     plan_limit = st.session_state.plan_features.get('project_upload_limit', 0)
 
     # --- VISTA DE ANÁLISIS ---
-    # Si un proyecto ha sido seleccionado y cargado en memoria, mostrar el analizador.
     if "da_selected_project_id" in st.session_state and "data_analysis_df" not in st.session_state:
-        # Cargar los datos por primera vez
         with st.spinner("Cargando datos del proyecto..."):
             df = load_project_data(st.session_state.da_storage_path)
             if df is not None:
@@ -511,7 +492,6 @@ def data_analysis_mode(db, selected_files):
         show_project_analyzer(st.session_state.data_analysis_df, db, selected_files)
     
     # --- VISTA DE GESTIÓN (PÁGINA PRINCIPAL) ---
-    # Si no hay ningún proyecto seleccionado, mostrar el dashboard de gestión.
     else:
         with st.expander("➕ Crear Nuevo Proyecto", expanded=True):
             show_project_creator(user_id, plan_limit)
