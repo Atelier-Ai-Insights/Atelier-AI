@@ -40,8 +40,9 @@ def set_mode_and_reset(new_mode):
         # --- LÓGICA MODIFICADA ---
         st.session_state.pop("data_analysis_df", None)
         st.session_state.pop("data_analysis_chat_history", None)
-        st.session_state.pop("da_selected_project_id", None) # <-- LÍNEA NUEVA
-        st.session_state.pop("da_selected_project_name", None) # <-- LÍNEA NUEVA
+        st.session_state.pop("da_selected_project_id", None) 
+        st.session_state.pop("da_selected_project_name", None)
+        st.session_state.pop("da_current_sub_mode", None) # <-- LÍNEA NUEVA
         # --- FIN LÓGICA MODIFICADA ---
         
         st.session_state.pop("text_analysis_files_dict", None)
@@ -230,10 +231,10 @@ def main():
         
         st.markdown("""
             <style>
-                [data-testid="stAppViewContainer"] > .main {
+                [data.testid="stAppViewContainer"] > .main {
                     padding-top: 2rem; 
                 }
-                div[data-testid="stBlock"] {
+                div[data.testid="stBlock"] {
                     padding-top: 0rem; 
                 }
             </style>

@@ -193,6 +193,7 @@ def show_project_list(user_id):
                     st.session_state.da_selected_project_id = proj_id
                     st.session_state.da_selected_project_name = proj_name
                     st.session_state.da_storage_path = storage_path
+                    st.session_state.da_current_sub_mode = "Análisis Rápido" # Iniciar en la primera pestaña
                     st.rerun()
             
             with col3:
@@ -206,10 +207,21 @@ def show_project_list(user_id):
                         except Exception as e:
                             st.error(f"Error al eliminar: {e}")
 
+# --- INICIO DE LA FUNCIÓN MODIFICADA ---
 def show_project_analyzer(df, db_filtered, selected_files):
     """
-    Muestra la UI de análisis completa (ahora con st.radio)
+    Muestra la UI de análisis completa (ahora con st.expander + st.button)
     """
+    
+    # --- 1. Lógica de Navegación de Sub-Modo ---
+    def set_da_sub_mode(new_mode):
+        st.session_state.da_current_sub_mode = new_mode
+
+    if "da_current_sub_mode" not in st.session_state:
+        st.session_state.da_current_sub_mode = "Análisis Rápido" # Default
+    
+    sub_modo = st.session_state.da_current_sub_mode
+    
     st.markdown(f"### Analizando: **{st.session_state.da_selected_project_name}**")
     
     if st.button("← Volver a la lista de proyectos"):
@@ -221,33 +233,32 @@ def show_project_analyzer(df, db_filtered, selected_files):
         st.session_state.pop("da_pivot_table", None)
         st.session_state.pop("da_wordcloud_fig", None)
         st.session_state.pop("da_freq_table_cloud", None)
+        st.session_state.pop("da_current_sub_mode", None) # Limpiar el estado del sub-modo
         st.rerun()
         
-    # --- ¡INICIO DE LA MODIFICACIÓN (st.tabs -> st.radio)! ---
+    # --- 2. Reemplazo de st.tabs por st.expander + st.button ---
     
-    tab_names = [
-        "Análisis Rápido", 
-        "Tabla Dinámica", 
-        "Nube de Palabras", 
-        "Exportar a PPT",
-        "Chat de Articulación"
-    ]
+    with st.expander("Selecciona una función de análisis:", expanded=True):
+        col1, col2, col3, col4, col5 = st.columns(5)
+        with col1:
+            st.button("Análisis Rápido", on_click=set_da_sub_mode, args=("Análisis Rápido",), use_container_width=True, type="primary" if sub_modo == "Análisis Rápido" else "secondary")
+        with col2:
+            st.button("Tabla Dinámica", on_click=set_da_sub_mode, args=("Tabla Dinámica",), use_container_width=True, type="primary" if sub_modo == "Tabla Dinámica" else "secondary")
+        with col3:
+            st.button("Nube de Palabras", on_click=set_da_sub_mode, args=("Nube de Palabras",), use_container_width=True, type="primary" if sub_modo == "Nube de Palabras" else "secondary")
+        with col4:
+            st.button("Exportar a PPT", on_click=set_da_sub_mode, args=("Exportar a PPT",), use_container_width=True, type="primary" if sub_modo == "Exportar a PPT" else "secondary")
+        with col5:
+            st.button("Chat de Articulación", on_click=set_da_sub_mode, args=("Chat de Articulación",), use_container_width=True, type="primary" if sub_modo == "Chat de Articulación" else "secondary")
+
+    st.divider()
     
-    # Usamos 'key' para que Streamlit recuerde la selección entre reruns
-    selected_tab = st.radio(
-        "Selecciona una función de análisis:",
-        tab_names,
-        horizontal=True,
-        key="data_analysis_active_tab" 
-    )
-    
-    # --- FIN DE LA MODIFICACIÓN ---
-        
+    # --- 3. Lógica condicional para mostrar el contenido ---
+
     if "data_analysis_stats_context" not in st.session_state:
         st.session_state.data_analysis_stats_context = ""
     
-    # --- PESTAÑA 1: ANÁLISIS RÁPIDO ---
-    if selected_tab == "Análisis Rápido":
+    if sub_modo == "Análisis Rápido":
         st.header("Análisis Rápido")
         st.markdown("Calcula métricas clave de columnas individuales.")
         context_buffer = io.StringIO() 
@@ -285,8 +296,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
         st.session_state.data_analysis_stats_context = context_buffer.getvalue()
         context_buffer.close()
 
-    # --- PESTAÑA 2: TABLA DINÁMICA ---
-    if selected_tab == "Tabla Dinámica":
+    if sub_modo == "Tabla Dinámica":
         st.header("Generador de Tabla Dinámica")
         st.markdown("Crea tablas cruzadas para explorar relaciones entre variables.")
         all_cols = ["(Ninguno)"] + df.columns.tolist()
@@ -358,8 +368,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
             except Exception as e:
                 st.error(f"Error al crear la tabla: {e}")
 
-    # --- PESTAÑA 3: NUBE DE PALABRAS ---
-    if selected_tab == "Nube de Palabras":
+    if sub_modo == "Nube de Palabras":
         st.header("Nube de Palabras (Preguntas Abiertas)")
         st.markdown("Genera una nube de palabras a partir de una columna de texto.")
         text_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
@@ -399,8 +408,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                     except Exception as e:
                         st.error(f"Error al generar la nube de palabras: {e}")
     
-    # --- PESTAÑA 4: EXPORTAR A PPT ---
-    if selected_tab == "Exportar a PPT":
+    if sub_modo == "Exportar a PPT":
         st.header("Exportar a Presentación (.pptx)")
         st.markdown("Selecciona los análisis que has generado y descárgalos en una diapositiva de PowerPoint.")
         template_file = "Plantilla_PPT_ATL.pptx"
@@ -435,8 +443,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
             if "generated_data_ppt" in st.session_state:
                 st.download_button(label="📥 Descargar Presentación (.pptx)", data=st.session_state.generated_data_ppt, file_name=f"analisis_{st.session_state.da_selected_project_name}.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation", use_container_width=True)
 
-    # --- PESTAÑA 5: CHAT DE ARTICULACIÓN ---
-    if selected_tab == "Chat de Articulación":
+    if sub_modo == "Chat de Articulación":
         st.header("Chat de Articulación (Cuanti + Cuali)")
         if "data_analysis_chat_history" not in st.session_state:
             st.session_state.data_analysis_chat_history = []
