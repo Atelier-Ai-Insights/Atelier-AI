@@ -56,10 +56,8 @@ def data_analysis_mode(db, selected_files):
         
         st.markdown(f"### Analizando: **{st.session_state.data_analysis_file_name}**")
         
-        # --- NUEVA ORGANIZACIÓN POR PESTAÑAS ---
         tab1, tab2, tab3 = st.tabs(["Análisis Rápido", "Tabla Dinámica", "Chat de Articulación"])
         
-        # Guardar el contexto para el chat
         if "data_analysis_stats_context" not in st.session_state:
             st.session_state.data_analysis_stats_context = ""
 
@@ -68,7 +66,7 @@ def data_analysis_mode(db, selected_files):
             st.header("Análisis Rápido")
             st.markdown("Calcula métricas clave de columnas individuales.")
             
-            context_buffer = io.StringIO() # Para construir el contexto del prompt
+            context_buffer = io.StringIO() 
 
             # A. Análisis de Tendencia Central (Numérico)
             st.subheader("Análisis de Columnas Numéricas")
@@ -88,7 +86,6 @@ def data_analysis_mode(db, selected_files):
                     col2.metric("Mediana", f"{median_val:.2f}")
                     col3.metric("Moda(s)", ", ".join(map(str, mode_val)))
 
-                    # Guardar para el prompt
                     context_buffer.write(f"Resumen de la columna '{col_to_num}':\n- Media: {mean_val:.2f}\n- Mediana: {median_val:.2f}\n- Moda(s): {', '.join(map(str, mode_val))}\n\n")
 
             # B. Análisis de Frecuencias (Categórico/Likert)
@@ -116,7 +113,7 @@ def data_analysis_mode(db, selected_files):
             st.session_state.data_analysis_stats_context = context_buffer.getvalue()
             context_buffer.close()
 
-        # --- PESTAÑA 2: TABLA DINÁMICA (NUEVA) ---
+        # --- PESTAÑA 2: TABLA DINÁMICA (MODIFICADA) ---
         with tab2:
             st.header("Generador de Tabla Dinámica")
             st.markdown("Crea tablas cruzadas para explorar relaciones entre variables.")
@@ -127,26 +124,62 @@ def data_analysis_mode(db, selected_files):
             if not numeric_cols_pivot:
                 st.error("No se pueden crear Tablas Dinámicas sin al menos una columna numérica (para 'Valores').")
             else:
-                # --- Controles de la Tabla Dinámica ---
                 st.markdown("#### Configuración de la Tabla")
                 c1, c2 = st.columns(2)
                 index_col = c1.selectbox("Filas (Index)", all_cols, key="pivot_index")
                 col_col = c2.selectbox("Columnas", all_cols, key="pivot_cols")
                 val_col = c1.selectbox("Valores (Dato a calcular)", numeric_cols_pivot, key="pivot_val")
-                agg_func = c2.selectbox("Operación", ["mean", "sum", "count", "median", "min", "max"], key="pivot_agg")
+                agg_func = c2.selectbox("Operación", ["sum", "count", "mean", "median", "min", "max"], key="pivot_agg")
+
+                # --- INICIO DE LA MODIFICACIÓN (NUEVO DROPDOWN) ---
+                display_mode = st.selectbox(
+                    "Mostrar valores como:",
+                    ["Valores Absolutos", "% del Total General", "% del Total de Fila", "% del Total de Columna"],
+                    key="pivot_display"
+                )
+                # --- FIN DE LA MODIFICACIÓN ---
 
                 # --- Lógica de Creación ---
-                if index_col != "(Ninguno)" and col_col != "(Ninguno)":
-                    try:
-                        pivot_df = pd.pivot_table(df, values=val_col, index=index_col, columns=col_col, aggfunc=agg_func)
+                pivot_df_raw = None # Para guardar la tabla con números brutos
+                
+                try:
+                    if index_col != "(Ninguno)" and col_col != "(Ninguno)":
+                        pivot_df_raw = pd.pivot_table(df, values=val_col, index=index_col, columns=col_col, aggfunc=agg_func)
+                    elif index_col != "(Ninguno)":
+                        pivot_df_raw = pd.pivot_table(df, values=val_col, index=index_col, aggfunc=agg_func)
+                    else:
+                        st.info("Selecciona al menos una 'Fila (Index)' para generar una tabla.")
+                        
+                    # --- Si se generó una tabla, la mostramos y aplicamos % ---
+                    if pivot_df_raw is not None:
+                        pivot_df_raw = pivot_df_raw.fillna(0)
+                        
+                        # Guardar contexto para el chat (siempre los números brutos)
+                        context_title = f"Tabla ({val_col} por {index_col})"
+                        if col_col != "(Ninguno)": context_title += f"/{col_col}"
+                        st.session_state.data_analysis_stats_context += f"\n{context_title}:\n{pivot_df_raw.to_string()}\n\n"
+
+                        # --- Lógica de Visualización (Absolutos vs %) ---
                         st.markdown("#### Resultado de la Tabla Dinámica")
-                        st.dataframe(pivot_df.fillna(0), use_container_width=True)
                         
-                        # Añadir al contexto del chat
-                        st.session_state.data_analysis_stats_context += f"\nTabla Dinámica ({val_col} por {index_col}/{col_col}):\n{pivot_df.to_string()}\n\n"
+                        display_df = pivot_df_raw.copy() # Copiamos para no modificar el original
                         
-                        # --- Botón de Descarga ---
-                        excel_bytes = to_excel(pivot_df.fillna(0))
+                        if display_mode == "% del Total General":
+                            total_sum = display_df.sum().sum()
+                            display_df = display_df / total_sum
+                        elif display_mode == "% del Total de Fila":
+                            display_df = display_df.apply(lambda x: x / x.sum(), axis=1)
+                        elif display_mode == "% del Total de Columna":
+                            display_df = display_df.apply(lambda x: x / x.sum(), axis=0)
+
+                        # Formatear la tabla para mostrar
+                        if display_mode == "Valores Absolutos":
+                            st.dataframe(display_df.style.format("{:,.2f}"), use_container_width=True)
+                        else:
+                            st.dataframe(display_df.fillna(0).style.format("{:.1%}"), use_container_width=True)
+                        
+                        # --- Botón de Descarga (Siempre descarga los números brutos) ---
+                        excel_bytes = to_excel(pivot_df_raw)
                         st.download_button(
                             label="📥 Descargar Tabla como Excel",
                             data=excel_bytes,
@@ -154,31 +187,8 @@ def data_analysis_mode(db, selected_files):
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             use_container_width=True
                         )
-                    except Exception as e:
-                        st.error(f"Error al crear la tabla: {e}")
-                elif index_col != "(Ninguno)":
-                    # Tabla simple (sin columnas)
-                    try:
-                        pivot_df = pd.pivot_table(df, values=val_col, index=index_col, aggfunc=agg_func)
-                        st.markdown("#### Resultado de la Tabla")
-                        st.dataframe(pivot_df.fillna(0), use_container_width=True)
-
-                        # Añadir al contexto del chat
-                        st.session_state.data_analysis_stats_context += f"\nTabla ({val_col} por {index_col}):\n{pivot_df.to_string()}\n\n"
-                        
-                        # --- Botón de Descarga ---
-                        excel_bytes = to_excel(pivot_df.fillna(0))
-                        st.download_button(
-                            label="📥 Descargar Tabla como Excel",
-                            data=excel_bytes,
-                            file_name=f"table_{index_col}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True
-                        )
-                    except Exception as e:
-                        st.error(f"Error al crear la tabla: {e}")
-                else:
-                    st.info("Selecciona al menos una 'Fila (Index)' para generar una tabla.")
+                except Exception as e:
+                    st.error(f"Error al crear la tabla: {e}")
 
 
         # --- PESTAÑA 3: CHAT DE ARTICULACIÓN ---
