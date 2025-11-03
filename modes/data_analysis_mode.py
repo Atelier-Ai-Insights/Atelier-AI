@@ -6,11 +6,18 @@ from services.supabase_db import log_query_event
 from prompts import get_survey_articulation_prompt
 import constants as c
 import io # Necesario para la descarga de Excel
+import os # Necesario para chequear la plantilla
 
 # --- Nuevas importaciones para Nube de Palabras ---
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 import nltk
+
+# --- NUEVAS IMPORTACIONES PARA PPTX ---
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.enum.text import PP_ALIGN
+from pptx.dml.color import RGBColor
 
 # =====================================================
 # MODO: ANÁLISIS DE DATOS (EXCEL)
@@ -35,13 +42,74 @@ def get_stopwords():
     try:
         spanish_stopwords = nltk.corpus.stopwords.words('spanish')
     except:
-        # Lista fallback por si NLTK falla
         spanish_stopwords = ['de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'las', 'un', 'para', 'con', 'no', 'una', 'su', 'que', 'se', 'por', 'es', 'más', 'lo', 'pero', 'me', 'mi', 'al', 'le', 'si', 'este', 'esta']
     
-    # Añade palabras comunes de encuestas que no aportan valor
     custom_list = ['...', 'p', 'r', 'rta', 'respuesta', 'si', 'no', 'na', 'ninguno', 'ninguna', 'nan']
     spanish_stopwords.extend(custom_list)
     return set(spanish_stopwords)
+
+
+# --- NUEVAS FUNCIONES HELPER PARA PPTX ---
+
+def add_title_slide(prs, title_text):
+    """Añade una diapositiva de título estándar."""
+    try:
+        slide_layout = prs.slide_layouts[0] # Usar layout de título
+        slide = prs.slides.add_slide(slide_layout)
+        title = slide.shapes.title
+        title.text = title_text
+    except Exception as e:
+        print(f"Error al añadir slide de título: {e}")
+
+def add_image_slide(prs, title_text, image_stream):
+    """Añade una diapositiva con un título y una imagen."""
+    try:
+        slide_layout = prs.slide_layouts[5] # Usar layout de "Título y Contenido"
+        slide = prs.slides.add_slide(slide_layout)
+        title = slide.shapes.title
+        title.text = title_text
+        
+        # Añadir imagen
+        image_stream.seek(0)
+        slide.shapes.add_picture(image_stream, Inches(0.5), Inches(1.5), width=Inches(9))
+    except Exception as e:
+        print(f"Error al añadir slide de imagen: {e}")
+
+def add_table_slide(prs, title_text, df):
+    """Añade una diapositiva con un título y una tabla de pandas."""
+    try:
+        slide_layout = prs.slide_layouts[5] # Usar layout de "Título y Contenido"
+        slide = prs.slides.add_slide(slide_layout)
+        title = slide.shapes.title
+        title.text = title_text
+
+        # Incluir el índice si es significativo
+        if df.index.name or isinstance(df.index, pd.MultiIndex):
+            df_to_add = df.reset_index()
+        else:
+            df_to_add = df
+            
+        rows, cols = df_to_add.shape
+        # Definir posición y tamaño de la tabla
+        left = Inches(0.5); top = Inches(1.5); width = Inches(9.0); height = Inches(5.5)
+        
+        graphic_frame = slide.shapes.add_table(rows + 1, cols, left, top, width, height)
+        table = graphic_frame.table
+
+        # Poner encabezados
+        for c in range(cols):
+            table.cell(0, c).text = str(df_to_add.columns[c])
+            table.cell(0, c).text_frame.paragraphs[0].font.bold = True
+
+        # Poner datos
+        for r in range(rows):
+            for c in range(cols):
+                table.cell(r + 1, c).text = str(df_to_add.iloc[r, c])
+                
+    except Exception as e:
+        print(f"Error al añadir slide de tabla: {e}")
+
+# --- FIN DE NUEVAS FUNCIONES HELPER ---
 
 
 def data_analysis_mode(db, selected_files):
@@ -57,6 +125,10 @@ def data_analysis_mode(db, selected_files):
         st.session_state.pop("data_analysis_file_name", None)
         st.session_state.pop("data_analysis_chat_history", None)
         st.session_state.pop("data_analysis_stats_context", None)
+        # Limpiar también los resultados generados
+        st.session_state.pop("da_freq_table", None)
+        st.session_state.pop("da_pivot_table", None)
+        st.session_state.pop("da_wordcloud_fig", None)
 
     # Procesar el archivo si se sube uno nuevo
     if uploaded_file:
@@ -65,8 +137,12 @@ def data_analysis_mode(db, selected_files):
                 with st.spinner("Procesando archivo Excel..."):
                     st.session_state.data_analysis_df = pd.read_excel(uploaded_file)
                     st.session_state.data_analysis_file_name = uploaded_file.name
-                    st.session_state.data_analysis_chat_history = [] # Reiniciar chat
-                    st.session_state.data_analysis_stats_context = "" # Reiniciar stats
+                    st.session_state.data_analysis_chat_history = [] 
+                    st.session_state.data_analysis_stats_context = "" 
+                    # Limpiar resultados anteriores al cargar nuevo archivo
+                    st.session_state.pop("da_freq_table", None)
+                    st.session_state.pop("da_pivot_table", None)
+                    st.session_state.pop("da_wordcloud_fig", None)
                 st.success(f"Archivo '{uploaded_file.name}' cargado.")
         
         except Exception as e:
@@ -79,17 +155,19 @@ def data_analysis_mode(db, selected_files):
         
         st.markdown(f"### Analizando: **{st.session_state.data_analysis_file_name}**")
         
-        tab1, tab2, tab_cloud, tab_chat = st.tabs([
+        # --- MODIFICADO: Añadida "Exportar a PPT" ---
+        tab1, tab2, tab_cloud, tab_export, tab_chat = st.tabs([
             "Análisis Rápido", 
             "Tabla Dinámica", 
             "Nube de Palabras", 
+            "Exportar a PPT", # <-- NUEVA PESTAÑA
             "Chat de Articulación"
         ])
         
         if "data_analysis_stats_context" not in st.session_state:
             st.session_state.data_analysis_stats_context = ""
 
-        # --- PESTAÑA 1: ANÁLISIS RÁPIDO ---
+        # --- PESTAÑA 1: ANÁLISIS RÁPIDO (MODIFICADA) ---
         with tab1:
             st.header("Análisis Rápido")
             st.markdown("Calcula métricas clave de columnas individuales.")
@@ -135,13 +213,16 @@ def data_analysis_mode(db, selected_files):
                     st.dataframe(df_freq, use_container_width=True)
                     st.bar_chart(counts)
                     
+                    # --- GUARDAR EN SESSION STATE ---
+                    st.session_state.da_freq_table = df_freq 
+                    # --- FIN ---
+                    
                     context_buffer.write(f"Distribución de la columna '{col_to_cat}':\n{df_freq.to_string()}\n\n")
 
-            # Actualizar el contexto de la sesión
             st.session_state.data_analysis_stats_context = context_buffer.getvalue()
             context_buffer.close()
 
-        # --- PESTAÑA 2: TABLA DINÁMICA ---
+        # --- PESTAÑA 2: TABLA DINÁMICA (MODIFICADA) ---
         with tab2:
             st.header("Generador de Tabla Dinámica")
             st.markdown("Crea tablas cruzadas para explorar relaciones entre variables.")
@@ -178,6 +259,10 @@ def data_analysis_mode(db, selected_files):
                     if pivot_df_raw is not None:
                         pivot_df_raw = pivot_df_raw.fillna(0)
                         
+                        # --- GUARDAR EN SESSION STATE ---
+                        st.session_state.da_pivot_table = pivot_df_raw
+                        # --- FIN ---
+
                         context_title = f"Tabla ({val_col} por {index_col})"
                         if col_col != "(Ninguno)": context_title += f"/{col_col}"
                         st.session_state.data_analysis_stats_context += f"\n{context_title}:\n{pivot_df_raw.to_string()}\n\n"
@@ -210,7 +295,7 @@ def data_analysis_mode(db, selected_files):
                 except Exception as e:
                     st.error(f"Error al crear la tabla: {e}")
 
-        # --- PESTAÑA 3: NUBE DE PALABRAS (MODIFICADA) ---
+        # --- PESTAÑA 3: NUBE de PALABRAS (MODIFICADA) ---
         with tab_cloud:
             st.header("Nube de Palabras (Preguntas Abiertas)")
             st.markdown("Genera una nube de palabras a partir de una columna de texto.")
@@ -225,55 +310,50 @@ def data_analysis_mode(db, selected_files):
                 if col_to_cloud:
                     with st.spinner("Generando nube de palabras y tabla..."):
                         try:
-                            # 1. Obtener stopwords
                             stopwords = get_stopwords()
-                        
-                            # 2. Combinar todo el texto
                             text = " ".join(str(review) for review in df[col_to_cloud].dropna())
                             
                             if not text.strip():
                                 st.warning("La columna seleccionada está vacía o no contiene texto.")
                             else:
-                                # 3. Crear el objeto WordCloud
                                 wc = WordCloud(
                                     width=800, 
                                     height=400, 
                                     background_color='white',
                                     stopwords=stopwords,
                                     min_font_size=10,
-                                    collocations=False # Evita que se repitan pares de palabras
+                                    collocations=False 
                                 )
-                                
-                                # 4. Procesar el texto para obtener las frecuencias (conteos)
-                                # Esto devuelve un diccionario: {'palabra': 5, 'otra': 3}
                                 frequencies = wc.process_text(text)
                                 
                                 if not frequencies:
                                     st.warning("No se encontraron palabras para la nube (probablemente todas son 'stopwords').")
                                 else:
-                                    # 5. Generar la nube DESDE las frecuencias
                                     wc.generate_from_frequencies(frequencies)
                                 
-                                    # 6. Mostrar la nube
                                     fig, ax = plt.subplots(figsize=(10, 5))
                                     ax.imshow(wc, interpolation='bilinear')
                                     ax.axis('off')
                                     st.pyplot(fig)
                                     
-                                    # --- INICIO DE LA NUEVA IMPLEMENTACIÓN ---
+                                    # --- GUARDAR FIGURA EN SESSION STATE ---
+                                    img_stream = io.BytesIO()
+                                    fig.savefig(img_stream, format='png', bbox_inches='tight')
+                                    st.session_state.da_wordcloud_fig = img_stream
+                                    # --- FIN ---
                                     
                                     st.subheader("Tabla de Frecuencias")
-                                    
-                                    # 1. Convertir el dict de frecuencias a DataFrame
                                     df_freq = pd.DataFrame(
                                         frequencies.items(), 
                                         columns=['Palabra', 'Frecuencia']
                                     ).sort_values(by='Frecuencia', ascending=False).reset_index(drop=True)
                                     
-                                    # 2. Mostrar la tabla
                                     st.dataframe(df_freq, use_container_width=True)
                                     
-                                    # 3. Botón de descarga
+                                    # --- GUARDAR TABLA EN SESSION STATE ---
+                                    st.session_state.da_freq_table_cloud = df_freq
+                                    # --- FIN ---
+                                    
                                     excel_bytes = to_excel(df_freq)
                                     st.download_button(
                                         label="📥 Descargar Frecuencias como Excel",
@@ -282,17 +362,90 @@ def data_analysis_mode(db, selected_files):
                                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                         use_container_width=True
                                     )
-                                    # --- FIN DE LA NUEVA IMPLEMENTACIÓN ---
                                     
-                                    # 5. (Opcional) Añadir al contexto del chat
                                     top_words = ', '.join(df_freq['Palabra'].head(10))
                                     st.session_state.data_analysis_stats_context += f"\nPalabras clave de '{col_to_cloud}': {top_words}...\n\n"
                                 
                         except Exception as e:
                             st.error(f"Error al generar la nube de palabras: {e}")
                             st.error("Asegúrate de tener las librerías 'wordcloud' y 'matplotlib' instaladas.")
+        
+        # --- PESTAÑA 4: EXPORTAR A PPT (NUEVA) ---
+        with tab_export:
+            st.header("Exportar a Presentación (.pptx)")
+            st.markdown("Selecciona los análisis que has generado y descárgalos en una diapositiva de PowerPoint.")
+            
+            template_file = "Plantilla_PPT_ATL.pptx"
+            if not os.path.isfile(template_file):
+                st.error(f"Error: No se encontró el archivo de plantilla '{template_file}' en la carpeta raíz de la aplicación.")
+                st.info("Asegúrate de que la plantilla base esté subida al repositorio de la app.")
+            else:
+                # --- Opciones de Checkbox ---
+                st.markdown("#### Seleccionar Contenido")
+                
+                include_freq = st.checkbox(
+                    "Incluir Tabla de Frecuencias (de Pestaña 1)", 
+                    value=True, 
+                    disabled=not "da_freq_table" in st.session_state
+                )
+                include_pivot = st.checkbox(
+                    "Incluir Tabla Dinámica (de Pestaña 2)", 
+                    value=True, 
+                    disabled=not "da_pivot_table" in st.session_state
+                )
+                include_cloud_img = st.checkbox(
+                    "Incluir Nube de Palabras (Imagen)", 
+                    value=True, 
+                    disabled=not "da_wordcloud_fig" in st.session_state
+                )
+                include_cloud_table = st.checkbox(
+                    "Incluir Tabla de Frecuencias (de Nube de Palabras)", 
+                    value=False, 
+                    disabled=not "da_freq_table_cloud" in st.session_state
+                )
+                
+                # --- Botón de Generar ---
+                if st.button("Generar Presentación", use_container_width=True, type="primary"):
+                    with st.spinner("Creando archivo .pptx..."):
+                        try:
+                            prs = Presentation(template_file)
+                            
+                            add_title_slide(prs, f"Análisis de Datos: {st.session_state.data_analysis_file_name}")
+                            
+                            if include_freq and "da_freq_table" in st.session_state:
+                                add_table_slide(prs, "Análisis de Frecuencias", st.session_state.da_freq_table)
+                                
+                            if include_pivot and "da_pivot_table" in st.session_state:
+                                add_table_slide(prs, "Tabla Dinámica", st.session_state.da_pivot_table)
+                                
+                            if include_cloud_img and "da_wordcloud_fig" in st.session_state:
+                                add_image_slide(prs, "Nube de Palabras", st.session_state.da_wordcloud_fig)
+                            
+                            if include_cloud_table and "da_freq_table_cloud" in st.session_state:
+                                add_table_slide(prs, "Tabla de Frecuencias (Nube)", st.session_state.da_freq_table_cloud)
 
-        # --- PESTAÑA 4: CHAT DE ARTICULACIÓN ---
+                            # Guardar en memoria
+                            ppt_stream = io.BytesIO()
+                            prs.save(ppt_stream)
+                            ppt_stream.seek(0)
+                            
+                            st.session_state.generated_data_ppt = ppt_stream.getvalue()
+                        
+                        except Exception as e:
+                            st.error(f"Error al generar la presentación: {e}")
+                
+                # --- Botón de Descarga ---
+                if "generated_data_ppt" in st.session_state:
+                    st.download_button(
+                        label="📥 Descargar Presentación (.pptx)",
+                        data=st.session_state.generated_data_ppt,
+                        file_name=f"analisis_{st.session_state.data_analysis_file_name}.pptx",
+                        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                        use_container_width=True
+                    )
+
+
+        # --- PESTAÑA 5: CHAT DE ARTICULACIÓN ---
         with tab_chat:
             st.header("Chat de Articulación (Cuanti + Cuali)")
             
