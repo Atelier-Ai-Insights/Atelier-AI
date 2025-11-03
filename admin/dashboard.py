@@ -43,16 +43,19 @@ def show_repository_dashboard(db_full):
         # Gráfico de Cliente (Pie Chart)
         st.markdown("**Estudios por Cliente (campo 'cliente')**")
         
-        # 1. Contar los valores
+        # --- ¡INICIO DE LA CORRECCIÓN DEFINITIVA! ---
+        # 1. Contar los valores (devuelve una Serie)
         cliente_counts_series = df['cliente'].value_counts()
-        # 2. Convertir la Serie a un DataFrame explícito
-        cliente_counts_df = pd.DataFrame(cliente_counts_series)
-        # 3. Darle un nombre a la columna de conteo
-        cliente_counts_df.columns = ['Conteo']
         
-        # --- ¡INICIO DE LA CORRECCIÓN! ---
-        # 4. Graficar el DataFrame, diciéndole que use la columna "Conteo"
-        st.pie_chart(cliente_counts_df, y='Conteo')
+        # 2. Convertir la Serie a un DataFrame y RESETEAR EL ÍNDICE
+        # Esto crea dos columnas: 'index' (con los nombres) y 0 (con los conteos)
+        cliente_counts_df = cliente_counts_series.reset_index()
+        
+        # 3. Renombrar las columnas explícitamente
+        cliente_counts_df.columns = ['Cliente', 'Conteo']
+        
+        # 4. Graficar, especificando la columna 'x' (etiquetas) y 'y' (valores)
+        st.pie_chart(cliente_counts_df, x='Cliente', y='Conteo')
         # --- ¡FIN DE LA CORRECCIÓN! ---
 
     with col2:
