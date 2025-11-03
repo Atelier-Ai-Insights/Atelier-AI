@@ -43,6 +43,12 @@ def show_repository_dashboard(db_full):
         # Gráfico de Cliente (Pie Chart)
         st.markdown("**Estudios por Cliente (campo 'cliente')**")
         cliente_counts = df['cliente'].value_counts()
+        
+        # --- ¡INICIO DE LA CORRECCIÓN! ---
+        # Le damos un nombre al índice para que st.pie_chart sepa cómo etiquetarlo.
+        cliente_counts.index.name = "Cliente"
+        # --- ¡FIN DE LA CORRECCIÓN! ---
+        
         st.pie_chart(cliente_counts)
 
     with col2:
