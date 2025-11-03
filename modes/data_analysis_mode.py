@@ -13,11 +13,14 @@ from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 import nltk
 
-# --- NUEVAS IMPORTACIONES PARA PPTX ---
+# --- Nuevas importaciones para PPTX ---
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN
 from pptx.dml.color import RGBColor
+
+# --- ¡NUEVA IMPORTACIÓN PARA SIGNIFICANCIA! ---
+import scipy.stats as stats
 
 # =====================================================
 # MODO: ANÁLISIS DE DATOS (EXCEL)
@@ -49,12 +52,12 @@ def get_stopwords():
     return set(spanish_stopwords)
 
 
-# --- NUEVAS FUNCIONES HELPER PARA PPTX ---
+# --- Funciones Helper para PPTX ---
 
 def add_title_slide(prs, title_text):
     """Añade una diapositiva de título estándar."""
     try:
-        slide_layout = prs.slide_layouts[0] # Usar layout de título
+        slide_layout = prs.slide_layouts[0] 
         slide = prs.slides.add_slide(slide_layout)
         title = slide.shapes.title
         title.text = title_text
@@ -64,12 +67,11 @@ def add_title_slide(prs, title_text):
 def add_image_slide(prs, title_text, image_stream):
     """Añade una diapositiva con un título y una imagen."""
     try:
-        slide_layout = prs.slide_layouts[5] # Usar layout de "Título y Contenido"
+        slide_layout = prs.slide_layouts[5] 
         slide = prs.slides.add_slide(slide_layout)
         title = slide.shapes.title
         title.text = title_text
         
-        # Añadir imagen
         image_stream.seek(0)
         slide.shapes.add_picture(image_stream, Inches(0.5), Inches(1.5), width=Inches(9))
     except Exception as e:
@@ -78,38 +80,32 @@ def add_image_slide(prs, title_text, image_stream):
 def add_table_slide(prs, title_text, df):
     """Añade una diapositiva con un título y una tabla de pandas."""
     try:
-        slide_layout = prs.slide_layouts[5] # Usar layout de "Título y Contenido"
+        slide_layout = prs.slide_layouts[5] 
         slide = prs.slides.add_slide(slide_layout)
         title = slide.shapes.title
         title.text = title_text
 
-        # Incluir el índice si es significativo
         if df.index.name or isinstance(df.index, pd.MultiIndex):
             df_to_add = df.reset_index()
         else:
             df_to_add = df
             
         rows, cols = df_to_add.shape
-        # Definir posición y tamaño de la tabla
         left = Inches(0.5); top = Inches(1.5); width = Inches(9.0); height = Inches(5.5)
         
         graphic_frame = slide.shapes.add_table(rows + 1, cols, left, top, width, height)
         table = graphic_frame.table
 
-        # Poner encabezados
         for c in range(cols):
             table.cell(0, c).text = str(df_to_add.columns[c])
             table.cell(0, c).text_frame.paragraphs[0].font.bold = True
 
-        # Poner datos
         for r in range(rows):
             for c in range(cols):
                 table.cell(r + 1, c).text = str(df_to_add.iloc[r, c])
                 
     except Exception as e:
         print(f"Error al añadir slide de tabla: {e}")
-
-# --- FIN DE NUEVAS FUNCIONES HELPER ---
 
 
 def data_analysis_mode(db, selected_files):
@@ -125,7 +121,6 @@ def data_analysis_mode(db, selected_files):
         st.session_state.pop("data_analysis_file_name", None)
         st.session_state.pop("data_analysis_chat_history", None)
         st.session_state.pop("data_analysis_stats_context", None)
-        # Limpiar también los resultados generados
         st.session_state.pop("da_freq_table", None)
         st.session_state.pop("da_pivot_table", None)
         st.session_state.pop("da_wordcloud_fig", None)
@@ -139,7 +134,6 @@ def data_analysis_mode(db, selected_files):
                     st.session_state.data_analysis_file_name = uploaded_file.name
                     st.session_state.data_analysis_chat_history = [] 
                     st.session_state.data_analysis_stats_context = "" 
-                    # Limpiar resultados anteriores al cargar nuevo archivo
                     st.session_state.pop("da_freq_table", None)
                     st.session_state.pop("da_pivot_table", None)
                     st.session_state.pop("da_wordcloud_fig", None)
@@ -155,19 +149,18 @@ def data_analysis_mode(db, selected_files):
         
         st.markdown(f"### Analizando: **{st.session_state.data_analysis_file_name}**")
         
-        # --- MODIFICADO: Añadida "Exportar a PPT" ---
         tab1, tab2, tab_cloud, tab_export, tab_chat = st.tabs([
             "Análisis Rápido", 
             "Tabla Dinámica", 
             "Nube de Palabras", 
-            "Exportar a PPT", # <-- NUEVA PESTAÑA
+            "Exportar a PPT",
             "Chat de Articulación"
         ])
         
         if "data_analysis_stats_context" not in st.session_state:
             st.session_state.data_analysis_stats_context = ""
 
-        # --- PESTAÑA 1: ANÁLISIS RÁPIDO (MODIFICADA) ---
+        # --- PESTAÑA 1: ANÁLISIS RÁPIDO ---
         with tab1:
             st.header("Análisis Rápido")
             st.markdown("Calcula métricas clave de columnas individuales.")
@@ -213,9 +206,7 @@ def data_analysis_mode(db, selected_files):
                     st.dataframe(df_freq, use_container_width=True)
                     st.bar_chart(counts)
                     
-                    # --- GUARDAR EN SESSION STATE ---
                     st.session_state.da_freq_table = df_freq 
-                    # --- FIN ---
                     
                     context_buffer.write(f"Distribución de la columna '{col_to_cat}':\n{df_freq.to_string()}\n\n")
 
@@ -238,13 +229,26 @@ def data_analysis_mode(db, selected_files):
                 index_col = c1.selectbox("Filas (Index)", all_cols, key="pivot_index")
                 col_col = c2.selectbox("Columnas", all_cols, key="pivot_cols")
                 val_col = c1.selectbox("Valores (Dato a calcular)", numeric_cols_pivot, key="pivot_val")
-                agg_func = c2.selectbox("Operación", ["sum", "count", "mean", "median", "min", "max"], key="pivot_agg")
+                agg_func = c2.selectbox("Operación", ["count", "sum", "mean", "median"], key="pivot_agg")
 
                 display_mode = st.selectbox(
                     "Mostrar valores como:",
                     ["Valores Absolutos", "% del Total General", "% del Total de Fila", "% del Total de Columna"],
                     key="pivot_display"
                 )
+                
+                # --- ¡INICIO DE LA MODIFICACIÓN (SIGNIFICANCIA)! ---
+                show_sig = st.checkbox(
+                    "Calcular significancia (Chi-Squared)", 
+                    key="pivot_sig",
+                    disabled=(agg_func != "count"), # Solo se activa si la operación es 'count'
+                    help="Calcula si las diferencias en la tabla son estadísticamente significativas. Solo funciona con la operación 'count'."
+                )
+                
+                if agg_func != "count" and show_sig:
+                    st.warning("La significancia Chi-Squared solo se puede calcular con la operación 'count'.")
+                    show_sig = False
+                # --- FIN DE LA MODIFICACIÓN ---
 
                 pivot_df_raw = None 
                 
@@ -259,9 +263,7 @@ def data_analysis_mode(db, selected_files):
                     if pivot_df_raw is not None:
                         pivot_df_raw = pivot_df_raw.fillna(0)
                         
-                        # --- GUARDAR EN SESSION STATE ---
                         st.session_state.da_pivot_table = pivot_df_raw
-                        # --- FIN ---
 
                         context_title = f"Tabla ({val_col} por {index_col})"
                         if col_col != "(Ninguno)": context_title += f"/{col_col}"
@@ -284,6 +286,30 @@ def data_analysis_mode(db, selected_files):
                         else:
                             st.dataframe(display_df.fillna(0).style.format("{:.1%}"), use_container_width=True)
                         
+                        # --- ¡INICIO DE LA MODIFICACIÓN (LÓGICA CHI-SQUARED)! ---
+                        if show_sig and agg_func == 'count':
+                            st.markdown("---")
+                            st.subheader("Prueba de Significación (Chi-Squared)")
+                            if pivot_df_raw.shape[0] < 2 or pivot_df_raw.shape[1] < 2:
+                                st.warning("La prueba Chi-Squared requiere al menos 2 filas y 2 columnas.")
+                            else:
+                                try:
+                                    # La prueba no funciona si hay 0 en alguna celda (común)
+                                    # Añadimos +1 a toda la tabla para suavizar (Laplace Smoothing)
+                                    df_testable = pivot_df_raw + 1
+                                    
+                                    chi2, p_value, dof, expected = stats.chi2_contingency(df_testable)
+                                    
+                                    st.metric("Valor P (p-value)", f"{p_value:.4f}")
+                                    if p_value < 0.05:
+                                        st.success("✅ **Resultado Significativo (p < 0.05)**. Las diferencias en la tabla son reales y no se deben al azar.")
+                                    else:
+                                        st.info("ℹ️ **Resultado No Significativo (p > 0.05)**. Las diferencias observadas en la tabla son probablemente producto del azar.")
+                                
+                                except Exception as e:
+                                    st.error(f"Error al calcular Chi-Squared: {e}")
+                        # --- FIN DE LA MODIFICACIÓN ---
+
                         excel_bytes = to_excel(pivot_df_raw)
                         st.download_button(
                             label="📥 Descargar Tabla como Excel",
@@ -295,7 +321,7 @@ def data_analysis_mode(db, selected_files):
                 except Exception as e:
                     st.error(f"Error al crear la tabla: {e}")
 
-        # --- PESTAÑA 3: NUBE de PALABRAS (MODIFICADA) ---
+        # --- PESTAÑA 3: NUBE de PALABRAS ---
         with tab_cloud:
             st.header("Nube de Palabras (Preguntas Abiertas)")
             st.markdown("Genera una nube de palabras a partir de una columna de texto.")
@@ -336,11 +362,9 @@ def data_analysis_mode(db, selected_files):
                                     ax.axis('off')
                                     st.pyplot(fig)
                                     
-                                    # --- GUARDAR FIGURA EN SESSION STATE ---
                                     img_stream = io.BytesIO()
                                     fig.savefig(img_stream, format='png', bbox_inches='tight')
                                     st.session_state.da_wordcloud_fig = img_stream
-                                    # --- FIN ---
                                     
                                     st.subheader("Tabla de Frecuencias")
                                     df_freq = pd.DataFrame(
@@ -350,9 +374,7 @@ def data_analysis_mode(db, selected_files):
                                     
                                     st.dataframe(df_freq, use_container_width=True)
                                     
-                                    # --- GUARDAR TABLA EN SESSION STATE ---
                                     st.session_state.da_freq_table_cloud = df_freq
-                                    # --- FIN ---
                                     
                                     excel_bytes = to_excel(df_freq)
                                     st.download_button(
@@ -370,7 +392,7 @@ def data_analysis_mode(db, selected_files):
                             st.error(f"Error al generar la nube de palabras: {e}")
                             st.error("Asegúrate de tener las librerías 'wordcloud' y 'matplotlib' instaladas.")
         
-        # --- PESTAÑA 4: EXPORTAR A PPT (NUEVA) ---
+        # --- PESTAÑA 4: EXPORTAR A PPT ---
         with tab_export:
             st.header("Exportar a Presentación (.pptx)")
             st.markdown("Selecciona los análisis que has generado y descárgalos en una diapositiva de PowerPoint.")
@@ -380,7 +402,6 @@ def data_analysis_mode(db, selected_files):
                 st.error(f"Error: No se encontró el archivo de plantilla '{template_file}' en la carpeta raíz de la aplicación.")
                 st.info("Asegúrate de que la plantilla base esté subida al repositorio de la app.")
             else:
-                # --- Opciones de Checkbox ---
                 st.markdown("#### Seleccionar Contenido")
                 
                 include_freq = st.checkbox(
@@ -404,7 +425,6 @@ def data_analysis_mode(db, selected_files):
                     disabled=not "da_freq_table_cloud" in st.session_state
                 )
                 
-                # --- Botón de Generar ---
                 if st.button("Generar Presentación", use_container_width=True, type="primary"):
                     with st.spinner("Creando archivo .pptx..."):
                         try:
@@ -424,7 +444,6 @@ def data_analysis_mode(db, selected_files):
                             if include_cloud_table and "da_freq_table_cloud" in st.session_state:
                                 add_table_slide(prs, "Tabla de Frecuencias (Nube)", st.session_state.da_freq_table_cloud)
 
-                            # Guardar en memoria
                             ppt_stream = io.BytesIO()
                             prs.save(ppt_stream)
                             ppt_stream.seek(0)
@@ -434,7 +453,6 @@ def data_analysis_mode(db, selected_files):
                         except Exception as e:
                             st.error(f"Error al generar la presentación: {e}")
                 
-                # --- Botón de Descarga ---
                 if "generated_data_ppt" in st.session_state:
                     st.download_button(
                         label="📥 Descargar Presentación (.pptx)",
@@ -452,13 +470,9 @@ def data_analysis_mode(db, selected_files):
             if "data_analysis_chat_history" not in st.session_state:
                 st.session_state.data_analysis_chat_history = []
                 
-            # Mostrar historial de chat
             for msg in st.session_state.data_analysis_chat_history:
                 with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
                     st.markdown(msg['message'])
-            
-            # Input del usuario
-            user_prompt = st.chat_input("Haz una pregunta sobre estos datos y el repositorio...")
             
             if user_prompt:
                 st.session_state.data_analysis_chat_history.append({"role": "Usuario", "message": user_prompt})
@@ -469,30 +483,24 @@ def data_analysis_mode(db, selected_files):
                     message_placeholder = st.empty()
                     message_placeholder.markdown("Articulando...")
                     
-                    # 1. Obtener Contexto Cuantitativo (de las otras pestañas)
                     survey_context = st.session_state.get("data_analysis_stats_context", "No hay datos de encuesta analizados.")
                     if not survey_context.strip():
                         survey_context = "El usuario está viendo los datos de la encuesta pero no ha seleccionado un análisis específico."
                     
-                    # 2. Obtener Contexto Cualitativo (del Repositorio S3)
                     repo_context = get_relevant_info(db, user_prompt, selected_files)
                     
-                    # 3. Obtener Historial de este chat
                     conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.data_analysis_chat_history[-10:])
 
-                    # 4. Crear el prompt articulado
                     articulation_prompt = get_survey_articulation_prompt(
                         survey_context, 
                         repo_context, 
                         conversation_history
                     )
                     
-                    # 5. Llamar a la API
                     response = call_gemini_api(articulation_prompt)
                     
                     if response: 
                         message_placeholder.markdown(response)
-                        # Loggear el evento
                         log_query_event(user_prompt, mode=c.MODE_DATA_ANALYSIS)
                         st.session_state.data_analysis_chat_history.append({
                             "role": "Asistente", 
@@ -500,4 +508,4 @@ def data_analysis_mode(db, selected_files):
                         })
                     else: 
                         message_placeholder.error("Error al generar respuesta.")
-                        st.session_state.data_analysis_chat_history.pop() # Eliminar el prompt fallido
+                        st.session_state.data_analysis_chat_history.pop()
