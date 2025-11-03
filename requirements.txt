@@ -15,3 +15,4 @@ wordcloud
 matplotlib
 nltk
 scipy
+numpy

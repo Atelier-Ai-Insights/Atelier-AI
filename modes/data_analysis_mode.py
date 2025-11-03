@@ -19,8 +19,9 @@ from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN
 from pptx.dml.color import RGBColor
 
-# --- ¡NUEVA IMPORTACIÓN PARA SIGNIFICANCIA! ---
+# --- Importaciones para Significancia ---
 import scipy.stats as stats
+import numpy as np # <-- ¡NUEVA IMPORTACIÓN!
 
 # =====================================================
 # MODO: ANÁLISIS DE DATOS (EXCEL)
@@ -51,6 +52,15 @@ def get_stopwords():
     spanish_stopwords.extend(custom_list)
     return set(spanish_stopwords)
 
+# --- ¡NUEVA FUNCIÓN HELPER PARA ESTILOS! ---
+def style_residuals(val):
+    """Aplica color a los residuos estandarizados significativos."""
+    if val > 1.96:
+        return 'background-color: #d4edda; color: #155724' # Verde
+    elif val < -1.96:
+        return 'background-color: #f8d7da; color: #721c24' # Rojo
+    else:
+        return 'color: #333' # Negro (default)
 
 # --- Funciones Helper para PPTX ---
 
@@ -213,7 +223,7 @@ def data_analysis_mode(db, selected_files):
             st.session_state.data_analysis_stats_context = context_buffer.getvalue()
             context_buffer.close()
 
-        # --- PESTAÑA 2: TABLA DINÁMICA ---
+        # --- PESTAÑA 2: TABLA DINÁMICA (MODIFICADA) ---
         with tab2:
             st.header("Generador de Tabla Dinámica")
             st.markdown("Crea tablas cruzadas para explorar relaciones entre variables.")
@@ -284,11 +294,16 @@ def data_analysis_mode(db, selected_files):
                         else:
                             st.dataframe(display_df.fillna(0).style.format("{:.1%}"), use_container_width=True)
                         
+                        # --- ¡INICIO DE LA MODIFICACIÓN (LÓGICA CHI-SQUARED)! ---
                         if show_sig and agg_func == 'count':
                             st.markdown("---")
                             st.subheader("Prueba de Significación (Chi-Squared)")
-                            if pivot_df_raw.shape[0] < 2 or (pivot_df_raw.ndim == 2 and pivot_df_raw.shape[1] < 2):
-                                st.warning("La prueba Chi-Squared requiere al menos 2 filas y 2 columnas.")
+                            
+                            is_valid_shape = (pivot_df_raw.ndim == 1 and pivot_df_raw.shape[0] > 1) or \
+                                             (pivot_df_raw.ndim == 2 and pivot_df_raw.shape[0] > 1 and pivot_df_raw.shape[1] > 1)
+                            
+                            if not is_valid_shape:
+                                st.warning("La prueba Chi-Squared requiere al menos 2 filas (y 2 columnas si aplica).")
                             else:
                                 try:
                                     df_testable = pivot_df_raw + 1
@@ -298,11 +313,24 @@ def data_analysis_mode(db, selected_files):
                                     st.metric("Valor P (p-value)", f"{p_value:.4f}")
                                     if p_value < 0.05:
                                         st.success("✅ **Resultado Significativo (p < 0.05)**. Las diferencias en la tabla son reales y no se deben al azar.")
+                                        
+                                        # --- ¡INICIO DE NUEVA LÓGICA (RESIDUOS)! ---
+                                        st.markdown("##### Análisis de Residuos (Celdas Significativas)")
+                                        
+                                        # Calcular residuos estandarizados: (Observado - Esperado) / sqrt(Esperado)
+                                        std_residuals = (df_testable - expected) / np.sqrt(expected)
+                                        
+                                        # Mostrar tabla de calor
+                                        st.dataframe(std_residuals.style.applymap(style_residuals).format("{:.2f}"), use_container_width=True)
+                                        st.caption("Verde (>1.96): Significativamente MÁS alto de lo esperado. Rojo (<-1.96): Significativamente MÁS BAJO de lo esperado.")
+                                        # --- ¡FIN DE NUEVA LÓGICA (RESIDUOS)! ---
+                                        
                                     else:
                                         st.info("ℹ️ **Resultado No Significativo (p > 0.05)**. Las diferencias observadas en la tabla son probablemente producto del azar.")
                                 
                                 except Exception as e:
                                     st.error(f"Error al calcular Chi-Squared: {e}")
+                        # --- FIN DE LA MODIFICACIÓN ---
 
                         excel_bytes = to_excel(pivot_df_raw)
                         st.download_button(
@@ -457,22 +485,18 @@ def data_analysis_mode(db, selected_files):
                     )
 
 
-        # --- PESTAÑA 5: CHAT DE ARTICULACIÓN (CORREGIDO) ---
+        # --- PESTAÑA 5: CHAT DE ARTICULACIÓN ---
         with tab_chat:
             st.header("Chat de Articulación (Cuanti + Cuali)")
             
             if "data_analysis_chat_history" not in st.session_state:
                 st.session_state.data_analysis_chat_history = []
                 
-            # Mostrar historial de chat
             for msg in st.session_state.data_analysis_chat_history:
                 with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
                     st.markdown(msg['message'])
             
-            # --- INICIO DE LA CORRECCIÓN ---
-            # Definir el chat_input ANTES de usar la variable user_prompt
             user_prompt = st.chat_input("Haz una pregunta sobre estos datos y el repositorio...")
-            # --- FIN DE LA CORRECCIÓN ---
             
             if user_prompt:
                 st.session_state.data_analysis_chat_history.append({"role": "Usuario", "message": user_prompt})
