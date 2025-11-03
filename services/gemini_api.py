@@ -3,33 +3,65 @@ import google.generativeai as genai
 import html
 from config import api_keys, generation_config, safety_settings
 
-# (Dejamos fuera la inicialización de st.session_state.api_key_index, 
-# eso irá en app_v2.py)
+# (La inicialización del índice sigue en app.py)
 
-def configure_api_dynamically():
-    global api_keys
-    index = st.session_state.api_key_index
+def _configure_gemini(key_index):
+    """Función interna para configurar la API con una clave específica."""
     try:
-        api_key = api_keys[index]; genai.configure(api_key=api_key)
-        st.session_state.api_key_index = (index + 1) % len(api_keys)
-        print(f"INFO: Usando API Key #{index + 1}")
-    except IndexError: st.error(f"Error: Índice API Key ({index}) fuera de rango.")
-    except Exception as e: st.error(f"Error config API Key #{index + 1}: {e}")
+        api_key = api_keys[key_index]
+        genai.configure(api_key=api_key)
+        print(f"INFO: Configurando API Key #{key_index + 1}")
+        return True
+    except Exception as e:
+        print(f"ERROR: Configurando API Key #{key_index + 1}: {e}")
+        return False
 
-# Inicializa el modelo aquí
-model = genai.GenerativeModel(
-    model_name="gemini-2.5-flash", 
-    generation_config=generation_config, 
-    safety_settings=safety_settings
-)
+def call_gemini_api(prompt, generation_config_override=None):
+    """
+    Llama a la API de Gemini con lógica de rotación de claves y reintentos.
+    """
+    start_index = st.session_state.get("api_key_index", 0)
+    num_keys = len(api_keys)
+    
+    # Determinar la configuración a usar
+    final_gen_config = generation_config
+    if generation_config_override:
+        # Combinar/sobreescribir la configuración base con la específica
+        final_gen_config = {**generation_config, **generation_config_override}
 
-def call_gemini_api(prompt):
-    configure_api_dynamically()
-    try:
-        if isinstance(prompt, list): response = model.generate_content(prompt)
-        else: response = model.generate_content([prompt])
-        return html.unescape(response.text)
-    except Exception as e: 
-        print(f"ERROR GEMINI: {e}")
-        st.error(f"Error API Gemini (Key #{st.session_state.api_key_index}): {e}. Tipo: {type(prompt)}"); 
-        return None
+    last_error = None
+
+    # Bucle de reintento (una vez por cada clave disponible)
+    for i in range(num_keys):
+        current_key_index = (start_index + i) % num_keys
+        
+        if not _configure_gemini(current_key_index):
+            last_error = f"Error al configurar la Clave API #{current_key_index + 1}."
+            continue # Intenta con la siguiente clave
+
+        try:
+            # Inicializar el modelo con la configuración correcta
+            model = genai.GenerativeModel(
+                model_name="gemini-2.5-flash", 
+                generation_config=final_gen_config, 
+                safety_settings=safety_settings
+            )
+
+            # Intentar generar el contenido
+            if isinstance(prompt, list):
+                response = model.generate_content(prompt)
+            else:
+                response = model.generate_content([prompt])
+            
+            # ¡Éxito! Actualizar el índice para la PRÓXIMA llamada (balanceo)
+            st.session_state.api_key_index = (current_key_index + 1) % num_keys
+            return html.unescape(response.text)
+
+        except Exception as e:
+            last_error = e
+            print(f"ADVERTENCIA: API Key #{current_key_index + 1} falló. Error: {e}. Reintentando...")
+            # Continuar el bucle para probar la siguiente clave
+    
+    # Si el bucle termina, todas las claves fallaron
+    st.error(f"Error API Gemini: Todas las claves API fallaron. Último error: {last_error}")
+    return None

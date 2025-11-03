@@ -1,13 +1,13 @@
 import streamlit as st
 import json
 from services.supabase_db import get_monthly_usage, log_query_event
-import google.generativeai as genai
+# import google.generativeai as genai <--- ELIMINADO
 from config import safety_settings
-from services.gemini_api import configure_api_dynamically
+from services.gemini_api import call_gemini_api # <--- MODIFICADO
 from reporting.ppt_generator import crear_ppt_desde_json
 from utils import get_relevant_info, extract_text_from_pdfs
 from prompts import PROMPTS_ONEPAGER, get_onepager_final_prompt
-import constants as c # <--- IMPORTACIÓN AÑADIDA
+import constants as c
 
 # =====================================================
 # MODO: GENERADOR DE ONE-PAGER PPT (MEJORADO)
@@ -65,7 +65,7 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     st.divider()
 
     if st.button(f"Generar Diapositiva '{selected_template_name}'", use_container_width=True, type="primary"):
-        current_ppt_usage = get_monthly_usage(st.session_state.user, c.MODE_ONEPAGER) # <-- MODIFICADO
+        current_ppt_usage = get_monthly_usage(st.session_state.user, c.MODE_ONEPAGER)
         if current_ppt_usage >= ppt_limit and ppt_limit != float('inf'): st.error(f"¡Límite alcanzado!"); return
         if not tema_central.strip(): st.warning("Por favor, describe el tema central."); return
         if not use_repo and not use_uploads: st.error("Debes seleccionar al menos una fuente de datos."); return
@@ -90,14 +90,30 @@ def one_pager_ppt_mode(db_filtered, selected_files):
         with st.spinner(f"Generando contenido para '{selected_template_name}'..."):
             response_text = None
             try:
-                configure_api_dynamically()
-                json_generation_config = {"temperature": 0.5, "top_p": 0.8, "top_k": 32, "max_output_tokens": 8192, "response_mime_type": "application/json"}
-                json_model = genai.GenerativeModel(model_name="gemini-2.5-flash", generation_config=json_generation_config, safety_settings=safety_settings)
-                response = json_model.generate_content(final_prompt_json)
-                response_text = response.text
+                # --- INICIO DE MODIFICACIÓN ---
+                # Definimos la configuración JSON
+                json_generation_config = {"response_mime_type": "application/json"}
+                
+                # Llamamos a la función API centralizada con el override
+                response_text = call_gemini_api(
+                    final_prompt_json,
+                    generation_config_override=json_generation_config
+                )
+                
+                if response_text is None:
+                    # El error ya se mostró en la UI por call_gemini_api
+                    raise Exception("La API de Gemini falló al generar el JSON.")
+
                 data_json = json.loads(response_text)
+                # --- FIN DE MODIFICACIÓN ---
+
             except json.JSONDecodeError: st.error("Error: La IA no devolvió un JSON válido."); st.code(response_text); return
-            except Exception as e: st.error(f"Error API Gemini: {e}"); st.code(str(response_text)); return
+            except Exception as e: 
+                # Si el error no fue JSONDecode, imprimirlo (aunque call_gemini_api ya lo habrá hecho)
+                if "JSON" not in str(e):
+                    st.error(f"Error API Gemini: {e}")
+                st.code(str(response_text)); 
+                return
 
         if data_json:
             with st.spinner("Ensamblando diapositiva .pptx..."):
@@ -108,7 +124,7 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                 
                 # --- Lógica de guardado REVERTIDA ---
                 query_text = f"{selected_template_name}: {tema_central}"
-                log_query_event(query_text, mode=c.MODE_ONEPAGER) # <-- MODIFICADO
+                log_query_event(query_text, mode=c.MODE_ONEPAGER)
                 
                 st.rerun()
             else:
