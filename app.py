@@ -97,13 +97,12 @@ def run_user_mode(db_full, user_features, footer_html):
     
     # --- FIN DEL BLOQUE DE HEARTBEAT ---
 
-    # --- ¡INICIO DE LA CORRECCIÓN! ---
-    # Esta sección debe estar aquí, al inicio de la función
+    # --- INICIO DE LA SECCIÓN DE SIDEBAR (ESTA ES LA QUE FALTA) ---
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
     st.sidebar.divider()
-    # --- ¡FIN DE LA CORRECCIÓN! ---
+    # --- FIN DE LA SECCIÓN DE SIDEBAR ---
 
     st.sidebar.header("Seleccione el modo de uso")
     
