@@ -245,10 +245,10 @@ def main():
         
         st.markdown("""
             <style>
-                [data.testid="stAppViewContainer"] > .main {
+                [data-testid="stAppViewContainer"] > .main {
                     padding-top: 2rem; 
                 }
-                div[data.testid="stBlock"] {
+                div[data-testid="stBlock"] {
                     padding-top: 0rem; 
                 }
             </style>
