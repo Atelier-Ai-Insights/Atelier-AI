@@ -54,40 +54,56 @@ def set_mode_and_reset(new_mode):
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
 
-    # --- Bloque de Heartbeat (sin cambios) ---
-    GRACE_PERIOD_SECONDS = 5 
-    HEARTBEAT_INTERVAL_SECONDS = 60 
+    # --- ¡BLOQUE DE HEARTBEAT CON "TEMPORIZADOR SUAVE"! ---
+    
+    GRACE_PERIOD_SECONDS = 5 # Período de gracia post-login
+    HEARTBEAT_INTERVAL_SECONDS = 60 # Chequear solo cada 60 segundos
     current_time = time.time()
+    
     login_time = st.session_state.get("login_timestamp", 0)
     if (current_time - login_time) > GRACE_PERIOD_SECONDS:
+        
         last_check = st.session_state.get("last_heartbeat_check", 0)
+        
         if (current_time - last_check) > HEARTBEAT_INTERVAL_SECONDS:
             print("--- Ejecutando Heartbeat de Sesión ---")
             try:
                 if 'user_id' not in st.session_state or 'session_id' not in st.session_state:
                     st.error("Error de sesión (faltan datos). Por favor, inicie sesión de nuevo.")
-                    st.session_state.clear(); st.rerun()
+                    st.session_state.clear()
+                    st.rerun()
+
                 response = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute()
+                
                 if response.data and 'active_session_id' in response.data:
                     db_session_id = response.data['active_session_id']
+                    
                     if db_session_id != st.session_state.session_id:
                         st.error("Tu sesión ha sido cerrada porque iniciaste sesión en otro dispositivo.")
-                        st.session_state.clear(); st.rerun()
+                        st.session_state.clear()
+                        st.rerun()
                     else:
                         print("Heartbeat exitoso.")
                         st.session_state.last_heartbeat_check = current_time
+                
                 else:
                     st.error("Error al verificar sesión (usuario no encontrado).")
-                    st.session_state.clear(); st.rerun()
+                    st.session_state.clear()
+                    st.rerun()
+
             except Exception as e:
                 print(f"Heartbeat check falló (ej. red), pero NO se expulsará al usuario. Error: {e}")
                 st.session_state.last_heartbeat_check = current_time
+    
     # --- FIN DEL BLOQUE DE HEARTBEAT ---
 
+    # --- ¡INICIO DE LA CORRECCIÓN! ---
+    # Esta sección debe estar aquí, al inicio de la función
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
     st.sidebar.divider()
+    # --- ¡FIN DE LA CORRECCIÓN! ---
 
     st.sidebar.header("Seleccione el modo de uso")
     
@@ -155,13 +171,7 @@ def run_user_mode(db_full, user_features, footer_html):
     
     st.sidebar.header("Filtros de Búsqueda")
     
-    # --- ¡INICIO DE LA CORRECCIÓN! ---
-    # ANTES: run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS]
-    # AHORA: Quitamos c.MODE_DATA_ANALYSIS de la lista de exclusión.
-    
-    run_filters = modo not in [c.MODE_TEXT_ANALYSIS] 
-
-    # --- ¡FIN DE LA CORRECCIÓN! ---
+    run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS] 
 
     db_filtered = db_full[:] 
 
