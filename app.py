@@ -95,14 +95,12 @@ def run_user_mode(db_full, user_features, footer_html):
                 print(f"Heartbeat check falló (ej. red), pero NO se expulsará al usuario. Error: {e}")
                 st.session_state.last_heartbeat_check = current_time
     
-    # --- FIN DEL BLOQUE DE HEARTBEAT ---
 
     # --- INICIO DE LA SECCIÓN DE SIDEBAR (ESTA ES LA QUE FALTA) ---
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
     st.sidebar.divider()
-    # --- FIN DE LA SECCIÓN DE SIDEBAR ---
 
     st.sidebar.header("Seleccione el modo de uso")
     
@@ -287,3 +285,5 @@ def main():
 # ==============================
 if __name__ == "__main__":
     main()
+
+
