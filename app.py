@@ -170,22 +170,26 @@ def run_user_mode(db_full, user_features, footer_html):
     
     st.sidebar.header("Filtros de Búsqueda")
     
-    # --- ESTA ES LA LÍNEA CORREGIDA ---
+    # --- ESTA ES LA LÍNEA QUE MENCIONASTE ---
     # Los filtros se deshabilitan SOLO para el modo texto.
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS] 
 
     db_filtered = db_full[:] 
 
+    # Filtro 1: Marca(s)
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
     selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas", disabled=not run_filters)
     if run_filters and selected_marcas: 
         db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
 
-    years_options = sorted({doc.get("marca", "") for doc in db_full if doc.get("marca")})
+    # Filtro 2: Año(s) - LÍNEA CORREGIDA
+    # Ahora usa 'db_filtered' para que las opciones dependan del filtro anterior
+    years_options = sorted({doc.get("marca", "") for doc in db_filtered if doc.get("marca")})
     selected_years = st.sidebar.multiselect("Año(s):", years_options, key="filter_years", disabled=not run_filters)
     if run_filters and selected_years: 
         db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
+    # Filtro 3: Proyecto(s) - (Este ya estaba correcto)
     brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered if extract_brand(d.get("nombre_archivo", ""))})
     selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects", disabled=not run_filters)
     if run_filters and selected_brands: 
