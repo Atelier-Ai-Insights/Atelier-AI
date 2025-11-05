@@ -6,9 +6,9 @@ import time # Importar time
 # ==============================
 
 from styles import apply_styles
-from config import PLAN_FEATURES, banner_file 
+from config import PLAN_FEATURES, banner_file
 from services.storage import load_database
-from services.supabase_db import supabase 
+from services.supabase_db import supabase
 from auth import show_login_page, show_signup_page, show_reset_password_page
 from admin.dashboard import show_admin_dashboard
 from modes.report_mode import report_mode
@@ -22,13 +22,13 @@ from modes.text_analysis_mode import text_analysis_mode
 from modes.onepager_mode import one_pager_ppt_mode
 from modes.data_analysis_mode import data_analysis_mode
 from utils import (
-    extract_brand, reset_chat_workflow, reset_report_workflow 
+    extract_brand, reset_chat_workflow, reset_report_workflow
 )
 import constants as c
 
 def set_mode_and_reset(new_mode):
     if 'current_mode' not in st.session_state or st.session_state.current_mode != new_mode:
-        reset_chat_workflow() 
+        reset_chat_workflow()
         st.session_state.pop("generated_concept", None)
         st.session_state.pop("evaluation_result", None)
         st.session_state.pop("report", None)
@@ -39,7 +39,7 @@ def set_mode_and_reset(new_mode):
         
         st.session_state.pop("data_analysis_df", None)
         st.session_state.pop("data_analysis_chat_history", None)
-        st.session_state.pop("da_selected_project_id", None) 
+        st.session_state.pop("da_selected_project_id", None)
         st.session_state.pop("da_selected_project_name", None)
         st.session_state.pop("da_current_sub_mode", None)
         
@@ -110,7 +110,7 @@ def run_user_mode(db_full, user_features, footer_html):
 
     all_categories = {
         "Análisis": {
-            c.MODE_CHAT: True, 
+            c.MODE_CHAT: True,
             c.MODE_TEXT_ANALYSIS: user_features.get("transcript_file_limit", 0) > 0,
             c.MODE_DATA_ANALYSIS: True
         },
@@ -135,7 +135,7 @@ def run_user_mode(db_full, user_features, footer_html):
             default_expanded = category
             break
 
-    if any(all_categories["Análisis"].values()): 
+    if any(all_categories["Análisis"].values()):
         with st.sidebar.expander("Análisis", expanded=(default_expanded == "Análisis")):
             if all_categories["Análisis"][c.MODE_CHAT]:
                 st.button(c.MODE_CHAT, on_click=set_mode_and_reset, args=(c.MODE_CHAT,), use_container_width=True, type="primary" if modo == c.MODE_CHAT else "secondary")
@@ -170,35 +170,29 @@ def run_user_mode(db_full, user_features, footer_html):
     
     st.sidebar.header("Filtros de Búsqueda")
     
-    # --- ESTA ES LA LÍNEA QUE MENCIONASTE ---
-    # Los filtros se deshabilitan SOLO para el modo texto.
-    run_filters = modo not in [c.MODE_TEXT_ANALYSIS] 
+    run_filters = modo not in [c.MODE_TEXT_ANALYSIS]
 
-    db_filtered = db_full[:] 
+    db_filtered = db_full[:]
 
-    # Filtro 1: Marca(s)
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
     selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas", disabled=not run_filters)
-    if run_filters and selected_marcas: 
+    if run_filters and selected_marcas:
         db_filtered = [d for d in db_filtered if d.get("filtro") in selected_marcas]
 
-    # Filtro 2: Año(s) - LÍNEA CORREGIDA
-    # Ahora usa 'db_filtered' para que las opciones dependan del filtro anterior
-    years_options = sorted({doc.get("marca", "") for doc in db_filtered if doc.get("marca")})
+    years_options = sorted({doc.get("marca", "") for doc in db_full if doc.get("marca")})
     selected_years = st.sidebar.multiselect("Año(s):", years_options, key="filter_years", disabled=not run_filters)
-    if run_filters and selected_years: 
+    if run_filters and selected_years:
         db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
 
-    # Filtro 3: Proyecto(s) - (Este ya estaba correcto)
     brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered if extract_brand(d.get("nombre_archivo", ""))})
     selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects", disabled=not run_filters)
-    if run_filters and selected_brands: 
+    if run_filters and selected_brands:
         db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
 
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         try:
-            if 'user_id' in st.session_state: 
+            if 'user_id' in st.session_state:
                 supabase.table("users").update({"active_session_id": None}).eq("id", st.session_state.user_id).execute()
         except Exception as e:
             print(f"Error al limpiar sesión en DB: {e}")
@@ -212,7 +206,7 @@ def run_user_mode(db_full, user_features, footer_html):
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
 
-    if run_filters and not selected_files and modo not in [c.MODE_REPORT, c.MODE_IMAGE_EVAL, c.MODE_VIDEO_EVAL, c.MODE_ONEPAGER]: 
+    if run_filters and not selected_files and modo not in [c.MODE_REPORT, c.MODE_IMAGE_EVAL, c.MODE_VIDEO_EVAL, c.MODE_ONEPAGER]:
          st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
 
     if modo == c.MODE_REPORT: report_mode(db_filtered, selected_files)
@@ -233,7 +227,7 @@ def main():
     
     st.set_page_config(
         page_title="Atelier Data Studio",
-        page_icon="Logo_Casa.png" 
+        page_icon="Logo_Casa.png"
     )
     
     apply_styles()
@@ -251,10 +245,10 @@ def main():
         st.markdown("""
             <style>
                 [data-testid="stAppViewContainer"] > .main {
-                    padding-top: 2rem; 
+                    padding-top: 2rem;
                 }
                 div[data-testid="stBlock"] {
-                    padding-top: 0rem; 
+                    padding-top: 0rem;
                 }
             </style>
             """, unsafe_allow_html=True)
@@ -265,13 +259,13 @@ def main():
             if st.session_state.page == "login": show_login_page()
             elif st.session_state.page == "signup": show_signup_page()
             elif st.session_state.page == "reset_password": show_reset_password_page()
-        st.divider() 
+        st.divider()
         st.markdown(footer_html, unsafe_allow_html=True)
         st.stop()
 
-    try: 
-        db_full = load_database(st.session_state.cliente) 
-    except Exception as e: 
+    try:
+        db_full = load_database(st.session_state.cliente)
+    except Exception as e:
         st.error(f"Error crítico al cargar BD: {e}")
         st.stop()
 
@@ -279,13 +273,13 @@ def main():
 
     if st.session_state.get("is_admin", False):
         tab_user, tab_admin = st.tabs(["Modo Usuario", "Modo Administrador"])
-        with tab_user: 
+        with tab_user:
             run_user_mode(db_full, user_features, footer_html)
         with tab_admin:
             st.title("Panel de Administración")
             st.write(f"Gestionando como: {st.session_state.user}")
             show_admin_dashboard(db_full)
-    else: 
+    else:
         run_user_mode(db_full, user_features, footer_html)
 
 # ==============================
