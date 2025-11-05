@@ -3,7 +3,7 @@ import pandas as pd
 from services.supabase_db import supabase, supabase_admin_client
 from config import PLAN_FEATURES
 from supabase import create_client 
-import altair as alt # Importación para el gráfico de pastel
+import altair as alt # <-- ¡NUEVA IMPORTACIÓN!
 
 # =====================================================
 # FUNCIÓN DEL DASHBOARD DEL REPOSITORIO (MODIFICADA)
@@ -32,52 +32,60 @@ def show_repository_dashboard(db_full):
     st.markdown("#### Distribución de Estudios")
     
     # Gráfico de Año (Vertical)
-    st.markdown("**Estudios por Año**")
+    st.markdown("**Estudios por Año (campo 'marca')**")
     year_counts = df['marca'].value_counts().sort_index()
     st.bar_chart(year_counts)
 
     st.divider()
     
-    # --- ¡INICIO DE LA MODIFICACIÓN (Columnas eliminadas)! ---
+    col1, col2 = st.columns(2)
     
-    # Gráfico de Cliente (Pie Chart) - (Ya no está en una columna)
-    st.markdown("**Estudios por Cliente**")
-    try:
-        cliente_counts_series = df['cliente'].value_counts()
-        cliente_counts_df = cliente_counts_series.reset_index()
-        cliente_counts_df.columns = ['Cliente', 'Conteo']
+    with col1:
+        # Gráfico de Cliente (Pie Chart)
+        st.markdown("**Estudios por Cliente (campo 'cliente')**")
         
-        if not cliente_counts_df.empty:
-            base = alt.Chart(cliente_counts_df).encode(
-               theta=alt.Theta("Conteo:Q", stack=True)
-            )
-            pie = base.mark_arc(outerRadius=120).encode(
-                color=alt.Color("Cliente:N"),
-                order=alt.Order("Conteo:Q", sort="descending"),
-                tooltip=["Cliente", "Conteo"]
-            )
-            text = base.mark_text(radius=140).encode(
-                text=alt.Text("Conteo:Q", format=".1%"),
-                order=alt.Order("Conteo:Q", sort="descending"),
-                color=alt.value("black")
-            )
-            chart = pie + text
-            st.altair_chart(chart, use_container_width=True)
-        else:
-            st.info("No hay datos de clientes para mostrar en el gráfico.")
-    
-    except Exception as e:
-        st.error(f"Se produjo un error al generar el gráfico de pastel: {e}")
+        # --- ¡INICIO DE LA CORRECCIÓN (con Altair)! ---
+        try:
+            cliente_counts_series = df['cliente'].value_counts()
+            cliente_counts_df = cliente_counts_series.reset_index()
+            cliente_counts_df.columns = ['Cliente', 'Conteo']
+            
+            if not cliente_counts_df.empty:
+                # 1. Crear el gráfico base
+                base = alt.Chart(cliente_counts_df).encode(
+                   theta=alt.Theta("Conteo:Q", stack=True)
+                )
 
-    st.divider() # <-- Añadido para separar
+                # 2. Definir el gráfico de pastel
+                pie = base.mark_arc(outerRadius=120).encode(
+                    color=alt.Color("Cliente:N"),
+                    order=alt.Order("Conteo:Q", sort="descending"),
+                    tooltip=["Cliente", "Conteo"]
+                )
 
-    # Gráfico de Marca (Tabla) - (Ya no está en una columna)
-    st.markdown("**Estudios por Marca**")
-    filtro_counts = df['filtro'].value_counts().reset_index()
-    filtro_counts.columns = ['Marca', 'Conteo']
-    st.dataframe(filtro_counts.set_index('Marca'), use_container_width=True)
-    
-    # --- ¡FIN DE LA MODIFICACIÓN! ---
+                # 3. Añadir el texto (porcentajes)
+                text = base.mark_text(radius=140).encode(
+                    text=alt.Text("Conteo:Q", format=".1%"),
+                    order=alt.Order("Conteo:Q", sort="descending"),
+                    color=alt.value("black")  # Color del texto
+                )
+
+                # 4. Combinar y mostrar
+                chart = pie + text
+                st.altair_chart(chart, use_container_width=True)
+            else:
+                st.info("No hay datos de clientes para mostrar en el gráfico.")
+        
+        except Exception as e:
+            st.error(f"Se produjo un error al generar el gráfico de pastel: {e}")
+        # --- ¡FIN DE LA CORRECCIÓN! ---
+
+    with col2:
+        # Gráfico de Marca (Tabla)
+        st.markdown("**Estudios por Marca (campo 'filtro')**")
+        filtro_counts = df['filtro'].value_counts().reset_index()
+        filtro_counts.columns = ['Marca', 'Conteo']
+        st.dataframe(filtro_counts.set_index('Marca'), use_container_width=True)
 
 
 # =====================================================
