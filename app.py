@@ -37,11 +37,13 @@ def set_mode_and_reset(new_mode):
         st.session_state.pop("video_evaluation_result", None)
         st.session_state.pop("generated_ppt_bytes", None)
         
+        # --- LÓGICA MODIFICADA ---
         st.session_state.pop("data_analysis_df", None)
         st.session_state.pop("data_analysis_chat_history", None)
         st.session_state.pop("da_selected_project_id", None)
         st.session_state.pop("da_selected_project_name", None)
-        st.session_state.pop("da_current_sub_mode", None)
+        st.session_state.pop("da_current_sub_mode", None) # <-- LÍNEA NUEVA
+        # --- FIN LÓGICA MODIFICADA ---
         
         st.session_state.pop("text_analysis_files_dict", None)
         st.session_state.pop("text_analysis_combined_context", None)
@@ -168,7 +170,13 @@ def run_user_mode(db_full, user_features, footer_html):
     
     st.sidebar.header("Filtros de Búsqueda")
     
-    run_filters = modo not in [c.MODE_TEXT_ANALYSIS]
+    # --- ¡INICIO DE LA CORRECCIÓN! ---
+    # ANTES: run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS]
+    # AHORA: Quitamos c.MODE_DATA_ANALYSIS de la lista de exclusión.
+    
+    run_filters = modo not in [c.MODE_TEXT_ANALYSIS] 
+
+    # --- ¡FIN DE LA CORRECCIÓN! ---
 
     db_filtered = db_full[:]
 
