@@ -21,29 +21,57 @@ TEXT_PROJECT_BUCKET = "text_project_files"
 # --- Funciones de Carga de Datos ---
 
 @st.cache_data(ttl=600)
-def load_text_project_data(storage_path):
+def load_text_project_data(storage_path_folder):
     """
-    Descarga un archivo .docx de Supabase Storage y extrae su texto.
+    Descarga TODOS los archivos .docx de una carpeta de proyecto
+    de Supabase Storage y extrae su texto.
     """
     try:
-        # 1. Obtener URL firmada
-        response_url = supabase.storage.from_(TEXT_PROJECT_BUCKET).create_signed_url(storage_path, 60)
-        signed_url = response_url['signedURL']
+        # 1. Listar los archivos en la carpeta del proyecto
+        files_list = supabase.storage.from_(TEXT_PROJECT_BUCKET).list(path=storage_path_folder)
         
-        # 2. Descargar el archivo en memoria
-        response_file = requests.get(signed_url)
-        response_file.raise_for_status() # Asegurarse de que la descarga fue exitosa
+        if not files_list:
+            st.error("Error: Este proyecto no contiene archivos.")
+            return None
         
-        # 3. Leer el archivo .docx desde los bytes
-        file_stream = io.BytesIO(response_file.content)
-        document = docx.Document(file_stream)
-        full_text = "\n".join([para.text for para in document.paragraphs if para.text.strip()])
+        combined_context = ""
         
-        # 4. Crear el contexto combinado
-        # Usamos el path como nombre de archivo "simulado"
-        file_name = storage_path.split('/')[-1] 
-        combined_context = f"\n\n--- INICIO DOCUMENTO: {file_name} ---\n\n{full_text}\n\n--- FIN DOCUMENTO: {file_name} ---\n"
+        # 2. Bucle para descargar y procesar CADA archivo
+        st.write(f"Cargando {len(files_list)} archivo(s) del proyecto...")
+        progress_bar = st.progress(0.0)
         
+        for i, file_info in enumerate(files_list):
+            file_name = file_info.get('name')
+            # Ignorar archivos del sistema como .DS_Store
+            if not file_name or not file_name.endswith(('.docx', '.DOCX')):
+                continue
+                
+            file_path = f"{storage_path_folder}/{file_name}"
+            
+            try:
+                # 2a. Obtener URL firmada para este archivo
+                response_url = supabase.storage.from_(TEXT_PROJECT_BUCKET).create_signed_url(file_path, 60)
+                signed_url = response_url['signedURL']
+                
+                # 2b. Descargar el archivo
+                response_file = requests.get(signed_url)
+                response_file.raise_for_status()
+                
+                # 2c. Leer el .docx
+                file_stream = io.BytesIO(response_file.content)
+                document = docx.Document(file_stream)
+                full_text = "\n".join([para.text for para in document.paragraphs if para.text.strip()])
+                
+                # 2d. Añadir al contexto combinado
+                combined_context += f"\n\n--- INICIO DOCUMENTO: {file_name} ---\n\n{full_text}\n\n--- FIN DOCUMENTO: {file_name} ---\n"
+                
+                progress_bar.progress((i + 1) / len(files_list))
+
+            except Exception as e:
+                st.warning(f"No se pudo cargar el archivo '{file_name}': {e}")
+                continue
+        
+        progress_bar.empty()
         return combined_context
         
     except Exception as e:
@@ -70,38 +98,48 @@ def show_text_project_creator(user_id, plan_limit):
         project_name = st.text_input("Nombre del Proyecto*", placeholder="Ej: Entrevistas NPS Q1 2024")
         project_brand = st.text_input("Marca", placeholder="Ej: Marca X")
         project_year = st.number_input("Año", min_value=2020, max_value=2030, value=datetime.now().year)
-        uploaded_file = st.file_uploader("Archivo Word (.docx)*", type=["docx"])
-        st.caption("Nota: Si tienes múltiples transcripciones, por favor combínalas en un solo archivo .docx antes de subir.")
+        
+        # --- ¡INICIO DE LA CORRECCIÓN! ---
+        uploaded_files = st.file_uploader(
+            "Archivos Word (.docx)*", 
+            type=["docx"],
+            accept_multiple_files=True # <-- Aceptar múltiples archivos
+        )
+        # --- ¡FIN DE LA CORRECCIÓN! ---
         
         submitted = st.form_submit_button("Crear Proyecto")
 
     if submitted:
-        if not all([project_name, uploaded_file]):
-            st.warning("Por favor, completa el Nombre del Proyecto y sube un archivo .docx.")
+        # --- ¡INICIO DE LA CORRECCIÓN! ---
+        if not all([project_name, uploaded_files]):
+            st.warning("Por favor, completa el Nombre del Proyecto y sube al menos un archivo .docx.")
             return
+        # --- ¡FIN DE LA CORRECCIÓN! ---
 
-        with st.spinner("Creando proyecto y subiendo archivo..."):
+        storage_path_folder = f"{user_id}/{uuid.uuid4()}" # Esta es la CARPETA del proyecto
+        
+        with st.spinner(f"Creando proyecto y subiendo {len(uploaded_files)} archivo(s)..."):
             try:
-                file_bytes = uploaded_file.getvalue()
-                file_ext = os.path.splitext(uploaded_file.name)[1]
-                storage_path = f"{user_id}/{uuid.uuid4()}{file_ext}" 
-                
-                supabase.storage.from_(TEXT_PROJECT_BUCKET).upload(
-                    path=storage_path,
-                    file=file_bytes,
-                    file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
-                )
-                
                 # --- ¡INICIO DE LA CORRECCIÓN! ---
-                # Ya no necesitamos enviar 'user_id' porque la DB lo maneja
-                # con 'auth.uid()' como valor por defecto.
+                # Bucle para subir cada archivo a la carpeta
+                for file in uploaded_files:
+                    file_bytes = file.getvalue()
+                    file_name = file.name
+                    full_storage_path = f"{storage_path_folder}/{file_name}" # Ruta al archivo individual
+                    
+                    supabase.storage.from_(TEXT_PROJECT_BUCKET).upload(
+                        path=full_storage_path,
+                        file=file_bytes,
+                        file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+                    )
+                # --- ¡FIN DE LA CORRECCIÓN! ---
+
                 project_data = {
                     "project_name": project_name,
                     "project_brand": project_brand if project_brand else None,
                     "project_year": int(project_year) if project_year else None,
-                    "storage_path": storage_path
+                    "storage_path": storage_path_folder # <-- Guardamos la RUTA DE LA CARPETA
                 }
-                # --- ¡FIN DE LA CORRECCIÓN! ---
                 
                 supabase.table("text_projects").insert(project_data).execute()
                 
@@ -110,10 +148,14 @@ def show_text_project_creator(user_id, plan_limit):
 
             except Exception as e:
                 st.error(f"Error al crear el proyecto: {e}")
+                # Lógica de limpieza: eliminar archivos subidos si falla
                 try:
-                    supabase.storage.from_(TEXT_PROJECT_BUCKET).remove([storage_path])
+                    files_in_folder = supabase.storage.from_(TEXT_PROJECT_BUCKET).list(path=storage_path_folder)
+                    file_paths_to_remove = [f"{storage_path_folder}/{file['name']}" for file in files_in_folder]
+                    if file_paths_to_remove:
+                        supabase.storage.from_(TEXT_PROJECT_BUCKET).remove(file_paths_to_remove)
                 except:
-                    pass
+                    pass # Mejor esfuerzo para limpiar
 
 def show_text_project_list(user_id):
     st.subheader("Mis Proyectos de Texto")
@@ -134,7 +176,7 @@ def show_text_project_list(user_id):
         proj_name = proj['project_name']
         proj_brand = proj.get('project_brand', 'N/A')
         proj_year = proj.get('project_year', 'N/A')
-        storage_path = proj['storage_path']
+        storage_path = proj['storage_path'] # Esta es la ruta de la CARPETA
         
         with st.container(border=True):
             col1, col2, col3 = st.columns([4, 1, 1])
@@ -153,8 +195,17 @@ def show_text_project_list(user_id):
                 if st.button("Eliminar", key=f"eliminar_txt_{proj_id}", use_container_width=True):
                     with st.spinner("Eliminando proyecto..."):
                         try:
-                            supabase.storage.from_(TEXT_PROJECT_BUCKET).remove([storage_path])
+                            # --- ¡INICIO DE LA CORRECCIÓN! ---
+                            # Lógica para eliminar todos los archivos de la carpeta
+                            files_in_folder = supabase.storage.from_(TEXT_PROJECT_BUCKET).list(path=storage_path)
+                            file_paths_to_remove = [f"{storage_path}/{file['name']}" for file in files_in_folder]
+                            if file_paths_to_remove:
+                                supabase.storage.from_(TEXT_PROJECT_BUCKET).remove(file_paths_to_remove)
+                            # --- ¡FIN DE LA CORRECCIÓN! ---
+                            
+                            # Eliminar el registro de la tabla
                             supabase.table("text_projects").delete().eq("id", proj_id).execute()
+                            
                             st.success(f"Proyecto '{proj_name}' eliminado.")
                             st.rerun()
                         except Exception as e:
@@ -184,7 +235,7 @@ def show_text_project_analyzer(combined_context, project_name):
     # --- PESTAÑA 1: CHAT DE TRANSCRIPCIONES ---
     with tab_chat:
         st.header("Análisis de Notas y Transcripciones")
-        st.markdown("Haz preguntas específicas sobre el contenido del archivo cargado.")
+        st.markdown("Haz preguntas específicas sobre el contenido de los archivos cargados.")
         
         if "transcript_chat_history" not in st.session_state: 
             st.session_state.transcript_chat_history = []
@@ -247,7 +298,7 @@ def show_text_project_analyzer(combined_context, project_name):
                     st.rerun()
         
         else:
-            st.markdown("Esta herramienta leerá el archivo cargado y generará un reporte de temas clave y citas de respaldo.")
+            st.markdown("Esta herramienta leerá todos los archivos cargados y generará un reporte de temas clave y citas de respaldo.")
             main_topic = st.text_input(
                 "¿Cuál es el tema principal de estas entrevistas?", 
                 placeholder="Ej: Percepción de snacks saludables, Experiencia de compra, etc.",
@@ -311,3 +362,4 @@ def text_analysis_mode():
         st.divider()
         
         show_text_project_list(user_id)
+        
