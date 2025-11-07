@@ -46,9 +46,10 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
 
         try:
             # --- ¡INICIO DE LA CORRECCIÓN! ---
-            # Probamos con el modelo 1.5 Pro, que también es multimodal.
+            # Volvemos al modelo multimodal 'v1beta' (gemini-pro-vision)
+            # Este modelo es compatible con todas las funciones de tu app.
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-pro-latest", # <-- CORREGIDO
+                model_name="gemini-pro-vision", # <-- CORREGIDO
                 generation_config=final_gen_config, 
                 safety_settings=final_safety_settings
             )
