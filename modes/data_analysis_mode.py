@@ -253,26 +253,24 @@ def show_project_analyzer(df, db_filtered, selected_files):
         
         st.rerun()
         
-    # --- ¡INICIO DE LA CORRECCIÓN! ---
     # --- 2. Nuevo layout de navegación con st.columns y st.expander ---
     
     st.markdown("##### Selecciona una función de análisis:")
     col_ia, col_stats = st.columns(2)
 
     with col_ia:
-        with st.expander("📊 Funciones de IA Generativa", expanded=True):
+        with st.expander("Funciones de IA Generativa", expanded=True):
             st.button("Resumen Ejecutivo", on_click=set_da_sub_mode, args=("Resumen Ejecutivo IA",), use_container_width=True, type="primary" if sub_modo == "Resumen Ejecutivo IA" else "secondary")
             st.button("Auto-Codificación", on_click=set_da_sub_mode, args=("Auto-Codificación",), use_container_width=True, type="primary" if sub_modo == "Auto-Codificación" else "secondary")
             st.button("Nube de Palabras", on_click=set_da_sub_mode, args=("Nube de Palabras",), use_container_width=True, type="primary" if sub_modo == "Nube de Palabras" else "secondary")
             st.button("Exportar a PPT", on_click=set_da_sub_mode, args=("Exportar a PPT",), use_container_width=True, type="primary" if sub_modo == "Exportar a PPT" else "secondary")
 
     with col_stats:
-        with st.expander("📈 Análisis Estadístico y Cruces", expanded=True):
+        with st.expander("Análisis Estadístico y Cruces", expanded=True):
             st.button("Análisis Rápido", on_click=set_da_sub_mode, args=("Análisis Rápido",), use_container_width=True, type="primary" if sub_modo == "Análisis Rápido" else "secondary")
             st.button("Tabla Dinámica", on_click=set_da_sub_mode, args=("Tabla Dinámica",), use_container_width=True, type="primary" if sub_modo == "Tabla Dinámica" else "secondary")
             st.button("Análisis de Correlación", on_click=set_da_sub_mode, args=("Análisis de Correlación",), use_container_width=True, type="primary" if sub_modo == "Análisis de Correlación" else "secondary")
             st.button("Comparación de Grupos", on_click=set_da_sub_mode, args=("Comparación de Grupos",), use_container_width=True, type="primary" if sub_modo == "Comparación de Grupos" else "secondary")
-    # --- ¡FIN DE LA CORRECCIÓN! ---
 
     st.divider()
     
@@ -281,7 +279,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
     if "data_analysis_stats_context" not in st.session_state:
         st.session_state.data_analysis_stats_context = ""
     
-    # --- ¡INICIO NUEVA FUNCIÓN 1: RESUMEN EJECUTIVO IA! ---
     if sub_modo == "Resumen Ejecutivo IA":
         st.header("Resumen Ejecutivo")
         st.markdown("Un primer vistazo a tus datos para identificar los hallazgos más evidentes y las hipótesis de exploración más interesantes.")
@@ -338,7 +335,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
                     except Exception as e:
                         st.error(f"Error al generar el resumen: {e}")
                         st.code(traceback.format_exc())
-    # --- ¡FIN NUEVA FUNCIÓN 1! ---
 
     if sub_modo == "Análisis Rápido":
         st.header("Análisis Rápido")
@@ -490,7 +486,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
                     except Exception as e:
                         st.error(f"Error al generar la nube de palabras: {e}")
 
-    # --- ¡INICIO NUEVA FUNCIÓN 2: ANÁLISIS DE CORRELACIÓN! ---
     if sub_modo == "Análisis de Correlación":
         st.header("Análisis de Correlación (Heatmap)")
         st.markdown("Explora la relación entre diferentes variables numéricas (ej. Satisfacción vs. NPS).")
@@ -537,9 +532,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                 except Exception as e:
                     st.error(f"Error al calcular la correlación: {e}")
                     st.code(traceback.format_exc())
-    # --- ¡FIN NUEVA FUNCIÓN 2! ---
 
-    # --- ¡INICIO NUEVA FUNCIÓN 3: COMPARACIÓN DE GRUPOS! ---
     if sub_modo == "Comparación de Grupos":
         st.header("Comparación de Grupos (T-Test / ANOVA)")
         st.markdown("Comprueba si existen diferencias estadísticamente significativas en una métrica numérica entre diferentes grupos categóricos.")
@@ -600,7 +593,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
                 except Exception as e:
                     st.error(f"Error al ejecutar la prueba estadística: {e}")
                     st.code(traceback.format_exc())
-    # --- ¡FIN NUEVA FUNCIÓN 3! ---
     
     if sub_modo == "Exportar a PPT":
         st.header("Exportar a Presentación (.pptx)")
@@ -688,7 +680,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                 if st.button("Analizar otra columna", use_container_width=True, type="secondary"):
                     st.session_state.pop("da_autocode_results_df", None)
                     st.session_state.pop("da_autocode_json", None)
-                    st.session_state.pop("da_autocode_selected_col", None) # <-- Limpiar
+                    st.session_state.pop("da_autocode_selected_col", None)
                     st.rerun()
                 
                 st.divider()
@@ -822,8 +814,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 st.code(traceback.format_exc())
 
 
-# --- FUNCIÓN PRINCIPAL DEL MODO (NUEVA ARQUITECTURA) ---
-
 def data_analysis_mode(db, selected_files):
     st.subheader(c.MODE_DATA_ANALYSIS)
     st.markdown("Carga, gestiona y analiza tus proyectos de datos (Excel). Articula tus hallazgos cuantitativos con el repositorio cualitativo.")
@@ -832,7 +822,6 @@ def data_analysis_mode(db, selected_files):
     user_id = st.session_state.user_id
     plan_limit = st.session_state.plan_features.get('project_upload_limit', 0)
 
-    # --- VISTA DE ANÁLISIS ---
     if "da_selected_project_id" in st.session_state and "data_analysis_df" not in st.session_state:
         with st.spinner("Cargando datos del proyecto..."):
             df = load_project_data(st.session_state.da_storage_path)
