@@ -272,7 +272,7 @@ PROMPTS_ONEPAGER = {
         Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
         {{
           "template_type": "empatia",
-          "titulo_diapapositiva": "Mapa de Empatía: {tema_central}",
+          "titulo_diapositapositiva": "Mapa de Empatía: {tema_central}",
           "piensa_siente": ["... (2-3 puntos) ..."],
           "ve": ["... (2-3 puntos) ..."],
           "dice_hace": ["... (2-3 puntos) ..."],
@@ -353,15 +353,11 @@ def get_onepager_final_prompt(relevant_info, selected_template_name, tema_centra
     {prompt_template.format(tema_central=tema_central)}
     """
 
-# --- ¡INICIO DEL BLOQUE CORREGIDO! ---
-
 def get_autocode_prompt(context, main_topic):
     """
     Crea un prompt para que la IA lea múltiples transcripciones e identifique
     temas clave (códigos) con citas de respaldo.
     """
-    # Se ha cambiado de múltiples f-strings separadas a un solo bloque f"""..."""
-    # Esto corrige el SyntaxError.
     return f"""
 **Tarea:** Eres un investigador cualitativo experto. Tu trabajo es analizar las transcripciones de entrevistas/focus groups proporcionadas sobre el tema '{main_topic}'.
 Debes identificar los **temas emergentes (códigos)** más importantes y respaldar cada tema con **citas textuales** de las transcripciones.
@@ -395,9 +391,6 @@ Un párrafo corto (2-3 frases) que resuma los principales hallazgos.
 - **Citas Textuales:** Las citas DEBEN ser copiadas palabra por palabra de las transcripciones.
 - **Fuente de la Cita:** DEBES indicar de qué archivo (ej. `(Fuente: Entrevista_Usuario_1.docx)`) proviene cada cita.
 """
-# --- ¡FIN DEL BLOQUE CORREGIDO! ---
-
-# --- ¡INICIO DEL BLOQUE CORREGIDO (CON LLAVES DOBLES)! ---
 
 def get_excel_autocode_prompt(main_topic, responses_sample):
     """
@@ -443,4 +436,87 @@ El JSON debe ser una lista de objetos, donde cada objeto representa una categor�
 3.  **No Inventes:** Basa tus categorías y keywords *estrictamente* en la muestra de respuestas.
 4.  **JSON Válido:** Tu salida debe ser *solamente* el JSON, sin texto introductorio.
 """
-# --- ¡FIN DEL BLOQUE CORREGIDO! ---
+
+# --- ¡INICIO DE LOS 3 NUEVOS PROMPTS! ---
+
+def get_data_summary_prompt(data_snapshot_str):
+    """
+    Crea un prompt para que la IA genere un resumen ejecutivo de un DataFrame.
+    """
+    return f"""
+**Tarea:** Eres un analista de investigación de mercados senior. Tu trabajo es analizar un resumen estructural de un archivo de datos (encuesta) y generar un resumen ejecutivo para tu cliente.
+
+--- RESUMEN ESTRUCTURAL DE DATOS ---
+```{data_snapshot_str}```
+
+**Formato de Salida OBLIGATORIO (Markdown):**
+Basándote *únicamente* en el resumen estructural, identifica los 3-5 hallazgos más evidentes o las hipótesis más interesantes que valdría la pena explorar.
+
+## Resumen Ejecutivo de Datos
+Un párrafo corto (2-3 frases) que describa la naturaleza de los datos.
+
+## Hallazgos Clave e Hipótesis
+* **[Hallazgo 1]:** [Explica el hallazgo o la hipótesis. Por ejemplo: "La 'Satisfacción' (media: 4.2) parece alta, pero la 'Intención de Recompra' (media: 3.1) es baja. Esto sugiere un problema de lealtad..."]
+* **[Hallazgo 2]:** [Explica el hallazgo o la hipótesis. Por ejemplo: "La mayoría de los encuestados son del 'Segmento A' (60%). Sería crucial cruzar todas las métricas clave contra el 'Segmento' para ver si el 'Segmento B' opina diferente..."]
+* **[Hallazgo 3]:** [...]
+* **[Hallazgo 4]:** [...]
+"""
+
+def get_correlation_prompt(correlation_matrix_str):
+    """
+    Crea un prompt para que la IA interprete una matriz de correlación.
+    """
+    return f"""
+**Tarea:** Eres un analista de datos experto. Interpreta la siguiente matriz de correlación en lenguaje sencillo.
+
+--- MATRIZ DE CORRELACIÓN ---
+```{correlation_matrix_str}```
+
+**Instrucciones:**
+1.  Define brevemente qué es una correlación (positiva vs. negativa).
+2.  Identifica las 2 o 3 relaciones **más fuertes** (positivas o negativas) de la matriz (ignora las correlaciones de 1.00 de una variable consigo misma).
+3.  Explica qué significa cada una de esas relaciones en la práctica.
+4.  Si no hay correlaciones fuertes (todas < 0.3 y > -0.3), indícalo.
+
+**Respuesta (en Markdown):**
+## Interpretación de Correlaciones
+...
+"""
+
+def get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups):
+    """
+    Crea un prompt para que la IA interprete un resultado de T-Test o ANOVA.
+    """
+    
+    prompt = f"""
+**Tarea:** Eres un estadístico experto. Interpreta el siguiente resultado de una prueba estadística para un cliente, en lenguaje muy sencillo.
+
+**Contexto de la Prueba:**
+* **Prueba Realizada:** {test_type}
+* **Objetivo:** Comparar la media de la métrica '{num_col}' entre los {num_groups} grupos de la variable '{cat_col}'.
+* **Resultado (P-Value):** {p_value}
+
+**Instrucciones:**
+1.  Define el "P-Value" de forma simple (umbral 0.05).
+2.  Indica si el resultado es "Estadísticamente Significativo" (p < 0.05) o "No Significativo" (p >= 0.05).
+3.  Explica qué significa ese resultado en la práctica para '{num_col}' y '{cat_col}'.
+
+**Respuesta (en Markdown):**
+"""
+    
+    if p_value < 0.05:
+        prompt += f"""
+## ✅ Resultado Significativo
+* **Explicación:** El P-Value de {p_value:.4f} es *menor* que 0.05.
+* **Conclusión:** Esto significa que las diferencias observadas en la media de '{num_col}' entre los diferentes grupos de '{cat_col}' son **reales y estadísticamente significativas**. No se deben al azar.
+* **Acción Recomendada:** [Indica una acción, ej: "Vale la pena analizar qué grupo tuvo la media más alta o más baja."]
+"""
+    else:
+        prompt += f"""
+## ℹ️ Resultado No Significativo
+* **Explicación:** El P-Value de {p_value:.4f} es *mayor* que 0.05.
+* **Conclusión:** Esto significa que cualquier diferencia que se observe en la media de '{num_col}' entre los grupos de '{cat_col}' es **probablemente producto del azar**.
+* **Acción Recomendada:** [Indica una acción, ej: "No se puede concluir que haya una diferencia real entre los grupos para esta métrica."]
+"""
+    return prompt
+# --- ¡FIN DE LOS 3 NUEVOS PROMPTS! ---

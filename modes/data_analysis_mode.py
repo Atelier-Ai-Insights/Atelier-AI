@@ -4,15 +4,19 @@ from utils import get_relevant_info, get_stopwords
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event, supabase
 # --- INICIO DE MODIFICACIÓN DE IMPORTACIONES ---
-from prompts import get_survey_articulation_prompt, get_excel_autocode_prompt # <-- Importamos el nuevo prompt
+from prompts import (
+    get_survey_articulation_prompt, get_excel_autocode_prompt,
+    get_data_summary_prompt, get_correlation_prompt, get_stat_test_prompt # <-- Importamos los nuevos prompts
+)
 import constants as c
 import io 
 import os 
 import uuid 
 from datetime import datetime
-import re # <-- ¡NUEVA IMPORTACIÓN!
-import json # <-- ¡NUEVA IMPORTACIÓN!
-import traceback # <-- ¡NUEVA IMPORTACIÓN!
+import re 
+import json 
+import traceback 
+import seaborn as sns # <-- ¡NUEVA IMPORTACIÓN!
 # --- FIN DE MODIFICACIÓN DE IMPORTACIONES ---
 
 
@@ -199,7 +203,7 @@ def show_project_list(user_id):
                     st.session_state.da_selected_project_id = proj_id
                     st.session_state.da_selected_project_name = proj_name
                     st.session_state.da_storage_path = storage_path
-                    st.session_state.da_current_sub_mode = "Análisis Rápido" # Iniciar en la primera pestaña
+                    st.session_state.da_current_sub_mode = "Resumen Ejecutivo IA" # <-- NUEVO DEFAULT
                     st.rerun()
             
             with col3:
@@ -216,15 +220,15 @@ def show_project_list(user_id):
 # --- INICIO DE LA FUNCIÓN MODIFICADA ---
 def show_project_analyzer(df, db_filtered, selected_files):
     """
-    Muestra la UI de análisis completa (ahora con Auto-Codificación y Verbatims)
+    Muestra la UI de análisis completa (con 8 funciones)
     """
     
-    # --- 1. Lógica de Navegación de Sub-Modo (sin cambios) ---
+    # --- 1. Lógica de Navegación de Sub-Modo ---
     def set_da_sub_mode(new_mode):
         st.session_state.da_current_sub_mode = new_mode
 
     if "da_current_sub_mode" not in st.session_state:
-        st.session_state.da_current_sub_mode = "Análisis Rápido" # Default
+        st.session_state.da_current_sub_mode = "Resumen Ejecutivo IA" # Default
     
     sub_modo = st.session_state.da_current_sub_mode
     
@@ -240,28 +244,44 @@ def show_project_analyzer(df, db_filtered, selected_files):
         st.session_state.pop("da_wordcloud_fig", None)
         st.session_state.pop("da_freq_table_cloud", None)
         st.session_state.pop("da_current_sub_mode", None)
-        st.session_state.pop("data_analysis_chat_history", None) 
         
         st.session_state.pop("da_autocode_results_df", None)
         st.session_state.pop("da_autocode_json", None)
         st.session_state.pop("da_autocode_selected_col", None)
         
+        # --- ¡INICIO DE LIMPIEZA DE NUEVOS ESTADOS! ---
+        st.session_state.pop("da_summary_result", None)
+        st.session_state.pop("da_corr_interpretation", None)
+        st.session_state.pop("da_stat_test_interpretation", None)
+        # --- ¡FIN DE LIMPIEZA DE NUEVOS ESTADOS! ---
+        
         st.rerun()
         
-    # --- 2. Reemplazo de st.tabs por st.expander + st.button (MODIFICADO) ---
+    # --- 2. Nuevo layout de botones (2 filas de 4) ---
     
     with st.expander("Selecciona una función de análisis:", expanded=True):
-        col1, col2, col3, col4, col5 = st.columns(5) 
+        st.write("**Funciones de IA Generativa:**")
+        col1, col2, col3, col4 = st.columns(4) 
         with col1:
-            st.button("Análisis Rápido", on_click=set_da_sub_mode, args=("Análisis Rápido",), use_container_width=True, type="primary" if sub_modo == "Análisis Rápido" else "secondary")
+            st.button("Resumen Ejecutivo IA", on_click=set_da_sub_mode, args=("Resumen Ejecutivo IA",), use_container_width=True, type="primary" if sub_modo == "Resumen Ejecutivo IA" else "secondary")
         with col2:
-            st.button("Tabla Dinámica", on_click=set_da_sub_mode, args=("Tabla Dinámica",), use_container_width=True, type="primary" if sub_modo == "Tabla Dinámica" else "secondary")
+            st.button("Auto-Codificación", on_click=set_da_sub_mode, args=("Auto-Codificación",), use_container_width=True, type="primary" if sub_modo == "Auto-Codificación" else "secondary")
         with col3:
             st.button("Nube de Palabras", on_click=set_da_sub_mode, args=("Nube de Palabras",), use_container_width=True, type="primary" if sub_modo == "Nube de Palabras" else "secondary")
         with col4:
             st.button("Exportar a PPT", on_click=set_da_sub_mode, args=("Exportar a PPT",), use_container_width=True, type="primary" if sub_modo == "Exportar a PPT" else "secondary")
+
+        st.write("**Análisis Estadístico y Cruces:**")
+        col5, col6, col7, col8 = st.columns(4)
         with col5:
-            st.button("Auto-Codificación", on_click=set_da_sub_mode, args=("Auto-Codificación",), use_container_width=True, type="primary" if sub_modo == "Auto-Codificación" else "secondary")
+            st.button("Análisis Rápido", on_click=set_da_sub_mode, args=("Análisis Rápido",), use_container_width=True, type="primary" if sub_modo == "Análisis Rápido" else "secondary")
+        with col6:
+            st.button("Tabla Dinámica", on_click=set_da_sub_mode, args=("Tabla Dinámica",), use_container_width=True, type="primary" if sub_modo == "Tabla Dinámica" else "secondary")
+        with col7:
+            st.button("Análisis de Correlación", on_click=set_da_sub_mode, args=("Análisis de Correlación",), use_container_width=True, type="primary" if sub_modo == "Análisis de Correlación" else "secondary")
+        with col8:
+            st.button("Comparación de Grupos", on_click=set_da_sub_mode, args=("Comparación de Grupos",), use_container_width=True, type="primary" if sub_modo == "Comparación de Grupos" else "secondary")
+
 
     st.divider()
     
@@ -270,6 +290,63 @@ def show_project_analyzer(df, db_filtered, selected_files):
     if "data_analysis_stats_context" not in st.session_state:
         st.session_state.data_analysis_stats_context = ""
     
+    # --- ¡INICIO NUEVA FUNCIÓN 1: RESUMEN EJECUTIVO IA! ---
+    if sub_modo == "Resumen Ejecutivo IA":
+        st.header("Resumen Ejecutivo (Generado por IA)")
+        st.markdown("Un primer vistazo a tus datos para identificar los hallazgos más evidentes y las hipótesis de exploración más interesantes.")
+
+        if "da_summary_result" in st.session_state:
+            st.markdown(st.session_state.da_summary_result)
+            if st.button("Generar nuevo resumen", use_container_width=True, type="secondary"):
+                st.session_state.pop("da_summary_result")
+                st.rerun()
+        else:
+            if st.button("Generar Resumen Ejecutivo", use_container_width=True, type="primary"):
+                with st.spinner("Analizando la estructura de los datos..."):
+                    try:
+                        # 1. Crear el "snapshot" de los datos
+                        snapshot_buffer = io.StringIO()
+                        snapshot_buffer.write(f"Resumen del DataFrame (Total Filas: {len(df)})\n\n")
+                        snapshot_buffer.write("### Columnas y Tipos de Datos:\n")
+                        snapshot_buffer.write(df.info(buf=snapshot_buffer, verbose=False))
+                        snapshot_buffer.write("\n\n")
+
+                        # 2. Resumen de columnas numéricas
+                        numeric_cols = df.select_dtypes(include=['number']).columns
+                        if not numeric_cols.empty:
+                            snapshot_buffer.write("### Resumen de Métricas Numéricas:\n")
+                            snapshot_buffer.write(df[numeric_cols].describe().to_string(float_format="%.2f"))
+                            snapshot_buffer.write("\n\n")
+                        
+                        # 3. Resumen de columnas categóricas (top 5 valores)
+                        cat_cols = df.select_dtypes(include=['object', 'category']).columns
+                        if not cat_cols.empty:
+                            snapshot_buffer.write("### Resumen de Distribución Categórica (Top 5):\n")
+                            for col in cat_cols:
+                                if df[col].nunique() < 50: # Solo para columnas con < 50 valores únicos
+                                    snapshot_buffer.write(f"\n**Columna: {col}**\n")
+                                    snapshot_buffer.write(df[col].value_counts(normalize=True).head(5).to_string(float_format="%.1f%%"))
+                                    snapshot_buffer.write("\n")
+                        
+                        data_snapshot = snapshot_buffer.getvalue()
+                        snapshot_buffer.close()
+
+                        # 4. Llamar a la IA
+                        prompt = get_data_summary_prompt(data_snapshot)
+                        response = call_gemini_api(prompt)
+
+                        if response:
+                            st.session_state.da_summary_result = response
+                            log_query_event("Generar Resumen Ejecutivo IA", mode=c.MODE_DATA_ANALYSIS)
+                            st.rerun()
+                        else:
+                            st.error("No se pudo generar el resumen.")
+
+                    except Exception as e:
+                        st.error(f"Error al generar el resumen: {e}")
+                        st.code(traceback.format_exc())
+    # --- ¡FIN NUEVA FUNCIÓN 1! ---
+
     if sub_modo == "Análisis Rápido":
         st.header("Análisis Rápido")
         # ... (código existente sin cambios) ...
@@ -422,10 +499,123 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 st.session_state.data_analysis_stats_context += f"\nPalabras clave de '{col_to_cloud}': {top_words}...\n\n"
                     except Exception as e:
                         st.error(f"Error al generar la nube de palabras: {e}")
-    
+
+    # --- ¡INICIO NUEVA FUNCIÓN 2: ANÁLISIS DE CORRELACIÓN! ---
+    if sub_modo == "Análisis de Correlación":
+        st.header("Análisis de Correlación (Heatmap)")
+        st.markdown("Explora la relación entre diferentes variables numéricas (ej. Satisfacción vs. NPS).")
+        
+        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+        if len(numeric_cols) < 2:
+            st.warning("Este análisis requiere al menos 2 columnas numéricas en tu archivo Excel.")
+        else:
+            selected_cols = st.multiselect("Selecciona 2 o más columnas numéricas para correlacionar:", numeric_cols, default=numeric_cols[:min(len(numeric_cols), 5)])
+            
+            if len(selected_cols) < 2:
+                st.info("Por favor, selecciona al menos 2 columnas.")
+            else:
+                try:
+                    # 1. Calcular Matriz
+                    corr_matrix = df[selected_cols].corr()
+                    
+                    # 2. Dibujar Heatmap
+                    st.subheader("Mapa de Calor de Correlación")
+                    fig, ax = plt.subplots()
+                    sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap="coolwarm", ax=ax)
+                    st.pyplot(fig)
+                    
+                    # 3. Interpretación con IA
+                    st.subheader("Interpretación de la IA")
+                    if "da_corr_interpretation" in st.session_state:
+                        st.markdown(st.session_state.da_corr_interpretation)
+                        if st.button("Generar nueva interpretación", key="new_corr_interp", type="secondary"):
+                            st.session_state.pop("da_corr_interpretation")
+                            st.rerun()
+                    else:
+                        if st.button("Interpretar Correlaciones", type="primary"):
+                            with st.spinner("Interpretando relaciones..."):
+                                matrix_str = corr_matrix.to_string(float_format="%.2f")
+                                prompt = get_correlation_prompt(matrix_str)
+                                response = call_gemini_api(prompt)
+                                if response:
+                                    st.session_state.da_corr_interpretation = response
+                                    log_query_event(f"Interpretación Correlación: {', '.join(selected_cols)}", mode=c.MODE_DATA_ANALYSIS)
+                                    st.rerun()
+                                else:
+                                    st.error("No se pudo generar la interpretación.")
+
+                except Exception as e:
+                    st.error(f"Error al calcular la correlación: {e}")
+                    st.code(traceback.format_exc())
+    # --- ¡FIN NUEVA FUNCIÓN 2! ---
+
+    # --- ¡INICIO NUEVA FUNCIÓN 3: COMPARACIÓN DE GRUPOS! ---
+    if sub_modo == "Comparación de Grupos":
+        st.header("Comparación de Grupos (T-Test / ANOVA)")
+        st.markdown("Comprueba si existen diferencias estadísticamente significativas en una métrica numérica entre diferentes grupos categóricos.")
+
+        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+        cat_cols = [col for col in df.select_dtypes(include=['object', 'category']).columns if 2 <= df[col].nunique() <= 50] # Grupos entre 2 y 50
+
+        if not numeric_cols or not cat_cols:
+            st.warning("Este análisis requiere al menos una columna numérica (métrica) y una columna categórica (grupos).")
+        else:
+            st.markdown("#### Configuración de la Prueba")
+            c1, c2 = st.columns(2)
+            cat_col = c1.selectbox("Selecciona la Columna Categórica (Grupos):", cat_cols, help="La variable que define tus grupos (ej. 'Segmento', 'Género').")
+            num_col = c2.selectbox("Selecciona la Columna Numérica (Métrica):", numeric_cols, help="La métrica que quieres comparar (ej. 'Satisfacción', 'Gasto').")
+            
+            if cat_col and num_col:
+                try:
+                    st.markdown("---")
+                    st.subheader("Resultado de la Prueba")
+                    
+                    # 1. Preparar los datos
+                    groups = df[cat_col].unique()
+                    num_groups = len(groups)
+                    group_data = [df[num_col][df[cat_col] == g].dropna() for g in groups]
+                    
+                    # 2. Ejecutar la prueba
+                    if num_groups == 2:
+                        test_type = "Prueba T (T-Test)"
+                        stat, p_value = stats.ttest_ind(group_data[0], group_data[1], nan_policy='omit')
+                    elif num_groups > 2:
+                        test_type = "ANOVA"
+                        stat, p_value = stats.f_oneway(*group_data)
+                    else:
+                        st.error("La columna de grupos seleccionada solo tiene 1 valor."); return
+
+                    col1, col2 = st.columns(2)
+                    col1.metric("Prueba Realizada", test_type)
+                    col2.metric("P-Value", f"{p_value:.4f}")
+
+                    # 3. Interpretación con IA
+                    if "da_stat_test_interpretation" in st.session_state:
+                        st.markdown(st.session_state.da_stat_test_interpretation)
+                        if st.button("Generar nueva interpretación", key="new_stat_interp", type="secondary"):
+                            st.session_state.pop("da_stat_test_interpretation")
+                            st.rerun()
+                    else:
+                        if st.button("Interpretar Resultado", type="primary"):
+                            with st.spinner("Interpretando P-Value..."):
+                                prompt = get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups)
+                                response = call_gemini_api(prompt)
+                                if response:
+                                    st.session_state.da_stat_test_interpretation = response
+                                    log_query_event(f"Interpretación {test_type}: {num_col} vs {cat_col}", mode=c.MODE_DATA_ANALYSIS)
+                                    st.rerun()
+                                else:
+                                    st.error("No se pudo generar la interpretación.")
+
+                except Exception as e:
+                    st.error(f"Error al ejecutar la prueba estadística: {e}")
+                    st.code(traceback.format_exc())
+    # --- ¡FIN NUEVA FUNCIÓN 3! ---
+
     if sub_modo == "Exportar a PPT":
         st.header("Exportar a Presentación (.pptx)")
         # ... (código existente sin cambios) ...
+        # (Nota: La exportación de Autocodificación ya está incluida)
         st.markdown("Selecciona los análisis que has generado y descárgalos en una diapositiva de PowerPoint.")
         template_file = "Plantilla_PPT_ATL.pptx"
         if not os.path.isfile(template_file):
@@ -468,9 +658,9 @@ def show_project_analyzer(df, db_filtered, selected_files):
             if "generated_data_ppt" in st.session_state:
                 st.download_button(label="📥 Descargar Presentación (.pptx)", data=st.session_state.generated_data_ppt, file_name=f"analisis_{st.session_state.da_selected_project_name}.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation", use_container_width=True)
 
-    # --- ¡NUEVO BLOQUE: "Auto-Codificación"! ---
     if sub_modo == "Auto-Codificación":
         st.header("Auto-Codificación (Preguntas Abiertas)")
+        # ... (código existente sin cambios, incluyendo la sección "Explorar Verbatims") ...
         st.markdown("""
         Esta herramienta utiliza IA para analizar una columna de texto (pregunta abierta) y 
         generar categorías de análisis (nodos). Luego, cuantifica cuántos participantes 
@@ -514,32 +704,24 @@ def show_project_analyzer(df, db_filtered, selected_files):
                     st.session_state.pop("da_autocode_selected_col", None) # <-- Limpiar
                     st.rerun()
                 
-                # --- ¡INICIO DE LA NUEVA SECCIÓN 2! ---
                 st.divider()
                 st.subheader("Explorar Verbatims por Categoría")
                 
-                # Obtenemos la lista de categorías del dataframe de resultados
                 categories_list = ["(Selecciona una categoría)"] + st.session_state.da_autocode_results_df['Categoría'].tolist()
                 selected_cat = st.selectbox("Selecciona una categoría para ver ejemplos:", categories_list, key="verbatim_select")
 
                 if selected_cat != "(Selecciona una categoría)":
                     
-                    # --- ¡INICIO DE LA CORRECCIÓN! ---
-                    # Verificamos que la variable de estado exista antes de usarla
                     if "da_autocode_selected_col" not in st.session_state:
                         st.error("Error de estado: No se guardó la columna de origen. Por favor, haz clic en 'Analizar otra columna' y vuelve a generar el análisis.")
-                    # --- FIN DE LA CORRECCIÓN! ---
                     else:
                         try:
-                            # 1. Encontrar las keywords para la categoría seleccionada
                             cat_json = next(item for item in st.session_state.da_autocode_json if item["categoria"] == selected_cat)
                             keywords = cat_json.get("keywords", [])
                             
-                            # 2. Obtener la columna de texto original que se analizó
                             col_name = st.session_state.da_autocode_selected_col
                             full_series = st.session_state.data_analysis_df[col_name].astype(str)
 
-                            # 3. Filtrar los verbatims usando las keywords
                             valid_keywords = [re.escape(k.strip()) for k in keywords if k.strip()]
                             if not valid_keywords:
                                 st.warning("No se definieron keywords para esta categoría.")
@@ -548,23 +730,20 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 
                                 matching_verbatims = full_series[
                                     full_series.str.contains(regex_pattern, case=False, na=False, regex=True)
-                                ].dropna().unique() # .unique() para no repetir verbatims
+                                ].dropna().unique() 
 
-                            # 4. Mostrar los verbatims
-                            st.markdown(f"**Mostrando ejemplos de verbatims para '{selected_cat}':**")
-                            if len(matching_verbatims) == 0:
-                                st.info("No se encontraron verbatims coincidentes (esto podría indicar un error si N > 0).")
-                            else:
-                                # Mostramos un máximo de 20 para no saturar
-                                for v in matching_verbatims[:20]:
-                                    st.markdown(f"> {v}")
-                                
-                                if len(matching_verbatims) > 20:
-                                    st.caption(f"...y {len(matching_verbatims) - 20} más. (Mostrando los primeros 20 ejemplos).")
+                                st.markdown(f"**Mostrando ejemplos de verbatims para '{selected_cat}':**")
+                                if len(matching_verbatims) == 0:
+                                    st.info("No se encontraron verbatims coincidentes (esto podría indicar un error si N > 0).")
+                                else:
+                                    for v in matching_verbatims[:20]:
+                                        st.markdown(f"> {v}")
+                                    
+                                    if len(matching_verbatims) > 20:
+                                        st.caption(f"...y {len(matching_verbatims) - 20} más. (Mostrando los primeros 20 ejemplos).")
 
                         except Exception as e:
                             st.error(f"Error al buscar verbatims: {e}")
-                # --- ¡FIN DE LA NUEVA SECCIÓN 2! ---
             
             else:
                 col_to_autocode = st.selectbox("Selecciona la columna de texto (pregunta abierta):", text_cols, key="autocode_select")
@@ -576,17 +755,12 @@ def show_project_analyzer(df, db_filtered, selected_files):
                     else:
                         with st.spinner("Analizando respuestas y generando categorías (IA)..."):
                             try:
-                                # 1. Preparar datos de muestra para la IA
                                 non_null_responses = df[col_to_autocode].dropna().unique()
                                 if len(non_null_responses) == 0:
                                     st.error("La columna seleccionada está vacía o no tiene datos válidos."); return
                                 
-                                # --- ¡INICIO DE LA CORRECCIÓN! ---
-                                # Reducimos la muestra de 500 a 150 para evitar el error MAX_TOKENS
                                 sample_list = list(non_null_responses[:150])
-                                # --- ¡FIN DE LA CORRECCIÓN! ---
                                 
-                                # 2. Llamar a la IA para obtener el JSON de categorías y keywords
                                 prompt = get_excel_autocode_prompt(main_topic, sample_list)
                                 json_config = {"response_mime_type": "application/json"}
                                 no_safety = [
@@ -610,7 +784,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 
                                 st.session_state.da_autocode_selected_col = col_to_autocode
                                 
-                                # 3. Procesar el conteo en Python (más preciso)
                                 total_participants = len(df)
                                 full_series = df[col_to_autocode].astype(str)
                                 results = []
@@ -643,7 +816,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                         "Porcentaje (%)": percentage
                                     })
 
-                                # 4. Guardar y mostrar resultados
                                 if not results:
                                     st.warning("La IA generó categorías, pero no se encontraron menciones con esas keywords.")
                                 else:
