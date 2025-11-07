@@ -5,6 +5,7 @@ import os
 import uuid
 from datetime import datetime
 import requests # <-- ¡Necesario para descargar el archivo!
+import re # <-- ¡Importación que usaremos para la corrección!
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event, supabase
 from prompts import get_transcript_prompt, get_autocode_prompt
@@ -99,32 +100,39 @@ def show_text_project_creator(user_id, plan_limit):
         project_brand = st.text_input("Marca", placeholder="Ej: Marca X")
         project_year = st.number_input("Año", min_value=2020, max_value=2030, value=datetime.now().year)
         
-        # --- ¡INICIO DE LA CORRECCIÓN! ---
         uploaded_files = st.file_uploader(
             "Archivos Word (.docx)*", 
             type=["docx"],
-            accept_multiple_files=True # <-- Aceptar múltiples archivos
+            accept_multiple_files=True
         )
-        # --- ¡FIN DE LA CORRECCIÓN! ---
         
         submitted = st.form_submit_button("Crear Proyecto")
 
     if submitted:
-        # --- ¡INICIO DE LA CORRECCIÓN! ---
         if not all([project_name, uploaded_files]):
             st.warning("Por favor, completa el Nombre del Proyecto y sube al menos un archivo .docx.")
             return
-        # --- ¡FIN DE LA CORRECCIÓN! ---
 
         storage_path_folder = f"{user_id}/{uuid.uuid4()}" # Esta es la CARPETA del proyecto
         
         with st.spinner(f"Creando proyecto y subiendo {len(uploaded_files)} archivo(s)..."):
             try:
-                # --- ¡INICIO DE LA CORRECCIÓN! ---
                 # Bucle para subir cada archivo a la carpeta
                 for file in uploaded_files:
                     file_bytes = file.getvalue()
-                    file_name = file.name
+                    
+                    # --- ¡INICIO DE LA CORRECCIÓN! ---
+                    # 1. Reemplazar espacios con guiones bajos
+                    base_name = file.name.replace(' ', '_')
+                    # 2. Eliminar cualquier carácter que no sea letra, número, punto, guion bajo o guion
+                    safe_name = re.sub(r'[^\w._-]', '', base_name)
+                    # 3. Si el nombre queda vacío (ej. "().docx"), usar un genérico
+                    if not safe_name or safe_name.startswith('.'):
+                        safe_name = f"archivo_{uuid.uuid4()}{os.path.splitext(file.name)[1]}"
+                    
+                    file_name = safe_name
+                    # --- ¡FIN DE LA CORRECCIÓN! ---
+                    
                     full_storage_path = f"{storage_path_folder}/{file_name}" # Ruta al archivo individual
                     
                     supabase.storage.from_(TEXT_PROJECT_BUCKET).upload(
@@ -132,7 +140,6 @@ def show_text_project_creator(user_id, plan_limit):
                         file=file_bytes,
                         file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
                     )
-                # --- ¡FIN DE LA CORRECCIÓN! ---
 
                 project_data = {
                     "project_name": project_name,
@@ -195,13 +202,11 @@ def show_text_project_list(user_id):
                 if st.button("Eliminar", key=f"eliminar_txt_{proj_id}", use_container_width=True):
                     with st.spinner("Eliminando proyecto..."):
                         try:
-                            # --- ¡INICIO DE LA CORRECCIÓN! ---
                             # Lógica para eliminar todos los archivos de la carpeta
                             files_in_folder = supabase.storage.from_(TEXT_PROJECT_BUCKET).list(path=storage_path)
                             file_paths_to_remove = [f"{storage_path}/{file['name']}" for file in files_in_folder]
                             if file_paths_to_remove:
                                 supabase.storage.from_(TEXT_PROJECT_BUCKET).remove(file_paths_to_remove)
-                            # --- ¡FIN DE LA CORRECCIÓN! ---
                             
                             # Eliminar el registro de la tabla
                             supabase.table("text_projects").delete().eq("id", proj_id).execute()
@@ -362,4 +367,3 @@ def text_analysis_mode():
         st.divider()
         
         show_text_project_list(user_id)
-        
