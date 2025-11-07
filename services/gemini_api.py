@@ -16,7 +16,7 @@ def _configure_gemini(key_index):
         print(f"ERROR: Configurando API Key #{key_index + 1}: {e}")
         return False
 
-def call_gemini_api(prompt, generation_config_override=None):
+def call_gemini_api(prompt, generation_config_override=None, safety_settings_override=None): # <-- Argumento añadido
     """
     Llama a la API de Gemini con lógica de rotación de claves y reintentos.
     """
@@ -28,6 +28,13 @@ def call_gemini_api(prompt, generation_config_override=None):
     if generation_config_override:
         # Combinar/sobreescribir la configuración base con la específica
         final_gen_config = {**generation_config, **generation_config_override}
+
+    # --- ¡INICIO DE LA CORRECCIÓN! ---
+    # Determinar los settings de seguridad
+    final_safety_settings = safety_settings # Usar los de config.py por defecto
+    if safety_settings_override is not None:
+        final_safety_settings = safety_settings_override # Usar el override si se provee
+    # --- ¡FIN DE LA CORRECCIÓN! ---
 
     last_error = None
 
@@ -42,9 +49,9 @@ def call_gemini_api(prompt, generation_config_override=None):
         try:
             # Inicializar el modelo con la configuración correcta
             model = genai.GenerativeModel(
-                model_name="gemini-2.5-flash", 
+                model_name="gemini-1.5-flash", 
                 generation_config=final_gen_config, 
-                safety_settings=safety_settings
+                safety_settings=final_safety_settings # <-- Usar la variable final
             )
 
             # Intentar generar el contenido

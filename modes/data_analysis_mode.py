@@ -533,7 +533,24 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 # 2. Llamar a la IA para obtener el JSON de categorías y keywords
                                 prompt = get_excel_autocode_prompt(main_topic, sample_list)
                                 json_config = {"response_mime_type": "application/json"}
-                                response_text = call_gemini_api(prompt, generation_config_override=json_config)
+                                
+                                # --- ¡INICIO DE LA CORRECCIÓN! ---
+                                # Desactivamos los filtros de seguridad SÓLO para esta llamada,
+                                # ya que a veces pueden truncar el JSON si detectan
+                                # lenguaje "hostil" en las respuestas de los usuarios.
+                                no_safety = [
+                                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+                                ]
+                                
+                                response_text = call_gemini_api(
+                                    prompt,
+                                    generation_config_override=json_config,
+                                    safety_settings_override=no_safety # <-- Pasamos el override
+                                )
+                                # --- ¡FIN DE LA CORRECCIÓN! ---
                                 
                                 if not response_text:
                                     st.error("La IA no pudo generar una respuesta. Inténtalo de nuevo."); return
