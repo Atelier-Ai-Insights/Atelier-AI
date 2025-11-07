@@ -249,11 +249,9 @@ def show_project_analyzer(df, db_filtered, selected_files):
         st.session_state.pop("da_autocode_json", None)
         st.session_state.pop("da_autocode_selected_col", None)
         
-        # --- ¡INICIO DE LIMPIEZA DE NUEVOS ESTADOS! ---
         st.session_state.pop("da_summary_result", None)
         st.session_state.pop("da_corr_interpretation", None)
         st.session_state.pop("da_stat_test_interpretation", None)
-        # --- ¡FIN DE LIMPIEZA DE NUEVOS ESTADOS! ---
         
         st.rerun()
         
@@ -308,7 +306,13 @@ def show_project_analyzer(df, db_filtered, selected_files):
                         snapshot_buffer = io.StringIO()
                         snapshot_buffer.write(f"Resumen del DataFrame (Total Filas: {len(df)})\n\n")
                         snapshot_buffer.write("### Columnas y Tipos de Datos:\n")
-                        snapshot_buffer.write(df.info(buf=snapshot_buffer, verbose=False))
+                        
+                        # --- ¡INICIO DE LA CORRECCIÓN! ---
+                        # Esta línea ahora escribe en el buffer y devuelve None.
+                        # La llamamos por separado.
+                        df.info(buf=snapshot_buffer, verbose=False)
+                        # --- ¡FIN DE LA CORRECCIÓN! ---
+                        
                         snapshot_buffer.write("\n\n")
 
                         # 2. Resumen de columnas numéricas
@@ -349,7 +353,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
 
     if sub_modo == "Análisis Rápido":
         st.header("Análisis Rápido")
-        # ... (código existente sin cambios) ...
         st.markdown("Calcula métricas clave de columnas individuales.")
         context_buffer = io.StringIO() 
         st.subheader("Análisis de Columnas Numéricas")
@@ -388,7 +391,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
 
     if sub_modo == "Tabla Dinámica":
         st.header("Generador de Tabla Dinámica")
-        # ... (código existente sin cambios) ...
         st.markdown("Crea tablas cruzadas para explorar relaciones entre variables.")
         all_cols = ["(Ninguno)"] + df.columns.tolist()
         numeric_cols_pivot = df.select_dtypes(include=['number']).columns.tolist()
@@ -461,7 +463,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
 
     if sub_modo == "Nube de Palabras":
         st.header("Nube de Palabras (Preguntas Abiertas)")
-        # ... (código existente sin cambios) ...
         st.markdown("Genera una nube de palabras a partir de una columna de texto.")
         text_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
         if not text_cols:
@@ -611,11 +612,9 @@ def show_project_analyzer(df, db_filtered, selected_files):
                     st.error(f"Error al ejecutar la prueba estadística: {e}")
                     st.code(traceback.format_exc())
     # --- ¡FIN NUEVA FUNCIÓN 3! ---
-
+    
     if sub_modo == "Exportar a PPT":
         st.header("Exportar a Presentación (.pptx)")
-        # ... (código existente sin cambios) ...
-        # (Nota: La exportación de Autocodificación ya está incluida)
         st.markdown("Selecciona los análisis que has generado y descárgalos en una diapositiva de PowerPoint.")
         template_file = "Plantilla_PPT_ATL.pptx"
         if not os.path.isfile(template_file):
@@ -660,7 +659,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
 
     if sub_modo == "Auto-Codificación":
         st.header("Auto-Codificación (Preguntas Abiertas)")
-        # ... (código existente sin cambios, incluyendo la sección "Explorar Verbatims") ...
         st.markdown("""
         Esta herramienta utiliza IA para analizar una columna de texto (pregunta abierta) y 
         generar categorías de análisis (nodos). Luego, cuantifica cuántos participantes 
