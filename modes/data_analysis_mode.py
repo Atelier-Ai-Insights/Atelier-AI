@@ -216,7 +216,7 @@ def show_project_list(user_id):
 # --- INICIO DE LA FUNCIÓN MODIFICADA ---
 def show_project_analyzer(df, db_filtered, selected_files):
     """
-    Muestra la UI de análisis completa (ahora con Auto-Codificación)
+    Muestra la UI de análisis completa (ahora con Auto-Codificación y Verbatims)
     """
     
     # --- 1. Lógica de Navegación de Sub-Modo (sin cambios) ---
@@ -239,17 +239,21 @@ def show_project_analyzer(df, db_filtered, selected_files):
         st.session_state.pop("da_pivot_table", None)
         st.session_state.pop("da_wordcloud_fig", None)
         st.session_state.pop("da_freq_table_cloud", None)
-        st.session_state.pop("da_current_sub_mode", None) # Limpiar el estado del sub-modo
-        # --- (LIMPIEZA DE ESTADOS) ---
-        st.session_state.pop("da_autocode_results_df", None) # <-- NUEVO
-        st.session_state.pop("da_autocode_json", None) # <-- NUEVO
-        st.session_state.pop("data_analysis_chat_history", None) # <-- ELIMINADO (del modo anterior)
+        st.session_state.pop("da_current_sub_mode", None)
+        st.session_state.pop("data_analysis_chat_history", None) 
+        
+        # --- ¡INICIO DE LA SECCIÓN AÑADIDA 1! ---
+        # Limpiar los nuevos estados de autocodificación
+        st.session_state.pop("da_autocode_results_df", None)
+        st.session_state.pop("da_autocode_json", None)
+        st.session_state.pop("da_autocode_selected_col", None)
+        # --- ¡FIN DE LA SECCIÓN AÑADIDA 1! ---
+        
         st.rerun()
         
     # --- 2. Reemplazo de st.tabs por st.expander + st.button (MODIFICADO) ---
     
     with st.expander("Selecciona una función de análisis:", expanded=True):
-        # --- (Modificamos la 5ta columna) ---
         col1, col2, col3, col4, col5 = st.columns(5) 
         with col1:
             st.button("Análisis Rápido", on_click=set_da_sub_mode, args=("Análisis Rápido",), use_container_width=True, type="primary" if sub_modo == "Análisis Rápido" else "secondary")
@@ -260,7 +264,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
         with col4:
             st.button("Exportar a PPT", on_click=set_da_sub_mode, args=("Exportar a PPT",), use_container_width=True, type="primary" if sub_modo == "Exportar a PPT" else "secondary")
         with col5:
-            # --- (Este es el botón REEMPLAZADO) ---
             st.button("Auto-Codificación", on_click=set_da_sub_mode, args=("Auto-Codificación",), use_container_width=True, type="primary" if sub_modo == "Auto-Codificación" else "secondary")
 
     st.divider()
@@ -272,6 +275,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
     
     if sub_modo == "Análisis Rápido":
         st.header("Análisis Rápido")
+        # ... (código existente sin cambios) ...
         st.markdown("Calcula métricas clave de columnas individuales.")
         context_buffer = io.StringIO() 
         st.subheader("Análisis de Columnas Numéricas")
@@ -310,6 +314,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
 
     if sub_modo == "Tabla Dinámica":
         st.header("Generador de Tabla Dinámica")
+        # ... (código existente sin cambios) ...
         st.markdown("Crea tablas cruzadas para explorar relaciones entre variables.")
         all_cols = ["(Ninguno)"] + df.columns.tolist()
         numeric_cols_pivot = df.select_dtypes(include=['number']).columns.tolist()
@@ -382,6 +387,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
 
     if sub_modo == "Nube de Palabras":
         st.header("Nube de Palabras (Preguntas Abiertas)")
+        # ... (código existente sin cambios) ...
         st.markdown("Genera una nube de palabras a partir de una columna de texto.")
         text_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
         if not text_cols:
@@ -422,6 +428,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
     
     if sub_modo == "Exportar a PPT":
         st.header("Exportar a Presentación (.pptx)")
+        # ... (código existente sin cambios) ...
         st.markdown("Selecciona los análisis que has generado y descárgalos en una diapositiva de PowerPoint.")
         template_file = "Plantilla_PPT_ATL.pptx"
         if not os.path.isfile(template_file):
@@ -434,7 +441,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
             include_cloud_img = st.checkbox("Incluir Nube de Palabras (Imagen)", value=True, disabled=not "da_wordcloud_fig" in st.session_state)
             include_cloud_table = st.checkbox("Incluir Tabla de Frecuencias (de Nube de Palabras)", value=False, disabled=not "da_freq_table_cloud" in st.session_state)
             
-            # --- (¡NUEVA OPCIÓN DE EXPORTACIÓN!) ---
             include_autocode = st.checkbox("Incluir Tabla de Auto-Codificación (de Pestaña 5)", value=True, disabled=not "da_autocode_results_df" in st.session_state)
             
             if st.button("Generar Presentación", use_container_width=True, type="primary"):
@@ -451,9 +457,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                         if include_cloud_table and "da_freq_table_cloud" in st.session_state:
                             add_table_slide(prs, "Tabla de Frecuencias (Nube)", st.session_state.da_freq_table_cloud)
                         
-                        # --- (¡NUEVA LÓGICA DE EXPORTACIÓN!) ---
                         if include_autocode and "da_autocode_results_df" in st.session_state:
-                            # Formatear el % antes de exportar
                             df_autocode_export = st.session_state.da_autocode_results_df.copy()
                             df_autocode_export["Porcentaje (%)"] = df_autocode_export["Porcentaje (%)"].apply(lambda x: f"{x:.1f}%")
                             add_table_slide(prs, "Auto-Codificación de Pregunta Abierta", df_autocode_export)
@@ -510,7 +514,53 @@ def show_project_analyzer(df, db_filtered, selected_files):
                 if st.button("Analizar otra columna", use_container_width=True, type="secondary"):
                     st.session_state.pop("da_autocode_results_df", None)
                     st.session_state.pop("da_autocode_json", None)
+                    st.session_state.pop("da_autocode_selected_col", None) # <-- Limpiar
                     st.rerun()
+                
+                # --- ¡INICIO DE LA NUEVA SECCIÓN 2! ---
+                st.divider()
+                st.subheader("Explorar Verbatims por Categoría")
+                
+                # Obtenemos la lista de categorías del dataframe de resultados
+                categories_list = ["(Selecciona una categoría)"] + st.session_state.da_autocode_results_df['Categoría'].tolist()
+                selected_cat = st.selectbox("Selecciona una categoría para ver ejemplos:", categories_list, key="verbatim_select")
+
+                if selected_cat != "(Selecciona una categoría)":
+                    try:
+                        # 1. Encontrar las keywords para la categoría seleccionada
+                        cat_json = next(item for item in st.session_state.da_autocode_json if item["categoria"] == selected_cat)
+                        keywords = cat_json.get("keywords", [])
+                        
+                        # 2. Obtener la columna de texto original que se analizó
+                        col_name = st.session_state.da_autocode_selected_col
+                        full_series = st.session_state.data_analysis_df[col_name].astype(str)
+
+                        # 3. Filtrar los verbatims usando las keywords
+                        valid_keywords = [re.escape(k.strip()) for k in keywords if k.strip()]
+                        if not valid_keywords:
+                            st.warning("No se definieron keywords para esta categoría.")
+                        else:
+                            regex_pattern = r'\b(' + '|'.join(valid_keywords) + r')\b'
+                            
+                            matching_verbatims = full_series[
+                                full_series.str.contains(regex_pattern, case=False, na=False, regex=True)
+                            ].dropna().unique() # .unique() para no repetir verbatims
+
+                            # 4. Mostrar los verbatims
+                            st.markdown(f"**Mostrando ejemplos de verbatims para '{selected_cat}':**")
+                            if len(matching_verbatims) == 0:
+                                st.info("No se encontraron verbatims coincidentes (esto podría indicar un error si N > 0).")
+                            else:
+                                # Mostramos un máximo de 20 para no saturar
+                                for v in matching_verbatims[:20]:
+                                    st.markdown(f"> {v}")
+                                
+                                if len(matching_verbatims) > 20:
+                                    st.caption(f"...y {len(matching_verbatims) - 20} más. (Mostrando los primeros 20 ejemplos).")
+
+                    except Exception as e:
+                        st.error(f"Error al buscar verbatims: {e}")
+                # --- ¡FIN DE LA NUEVA SECCIÓN 2! ---
             
             else:
                 col_to_autocode = st.selectbox("Selecciona la columna de texto (pregunta abierta):", text_cols, key="autocode_select")
@@ -523,7 +573,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
                         with st.spinner("Analizando respuestas y generando categorías (IA)..."):
                             try:
                                 # 1. Preparar datos de muestra para la IA
-                                # Tomamos max 500 respuestas únicas no nulas como muestra
                                 non_null_responses = df[col_to_autocode].dropna().unique()
                                 if len(non_null_responses) == 0:
                                     st.error("La columna seleccionada está vacía o no tiene datos válidos."); return
@@ -533,11 +582,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 # 2. Llamar a la IA para obtener el JSON de categorías y keywords
                                 prompt = get_excel_autocode_prompt(main_topic, sample_list)
                                 json_config = {"response_mime_type": "application/json"}
-                                
-                                # --- ¡INICIO DE LA CORRECCIÓN! ---
-                                # Desactivamos los filtros de seguridad SÓLO para esta llamada,
-                                # ya que a veces pueden truncar el JSON si detectan
-                                # lenguaje "hostil" en las respuestas de los usuarios.
                                 no_safety = [
                                     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                                     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -548,9 +592,8 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 response_text = call_gemini_api(
                                     prompt,
                                     generation_config_override=json_config,
-                                    safety_settings_override=no_safety # <-- Pasamos el override
+                                    safety_settings_override=no_safety
                                 )
-                                # --- ¡FIN DE LA CORRECCIÓN! ---
                                 
                                 if not response_text:
                                     st.error("La IA no pudo generar una respuesta. Inténtalo de nuevo."); return
@@ -558,9 +601,14 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 categories_json = json.loads(response_text)
                                 st.session_state.da_autocode_json = categories_json
                                 
+                                # --- ¡INICIO DE LA NUEVA SECCIÓN 3! ---
+                                # Guardamos la columna que estamos analizando
+                                st.session_state.da_autocode_selected_col = col_to_autocode
+                                # --- ¡FIN DE LA NUEVA SECCIÓN 3! ---
+                                
                                 # 3. Procesar el conteo en Python (más preciso)
-                                total_participants = len(df) # El total de registros
-                                full_series = df[col_to_autocode].astype(str) # La columna completa
+                                total_participants = len(df)
+                                full_series = df[col_to_autocode].astype(str)
                                 results = []
                                 
                                 for cat in categories_json:
@@ -570,24 +618,19 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                     if not keywords or not isinstance(keywords, list):
                                         continue
                                     
-                                    # Creamos un patrón regex: \b(keyword1|keyword2|frase 3)\b
-                                    # \b asegura que sean palabras completas
-                                    # Filtramos keywords vacías antes de unirlas
                                     valid_keywords = [re.escape(k.strip()) for k in keywords if k.strip()]
                                     if not valid_keywords:
                                         continue
                                         
                                     regex_pattern = r'\b(' + '|'.join(valid_keywords) + r')\b'
                                     
-                                    # Contamos cuántas filas contienen CUALQUIERA de las keywords
                                     mentions_count = full_series.str.contains(
                                         regex_pattern, 
-                                        case=False, # Ignorar mayúsculas/minúsculas
-                                        na=False,   # Tratar NaN como "no encontrado"
+                                        case=False,
+                                        na=False,
                                         regex=True
                                     ).sum()
                                     
-                                    # Calculamos el porcentaje sobre el TOTAL de participantes
                                     percentage = (mentions_count / total_participants) * 100 if total_participants > 0 else 0
                                     
                                     results.append({
