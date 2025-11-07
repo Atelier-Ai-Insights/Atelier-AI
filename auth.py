@@ -59,6 +59,13 @@ def show_login_page():
                     pending_info = st.session_state.pending_login_info
                     user_id = pending_info['user_id']
                     
+                    # --- ¡INICIO CORRECCIÓN DE AUTENTICACIÓN! ---
+                    # Guardamos los tokens del login pendiente en la sesión principal
+                    st.session_state.access_token = pending_info['access_token']
+                    st.session_state.refresh_token = pending_info['refresh_token']
+                    supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
+                    # --- ¡FIN CORRECCIÓN DE AUTENTICACIÓN! ---
+                    
                     # Generamos el NUEVO ID de sesión
                     new_session_id = str(uuid.uuid4())
                     
@@ -105,13 +112,23 @@ def show_login_page():
                 response = supabase.auth.sign_in_with_password({"email": email, "password": password})
                 user_id = response.user.id
                 
+                # --- ¡INICIO CORRECCIÓN DE AUTENTICACIÓN! ---
+                # Capturamos los tokens
+                access_token = response.session.access_token
+                refresh_token = response.session.refresh_token
+                # --- ¡FIN CORRECCIÓN DE AUTENTICACIÓN! ---
+                
                 # 2. Revisar la sesión activa en la DB
                 user_profile_check = supabase.table("users").select("active_session_id").eq("id", user_id).single().execute()
 
                 if user_profile_check.data and user_profile_check.data.get('active_session_id'):
                     # --- ¡SESIÓN ACTIVA DETECTADA! ---
-                    # No iniciamos sesión. Guardamos los datos y recargamos para mostrar los botones de confirmación.
-                    st.session_state.pending_login_info = {'user_id': user_id}
+                    # Guardamos los datos Y LOS TOKENS y recargamos.
+                    st.session_state.pending_login_info = {
+                        'user_id': user_id,
+                        'access_token': access_token,
+                        'refresh_token': refresh_token
+                    }
                     st.rerun()
                 else:
                     # --- NO HAY SESIÓN ACTIVA (LOGIN NORMAL) ---
@@ -124,6 +141,12 @@ def show_login_page():
                     if user_profile.data and user_profile.data.get('clients'):
                         # Guardamos el nuevo ID en la DB
                         supabase.table("users").update({"active_session_id": new_session_id}).eq("id", user_id).execute()
+                        
+                        # --- ¡INICIO CORRECCIÓN DE AUTENTICACIÓN! ---
+                        # Guardamos los tokens en la sesión
+                        st.session_state.access_token = access_token
+                        st.session_state.refresh_token = refresh_token
+                        # --- ¡FIN CORRECCIÓN DE AUTENTICACIÓN! ---
                         
                         # Guardamos todo en el estado de Streamlit
                         client_info = user_profile.data['clients']

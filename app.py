@@ -42,8 +42,7 @@ def set_mode_and_reset(new_mode):
         st.session_state.pop("data_analysis_chat_history", None)
         st.session_state.pop("da_selected_project_id", None)
         st.session_state.pop("da_selected_project_name", None)
-        st.session_state.pop("da_current_sub_mode", None) # <-- LÍNEA NUEVA
-        # --- FIN LÓGICA MODIFICADA ---
+        st.session_state.pop("da_current_sub_mode", None)
         
         st.session_state.pop("text_analysis_files_dict", None)
         st.session_state.pop("text_analysis_combined_context", None)
@@ -75,6 +74,12 @@ def run_user_mode(db_full, user_features, footer_html):
                     st.session_state.clear()
                     st.rerun()
 
+                # --- ¡INICIO CORRECCIÓN DE AUTENTICACIÓN! ---
+                # Aseguramos que el cliente esté autenticado ANTES de la llamada
+                if st.session_state.get("access_token"):
+                    supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
+                # --- ¡FIN CORRECCIÓN DE AUTENTICACIÓN! ---
+                
                 response = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute()
                 
                 if response.data and 'active_session_id' in response.data:
@@ -94,8 +99,15 @@ def run_user_mode(db_full, user_features, footer_html):
                     st.rerun()
 
             except Exception as e:
-                print(f"Heartbeat check falló (ej. red), pero NO se expulsará al usuario. Error: {e}")
-                st.session_state.last_heartbeat_check = current_time
+                # Si el token expira, set_session fallará y forzará el logout
+                if "Invalid token" in str(e) or "JWT" in str(e):
+                    st.error(f"Tu sesión ha expirado. Por favor, inicia sesión de nuevo.")
+                    supabase.auth.sign_out()
+                    st.session_state.clear()
+                    st.rerun()
+                else:
+                    print(f"Heartbeat check falló (ej. red), pero NO se expulsará al usuario. Error: {e}")
+                    st.session_state.last_heartbeat_check = current_time
     # --- FIN DEL BLOQUE DE HEARTBEAT ---
 
     st.sidebar.image("LogoDataStudio.png")
@@ -170,14 +182,7 @@ def run_user_mode(db_full, user_features, footer_html):
     
     st.sidebar.header("Filtros de Búsqueda")
     
-    # --- ¡INICIO DE LA CORRECCIÓN! ---
-    # ANTES: run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS]
-    # AHORA: Quitamos c.MODE_DATA_ANALYSIS de la lista de exclusión.
-    
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS] 
-
-    # --- ¡FIN DE LA CORRECCIÓN! ---
-
     db_filtered = db_full[:]
 
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
@@ -199,6 +204,11 @@ def run_user_mode(db_full, user_features, footer_html):
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         try:
             if 'user_id' in st.session_state:
+                # --- ¡INICIO CORRECCIÓN DE AUTENTICACIÓN! ---
+                # Aseguramos que el cliente esté autenticado ANTES de la llamada
+                if st.session_state.get("access_token"):
+                    supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
+                # --- ¡FIN CORRECCIÓN DE AUTENTICACIÓN! ---
                 supabase.table("users").update({"active_session_id": None}).eq("id", st.session_state.user_id).execute()
         except Exception as e:
             print(f"Error al limpiar sesión en DB: {e}")
@@ -240,6 +250,25 @@ def main():
 
     if 'page' not in st.session_state: st.session_state.page = "login"
     if "api_key_index" not in st.session_state: st.session_state.api_key_index = 0
+    
+    # --- ¡INICIO CORRECCIÓN DE AUTENTICACIÓN! ---
+    # Re-autentica el cliente global de Supabase en CADA recarga de página
+    # si el usuario ya ha iniciado sesión.
+    if st.session_state.get("logged_in") and st.session_state.get("access_token"):
+        try:
+            supabase.auth.set_session(
+                st.session_state.access_token, 
+                st.session_state.refresh_token
+            )
+            print("INFO: Sesión de Supabase re-autenticada.")
+        except Exception as e:
+            # Si el token expira o es inválido, forzamos el logout.
+            st.error(f"Tu sesión ha expirado: {e}. Por favor, inicia sesión de nuevo.")
+            supabase.auth.sign_out()
+            st.session_state.clear()
+            st.rerun()
+    # --- ¡FIN CORRECCIÓN DE AUTENTICACIÓN! ---
+    
     if 'current_mode' not in st.session_state:
         st.session_state.current_mode = c.MODE_CHAT
         
@@ -293,5 +322,3 @@ def main():
 # ==============================
 if __name__ == "__main__":
     main()
-
-
