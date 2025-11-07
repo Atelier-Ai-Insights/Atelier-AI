@@ -37,13 +37,22 @@ def set_mode_and_reset(new_mode):
         st.session_state.pop("video_evaluation_result", None)
         st.session_state.pop("generated_ppt_bytes", None)
         
-        # --- LÓGICA MODIFICADA ---
+        # --- Limpieza Modo Análisis Numérico ---
         st.session_state.pop("data_analysis_df", None)
-        st.session_state.pop("data_analysis_chat_history", None)
         st.session_state.pop("da_selected_project_id", None)
         st.session_state.pop("da_selected_project_name", None)
+        st.session_state.pop("da_storage_path", None)
         st.session_state.pop("da_current_sub_mode", None)
         
+        # --- Limpieza Modo Análisis de Texto ---
+        st.session_state.pop("ta_selected_project_id", None)
+        st.session_state.pop("ta_selected_project_name", None)
+        st.session_state.pop("ta_storage_path", None)
+        st.session_state.pop("ta_combined_context", None)
+        st.session_state.pop("transcript_chat_history", None)
+        st.session_state.pop("autocode_result", None)
+        
+        # Limpieza del modo volátil anterior (por si acaso)
         st.session_state.pop("text_analysis_files_dict", None)
         st.session_state.pop("text_analysis_combined_context", None)
         st.session_state.pop("text_analysis_file_names", None)
@@ -183,6 +192,7 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.header("Filtros de Búsqueda")
     
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS] 
+
     db_filtered = db_full[:]
 
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
