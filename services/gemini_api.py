@@ -49,7 +49,7 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
         try:
             # Inicializar el modelo con la configuración correcta
             model = genai.GenerativeModel(
-                model_name="gemini-1.5", 
+                model_name="gemini-1.5-flash", 
                 generation_config=final_gen_config, 
                 safety_settings=final_safety_settings # <-- Usar la variable final
             )
