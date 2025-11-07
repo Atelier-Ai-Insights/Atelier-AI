@@ -49,7 +49,7 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
             # Volvemos al modelo multimodal 'v1beta' (gemini-pro-vision)
             # Este modelo es compatible con todas las funciones de tu app.
             model = genai.GenerativeModel(
-                model_name="gemini-pro-vision", # <-- CORREGIDO
+                model_name="gemini-2.5-flash", # <-- CORREGIDO
                 generation_config=final_gen_config, 
                 safety_settings=final_safety_settings
             )
