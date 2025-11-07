@@ -526,40 +526,47 @@ def show_project_analyzer(df, db_filtered, selected_files):
                 selected_cat = st.selectbox("Selecciona una categoría para ver ejemplos:", categories_list, key="verbatim_select")
 
                 if selected_cat != "(Selecciona una categoría)":
-                    try:
-                        # 1. Encontrar las keywords para la categoría seleccionada
-                        cat_json = next(item for item in st.session_state.da_autocode_json if item["categoria"] == selected_cat)
-                        keywords = cat_json.get("keywords", [])
-                        
-                        # 2. Obtener la columna de texto original que se analizó
-                        col_name = st.session_state.da_autocode_selected_col
-                        full_series = st.session_state.data_analysis_df[col_name].astype(str)
-
-                        # 3. Filtrar los verbatims usando las keywords
-                        valid_keywords = [re.escape(k.strip()) for k in keywords if k.strip()]
-                        if not valid_keywords:
-                            st.warning("No se definieron keywords para esta categoría.")
-                        else:
-                            regex_pattern = r'\b(' + '|'.join(valid_keywords) + r')\b'
+                    
+                    # --- ¡INICIO DE LA CORRECCIÓN! ---
+                    # Verificamos que la variable de estado exista antes de usarla
+                    if "da_autocode_selected_col" not in st.session_state:
+                        st.error("Error de estado: No se guardó la columna de origen. Por favor, haz clic en 'Analizar otra columna' y vuelve a generar el análisis.")
+                    # --- FIN DE LA CORRECCIÓN! ---
+                    else:
+                        try:
+                            # 1. Encontrar las keywords para la categoría seleccionada
+                            cat_json = next(item for item in st.session_state.da_autocode_json if item["categoria"] == selected_cat)
+                            keywords = cat_json.get("keywords", [])
                             
-                            matching_verbatims = full_series[
-                                full_series.str.contains(regex_pattern, case=False, na=False, regex=True)
-                            ].dropna().unique() # .unique() para no repetir verbatims
+                            # 2. Obtener la columna de texto original que se analizó
+                            col_name = st.session_state.da_autocode_selected_col
+                            full_series = st.session_state.data_analysis_df[col_name].astype(str)
 
-                            # 4. Mostrar los verbatims
-                            st.markdown(f"**Mostrando ejemplos de verbatims para '{selected_cat}':**")
-                            if len(matching_verbatims) == 0:
-                                st.info("No se encontraron verbatims coincidentes (esto podría indicar un error si N > 0).")
+                            # 3. Filtrar los verbatims usando las keywords
+                            valid_keywords = [re.escape(k.strip()) for k in keywords if k.strip()]
+                            if not valid_keywords:
+                                st.warning("No se definieron keywords para esta categoría.")
                             else:
-                                # Mostramos un máximo de 20 para no saturar
-                                for v in matching_verbatims[:20]:
-                                    st.markdown(f"> {v}")
+                                regex_pattern = r'\b(' + '|'.join(valid_keywords) + r')\b'
                                 
-                                if len(matching_verbatims) > 20:
-                                    st.caption(f"...y {len(matching_verbatims) - 20} más. (Mostrando los primeros 20 ejemplos).")
+                                matching_verbatims = full_series[
+                                    full_series.str.contains(regex_pattern, case=False, na=False, regex=True)
+                                ].dropna().unique() # .unique() para no repetir verbatims
 
-                    except Exception as e:
-                        st.error(f"Error al buscar verbatims: {e}")
+                                # 4. Mostrar los verbatims
+                                st.markdown(f"**Mostrando ejemplos de verbatims para '{selected_cat}':**")
+                                if len(matching_verbatims) == 0:
+                                    st.info("No se encontraron verbatims coincidentes (esto podría indicar un error si N > 0).")
+                                else:
+                                    # Mostramos un máximo de 20 para no saturar
+                                    for v in matching_verbatims[:20]:
+                                        st.markdown(f"> {v}")
+                                    
+                                    if len(matching_verbatims) > 20:
+                                        st.caption(f"...y {len(matching_verbatims) - 20} más. (Mostrando los primeros 20 ejemplos).")
+
+                        except Exception as e:
+                            st.error(f"Error al buscar verbatims: {e}")
                 # --- ¡FIN DE LA NUEVA SECCIÓN 2! ---
             
             else:
