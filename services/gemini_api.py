@@ -16,7 +16,7 @@ def _configure_gemini(key_index):
         print(f"ERROR: Configurando API Key #{key_index + 1}: {e}")
         return False
 
-def call_gemini_api(prompt, generation_config_override=None, safety_settings_override=None): # <-- Argumento añadido
+def call_gemini_api(prompt, generation_config_override=None, safety_settings_override=None):
     """
     Llama a la API de Gemini con lógica de rotación de claves y reintentos.
     """
@@ -46,9 +46,9 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
 
         try:
             # --- ¡INICIO DE LA CORRECCIÓN! ---
-            # Usamos el nombre del modelo con la etiqueta '-latest'
+            # Probamos con el modelo 1.5 Pro, que también es multimodal.
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash-latest", # <-- CORREGIDO
+                model_name="gemini-1.5-pro-latest", # <-- CORREGIDO
                 generation_config=final_gen_config, 
                 safety_settings=final_safety_settings
             )
