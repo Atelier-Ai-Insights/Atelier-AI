@@ -3,12 +3,18 @@ import pandas as pd
 from utils import get_relevant_info, get_stopwords
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event, supabase
-from prompts import get_survey_articulation_prompt
+# --- INICIO DE MODIFICACIÓN DE IMPORTACIONES ---
+from prompts import get_survey_articulation_prompt, get_excel_autocode_prompt # <-- Importamos el nuevo prompt
 import constants as c
 import io 
 import os 
 import uuid 
 from datetime import datetime
+import re # <-- ¡NUEVA IMPORTACIÓN!
+import json # <-- ¡NUEVA IMPORTACIÓN!
+import traceback # <-- ¡NUEVA IMPORTACIÓN!
+# --- FIN DE MODIFICACIÓN DE IMPORTACIONES ---
+
 
 # --- Importaciones de Análisis ---
 from wordcloud import WordCloud
@@ -210,10 +216,10 @@ def show_project_list(user_id):
 # --- INICIO DE LA FUNCIÓN MODIFICADA ---
 def show_project_analyzer(df, db_filtered, selected_files):
     """
-    Muestra la UI de análisis completa (ahora con st.expander + st.button)
+    Muestra la UI de análisis completa (ahora con Auto-Codificación)
     """
     
-    # --- 1. Lógica de Navegación de Sub-Modo ---
+    # --- 1. Lógica de Navegación de Sub-Modo (sin cambios) ---
     def set_da_sub_mode(new_mode):
         st.session_state.da_current_sub_mode = new_mode
 
@@ -234,12 +240,17 @@ def show_project_analyzer(df, db_filtered, selected_files):
         st.session_state.pop("da_wordcloud_fig", None)
         st.session_state.pop("da_freq_table_cloud", None)
         st.session_state.pop("da_current_sub_mode", None) # Limpiar el estado del sub-modo
+        # --- (LIMPIEZA DE ESTADOS) ---
+        st.session_state.pop("da_autocode_results_df", None) # <-- NUEVO
+        st.session_state.pop("da_autocode_json", None) # <-- NUEVO
+        st.session_state.pop("data_analysis_chat_history", None) # <-- ELIMINADO (del modo anterior)
         st.rerun()
         
-    # --- 2. Reemplazo de st.tabs por st.expander + st.button ---
+    # --- 2. Reemplazo de st.tabs por st.expander + st.button (MODIFICADO) ---
     
     with st.expander("Selecciona una función de análisis:", expanded=True):
-        col1, col2, col3, col4, col5 = st.columns(5)
+        # --- (Modificamos la 5ta columna) ---
+        col1, col2, col3, col4, col5 = st.columns(5) 
         with col1:
             st.button("Análisis Rápido", on_click=set_da_sub_mode, args=("Análisis Rápido",), use_container_width=True, type="primary" if sub_modo == "Análisis Rápido" else "secondary")
         with col2:
@@ -249,7 +260,8 @@ def show_project_analyzer(df, db_filtered, selected_files):
         with col4:
             st.button("Exportar a PPT", on_click=set_da_sub_mode, args=("Exportar a PPT",), use_container_width=True, type="primary" if sub_modo == "Exportar a PPT" else "secondary")
         with col5:
-            st.button("Chat de Articulación", on_click=set_da_sub_mode, args=("Chat de Articulación",), use_container_width=True, type="primary" if sub_modo == "Chat de Articulación" else "secondary")
+            # --- (Este es el botón REEMPLAZADO) ---
+            st.button("Auto-Codificación", on_click=set_da_sub_mode, args=("Auto-Codificación",), use_container_width=True, type="primary" if sub_modo == "Auto-Codificación" else "secondary")
 
     st.divider()
     
@@ -421,6 +433,10 @@ def show_project_analyzer(df, db_filtered, selected_files):
             include_pivot = st.checkbox("Incluir Tabla Dinámica (de Pestaña 2)", value=True, disabled=not "da_pivot_table" in st.session_state)
             include_cloud_img = st.checkbox("Incluir Nube de Palabras (Imagen)", value=True, disabled=not "da_wordcloud_fig" in st.session_state)
             include_cloud_table = st.checkbox("Incluir Tabla de Frecuencias (de Nube de Palabras)", value=False, disabled=not "da_freq_table_cloud" in st.session_state)
+            
+            # --- (¡NUEVA OPCIÓN DE EXPORTACIÓN!) ---
+            include_autocode = st.checkbox("Incluir Tabla de Auto-Codificación (de Pestaña 5)", value=True, disabled=not "da_autocode_results_df" in st.session_state)
+            
             if st.button("Generar Presentación", use_container_width=True, type="primary"):
                 with st.spinner("Creando archivo .pptx..."):
                     try:
@@ -434,6 +450,14 @@ def show_project_analyzer(df, db_filtered, selected_files):
                             add_image_slide(prs, "Nube de Palabras", st.session_state.da_wordcloud_fig)
                         if include_cloud_table and "da_freq_table_cloud" in st.session_state:
                             add_table_slide(prs, "Tabla de Frecuencias (Nube)", st.session_state.da_freq_table_cloud)
+                        
+                        # --- (¡NUEVA LÓGICA DE EXPORTACIÓN!) ---
+                        if include_autocode and "da_autocode_results_df" in st.session_state:
+                            # Formatear el % antes de exportar
+                            df_autocode_export = st.session_state.da_autocode_results_df.copy()
+                            df_autocode_export["Porcentaje (%)"] = df_autocode_export["Porcentaje (%)"].apply(lambda x: f"{x:.1f}%")
+                            add_table_slide(prs, "Auto-Codificación de Pregunta Abierta", df_autocode_export)
+                        
                         ppt_stream = io.BytesIO()
                         prs.save(ppt_stream)
                         ppt_stream.seek(0)
@@ -443,35 +467,137 @@ def show_project_analyzer(df, db_filtered, selected_files):
             if "generated_data_ppt" in st.session_state:
                 st.download_button(label="📥 Descargar Presentación (.pptx)", data=st.session_state.generated_data_ppt, file_name=f"analisis_{st.session_state.da_selected_project_name}.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation", use_container_width=True)
 
-    if sub_modo == "Chat de Articulación":
-        st.header("Chat de Articulación (Cuanti + Cuali)")
-        if "data_analysis_chat_history" not in st.session_state:
-            st.session_state.data_analysis_chat_history = []
-        for msg in st.session_state.data_analysis_chat_history:
-            with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
-                st.markdown(msg['message'])
-        user_prompt = st.chat_input("Haz una pregunta sobre estos datos y el repositorio...")
-        if user_prompt:
-            st.session_state.data_analysis_chat_history.append({"role": "Usuario", "message": user_prompt})
-            with st.chat_message("Usuario", avatar="👤"): 
-                st.markdown(user_prompt)
-            with st.chat_message("Asistente", avatar="✨"):
-                message_placeholder = st.empty()
-                message_placeholder.markdown("Articulando...")
-                survey_context = st.session_state.get("data_analysis_stats_context", "No hay datos de encuesta analizados.")
-                if not survey_context.strip():
-                    survey_context = "El usuario está viendo los datos de la encuesta pero no ha seleccionado un análisis específico."
-                repo_context = get_relevant_info(db, user_prompt, selected_files)
-                conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.data_analysis_chat_history[-10:])
-                articulation_prompt = get_survey_articulation_prompt(survey_context, repo_context, conversation_history)
-                response = call_gemini_api(articulation_prompt)
-                if response: 
-                    message_placeholder.markdown(response)
-                    log_query_event(user_prompt, mode=c.MODE_DATA_ANALYSIS)
-                    st.session_state.data_analysis_chat_history.append({"role": "Asistente", "message": response})
-                else: 
-                    message_placeholder.error("Error al generar respuesta.")
-                    st.session_state.data_analysis_chat_history.pop() 
+    # --- ¡NUEVO BLOQUE: "Auto-Codificación"! ---
+    if sub_modo == "Auto-Codificación":
+        st.header("Auto-Codificación (Preguntas Abiertas)")
+        st.markdown("""
+        Esta herramienta utiliza IA para analizar una columna de texto (pregunta abierta) y 
+        generar categorías de análisis (nodos). Luego, cuantifica cuántos participantes 
+        mencionaron cada categoría.
+        """)
+        
+        text_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+        
+        if not text_cols:
+            st.warning("El archivo no contiene columnas de texto/categoría para este análisis.")
+        else:
+            if "da_autocode_results_df" in st.session_state:
+                st.subheader("Resultados de la Codificación")
+                st.dataframe(
+                    st.session_state.da_autocode_results_df,
+                    column_config={
+                        "Categoría": st.column_config.TextColumn(width="large"),
+                        "Menciones (N)": st.column_config.NumberColumn(format="%d"),
+                        "Porcentaje (%)": st.column_config.ProgressColumn(
+                            format="%.1f%%",
+                            min_value=0,
+                            max_value=st.session_state.da_autocode_results_df["Porcentaje (%)"].max() if not st.session_state.da_autocode_results_df["Porcentaje (%)"].empty else 100
+                        ),
+                    },
+                    use_container_width=True,
+                    hide_index=True
+                )
+                
+                excel_bytes = to_excel(st.session_state.da_autocode_results_df)
+                st.download_button(
+                    label="📥 Descargar Tabla como Excel", 
+                    data=excel_bytes, 
+                    file_name="auto_codificacion.xlsx", 
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+                    use_container_width=True
+                )
+
+                if st.button("Analizar otra columna", use_container_width=True, type="secondary"):
+                    st.session_state.pop("da_autocode_results_df", None)
+                    st.session_state.pop("da_autocode_json", None)
+                    st.rerun()
+            
+            else:
+                col_to_autocode = st.selectbox("Selecciona la columna de texto (pregunta abierta):", text_cols, key="autocode_select")
+                main_topic = st.text_input("¿Cuál es el tema principal de esta pregunta?", placeholder="Ej: 'Motivos de preferencia', 'Aspectos a mejorar'")
+                
+                if st.button("Generar Categorías y Conteo", use_container_width=True, type="primary"):
+                    if not col_to_autocode or not main_topic:
+                        st.warning("Por favor, selecciona una columna y define el tema principal.")
+                    else:
+                        with st.spinner("Analizando respuestas y generando categorías (IA)..."):
+                            try:
+                                # 1. Preparar datos de muestra para la IA
+                                # Tomamos max 500 respuestas únicas no nulas como muestra
+                                non_null_responses = df[col_to_autocode].dropna().unique()
+                                if len(non_null_responses) == 0:
+                                    st.error("La columna seleccionada está vacía o no tiene datos válidos."); return
+                                
+                                sample_list = list(non_null_responses[:500])
+                                
+                                # 2. Llamar a la IA para obtener el JSON de categorías y keywords
+                                prompt = get_excel_autocode_prompt(main_topic, sample_list)
+                                json_config = {"response_mime_type": "application/json"}
+                                response_text = call_gemini_api(prompt, generation_config_override=json_config)
+                                
+                                if not response_text:
+                                    st.error("La IA no pudo generar una respuesta. Inténtalo de nuevo."); return
+
+                                categories_json = json.loads(response_text)
+                                st.session_state.da_autocode_json = categories_json
+                                
+                                # 3. Procesar el conteo en Python (más preciso)
+                                total_participants = len(df) # El total de registros
+                                full_series = df[col_to_autocode].astype(str) # La columna completa
+                                results = []
+                                
+                                for cat in categories_json:
+                                    category_name = cat.get('categoria', 'Sin Categoría')
+                                    keywords = cat.get('keywords', [])
+                                    
+                                    if not keywords or not isinstance(keywords, list):
+                                        continue
+                                    
+                                    # Creamos un patrón regex: \b(keyword1|keyword2|frase 3)\b
+                                    # \b asegura que sean palabras completas
+                                    # Filtramos keywords vacías antes de unirlas
+                                    valid_keywords = [re.escape(k.strip()) for k in keywords if k.strip()]
+                                    if not valid_keywords:
+                                        continue
+                                        
+                                    regex_pattern = r'\b(' + '|'.join(valid_keywords) + r')\b'
+                                    
+                                    # Contamos cuántas filas contienen CUALQUIERA de las keywords
+                                    mentions_count = full_series.str.contains(
+                                        regex_pattern, 
+                                        case=False, # Ignorar mayúsculas/minúsculas
+                                        na=False,   # Tratar NaN como "no encontrado"
+                                        regex=True
+                                    ).sum()
+                                    
+                                    # Calculamos el porcentaje sobre el TOTAL de participantes
+                                    percentage = (mentions_count / total_participants) * 100 if total_participants > 0 else 0
+                                    
+                                    results.append({
+                                        "Categoría": category_name,
+                                        "Menciones (N)": int(mentions_count),
+                                        "Porcentaje (%)": percentage
+                                    })
+
+                                # 4. Guardar y mostrar resultados
+                                if not results:
+                                    st.warning("La IA generó categorías, pero no se encontraron menciones con esas keywords.")
+                                else:
+                                    df_results = pd.DataFrame(results).sort_values(by="Menciones (N)", ascending=False)
+                                    st.session_state.da_autocode_results_df = df_results
+                                    log_query_event(f"Auto-Codificación: {main_topic} ({col_to_autocode})", mode=c.MODE_DATA_ANALYSIS)
+                                    st.rerun()
+
+                            except json.JSONDecodeError:
+                                st.error("Error de la IA: La respuesta no fue un JSON válido.")
+                                st.code(response_text)
+                            except re.error as e:
+                                st.error(f"Error de Regex: La IA generó keywords inválidas. {e}")
+                                st.code(st.session_state.get("da_autocode_json"))
+                            except Exception as e:
+                                st.error(f"Ocurrió un error inesperado: {e}")
+                                st.code(traceback.format_exc())
+
 
 # --- FUNCIÓN PRINCIPAL DEL MODO (NUEVA ARQUITECTURA) ---
 

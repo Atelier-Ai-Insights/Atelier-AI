@@ -396,3 +396,51 @@ Un párrafo corto (2-3 frases) que resuma los principales hallazgos.
 - **Fuente de la Cita:** DEBES indicar de qué archivo (ej. `(Fuente: Entrevista_Usuario_1.docx)`) proviene cada cita.
 """
 # --- ¡FIN DEL BLOQUE CORREGIDO! ---
+
+# --- ¡INICIO DEL NUEVO BLOQUE! ---
+
+def get_excel_autocode_prompt(main_topic, responses_sample):
+    """
+    Crea un prompt para que la IA lea una MUESTRA de respuestas de una
+    pregunta abierta de Excel y genere categorías (nodos) con 
+    palabras clave de búsqueda.
+    """
+    
+    # Convertimos la lista de respuestas de Python a un string formateado
+    sample_text = "\n".join([f"- {r}" for r in responses_sample])
+    
+    return f"""
+**Tarea:** Eres un investigador cualitativo experto en codificación. Tu trabajo es analizar la siguiente MUESTRA de respuestas de una encuesta sobre el tema '{main_topic}'.
+
+Tu objetivo es definir un **esquema de codificación (nodos)** para categorizar estas respuestas.
+
+--- MUESTRA DE RESPUESTAS ---
+```{sample_text}```
+
+**Instrucciones de Salida (JSON OBLIGATORIO):**
+Analiza la muestra y genera ÚNICAMENTE un objeto JSON válido.
+El JSON debe ser una lista de objetos, donde cada objeto representa una categoría (nodo) que encuentres.
+
+**Formato JSON Exacto:**
+`[
+  {
+    "categoria": "Nombre de la Categoría 1",
+    "keywords": ["palabra clave 1", "frase clave 1", "sinónimo 1"]
+  },
+  {
+    "categoria": "Nombre de la Categoría 2",
+    "keywords": ["palabra 2", "frase 2"]
+  },
+  {
+    "categoria": "Otro Tema Emergente",
+    "keywords": ["palabra 3", "palabra 4", "frase clave 3"]
+  }
+]`
+
+**Reglas Importantes:**
+1.  **Categorías Claras:** Las "categorias" deben ser nombres cortos y descriptivos (ej. "Precio Alto", "Sabor Agradable", "Problemas con Empaque").
+2.  **Keywords de Búsqueda:** Los "keywords" deben ser las palabras o frases literales que la gente usa en la muestra y que definen esa categoría. Incluye variaciones (ej. "caro", "costoso", "precio alto").
+3.  **No Inventes:** Basa tus categorías y keywords *estrictamente* en la muestra de respuestas.
+4.  **JSON Válido:** Tu salida debe ser *solamente* el JSON, sin texto introductorio.
+"""
+# --- ¡FIN DEL NUEVO BLOQUE! ---
