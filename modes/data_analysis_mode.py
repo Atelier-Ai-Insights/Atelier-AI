@@ -254,31 +254,23 @@ def show_project_analyzer(df, db_filtered, selected_files):
         st.rerun()
         
     # --- ¡INICIO DE LA CORRECCIÓN! ---
-    # --- 2. Nuevo layout de navegación con st.tabs ---
+    # --- 2. Nuevo layout de navegación con st.columns y st.expander ---
     
     st.markdown("##### Selecciona una función de análisis:")
-    tab_ia, tab_stats = st.tabs(["Funciones de IA Generativa", "Análisis Estadístico y Cruces"])
+    col_ia, col_stats = st.columns(2)
 
-    with tab_ia:
-        col1, col2, col3, col4 = st.columns(4) 
-        with col1:
+    with col_ia:
+        with st.expander("📊 Funciones de IA Generativa", expanded=True):
             st.button("Resumen Ejecutivo", on_click=set_da_sub_mode, args=("Resumen Ejecutivo IA",), use_container_width=True, type="primary" if sub_modo == "Resumen Ejecutivo IA" else "secondary")
-        with col2:
             st.button("Auto-Codificación", on_click=set_da_sub_mode, args=("Auto-Codificación",), use_container_width=True, type="primary" if sub_modo == "Auto-Codificación" else "secondary")
-        with col3:
             st.button("Nube de Palabras", on_click=set_da_sub_mode, args=("Nube de Palabras",), use_container_width=True, type="primary" if sub_modo == "Nube de Palabras" else "secondary")
-        with col4:
             st.button("Exportar a PPT", on_click=set_da_sub_mode, args=("Exportar a PPT",), use_container_width=True, type="primary" if sub_modo == "Exportar a PPT" else "secondary")
 
-    with tab_stats:
-        col5, col6, col7, col8 = st.columns(4)
-        with col5:
+    with col_stats:
+        with st.expander("📈 Análisis Estadístico y Cruces", expanded=True):
             st.button("Análisis Rápido", on_click=set_da_sub_mode, args=("Análisis Rápido",), use_container_width=True, type="primary" if sub_modo == "Análisis Rápido" else "secondary")
-        with col6:
             st.button("Tabla Dinámica", on_click=set_da_sub_mode, args=("Tabla Dinámica",), use_container_width=True, type="primary" if sub_modo == "Tabla Dinámica" else "secondary")
-        with col7:
             st.button("Análisis de Correlación", on_click=set_da_sub_mode, args=("Análisis de Correlación",), use_container_width=True, type="primary" if sub_modo == "Análisis de Correlación" else "secondary")
-        with col8:
             st.button("Comparación de Grupos", on_click=set_da_sub_mode, args=("Comparación de Grupos",), use_container_width=True, type="primary" if sub_modo == "Comparación de Grupos" else "secondary")
     # --- ¡FIN DE LA CORRECCIÓN! ---
 
@@ -855,7 +847,6 @@ def data_analysis_mode(db, selected_files):
     if "data_analysis_df" in st.session_state:
         show_project_analyzer(st.session_state.data_analysis_df, db, selected_files)
     
-    # --- VISTA DE GESTIÓN (PÁGINA PRINCIPAL) ---
     else:
         with st.expander("➕ Crear Nuevo Proyecto", expanded=True):
             show_project_creator(user_id, plan_limit)
