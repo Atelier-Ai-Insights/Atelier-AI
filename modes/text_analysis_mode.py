@@ -121,7 +121,7 @@ def show_text_project_creator(user_id, plan_limit):
                 for file in uploaded_files:
                     file_bytes = file.getvalue()
                     
-                    # --- ¡INICIO DE LA CORRECCIÓN! ---
+                    # --- ¡INICIO DEL AJUSTE! ---
                     # 1. Reemplazar espacios con guiones bajos
                     base_name = file.name.replace(' ', '_')
                     # 2. Eliminar cualquier carácter que no sea letra, número, punto, guion bajo o guion
@@ -131,7 +131,7 @@ def show_text_project_creator(user_id, plan_limit):
                         safe_name = f"archivo_{uuid.uuid4()}{os.path.splitext(file.name)[1]}"
                     
                     file_name = safe_name
-                    # --- ¡FIN DE LA CORRECCIÓN! ---
+                    # --- ¡FIN DEL AJUSTE! ---
                     
                     full_storage_path = f"{storage_path_folder}/{file_name}" # Ruta al archivo individual
                     
@@ -367,3 +367,4 @@ def text_analysis_mode():
         st.divider()
         
         show_text_project_list(user_id)
+        
