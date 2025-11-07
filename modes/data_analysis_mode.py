@@ -3,7 +3,6 @@ import pandas as pd
 from utils import get_relevant_info, get_stopwords
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event, supabase
-# --- INICIO DE MODIFICACIÓN DE IMPORTACIONES ---
 from prompts import (
     get_survey_articulation_prompt, get_excel_autocode_prompt,
     get_data_summary_prompt, get_correlation_prompt, get_stat_test_prompt # <-- Importamos los nuevos prompts
@@ -16,8 +15,7 @@ from datetime import datetime
 import re 
 import json 
 import traceback 
-import seaborn as sns # <-- ¡NUEVA IMPORTACIÓN!
-# --- FIN DE MODIFICACIÓN DE IMPORTACIONES ---
+import seaborn as sns
 
 
 # --- Importaciones de Análisis ---
@@ -259,12 +257,12 @@ def show_project_analyzer(df, db_filtered, selected_files):
     # --- 2. Nuevo layout de navegación con st.tabs ---
     
     st.markdown("##### Selecciona una función de análisis:")
-    tab_ia, tab_stats = st.tabs(["📊 Funciones de IA Generativa", "📈 Análisis Estadístico y Cruces"])
+    tab_ia, tab_stats = st.tabs(["Funciones de IA Generativa", "Análisis Estadístico y Cruces"])
 
     with tab_ia:
         col1, col2, col3, col4 = st.columns(4) 
         with col1:
-            st.button("Resumen Ejecutivo IA", on_click=set_da_sub_mode, args=("Resumen Ejecutivo IA",), use_container_width=True, type="primary" if sub_modo == "Resumen Ejecutivo IA" else "secondary")
+            st.button("Resumen Ejecutivo", on_click=set_da_sub_mode, args=("Resumen Ejecutivo IA",), use_container_width=True, type="primary" if sub_modo == "Resumen Ejecutivo IA" else "secondary")
         with col2:
             st.button("Auto-Codificación", on_click=set_da_sub_mode, args=("Auto-Codificación",), use_container_width=True, type="primary" if sub_modo == "Auto-Codificación" else "secondary")
         with col3:
@@ -293,7 +291,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
     
     # --- ¡INICIO NUEVA FUNCIÓN 1: RESUMEN EJECUTIVO IA! ---
     if sub_modo == "Resumen Ejecutivo IA":
-        st.header("Resumen Ejecutivo (Generado por IA)")
+        st.header("Resumen Ejecutivo")
         st.markdown("Un primer vistazo a tus datos para identificar los hallazgos más evidentes y las hipótesis de exploración más interesantes.")
 
         if "da_summary_result" in st.session_state:
@@ -621,12 +619,12 @@ def show_project_analyzer(df, db_filtered, selected_files):
             st.info("Asegúrate de que la plantilla base esté subida al repositorio de la app.")
         else:
             st.markdown("#### Seleccionar Contenido")
-            include_freq = st.checkbox("Incluir Tabla de Frecuencias (de Pestaña 1)", value=True, disabled=not "da_freq_table" in st.session_state)
-            include_pivot = st.checkbox("Incluir Tabla Dinámica (de Pestaña 2)", value=True, disabled=not "da_pivot_table" in st.session_state)
-            include_cloud_img = st.checkbox("Incluir Nube de Palabras (Imagen)", value=True, disabled=not "da_wordcloud_fig" in st.session_state)
+            include_freq = st.checkbox("Incluir Tabla de Frecuencias", value=True, disabled=not "da_freq_table" in st.session_state)
+            include_pivot = st.checkbox("Incluir Tabla Dinámica", value=True, disabled=not "da_pivot_table" in st.session_state)
+            include_cloud_img = st.checkbox("Incluir Nube de Palabras", value=True, disabled=not "da_wordcloud_fig" in st.session_state)
             include_cloud_table = st.checkbox("Incluir Tabla de Frecuencias (de Nube de Palabras)", value=False, disabled=not "da_freq_table_cloud" in st.session_state)
             
-            include_autocode = st.checkbox("Incluir Tabla de Auto-Codificación (de Pestaña 5)", value=True, disabled=not "da_autocode_results_df" in st.session_state)
+            include_autocode = st.checkbox("Incluir Tabla de Auto-Codificación", value=True, disabled=not "da_autocode_results_df" in st.session_state)
             
             if st.button("Generar Presentación", use_container_width=True, type="primary"):
                 with st.spinner("Creando archivo .pptx..."):
@@ -660,7 +658,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
         st.header("Auto-Codificación (Preguntas Abiertas)")
         st.markdown("""
         Esta herramienta utiliza IA para analizar una columna de texto (pregunta abierta) y 
-        generar categorías de análisis (nodos). Luego, cuantifica cuántos participantes 
+        generar categorías de análisis. Luego, cuantifica cuántos participantes 
         mencionaron cada categoría.
         """)
         
