@@ -397,7 +397,7 @@ Un párrafo corto (2-3 frases) que resuma los principales hallazgos.
 """
 # --- ¡FIN DEL BLOQUE CORREGIDO! ---
 
-# --- ¡INICIO DEL NUEVO BLOQUE! ---
+# --- ¡INICIO DEL BLOQUE CORREGIDO (CON LLAVES DOBLES)! ---
 
 def get_excel_autocode_prompt(main_topic, responses_sample):
     """
@@ -423,18 +423,18 @@ El JSON debe ser una lista de objetos, donde cada objeto representa una categor�
 
 **Formato JSON Exacto:**
 `[
-  {
+  {{
     "categoria": "Nombre de la Categoría 1",
     "keywords": ["palabra clave 1", "frase clave 1", "sinónimo 1"]
-  },
-  {
+  }},
+  {{
     "categoria": "Nombre de la Categoría 2",
     "keywords": ["palabra 2", "frase 2"]
-  },
-  {
+  }},
+  {{
     "categoria": "Otro Tema Emergente",
     "keywords": ["palabra 3", "palabra 4", "frase clave 3"]
-  }
+  }}
 ]`
 
 **Reglas Importantes:**
@@ -443,4 +443,4 @@ El JSON debe ser una lista de objetos, donde cada objeto representa una categor�
 3.  **No Inventes:** Basa tus categorías y keywords *estrictamente* en la muestra de respuestas.
 4.  **JSON Válido:** Tu salida debe ser *solamente* el JSON, sin texto introductorio.
 """
-# --- ¡FIN DEL NUEVO BLOQUE! ---
+# --- ¡FIN DEL BLOQUE CORREGIDO! ---
