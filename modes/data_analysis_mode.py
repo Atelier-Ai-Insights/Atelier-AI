@@ -255,10 +255,13 @@ def show_project_analyzer(df, db_filtered, selected_files):
         
         st.rerun()
         
-    # --- 2. Nuevo layout de botones (2 filas de 4) ---
+    # --- ¡INICIO DE LA CORRECCIÓN! ---
+    # --- 2. Nuevo layout de navegación con st.tabs ---
     
-    with st.expander("Selecciona una función de análisis:", expanded=True):
-        st.write("**Funciones de IA Generativa:**")
+    st.markdown("##### Selecciona una función de análisis:")
+    tab_ia, tab_stats = st.tabs(["📊 Funciones de IA Generativa", "📈 Análisis Estadístico y Cruces"])
+
+    with tab_ia:
         col1, col2, col3, col4 = st.columns(4) 
         with col1:
             st.button("Resumen Ejecutivo IA", on_click=set_da_sub_mode, args=("Resumen Ejecutivo IA",), use_container_width=True, type="primary" if sub_modo == "Resumen Ejecutivo IA" else "secondary")
@@ -269,7 +272,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
         with col4:
             st.button("Exportar a PPT", on_click=set_da_sub_mode, args=("Exportar a PPT",), use_container_width=True, type="primary" if sub_modo == "Exportar a PPT" else "secondary")
 
-        st.write("**Análisis Estadístico y Cruces:**")
+    with tab_stats:
         col5, col6, col7, col8 = st.columns(4)
         with col5:
             st.button("Análisis Rápido", on_click=set_da_sub_mode, args=("Análisis Rápido",), use_container_width=True, type="primary" if sub_modo == "Análisis Rápido" else "secondary")
@@ -279,7 +282,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
             st.button("Análisis de Correlación", on_click=set_da_sub_mode, args=("Análisis de Correlación",), use_container_width=True, type="primary" if sub_modo == "Análisis de Correlación" else "secondary")
         with col8:
             st.button("Comparación de Grupos", on_click=set_da_sub_mode, args=("Comparación de Grupos",), use_container_width=True, type="primary" if sub_modo == "Comparación de Grupos" else "secondary")
-
+    # --- ¡FIN DE LA CORRECCIÓN! ---
 
     st.divider()
     
@@ -307,11 +310,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                         snapshot_buffer.write(f"Resumen del DataFrame (Total Filas: {len(df)})\n\n")
                         snapshot_buffer.write("### Columnas y Tipos de Datos:\n")
                         
-                        # --- ¡INICIO DE LA CORRECCIÓN! ---
-                        # Esta línea ahora escribe en el buffer y devuelve None.
-                        # La llamamos por separado.
                         df.info(buf=snapshot_buffer, verbose=False)
-                        # --- ¡FIN DE LA CORRECCIÓN! ---
                         
                         snapshot_buffer.write("\n\n")
 
