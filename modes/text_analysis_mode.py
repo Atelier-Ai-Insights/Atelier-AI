@@ -121,7 +121,7 @@ def show_text_project_creator(user_id, plan_limit):
                 for file in uploaded_files:
                     file_bytes = file.getvalue()
                     
-                    # --- ¡INICIO DEL AJUSTE! ---
+                    # --- ¡INICIO DEL AJUSTE (SANITIZACIÓN)! ---
                     # 1. Reemplazar espacios con guiones bajos
                     base_name = file.name.replace(' ', '_')
                     # 2. Eliminar cualquier carácter que no sea letra, número, punto, guion bajo o guion
@@ -131,7 +131,7 @@ def show_text_project_creator(user_id, plan_limit):
                         safe_name = f"archivo_{uuid.uuid4()}{os.path.splitext(file.name)[1]}"
                     
                     file_name = safe_name
-                    # --- ¡FIN DEL AJUSTE! ---
+                    # --- ¡FIN DEL AJUSTE (SANITIZACIÓN)! ---
                     
                     full_storage_path = f"{storage_path_folder}/{file_name}" # Ruta al archivo individual
                     
@@ -145,7 +145,7 @@ def show_text_project_creator(user_id, plan_limit):
                     "project_name": project_name,
                     "project_brand": project_brand if project_brand else None,
                     "project_year": int(project_year) if project_year else None,
-                    "storage_path": storage_path_folder # <-- Guardamos la RUTA DE LA CARPETA
+                    "storage_path": storage_path_folder 
                 }
                 
                 supabase.table("text_projects").insert(project_data).execute()
@@ -162,7 +162,7 @@ def show_text_project_creator(user_id, plan_limit):
                     if file_paths_to_remove:
                         supabase.storage.from_(TEXT_PROJECT_BUCKET).remove(file_paths_to_remove)
                 except:
-                    pass # Mejor esfuerzo para limpiar
+                    pass 
 
 def show_text_project_list(user_id):
     st.subheader("Mis Proyectos de Texto")
@@ -183,7 +183,7 @@ def show_text_project_list(user_id):
         proj_name = proj['project_name']
         proj_brand = proj.get('project_brand', 'N/A')
         proj_year = proj.get('project_year', 'N/A')
-        storage_path = proj['storage_path'] # Esta es la ruta de la CARPETA
+        storage_path = proj['storage_path'] 
         
         with st.container(border=True):
             col1, col2, col3 = st.columns([4, 1, 1])
@@ -208,7 +208,6 @@ def show_text_project_list(user_id):
                             if file_paths_to_remove:
                                 supabase.storage.from_(TEXT_PROJECT_BUCKET).remove(file_paths_to_remove)
                             
-                            # Eliminar el registro de la tabla
                             supabase.table("text_projects").delete().eq("id", proj_id).execute()
                             
                             st.success(f"Proyecto '{proj_name}' eliminado.")
@@ -234,10 +233,8 @@ def show_text_project_analyzer(combined_context, project_name):
         
     st.divider()
 
-    # --- PESTAÑAS DE ANÁLISIS (Lógica del archivo antiguo) ---
     tab_chat, tab_autocode = st.tabs(["Análisis de Notas y Transcripciones", "Auto-Codificación"])
 
-    # --- PESTAÑA 1: CHAT DE TRANSCRIPCIONES ---
     with tab_chat:
         st.header("Análisis de Notas y Transcripciones")
         st.markdown("Haz preguntas específicas sobre el contenido de los archivos cargados.")
@@ -278,7 +275,6 @@ def show_text_project_analyzer(combined_context, project_name):
                 else:
                     message_placeholder.error("Error al obtener respuesta."); st.session_state.transcript_chat_history.pop()
 
-    # --- PESTAÑA 2: AUTO-CODIFICACIÓN ---
     with tab_autocode:
         st.header("Auto-Codificación")
         
@@ -367,3 +363,4 @@ def text_analysis_mode():
         st.divider()
         
         show_text_project_list(user_id)
+        
