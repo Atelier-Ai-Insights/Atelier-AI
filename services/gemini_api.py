@@ -29,12 +29,10 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
         # Combinar/sobreescribir la configuración base con la específica
         final_gen_config = {**generation_config, **generation_config_override}
 
-    # --- ¡INICIO DE LA CORRECCIÓN! ---
     # Determinar los settings de seguridad
     final_safety_settings = safety_settings # Usar los de config.py por defecto
     if safety_settings_override is not None:
         final_safety_settings = safety_settings_override # Usar el override si se provee
-    # --- ¡FIN DE LA CORRECCIÓN! ---
 
     last_error = None
 
@@ -47,12 +45,14 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
             continue # Intenta con la siguiente clave
 
         try:
-            # Inicializar el modelo con la configuración correcta
+            # --- ¡INICIO DE LA CORRECCIÓN! ---
+            # Usamos el nombre del modelo con la etiqueta '-latest'
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash", 
+                model_name="gemini-1.5-flash-latest", # <-- CORREGIDO
                 generation_config=final_gen_config, 
-                safety_settings=final_safety_settings # <-- Usar la variable final
+                safety_settings=final_safety_settings
             )
+            # --- ¡FIN DE LA CORRECCIÓN! ---
 
             # Intentar generar el contenido
             if isinstance(prompt, list):
