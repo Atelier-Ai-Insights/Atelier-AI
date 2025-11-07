@@ -242,12 +242,9 @@ def show_project_analyzer(df, db_filtered, selected_files):
         st.session_state.pop("da_current_sub_mode", None)
         st.session_state.pop("data_analysis_chat_history", None) 
         
-        # --- ¡INICIO DE LA SECCIÓN AÑADIDA 1! ---
-        # Limpiar los nuevos estados de autocodificación
         st.session_state.pop("da_autocode_results_df", None)
         st.session_state.pop("da_autocode_json", None)
         st.session_state.pop("da_autocode_selected_col", None)
-        # --- ¡FIN DE LA SECCIÓN AÑADIDA 1! ---
         
         st.rerun()
         
@@ -553,17 +550,17 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                     full_series.str.contains(regex_pattern, case=False, na=False, regex=True)
                                 ].dropna().unique() # .unique() para no repetir verbatims
 
-                                # 4. Mostrar los verbatims
-                                st.markdown(f"**Mostrando ejemplos de verbatims para '{selected_cat}':**")
-                                if len(matching_verbatims) == 0:
-                                    st.info("No se encontraron verbatims coincidentes (esto podría indicar un error si N > 0).")
-                                else:
-                                    # Mostramos un máximo de 20 para no saturar
-                                    for v in matching_verbatims[:20]:
-                                        st.markdown(f"> {v}")
-                                    
-                                    if len(matching_verbatims) > 20:
-                                        st.caption(f"...y {len(matching_verbatims) - 20} más. (Mostrando los primeros 20 ejemplos).")
+                            # 4. Mostrar los verbatims
+                            st.markdown(f"**Mostrando ejemplos de verbatims para '{selected_cat}':**")
+                            if len(matching_verbatims) == 0:
+                                st.info("No se encontraron verbatims coincidentes (esto podría indicar un error si N > 0).")
+                            else:
+                                # Mostramos un máximo de 20 para no saturar
+                                for v in matching_verbatims[:20]:
+                                    st.markdown(f"> {v}")
+                                
+                                if len(matching_verbatims) > 20:
+                                    st.caption(f"...y {len(matching_verbatims) - 20} más. (Mostrando los primeros 20 ejemplos).")
 
                         except Exception as e:
                             st.error(f"Error al buscar verbatims: {e}")
@@ -584,7 +581,10 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 if len(non_null_responses) == 0:
                                     st.error("La columna seleccionada está vacía o no tiene datos válidos."); return
                                 
-                                sample_list = list(non_null_responses[:500])
+                                # --- ¡INICIO DE LA CORRECCIÓN! ---
+                                # Reducimos la muestra de 500 a 150 para evitar el error MAX_TOKENS
+                                sample_list = list(non_null_responses[:150])
+                                # --- ¡FIN DE LA CORRECCIÓN! ---
                                 
                                 # 2. Llamar a la IA para obtener el JSON de categorías y keywords
                                 prompt = get_excel_autocode_prompt(main_topic, sample_list)
@@ -608,10 +608,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 categories_json = json.loads(response_text)
                                 st.session_state.da_autocode_json = categories_json
                                 
-                                # --- ¡INICIO DE LA NUEVA SECCIÓN 3! ---
-                                # Guardamos la columna que estamos analizando
                                 st.session_state.da_autocode_selected_col = col_to_autocode
-                                # --- ¡FIN DE LA NUEVA SECCIÓN 3! ---
                                 
                                 # 3. Procesar el conteo en Python (más preciso)
                                 total_participants = len(df)
