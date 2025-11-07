@@ -149,14 +149,18 @@ def show_project_creator(user_id, plan_limit):
                     file=file_bytes,
                     file_options={"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
                 )
-
+                
+                # --- ¡INICIO DE LA CORRECCIÓN! ---
+                # Ya no necesitamos enviar 'user_id' porque la DB lo maneja
+                # con 'auth.uid()' como valor por defecto.
                 project_data = {
-                    "user_id": user_id,
                     "project_name": project_name,
                     "project_brand": project_brand,
                     "project_year": int(project_year),
                     "storage_path": storage_path
                 }
+                # --- ¡FIN DE LA CORRECCIÓN! ---
+                
                 supabase.table("projects").insert(project_data).execute()
                 
                 st.success(f"¡Proyecto '{project_name}' creado exitosamente!")

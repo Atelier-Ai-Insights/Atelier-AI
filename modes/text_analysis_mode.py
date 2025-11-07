@@ -1,97 +1,190 @@
 import streamlit as st
 import docx
-from io import BytesIO
+import io
+import os
+import uuid
+from datetime import datetime
+import requests # <-- ¡Necesario para descargar el archivo!
 from services.gemini_api import call_gemini_api
-from services.supabase_db import log_query_event
+from services.supabase_db import log_query_event, supabase
 from prompts import get_transcript_prompt, get_autocode_prompt
 import constants as c
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 
 # =====================================================
-# MODO: ANÁLISIS DE TEXTOS (CUALI)
+# MODO: ANÁLISIS DE TEXTOS (VERSIÓN PROYECTOS)
 # =====================================================
 
-@st.cache_data
-def process_text_files(uploaded_files_list):
+TEXT_PROJECT_BUCKET = "text_project_files"
+
+# --- Funciones de Carga de Datos ---
+
+@st.cache_data(ttl=600)
+def load_text_project_data(storage_path):
     """
-    Lee una lista de archivos docx y devuelve un dict {nombre: texto}
-    y una cadena de texto combinada para los prompts.
+    Descarga un archivo .docx de Supabase Storage y extrae su texto.
     """
-    combined_context = "" # Para el prompt de autocode
-    file_texts_dict = {}  # Para el chat de transcripción
+    try:
+        # 1. Obtener URL firmada
+        response_url = supabase.storage.from_(TEXT_PROJECT_BUCKET).create_signed_url(storage_path, 60)
+        signed_url = response_url['signedURL']
+        
+        # 2. Descargar el archivo en memoria
+        response_file = requests.get(signed_url)
+        response_file.raise_for_status() # Asegurarse de que la descarga fue exitosa
+        
+        # 3. Leer el archivo .docx desde los bytes
+        file_stream = io.BytesIO(response_file.content)
+        document = docx.Document(file_stream)
+        full_text = "\n".join([para.text for para in document.paragraphs if para.text.strip()])
+        
+        # 4. Crear el contexto combinado
+        # Usamos el path como nombre de archivo "simulado"
+        file_name = storage_path.split('/')[-1] 
+        combined_context = f"\n\n--- INICIO DOCUMENTO: {file_name} ---\n\n{full_text}\n\n--- FIN DOCUMENTO: {file_name} ---\n"
+        
+        return combined_context
+        
+    except Exception as e:
+        st.error(f"Error al cargar el proyecto de texto: {e}")
+        return None
+
+# --- Funciones de UI ---
+
+def show_text_project_creator(user_id, plan_limit):
+    st.subheader("Crear Nuevo Proyecto de Texto")
     
-    for uploaded_file in uploaded_files_list:
-        file_stream = BytesIO(uploaded_file.getvalue())
-        try:
-            document = docx.Document(file_stream)
-            full_text = "\n".join([para.text for para in document.paragraphs if para.text.strip()])
-            
-            # Para el autocode (un solo bloque de texto)
-            combined_context += f"\n\n--- INICIO DOCUMENTO: {uploaded_file.name} ---\n\n{full_text}\n\n--- FIN DOCUMENTO: {uploaded_file.name} ---\n"
-            
-            # Para el chat (dict separado)
-            file_texts_dict[uploaded_file.name] = full_text
-            
-        except Exception as e:
-            st.error(f"Error al procesar '{uploaded_file.name}': {e}")
-    
-    return file_texts_dict, combined_context
-
-# --- Función Principal del Modo ---
-
-def text_analysis_mode():
-    st.subheader(c.MODE_TEXT_ANALYSIS) # <-- Esto tomará el nuevo nombre
-    file_limit = st.session_state.plan_features.get('transcript_file_limit', 0)
-    
-    st.markdown(f"""
-        Sube uno o varios archivos Word (.docx) con entrevistas o focus groups.
-        **Tu plan actual te permite cargar un máximo de {file_limit} archivo(s) a la vez.**
-    """)
-
-    uploaded_files = st.file_uploader(
-        "Sube tus archivos .docx aquí:",
-        type=["docx"],
-        accept_multiple_files=True,
-        key="text_analysis_uploader"
-    )
-
-    if uploaded_files:
-        if len(uploaded_files) > file_limit:
-            st.error(f"¡Límite de archivos excedido! Tu plan permite {file_limit}..."); return
-
-        # Procesar archivos y guardar en session_state si son nuevos
-        current_file_names = {f.name for f in uploaded_files}
-        if "text_analysis_file_names" not in st.session_state or st.session_state.text_analysis_file_names != current_file_names:
-            with st.spinner(f"Procesando {len(uploaded_files)} archivo(s)..."):
-                file_texts_dict, combined_context = process_text_files(uploaded_files)
-                st.session_state.text_analysis_files_dict = file_texts_dict
-                st.session_state.text_analysis_combined_context = combined_context
-                st.session_state.text_analysis_file_names = current_file_names
-                # Reiniciar los sub-modos
-                st.session_state.pop("transcript_chat_history", None)
-                st.session_state.pop("autocode_result", None)
-            st.success(f"Se procesaron {len(current_file_names)} archivo(s).")
-    
-    # Si no hay archivos, no mostrar nada más
-    if "text_analysis_files_dict" not in st.session_state or not st.session_state.text_analysis_files_dict:
-        st.info("Sube uno o más archivos .docx para comenzar.")
+    try:
+        response = supabase.table("text_projects").select("id", count='exact').eq("user_id", user_id).execute()
+        project_count = response.count
+    except Exception as e:
+        st.error(f"Error al verificar el conteo de proyectos: {e}")
         return
 
-    st.markdown("---")
-    st.write("**Archivos cargados para análisis:**")
-    for filename in st.session_state.text_analysis_files_dict.keys():
-        st.caption(f"- {filename}")
-    st.markdown("---")
+    if project_count >= plan_limit and plan_limit != float('inf'):
+        st.warning(f"Has alcanzado el límite de {int(plan_limit)} proyectos de texto para tu plan actual. Deberás eliminar un proyecto existente para crear uno nuevo.")
+        return
+
+    with st.form("new_text_project_form"):
+        project_name = st.text_input("Nombre del Proyecto*", placeholder="Ej: Entrevistas NPS Q1 2024")
+        project_brand = st.text_input("Marca", placeholder="Ej: Marca X")
+        project_year = st.number_input("Año", min_value=2020, max_value=2030, value=datetime.now().year)
+        uploaded_file = st.file_uploader("Archivo Word (.docx)*", type=["docx"])
+        st.caption("Nota: Si tienes múltiples transcripciones, por favor combínalas en un solo archivo .docx antes de subir.")
+        
+        submitted = st.form_submit_button("Crear Proyecto")
+
+    if submitted:
+        if not all([project_name, uploaded_file]):
+            st.warning("Por favor, completa el Nombre del Proyecto y sube un archivo .docx.")
+            return
+
+        with st.spinner("Creando proyecto y subiendo archivo..."):
+            try:
+                file_bytes = uploaded_file.getvalue()
+                file_ext = os.path.splitext(uploaded_file.name)[1]
+                storage_path = f"{user_id}/{uuid.uuid4()}{file_ext}" 
+                
+                supabase.storage.from_(TEXT_PROJECT_BUCKET).upload(
+                    path=storage_path,
+                    file=file_bytes,
+                    file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+                )
+                
+                # --- ¡INICIO DE LA CORRECCIÓN! ---
+                # Ya no necesitamos enviar 'user_id' porque la DB lo maneja
+                # con 'auth.uid()' como valor por defecto.
+                project_data = {
+                    "project_name": project_name,
+                    "project_brand": project_brand if project_brand else None,
+                    "project_year": int(project_year) if project_year else None,
+                    "storage_path": storage_path
+                }
+                # --- ¡FIN DE LA CORRECCIÓN! ---
+                
+                supabase.table("text_projects").insert(project_data).execute()
+                
+                st.success(f"¡Proyecto '{project_name}' creado exitosamente!")
+                st.rerun()
+
+            except Exception as e:
+                st.error(f"Error al crear el proyecto: {e}")
+                try:
+                    supabase.storage.from_(TEXT_PROJECT_BUCKET).remove([storage_path])
+                except:
+                    pass
+
+def show_text_project_list(user_id):
+    st.subheader("Mis Proyectos de Texto")
     
-    # --- INICIO DE LA MODIFICACIÓN (Nombres de Pestañas) ---
+    try:
+        response = supabase.table("text_projects").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+        projects = response.data
+    except Exception as e:
+        st.error(f"Error al cargar la lista de proyectos: {e}")
+        return
+
+    if not projects:
+        st.info("Aún no has creado ningún proyecto de texto. Usa el formulario de arriba para empezar.")
+        return
+
+    for proj in projects:
+        proj_id = proj['id']
+        proj_name = proj['project_name']
+        proj_brand = proj.get('project_brand', 'N/A')
+        proj_year = proj.get('project_year', 'N/A')
+        storage_path = proj['storage_path']
+        
+        with st.container(border=True):
+            col1, col2, col3 = st.columns([4, 1, 1])
+            with col1:
+                st.markdown(f"**{proj_name}**")
+                st.caption(f"Marca: {proj_brand} | Año: {proj_year}")
+            
+            with col2:
+                if st.button("Analizar", key=f"analizar_txt_{proj_id}", use_container_width=True, type="primary"):
+                    st.session_state.ta_selected_project_id = proj_id
+                    st.session_state.ta_selected_project_name = proj_name
+                    st.session_state.ta_storage_path = storage_path
+                    st.rerun()
+            
+            with col3:
+                if st.button("Eliminar", key=f"eliminar_txt_{proj_id}", use_container_width=True):
+                    with st.spinner("Eliminando proyecto..."):
+                        try:
+                            supabase.storage.from_(TEXT_PROJECT_BUCKET).remove([storage_path])
+                            supabase.table("text_projects").delete().eq("id", proj_id).execute()
+                            st.success(f"Proyecto '{proj_name}' eliminado.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al eliminar: {e}")
+
+def show_text_project_analyzer(combined_context, project_name):
+    """
+    Muestra la UI de análisis (Chat y Autocode) para el proyecto cargado.
+    """
+    
+    st.markdown(f"### Analizando: **{project_name}**")
+    
+    if st.button("← Volver a la lista de proyectos"):
+        st.session_state.pop("ta_selected_project_id", None)
+        st.session_state.pop("ta_selected_project_name", None)
+        st.session_state.pop("ta_storage_path", None)
+        st.session_state.pop("ta_combined_context", None)
+        st.session_state.pop("transcript_chat_history", None)
+        st.session_state.pop("autocode_result", None)
+        st.rerun()
+        
+    st.divider()
+
+    # --- PESTAÑAS DE ANÁLISIS (Lógica del archivo antiguo) ---
     tab_chat, tab_autocode = st.tabs(["Análisis de Notas y Transcripciones", "Auto-Codificación"])
-    # --- FIN DE LA MODIFICACIÓN ---
 
     # --- PESTAÑA 1: CHAT DE TRANSCRIPCIONES ---
     with tab_chat:
-        st.header("Análisis de Notas y Transcripciones") # <-- Título modificado
-        st.markdown("Haz preguntas específicas sobre el contenido de los archivos cargados.")
+        st.header("Análisis de Notas y Transcripciones")
+        st.markdown("Haz preguntas específicas sobre el contenido del archivo cargado.")
         
         if "transcript_chat_history" not in st.session_state: 
             st.session_state.transcript_chat_history = []
@@ -109,8 +202,6 @@ def text_analysis_mode():
 
             with st.chat_message("assistant", avatar="✨"):
                 message_placeholder = st.empty(); message_placeholder.markdown("Analizando...")
-                
-                combined_context = st.session_state.text_analysis_combined_context
                 
                 MAX_CONTEXT_LENGTH = 800000 
                 if len(combined_context) > MAX_CONTEXT_LENGTH:
@@ -133,7 +224,7 @@ def text_analysis_mode():
 
     # --- PESTAÑA 2: AUTO-CODIFICACIÓN ---
     with tab_autocode:
-        st.header("Auto-Codificación") # <-- Título modificado
+        st.header("Auto-Codificación")
         
         if "autocode_result" in st.session_state:
             st.markdown("### Reporte de Temas Generado")
@@ -156,7 +247,7 @@ def text_analysis_mode():
                     st.rerun()
         
         else:
-            st.markdown("Esta herramienta leerá todos los archivos cargados y generará un reporte de temas clave y citas de respaldo.")
+            st.markdown("Esta herramienta leerá el archivo cargado y generará un reporte de temas clave y citas de respaldo.")
             main_topic = st.text_input(
                 "¿Cuál es el tema principal de estas entrevistas?", 
                 placeholder="Ej: Percepción de snacks saludables, Experiencia de compra, etc.",
@@ -168,8 +259,6 @@ def text_analysis_mode():
                     st.warning("Por favor, describe el tema principal.")
                 else:
                     with st.spinner("Analizando temas emergentes... (Esto puede tardar unos minutos)"):
-                        
-                        combined_context = st.session_state.text_analysis_combined_context
                         
                         MAX_CONTEXT_LENGTH = 1_000_000 
                         if len(combined_context) > MAX_CONTEXT_LENGTH:
@@ -185,3 +274,40 @@ def text_analysis_mode():
                             st.rerun()
                         else:
                             st.error("Error al generar el análisis de temas.")
+
+# --- FUNCIÓN PRINCIPAL DEL MODO (NUEVA ARQUITECTURA) ---
+
+def text_analysis_mode():
+    st.subheader(c.MODE_TEXT_ANALYSIS)
+    st.markdown("Carga, gestiona y analiza tus proyectos de transcripciones (.docx).")
+    st.divider()
+
+    user_id = st.session_state.user_id
+    plan_limit = st.session_state.plan_features.get('transcript_file_limit', 0)
+
+    # --- VISTA DE ANÁLISIS ---
+    if "ta_selected_project_id" in st.session_state and "ta_combined_context" not in st.session_state:
+        with st.spinner("Cargando datos del proyecto de texto..."):
+            context = load_text_project_data(st.session_state.ta_storage_path)
+            if context is not None:
+                st.session_state.ta_combined_context = context
+            else:
+                st.error("No se pudieron cargar los datos del proyecto.")
+                st.session_state.pop("ta_selected_project_id")
+                st.session_state.pop("ta_selected_project_name")
+                st.session_state.pop("ta_storage_path")
+
+    if "ta_combined_context" in st.session_state:
+        show_text_project_analyzer(
+            st.session_state.ta_combined_context,
+            st.session_state.ta_selected_project_name
+        )
+    
+    # --- VISTA DE GESTIÓN (PÁGINA PRINCIPAL) ---
+    else:
+        with st.expander("➕ Crear Nuevo Proyecto de Texto", expanded=True):
+            show_text_project_creator(user_id, plan_limit)
+        
+        st.divider()
+        
+        show_text_project_list(user_id)
