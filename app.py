@@ -280,7 +280,6 @@ def main():
             supabase.auth.sign_out()
             st.session_state.clear()
             st.rerun()
-    # --- ¡FIN DE LA CORRECCIÓN DE AUTENTICACIÓN ROBUSTA! ---
     
     if 'current_mode' not in st.session_state:
         st.session_state.current_mode = c.MODE_CHAT
@@ -335,3 +334,4 @@ def main():
 # ==============================
 if __name__ == "__main__":
     main()
+
