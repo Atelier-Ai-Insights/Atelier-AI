@@ -83,11 +83,9 @@ def run_user_mode(db_full, user_features, footer_html):
                     st.session_state.clear()
                     st.rerun()
 
-                # --- ¡INICIO CORRECCIÓN DE AUTENTICACIÓN! ---
                 # Aseguramos que el cliente esté autenticado ANTES de la llamada
                 if st.session_state.get("access_token"):
                     supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
-                # --- ¡FIN CORRECCIÓN DE AUTENTICACIÓN! ---
                 
                 response = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute()
                 
@@ -108,7 +106,6 @@ def run_user_mode(db_full, user_features, footer_html):
                     st.rerun()
 
             except Exception as e:
-                # Si el token expira, set_session fallará y forzará el logout
                 if "Invalid token" in str(e) or "JWT" in str(e):
                     st.error(f"Tu sesión ha expirado. Por favor, inicia sesión de nuevo.")
                     supabase.auth.sign_out()
@@ -214,11 +211,9 @@ def run_user_mode(db_full, user_features, footer_html):
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         try:
             if 'user_id' in st.session_state:
-                # --- ¡INICIO CORRECCIÓN DE AUTENTICACIÓN! ---
                 # Aseguramos que el cliente esté autenticado ANTES de la llamada
                 if st.session_state.get("access_token"):
                     supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
-                # --- ¡FIN CORRECCIÓN DE AUTENTICACIÓN! ---
                 supabase.table("users").update({"active_session_id": None}).eq("id", st.session_state.user_id).execute()
         except Exception as e:
             print(f"Error al limpiar sesión en DB: {e}")
@@ -261,23 +256,31 @@ def main():
     if 'page' not in st.session_state: st.session_state.page = "login"
     if "api_key_index" not in st.session_state: st.session_state.api_key_index = 0
     
-    # --- ¡INICIO CORRECCIÓN DE AUTENTICACIÓN! ---
-    # Re-autentica el cliente global de Supabase en CADA recarga de página
-    # si el usuario ya ha iniciado sesión.
-    if st.session_state.get("logged_in") and st.session_state.get("access_token"):
-        try:
-            supabase.auth.set_session(
-                st.session_state.access_token, 
-                st.session_state.refresh_token
-            )
-            print("INFO: Sesión de Supabase re-autenticada.")
-        except Exception as e:
-            # Si el token expira o es inválido, forzamos el logout.
-            st.error(f"Tu sesión ha expirado: {e}. Por favor, inicia sesión de nuevo.")
+    # --- ¡INICIO DE LA CORRECCIÓN DE AUTENTICACIÓN ROBUSTA! ---
+    if st.session_state.get("logged_in"):
+        if st.session_state.get("access_token"):
+            # Caso 1: El usuario está logueado Y tiene tokens.
+            # Re-autenticamos el cliente.
+            try:
+                supabase.auth.set_session(
+                    st.session_state.access_token, 
+                    st.session_state.refresh_token
+                )
+                print("INFO: Sesión de Supabase re-autenticada.")
+            except Exception as e:
+                # El token expiró. Forzamos logout.
+                st.error(f"Tu sesión ha expirado: {e}. Por favor, inicia sesión de nuevo.")
+                supabase.auth.sign_out()
+                st.session_state.clear()
+                st.rerun()
+        else:
+            # Caso 2: El usuario está logueado PERO NO tiene tokens.
+            # Esta es una sesión "antigua" o rota. Forzamos logout.
+            st.warning("Detectamos una sesión inválida. Por favor, inicia sesión de nuevo.")
             supabase.auth.sign_out()
             st.session_state.clear()
             st.rerun()
-    # --- ¡FIN CORRECCIÓN DE AUTENTICACIÓN! ---
+    # --- ¡FIN DE LA CORRECCIÓN DE AUTENTICACIÓN ROBUSTA! ---
     
     if 'current_mode' not in st.session_state:
         st.session_state.current_mode = c.MODE_CHAT
