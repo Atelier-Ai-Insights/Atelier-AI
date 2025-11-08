@@ -141,13 +141,15 @@ def show_text_project_creator(user_id, plan_limit):
                         file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
                     )
 
+                # --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
                 project_data = {
                     "project_name": project_name,
                     "project_brand": project_brand if project_brand else None,
                     "project_year": int(project_year) if project_year else None,
                     "storage_path": storage_path_folder,
-                    "user_id": user_id # <-- ¡AQUÍ ESTÁ LA CORRECCIÓN!
+                    "user_id": user_id 
                 }
+                # --- FIN DE LA CORRECCIÓN ---
                 
                 supabase.table("text_projects").insert(project_data).execute()
                 
@@ -356,7 +358,7 @@ def text_analysis_mode():
             st.session_state.ta_selected_project_name
         )
     
-    # --- VISTA de GESTIÓN (PÁGINA PRINCIPAL) ---
+    # --- VISTA DE GESTIÓN (PÁGINA PRINCIPAL) ---
     else:
         with st.expander("➕ Crear Nuevo Proyecto de Texto", expanded=True):
             show_text_project_creator(user_id, plan_limit)
@@ -364,3 +366,4 @@ def text_analysis_mode():
         st.divider()
         
         show_text_project_list(user_id)
+        

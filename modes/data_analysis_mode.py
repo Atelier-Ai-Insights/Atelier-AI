@@ -151,13 +151,13 @@ def show_project_creator(user_id, plan_limit):
                 )
                 
                 # --- ¡INICIO DE LA CORRECCIÓN! ---
-                # Ya no necesitamos enviar 'user_id' porque la DB lo maneja
-                # con 'auth.uid()' como valor por defecto.
+                # Añadimos el user_id para cumplir con la RLS de la tabla 'projects'
                 project_data = {
                     "project_name": project_name,
                     "project_brand": project_brand,
                     "project_year": int(project_year),
-                    "storage_path": storage_path
+                    "storage_path": storage_path,
+                    "user_id": user_id # <-- ¡AQUÍ ESTÁ LA CORRECCIÓN!
                 }
                 # --- ¡FIN DE LA CORRECCIÓN! ---
                 
