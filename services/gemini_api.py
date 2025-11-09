@@ -18,16 +18,25 @@ def _configure_gemini(key_index):
 
 def call_gemini_api(prompt, generation_config_override=None, safety_settings_override=None):
     """
-    Llama a la API de Gemini con lógica de rotación de claves y reintentos.
+    Llama a la API de Gemini con lógica de rotación de claves, reintentos 
+    y manejo robusto de respuestas.
     """
     start_index = st.session_state.get("api_key_index", 0)
     num_keys = len(api_keys)
     
-    # Determinar la configuración a usar
-    final_gen_config = generation_config
+    # --- INICIO CORRECCIÓN 1: Lógica de Configuración de Tokens ---
+    # 1. Empezar con la config base de config.py
+    final_gen_config = generation_config.copy() # Usar .copy() para no modificar el original
+
+    # 2. Aplicar un 'max_output_tokens' alto por defecto SI NO se especifica
+    #    en config.py. Esto soluciona el error 'MAX_TOKENS'.
+    if 'max_output_tokens' not in final_gen_config:
+        final_gen_config['max_output_tokens'] = 8192 # Valor alto por defecto
+
+    # 3. Si se pasa un override (ej. para chat), dejar que sobreescriba todo
     if generation_config_override:
-        # Combinar/sobreescribir la configuración base con la específica
-        final_gen_config = {**generation_config, **generation_config_override}
+        final_gen_config.update(generation_config_override) # .update() es más limpio
+    # --- FIN CORRECCIÓN 1 ---
 
     # Determinar los settings de seguridad
     final_safety_settings = safety_settings # Usar los de config.py por defecto
@@ -45,15 +54,11 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
             continue # Intenta con la siguiente clave
 
         try:
-            # --- ¡INICIO DE LA CORRECCIÓN! ---
-            # Volvemos al modelo multimodal 'v1beta' (gemini-pro-vision)
-            # Este modelo es compatible con todas las funciones de tu app.
             model = genai.GenerativeModel(
-                model_name="gemini-2.5-flash", # <-- CORREGIDO
+                model_name="gemini-1.5-pro-latest", # Recomiendo 1.5-pro o 1.5-flash
                 generation_config=final_gen_config, 
                 safety_settings=final_safety_settings
             )
-            # --- ¡FIN DE LA CORRECCIÓN! ---
 
             # Intentar generar el contenido
             if isinstance(prompt, list):
@@ -61,15 +66,58 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
             else:
                 response = model.generate_content([prompt])
             
-            # ¡Éxito! Actualizar el índice para la PRÓXIMA llamada (balanceo)
-            st.session_state.api_key_index = (current_key_index + 1) % num_keys
-            return html.unescape(response.text)
+            # --- INICIO CORRECCIÓN 2: Manejo Robusto de Respuesta ---
+            # NO accedas a response.text directamente.
+            
+            if not response.candidates:
+                last_error = "Error API Gemini: La respuesta no tuvo candidatos válidos."
+                print(f"ADVERTENCIA: API Key #{current_key_index + 1} falló. Error: {last_error}. Reintentando...")
+                continue # Probar siguiente clave
+
+            candidate = response.candidates[0]
+            finish_reason_name = candidate.finish_reason.name
+
+            # Caso 1: Éxito (Terminó normalmente)
+            if finish_reason_name == "STOP":
+                st.session_state.api_key_index = (current_key_index + 1) % num_keys
+                # Ahora SÍ es seguro acceder a .text
+                return html.unescape(response.text) 
+
+            # Caso 2: Cortado por MAX_TOKENS (¡El error que viste!)
+            elif finish_reason_name == "MAX_TOKENS":
+                st.warning("Advertencia: La respuesta de la IA fue muy larga y ha sido cortada. (MAX_TOKENS)")
+                st.session_state.api_key_index = (current_key_index + 1) % num_keys
+                # Intentar devolver el texto parcial que sí se generó
+                if candidate.content.parts:
+                    partial_text = candidate.content.parts[0].text
+                    return html.unescape(partial_text) + "\n\n... (Respuesta truncada por MAX_TOKENS)"
+                else:
+                    last_error = "MAX_TOKENS pero no se encontró contenido parcial."
+                    print(f"ADVERTENCIA: API Key #{current_key_index + 1} falló. Error: {last_error}. Reintentando...")
+                    continue # Probar siguiente clave
+            
+            # Caso 3: Bloqueo de seguridad u otra razón
+            else:
+                last_error = f"Generación detenida por: {finish_reason_name}"
+                # Intentar obtener más detalles del bloqueo
+                try:
+                    if candidate.safety_ratings:
+                        last_error += f" | Ratings: {str(candidate.safety_ratings)}"
+                except:
+                    pass
+                
+                print(f"ADVERTENCIA: API Key #{current_key_index + 1} falló. Error: {last_error}. Reintentando...")
+                continue # Probar siguiente clave
+            
+            # --- FIN CORRECCIÓN 2 ---
 
         except Exception as e:
+            # Esto ahora capturará errores de red, auth, etc.
+            # (El error 'Invalid operation' ya no debería ocurrir)
             last_error = e
             print(f"ADVERTENCIA: API Key #{current_key_index + 1} falló. Error: {e}. Reintentando...")
             # Continuar el bucle para probar la siguiente clave
-    
+        
     # Si el bucle termina, todas las claves fallaron
     st.error(f"Error API Gemini: Todas las claves API fallaron. Último error: {last_error}")
     return None
