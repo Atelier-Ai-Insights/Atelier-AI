@@ -82,11 +82,6 @@ def load_text_project_data(storage_path_folder):
 # --- Funciones de UI ---
 
 def show_text_project_creator(user_id, plan_limit):
-    
-    # --- ¡LÍNEA DE DEBUG 1! ---
-    # Esto confirma que la variable user_id está llegando a la función.
-    st.write(f"DEBUG: ID de usuario detectado: {user_id}")
-    
     st.subheader("Crear Nuevo Proyecto de Texto")
     
     try:
@@ -114,11 +109,6 @@ def show_text_project_creator(user_id, plan_limit):
         submitted = st.form_submit_button("Crear Proyecto")
 
     if submitted:
-        
-        # --- ¡LÍNEA DE DEBUG 2! ---
-        # Esto aparecerá en tu TERMINAL (no en el navegador)
-        print(f"DEBUG: Formulario enviado. El user_id es: {user_id}")
-
         if not all([project_name, uploaded_files]):
             st.warning("Por favor, completa el Nombre del Proyecto y sube al menos un archivo .docx.")
             return
@@ -151,18 +141,16 @@ def show_text_project_creator(user_id, plan_limit):
                         file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
                     )
 
+                # --- CÓDIGO AJUSTADO ---
+                # Se elimina user_id. La BD lo insertará automáticamente
+                # gracias al "Default Value" (auth.uid()).
                 project_data = {
                     "project_name": project_name,
                     "project_brand": project_brand if project_brand else None,
                     "project_year": int(project_year) if project_year else None,
-                    "storage_path": storage_path_folder,
-                    "user_id": user_id # <-- Esta es la corrección
+                    "storage_path": storage_path_folder
                 }
                 
-                # --- ¡LÍNEA DE DEBUG 3! ---
-                # Esto nos dirá exactamente qué se intenta insertar
-                print(f"DEBUG: Intentando insertar en 'text_projects': {project_data}")
-
                 supabase.table("text_projects").insert(project_data).execute()
                 
                 st.success(f"¡Proyecto '{project_name}' creado exitosamente!")
@@ -170,11 +158,6 @@ def show_text_project_creator(user_id, plan_limit):
 
             except Exception as e:
                 st.error(f"Error al crear el proyecto: {e}")
-                
-                # --- ¡LÍNEA DE DEBUG 4! ---
-                # Esto nos dará el error exacto en la terminal
-                print(f"DEBUG: ERROR DETALLADO AL INSERTAR: {e}")
-
                 # Lógica de limpieza: eliminar archivos subidos si falla
                 try:
                     files_in_folder = supabase.storage.from_(TEXT_PROJECT_BUCKET).list(path=storage_path_folder)

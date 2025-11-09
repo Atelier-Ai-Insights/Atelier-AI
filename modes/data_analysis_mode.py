@@ -150,16 +150,15 @@ def show_project_creator(user_id, plan_limit):
                     file_options={"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
                 )
                 
-                # --- ¡INICIO DE LA CORRECCIÓN! ---
-                # Añadimos el user_id para cumplir con la RLS de la tabla 'projects'
+                # --- CÓDIGO AJUSTADO ---
+                # Se elimina user_id. La BD lo insertará automáticamente
+                # gracias al "Default Value" (auth.uid()).
                 project_data = {
                     "project_name": project_name,
                     "project_brand": project_brand,
                     "project_year": int(project_year),
-                    "storage_path": storage_path,
-                    "user_id": user_id # <-- ¡AQUÍ ESTÁ LA CORRECCIÓN!
+                    "storage_path": storage_path
                 }
-                # --- ¡FIN DE LA CORRECCIÓN! ---
                 
                 supabase.table("projects").insert(project_data).execute()
                 
@@ -728,7 +727,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                     for v in matching_verbatims[:20]:
                                         st.markdown(f"> {v}")
                                     
-                                    if len(matching_verbatims) > 20:
+                                    if len(matching_form_verbatims) > 20:
                                         st.caption(f"...y {len(matching_verbatims) - 20} más. (Mostrando los primeros 20 ejemplos).")
 
                         except Exception as e:
