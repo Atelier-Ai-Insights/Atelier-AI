@@ -538,9 +538,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                 except Exception as e:
                     st.error(f"Error al calcular la correlación: {e}")
                     st.code(traceback.format_exc())
-    # --- ¡FIN NUEVA FUNCIÓN 2! ---
 
-    # --- ¡INICIO NUEVA FUNCIÓN 3: COMPARACIÓN DE GRUPOS! ---
     if sub_modo == "Comparación de Grupos":
         st.header("Comparación de Grupos (T-Test / ANOVA)")
         st.markdown("Comprueba si existen diferencias estadísticamente significativas en una métrica numérica entre diferentes grupos categóricos.")
@@ -601,7 +599,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
                 except Exception as e:
                     st.error(f"Error al ejecutar la prueba estadística: {e}")
                     st.code(traceback.format_exc())
-    # --- ¡FIN NUEVA FUNCIÓN 3! ---
     
     if sub_modo == "Exportar a PPT":
         st.header("Exportar a Presentación (.pptx)")
@@ -823,7 +820,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 st.code(traceback.format_exc())
 
 
-# --- FUNCIÓN PRINCIPAL DEL MODO (NUEVA ARQUITECTURA) ---
 
 def data_analysis_mode(db, selected_files):
     st.subheader(c.MODE_DATA_ANALYSIS)
@@ -833,7 +829,6 @@ def data_analysis_mode(db, selected_files):
     user_id = st.session_state.user_id
     plan_limit = st.session_state.plan_features.get('project_upload_limit', 0)
 
-    # --- VISTA DE ANÁLISIS ---
     if "da_selected_project_id" in st.session_state and "data_analysis_df" not in st.session_state:
         with st.spinner("Cargando datos del proyecto..."):
             df = load_project_data(st.session_state.da_storage_path)
@@ -848,7 +843,6 @@ def data_analysis_mode(db, selected_files):
     if "data_analysis_df" in st.session_state:
         show_project_analyzer(st.session_state.data_analysis_df, db, selected_files)
     
-    # --- VISTA DE GESTIÓN (PÁGINA PRINCIPAL) ---
     else:
         with st.expander("➕ Crear Nuevo Proyecto", expanded=True):
             show_project_creator(user_id, plan_limit)
@@ -856,3 +850,4 @@ def data_analysis_mode(db, selected_files):
         st.divider()
         
         show_project_list(user_id)
+
