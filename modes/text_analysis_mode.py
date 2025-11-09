@@ -13,6 +13,8 @@ import constants as c
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 
+# --- AJUSTE v4 (Lógica de 1 solo archivo) ---
+
 # =====================================================
 # MODO: ANÁLISIS DE TEXTOS (VERSIÓN PROYECTOS)
 # =====================================================
@@ -22,61 +24,40 @@ TEXT_PROJECT_BUCKET = "text_project_files"
 # --- Funciones de Carga de Datos ---
 
 @st.cache_data(ttl=600)
-def load_text_project_data(storage_path_folder):
+def load_text_project_data(storage_file_path: str):
     """
-    Descarga TODOS los archivos .docx de una carpeta de proyecto
-    de Supabase Storage y extrae su texto.
+    Descarga un SOLO archivo .docx desde Supabase Storage
+    y extrae su texto.
     """
+    if not storage_file_path:
+        st.error("Error: La ruta del archivo está vacía.")
+        return None
+        
+    combined_context = ""
+    st.write(f"Cargando 1 archivo del proyecto...")
+    
     try:
-        # 1. Listar los archivos en la carpeta del proyecto
-        files_list = supabase.storage.from_(TEXT_PROJECT_BUCKET).list(path=storage_path_folder)
+        # 1. Obtener URL firmada para el archivo
+        response_url = supabase.storage.from_(TEXT_PROJECT_BUCKET).create_signed_url(storage_file_path, 60)
+        signed_url = response_url['signedURL']
         
-        if not files_list:
-            st.error("Error: Este proyecto no contiene archivos.")
-            return None
+        # 2. Descargar el archivo
+        response_file = requests.get(signed_url)
+        response_file.raise_for_status()
         
-        combined_context = ""
+        # 3. Leer el .docx
+        file_stream = io.BytesIO(response_file.content)
+        document = docx.Document(file_stream)
+        full_text = "\n".join([para.text for para in document.paragraphs if para.text.strip()])
         
-        # 2. Bucle para descargar y procesar CADA archivo
-        st.write(f"Cargando {len(files_list)} archivo(s) del proyecto...")
-        progress_bar = st.progress(0.0)
+        # 4. Añadir al contexto combinado
+        file_name = storage_file_path.split('/')[-1]
+        combined_context += f"\n\n--- INICIO DOCUMENTO: {file_name} ---\n\n{full_text}\n\n--- FIN DOCUMENTO: {file_name} ---\n"
         
-        for i, file_info in enumerate(files_list):
-            file_name = file_info.get('name')
-            # Ignorar archivos del sistema como .DS_Store
-            if not file_name or not file_name.endswith(('.docx', '.DOCX')):
-                continue
-                
-            file_path = f"{storage_path_folder}/{file_name}"
-            
-            try:
-                # 2a. Obtener URL firmada para este archivo
-                response_url = supabase.storage.from_(TEXT_PROJECT_BUCKET).create_signed_url(file_path, 60)
-                signed_url = response_url['signedURL']
-                
-                # 2b. Descargar el archivo
-                response_file = requests.get(signed_url)
-                response_file.raise_for_status()
-                
-                # 2c. Leer el .docx
-                file_stream = io.BytesIO(response_file.content)
-                document = docx.Document(file_stream)
-                full_text = "\n".join([para.text for para in document.paragraphs if para.text.strip()])
-                
-                # 2d. Añadir al contexto combinado
-                combined_context += f"\n\n--- INICIO DOCUMENTO: {file_name} ---\n\n{full_text}\n\n--- FIN DOCUMENTO: {file_name} ---\n"
-                
-                progress_bar.progress((i + 1) / len(files_list))
-
-            except Exception as e:
-                st.warning(f"No se pudo cargar el archivo '{file_name}': {e}")
-                continue
-        
-        progress_bar.empty()
         return combined_context
         
     except Exception as e:
-        st.error(f"Error al cargar el proyecto de texto: {e}")
+        st.error(f"Error al cargar el archivo del proyecto ({storage_file_path}): {e}")
         return None
 
 # --- Funciones de UI ---
@@ -97,54 +78,54 @@ def show_text_project_creator(user_id, plan_limit):
 
     with st.form("new_text_project_form"):
         project_name = st.text_input("Nombre del Proyecto*", placeholder="Ej: Entrevistas NPS Q1 2024")
+        # --- CAMBIO 1: Campos obligatorios ---
         project_brand = st.text_input("Marca*", placeholder="Ej: Marca X")
         project_year = st.number_input("Año*", min_value=2020, max_value=2030, value=datetime.now().year)
         
-        uploaded_files = st.file_uploader(
-            "Archivos Word (.docx)*", 
+        # --- CAMBIO 2: Lógica de 1 solo archivo ---
+        uploaded_file = st.file_uploader(
+            "Archivo Word (.docx)*", 
             type=["docx"],
-            accept_multiple_files=True
+            accept_multiple_files=False # <-- AJUSTE CLAVE
         )
+        # --- CAMBIO 3: Nota que pediste ---
+        st.caption("Nota: Si tienes varias transcripciones, por favor consólidalas en un solo archivo Word.")
+
         
         submitted = st.form_submit_button("Crear Proyecto")
 
     if submitted:
-        if not all([project_name, uploaded_files]):
-            st.warning("Por favor, completa el Nombre del Proyecto y sube al menos un archivo .docx.")
+        # --- CAMBIO 4: Validación de 4 campos ---
+        if not all([project_name, project_brand, project_year, uploaded_file]):
+            st.warning("Por favor, completa todos los campos obligatorios (*).")
             return
 
-        # Usamos el user_id para crear una carpeta única en el Storage
-        storage_path_folder = f"{user_id}/{uuid.uuid4()}" 
-        
-        with st.spinner(f"Creando proyecto y subiendo {len(uploaded_files)} archivo(s)..."):
-            try:
-                # Bucle para subir cada archivo a la carpeta
-                for file in uploaded_files:
-                    file_bytes = file.getvalue()
-                    
-                    # Sanitización del nombre del archivo
-                    base_name = file.name.replace(' ', '_')
-                    safe_name = re.sub(r'[^\w._-]', '', base_name)
-                    if not safe_name or safe_name.startswith('.'):
-                        safe_name = f"archivo_{uuid.uuid4()}{os.path.splitext(file.name)[1]}"
-                    
-                    file_name = safe_name
-                    full_storage_path = f"{storage_path_folder}/{file_name}" 
-                    
-                    supabase.storage.from_(TEXT_PROJECT_BUCKET).upload(
-                        path=full_storage_path,
-                        file=file_bytes,
-                        file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
-                    )
+        # Sanitización del nombre del archivo
+        base_name = uploaded_file.name.replace(' ', '_')
+        safe_name = re.sub(r'[^\w._-]', '', base_name)
+        file_ext = os.path.splitext(safe_name)[1]
+        if not safe_name or safe_name.startswith('.'):
+            safe_name = f"archivo_{uuid.uuid4()}{file_ext if file_ext else '.docx'}"
 
-                # --- AJUSTE FINAL (2025-11-08) ---
-                # Se elimina user_id. La BD lo insertará automáticamente
-                # gracias al "Default Value" (auth.uid()).
+        # --- CAMBIO 5: La ruta de almacenamiento es un archivo, no una carpeta ---
+        storage_file_path = f"{user_id}/{uuid.uuid4()}-{safe_name}" 
+        
+        with st.spinner(f"Creando proyecto y subiendo archivo..."):
+            try:
+                # --- CAMBIO 6: Lógica de subida simplificada (sin bucle) ---
+                file_bytes = uploaded_file.getvalue()
+                supabase.storage.from_(TEXT_PROJECT_BUCKET).upload(
+                    path=storage_file_path,
+                    file=file_bytes,
+                    file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+                )
+
+                # La BD ahora guarda la RUTA AL ARCHIVO, no a la carpeta
                 project_data = {
                     "project_name": project_name,
-                    "project_brand": project_brand if project_brand else None,
-                    "project_year": int(project_year) if project_year else None,
-                    "storage_path": storage_path_folder
+                    "project_brand": project_brand,
+                    "project_year": int(project_year),
+                    "storage_path": storage_file_path # <-- AJUSTE
                 }
                 
                 supabase.table("text_projects").insert(project_data).execute()
@@ -156,10 +137,7 @@ def show_text_project_creator(user_id, plan_limit):
                 st.error(f"Error al crear el proyecto: {e}")
                 # Lógica de limpieza
                 try:
-                    files_in_folder = supabase.storage.from_(TEXT_PROJECT_BUCKET).list(path=storage_path_folder)
-                    file_paths_to_remove = [f"{storage_path_folder}/{file['name']}" for file in files_in_folder]
-                    if file_paths_to_remove:
-                        supabase.storage.from_(TEXT_PROJECT_BUCKET).remove(file_paths_to_remove)
+                    supabase.storage.from_(TEXT_PROJECT_BUCKET).remove([storage_file_path])
                 except:
                     pass 
 
@@ -182,7 +160,7 @@ def show_text_project_list(user_id):
         proj_name = proj['project_name']
         proj_brand = proj.get('project_brand', 'N/A')
         proj_year = proj.get('project_year', 'N/A')
-        storage_path = proj['storage_path'] 
+        storage_path = proj['storage_path'] # Esta es la RUTA AL ARCHIVO
         
         with st.container(border=True):
             col1, col2, col3 = st.columns([4, 1, 1])
@@ -194,19 +172,18 @@ def show_text_project_list(user_id):
                 if st.button("Analizar", key=f"analizar_txt_{proj_id}", use_container_width=True, type="primary"):
                     st.session_state.ta_selected_project_id = proj_id
                     st.session_state.ta_selected_project_name = proj_name
-                    st.session_state.ta_storage_path = storage_path
+                    st.session_state.ta_storage_path = storage_path # Pasa la ruta del archivo
                     st.rerun()
             
             with col3:
                 if st.button("Eliminar", key=f"eliminar_txt_{proj_id}", use_container_width=True):
                     with st.spinner("Eliminando proyecto..."):
                         try:
-                            # Lógica para eliminar todos los archivos de la carpeta
-                            files_in_folder = supabase.storage.from_(TEXT_PROJECT_BUCKET).list(path=storage_path)
-                            file_paths_to_remove = [f"{storage_path}/{file['name']}" for file in files_in_folder]
-                            if file_paths_to_remove:
-                                supabase.storage.from_(TEXT_PROJECT_BUCKET).remove(file_paths_to_remove)
+                            # Lógica para eliminar el archivo único
+                            if storage_path:
+                                supabase.storage.from_(TEXT_PROJECT_BUCKET).remove([storage_path])
                             
+                            # Borrar el registro de la DB
                             supabase.table("text_projects").delete().eq("id", proj_id).execute()
                             
                             st.success(f"Proyecto '{proj_name}' eliminado.")
@@ -217,6 +194,7 @@ def show_text_project_list(user_id):
 def show_text_project_analyzer(combined_context, project_name):
     """
     Muestra la UI de análisis (Chat y Autocode) para el proyecto cargado.
+    (Esta función no necesita cambios)
     """
     
     st.markdown(f"### Analizando: **{project_name}**")
@@ -236,7 +214,7 @@ def show_text_project_analyzer(combined_context, project_name):
 
     with tab_chat:
         st.header("Análisis de Notas y Transcripciones")
-        st.markdown("Haz preguntas específicas sobre el contenido de los archivos cargados.")
+        st.markdown("Haz preguntas específicas sobre el contenido del archivo cargado.")
         
         if "transcript_chat_history" not in st.session_state: 
             st.session_state.transcript_chat_history = []
@@ -298,7 +276,7 @@ def show_text_project_analyzer(combined_context, project_name):
                     st.rerun()
         
         else:
-            st.markdown("Esta herramienta leerá todos los archivos cargados y generará un reporte de temas clave y citas de respaldo.")
+            st.markdown("Esta herramienta leerá el archivo cargado y generará un reporte de temas clave y citas de respaldo.")
             main_topic = st.text_input(
                 "¿Cuál es el tema principal de estas entrevistas?", 
                 placeholder="Ej: Percepción de snacks saludables, Experiencia de compra, etc.",
@@ -337,9 +315,11 @@ def text_analysis_mode():
     plan_limit = st.session_state.plan_features.get('transcript_file_limit', 0)
 
     # --- VISTA DE ANÁLISIS ---
-
+    
+    # --- CAMBIO 7: Lógica de carga actualizada para 1 archivo ---
     if "ta_selected_project_id" in st.session_state and "ta_combined_context" not in st.session_state:
         with st.spinner("Cargando datos del proyecto de texto..."):
+            # st.session_state.ta_storage_path AHORA es la RUTA AL ARCHIVO
             context = load_text_project_data(st.session_state.ta_storage_path)
             if context is not None:
                 st.session_state.ta_combined_context = context
@@ -355,6 +335,7 @@ def text_analysis_mode():
             st.session_state.ta_selected_project_name
         )
     
+    # --- VISTA DE GESTIÓN (PÁGINA PRINCIPAL) ---
     else:
         with st.expander("➕ Crear Nuevo Proyecto de Texto", expanded=True):
             show_text_project_creator(user_id, plan_limit)
