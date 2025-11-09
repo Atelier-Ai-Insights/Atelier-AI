@@ -257,7 +257,7 @@ PROMPTS_ONEPAGER = {
           "recomendacion_estrategica": "Una recomendación final clara y accionable (máx. 2 líneas)."
         }}
         """,
-    "Análisis DOFA (SWOT)": """
+    "Análisis DOFA": """
         Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
         {{
           "template_type": "dofa",
