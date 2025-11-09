@@ -23,7 +23,7 @@ TEXT_PROJECT_BUCKET = "text_project_files"
 
 # --- Funciones de Carga de Datos ---
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner=False)
 def load_text_project_data(storage_folder_path: str):
     """
     Descarga TODOS los archivos .docx de una carpeta en Supabase Storage

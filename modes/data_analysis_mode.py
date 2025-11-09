@@ -100,7 +100,7 @@ def add_table_slide(prs, title_text, df):
 
 # --- Funciones de Gestión de Proyectos (sin cambios) ---
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner=False)
 def load_project_data(storage_path):
     try:
         response = supabase.storage.from_(PROJECT_BUCKET).create_signed_url(storage_path, 60)
