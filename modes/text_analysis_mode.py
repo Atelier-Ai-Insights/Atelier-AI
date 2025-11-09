@@ -1,7 +1,7 @@
 import streamlit as st
 import docx
 import io
-import os
+import os  # Asegúrate de que 'os' esté importado
 import uuid
 from datetime import datetime
 import requests 
@@ -24,7 +24,7 @@ TEXT_PROJECT_BUCKET = "text_project_files"
 # --- Funciones de Carga de Datos ---
 
 @st.cache_data(ttl=600)
-def load_text_project_data(storage_folder_path: str): # <-- Parámetro renombrado para claridad
+def load_text_project_data(storage_folder_path: str):
     """
     Descarga TODOS los archivos .docx de una carpeta en Supabase Storage
     y extrae su texto combinado.
@@ -55,7 +55,7 @@ def load_text_project_data(storage_folder_path: str): # <-- Parámetro renombrad
         # 2. Iterar, descargar y leer cada archivo
         for file_info in docx_files:
             file_name = file_info['name']
-            full_file_path = f"{storage_folder_path}/{file_name}" # <-- Ruta completa al archivo
+            full_file_path = f"{storage_folder_path}/{file_name}" # Ruta completa al archivo
             
             try:
                 # 2.1. Descargar el archivo
@@ -100,26 +100,23 @@ def show_text_project_creator(user_id, plan_limit):
         project_brand = st.text_input("Marca*", placeholder="Ej: Marca X")
         project_year = st.number_input("Año*", min_value=2020, max_value=2030, value=datetime.now().year)
         
-        # --- INICIO DEL CAMBIO (UI) ---
-        uploaded_files = st.file_uploader( # <-- Renombrado a plural
-            "Archivos Word (.docx)*",      # <-- Texto actualizado
+        # UI para carga múltiple
+        uploaded_files = st.file_uploader(
+            "Archivos Word (.docx)*",
             type=["docx"],
-            accept_multiple_files=True     # <-- ¡CAMBIO PRINCIPAL!
+            accept_multiple_files=True
         )
         st.caption("Puedes cargar uno o varios archivos .docx. Se analizarán todos juntos.")
-        # --- FIN DEL CAMBIO (UI) ---
 
         
         submitted = st.form_submit_button("Crear Proyecto")
 
     if submitted:
-        # --- CAMBIO EN LA VALIDACIÓN ---
-        if not all([project_name, project_brand, project_year, uploaded_files]): # <-- Verificando la lista
+        # Validación para lista de archivos
+        if not all([project_name, project_brand, project_year, uploaded_files]):
             st.warning("Por favor, completa todos los campos obligatorios (*).")
             return
 
-        # --- INICIO LÓGICA DE SUBIDA MÚLTIPLE ---
-        
         # 1. Generar una RUTA DE CARPETA única para el proyecto
         project_storage_folder = f"{user_id}/{uuid.uuid4()}" 
         
@@ -129,11 +126,14 @@ def show_text_project_creator(user_id, plan_limit):
                 # 2. Subir TODOS los archivos
                 uploaded_file_paths = [] # Para la limpieza en caso de error
                 
-                for uploaded_file in uploaded_files: # <-- Bucle sobre los archivos
+                for uploaded_file in uploaded_files: # Bucle sobre los archivos
                     # Sanitización del nombre de cada archivo
                     base_name = uploaded_file.name.replace(' ', '_')
                     safe_name = re.sub(r'[^\w._-]', '', base_name)
-                    file_ext = os.splitext(safe_name)[1]
+                    
+                    # --- ¡CORRECCIÓN APLICADA AQUÍ! (os.path.splitext) ---
+                    file_ext = os.path.splitext(safe_name)[1]
+                    
                     if not safe_name or safe_name.startswith('.'):
                         safe_name = f"archivo_{uuid.uuid4()}{file_ext if file_ext else '.docx'}"
 
@@ -154,7 +154,7 @@ def show_text_project_creator(user_id, plan_limit):
                     "project_name": project_name,
                     "project_brand": project_brand,
                     "project_year": int(project_year),
-                    "storage_path": project_storage_folder, # <-- ¡CAMBIO! Guarda la RUTA DE CARPETA
+                    "storage_path": project_storage_folder, # Guarda la RUTA DE CARPETA
                     "user_id": user_id
                 }
                 
@@ -172,7 +172,6 @@ def show_text_project_creator(user_id, plan_limit):
                         supabase.storage.from_(TEXT_PROJECT_BUCKET).remove(uploaded_file_paths)
                 except:
                     pass 
-        # --- FIN LÓGICA DE SUBIDA MÚLTIPLE ---
 
 def show_text_project_list(user_id):
     st.subheader("Mis Proyectos de Texto")
@@ -193,7 +192,7 @@ def show_text_project_list(user_id):
         proj_name = proj['project_name']
         proj_brand = proj.get('project_brand', 'N/A')
         proj_year = proj.get('project_year', 'N/A')
-        storage_path = proj['storage_path'] # <-- Esta es ahora la RUTA A LA CARPETA
+        storage_path = proj['storage_path'] # Esta es la RUTA A LA CARPETA
         
         with st.container(border=True):
             col1, col2, col3 = st.columns([4, 1, 1])
@@ -209,9 +208,9 @@ def show_text_project_list(user_id):
                     st.rerun()
             
             with col3:
-                # --- INICIO CAMBIO EN LÓGICA DE ELIMINACIÓN ---
+                # Lógica de eliminación de carpeta
                 if st.button("Eliminar", key=f"eliminar_txt_{proj_id}", use_container_width=True):
-                    with st.spinner("Eliminando proyecto y sus archivos..."): # <-- Texto actualizado
+                    with st.spinner("Eliminando proyecto y sus archivos..."):
                         try:
                             # Nueva lógica para eliminar TODOS los archivos de la CARPETA
                             if storage_path:
@@ -230,7 +229,6 @@ def show_text_project_list(user_id):
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al eliminar: {e}")
-                # --- FIN CAMBIO EN LÓGICA DE ELIMINACIÓN ---
 
 def show_text_project_analyzer(combined_context, project_name):
     """
@@ -359,7 +357,7 @@ def text_analysis_mode():
     
     if "ta_selected_project_id" in st.session_state and "ta_combined_context" not in st.session_state:
         with st.spinner("Cargando datos del proyecto de texto..."):
-            # Llama a la nueva función de carga múltiple
+            # Llama a la función de carga múltiple
             context = load_text_project_data(st.session_state.ta_storage_path) 
             if context is not None:
                 st.session_state.ta_combined_context = context
@@ -378,10 +376,10 @@ def text_analysis_mode():
     # --- VISTA DE GESTIÓN (PÁGINA PRINCIPAL) ---
     else:
         with st.expander("➕ Crear Nuevo Proyecto de Texto", expanded=True):
-            # Llama a la nueva función de creación múltiple
+            # Llama a la función de creación múltiple (corregida)
             show_text_project_creator(user_id, plan_limit)
         
         st.divider()
         
-        # Llama a la nueva función de listado (con borrado múltiple)
+        # Llama a la función de listado (con borrado múltiple)
         show_text_project_list(user_id)
