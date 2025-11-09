@@ -39,7 +39,6 @@ def load_text_project_data(storage_file_path: str):
     try:
         # --- INICIO DE LA CORRECCIÓN (Error 403) ---
         # 1. Descargar el archivo directamente usando el cliente de Supabase
-        #    (Esto reemplaza create_signed_url y requests.get)
         response_file_bytes = supabase.storage.from_(TEXT_PROJECT_BUCKET).download(storage_file_path)
         
         # 2. Leer el .docx
@@ -48,7 +47,7 @@ def load_text_project_data(storage_file_path: str):
         full_text = "\n".join([para.text for para in document.paragraphs if para.text.strip()])
         # --- FIN DE LA CORRECCIÓN ---
         
-        # 3. Añadir al contexto combinado (Antes era el paso 4)
+        # 3. Añadir al contexto combinado
         file_name = storage_file_path.split('/')[-1]
         combined_context += f"\n\n--- INICIO DOCUMENTO: {file_name} ---\n\n{full_text}\n\n--- FIN DOCUMENTO: {file_name} ---\n"
         
@@ -76,24 +75,20 @@ def show_text_project_creator(user_id, plan_limit):
 
     with st.form("new_text_project_form"):
         project_name = st.text_input("Nombre del Proyecto*", placeholder="Ej: Entrevistas NPS Q1 2024")
-        # --- CAMBIO 1: Campos obligatorios ---
         project_brand = st.text_input("Marca*", placeholder="Ej: Marca X")
         project_year = st.number_input("Año*", min_value=2020, max_value=2030, value=datetime.now().year)
         
-        # --- CAMBIO 2: Lógica de 1 solo archivo ---
         uploaded_file = st.file_uploader(
             "Archivo Word (.docx)*", 
             type=["docx"],
-            accept_multiple_files=False # <-- AJUSTE CLAVE
+            accept_multiple_files=False
         )
-        # --- CAMBIO 3: Nota que pediste ---
         st.caption("Nota: Si tienes varias transcripciones, por favor consólidalas en un solo archivo Word.")
 
         
         submitted = st.form_submit_button("Crear Proyecto")
 
     if submitted:
-        # --- CAMBIO 4: Validación de 4 campos ---
         if not all([project_name, project_brand, project_year, uploaded_file]):
             st.warning("Por favor, completa todos los campos obligatorios (*).")
             return
@@ -105,12 +100,11 @@ def show_text_project_creator(user_id, plan_limit):
         if not safe_name or safe_name.startswith('.'):
             safe_name = f"archivo_{uuid.uuid4()}{file_ext if file_ext else '.docx'}"
 
-        # --- CAMBIO 5: La ruta de almacenamiento es un archivo, no una carpeta ---
         storage_file_path = f"{user_id}/{uuid.uuid4()}-{safe_name}" 
         
         with st.spinner(f"Creando proyecto y subiendo archivo..."):
             try:
-                # --- CAMBIO 6: Lógica de subida simplificada (sin bucle) ---
+                # 1. Subir el archivo
                 file_bytes = uploaded_file.getvalue()
                 supabase.storage.from_(TEXT_PROJECT_BUCKET).upload(
                     path=storage_file_path,
@@ -118,14 +112,18 @@ def show_text_project_creator(user_id, plan_limit):
                     file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
                 )
 
-                # La BD ahora guarda la RUTA AL ARCHIVO, no a la carpeta
+                # --- INICIO DE LA CORRECCIÓN (Error RLS) ---
+                # 2. Definir los datos del proyecto (AÑADIENDO user_id)
                 project_data = {
                     "project_name": project_name,
                     "project_brand": project_brand,
                     "project_year": int(project_year),
-                    "storage_path": storage_file_path # <-- AJUSTE
+                    "storage_path": storage_file_path,
+                    "user_id": user_id  # <-- ¡CORRECCIÓN APLICADA AQUÍ!
                 }
+                # --- FIN DE LA CORRECCIÓN ---
                 
+                # 3. Insertar en la base de datos
                 supabase.table("text_projects").insert(project_data).execute()
                 
                 st.success(f"¡Proyecto '{project_name}' creado exitosamente!")
@@ -133,7 +131,7 @@ def show_text_project_creator(user_id, plan_limit):
 
             except Exception as e:
                 st.error(f"Error al crear el proyecto: {e}")
-                # Lógica de limpieza
+                # Lógica de limpieza (intenta borrar el archivo si falla la BD)
                 try:
                     supabase.storage.from_(TEXT_PROJECT_BUCKET).remove([storage_file_path])
                 except:
@@ -192,7 +190,6 @@ def show_text_project_list(user_id):
 def show_text_project_analyzer(combined_context, project_name):
     """
     Muestra la UI de análisis (Chat y Autocode) para el proyecto cargado.
-    (Esta función no necesita cambios)
     """
     
     st.markdown(f"### Analizando: **{project_name}**")
@@ -314,10 +311,8 @@ def text_analysis_mode():
 
     # --- VISTA DE ANÁLISIS ---
     
-    # --- CAMBIO 7: Lógica de carga actualizada para 1 archivo ---
     if "ta_selected_project_id" in st.session_state and "ta_combined_context" not in st.session_state:
         with st.spinner("Cargando datos del proyecto de texto..."):
-            # st.session_state.ta_storage_path AHORA es la RUTA AL ARCHIVO
             context = load_text_project_data(st.session_state.ta_storage_path)
             if context is not None:
                 st.session_state.ta_combined_context = context
