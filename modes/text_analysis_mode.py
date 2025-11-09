@@ -113,7 +113,8 @@ def show_text_project_creator(user_id, plan_limit):
             st.warning("Por favor, completa el Nombre del Proyecto y sube al menos un archivo .docx.")
             return
 
-        storage_path_folder = f"{user_id}/{uuid.uuid4()}" # Esta es la CARPETA del proyecto
+        # Usamos el user_id para crear una carpeta única en el Storage
+        storage_path_folder = f"{user_id}/{uuid.uuid4()}" 
         
         with st.spinner(f"Creando proyecto y subiendo {len(uploaded_files)} archivo(s)..."):
             try:
@@ -121,19 +122,14 @@ def show_text_project_creator(user_id, plan_limit):
                 for file in uploaded_files:
                     file_bytes = file.getvalue()
                     
-                    # --- ¡INICIO DEL AJUSTE (SANITIZACIÓN)! ---
-                    # 1. Reemplazar espacios con guiones bajos
+                    # Sanitización del nombre del archivo
                     base_name = file.name.replace(' ', '_')
-                    # 2. Eliminar cualquier carácter que no sea letra, número, punto, guion bajo o guion
                     safe_name = re.sub(r'[^\w._-]', '', base_name)
-                    # 3. Si el nombre queda vacío (ej. "().docx"), usar un genérico
                     if not safe_name or safe_name.startswith('.'):
                         safe_name = f"archivo_{uuid.uuid4()}{os.path.splitext(file.name)[1]}"
                     
                     file_name = safe_name
-                    # --- ¡FIN DEL AJUSTE (SANITIZACIÓN)! ---
-                    
-                    full_storage_path = f"{storage_path_folder}/{file_name}" # Ruta al archivo individual
+                    full_storage_path = f"{storage_path_folder}/{file_name}" 
                     
                     supabase.storage.from_(TEXT_PROJECT_BUCKET).upload(
                         path=full_storage_path,
@@ -141,7 +137,7 @@ def show_text_project_creator(user_id, plan_limit):
                         file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
                     )
 
-                # --- CÓDIGO AJUSTADO ---
+                # --- AJUSTE FINAL (2025-11-08) ---
                 # Se elimina user_id. La BD lo insertará automáticamente
                 # gracias al "Default Value" (auth.uid()).
                 project_data = {
@@ -158,7 +154,7 @@ def show_text_project_creator(user_id, plan_limit):
 
             except Exception as e:
                 st.error(f"Error al crear el proyecto: {e}")
-                # Lógica de limpieza: eliminar archivos subidos si falla
+                # Lógica de limpieza
                 try:
                     files_in_folder = supabase.storage.from_(TEXT_PROJECT_BUCKET).list(path=storage_path_folder)
                     file_paths_to_remove = [f"{storage_path_folder}/{file['name']}" for file in files_in_folder]
@@ -330,6 +326,7 @@ def show_text_project_analyzer(combined_context, project_name):
                         else:
                             st.error("Error al generar el análisis de temas.")
 
+# --- FUNCIÓN PRINCIPAL DEL MODO (NUEVA ARQUITECTURA) ---
 
 def text_analysis_mode():
     st.subheader(c.MODE_TEXT_ANALYSIS)
@@ -339,6 +336,7 @@ def text_analysis_mode():
     user_id = st.session_state.user_id
     plan_limit = st.session_state.plan_features.get('transcript_file_limit', 0)
 
+    # --- VISTA DE ANÁLISIS ---
     if "ta_selected_project_id" in st.session_state and "ta_combined_context" not in st.session_state:
         with st.spinner("Cargando datos del proyecto de texto..."):
             context = load_text_project_data(st.session_state.ta_storage_path)
@@ -356,6 +354,7 @@ def text_analysis_mode():
             st.session_state.ta_selected_project_name
         )
     
+    # --- VISTA DE GESTIÓN (PÁGINA PRINCIPAL) ---
     else:
         with st.expander("➕ Crear Nuevo Proyecto de Texto", expanded=True):
             show_text_project_creator(user_id, plan_limit)
@@ -363,5 +362,3 @@ def text_analysis_mode():
         st.divider()
         
         show_text_project_list(user_id)
-
-
