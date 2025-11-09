@@ -97,8 +97,8 @@ def show_text_project_creator(user_id, plan_limit):
 
     with st.form("new_text_project_form"):
         project_name = st.text_input("Nombre del Proyecto*", placeholder="Ej: Entrevistas NPS Q1 2024")
-        project_brand = st.text_input("Marca", placeholder="Ej: Marca X")
-        project_year = st.number_input("Año", min_value=2020, max_value=2030, value=datetime.now().year)
+        project_brand = st.text_input("Marca*", placeholder="Ej: Marca X")
+        project_year = st.number_input("Año*", min_value=2020, max_value=2030, value=datetime.now().year)
         
         uploaded_files = st.file_uploader(
             "Archivos Word (.docx)*", 
@@ -337,7 +337,7 @@ def text_analysis_mode():
     plan_limit = st.session_state.plan_features.get('transcript_file_limit', 0)
 
     # --- VISTA DE ANÁLISIS ---
-    
+
     if "ta_selected_project_id" in st.session_state and "ta_combined_context" not in st.session_state:
         with st.spinner("Cargando datos del proyecto de texto..."):
             context = load_text_project_data(st.session_state.ta_storage_path)
