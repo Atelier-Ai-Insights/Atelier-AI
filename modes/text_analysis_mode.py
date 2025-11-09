@@ -366,3 +366,4 @@ def text_analysis_mode():
         st.divider()
         
         show_text_project_list(user_id)
+        

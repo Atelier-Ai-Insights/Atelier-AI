@@ -856,3 +856,5 @@ def data_analysis_mode(db, selected_files):
         st.divider()
         
         show_project_list(user_id)
+
+        
