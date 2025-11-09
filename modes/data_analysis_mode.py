@@ -150,9 +150,10 @@ def show_project_creator(user_id, plan_limit):
                     file_options={"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
                 )
                 
-                # --- CÓDIGO AJUSTADO ---
-                # Se elimina user_id. La BD lo insertará automáticamente
-                # gracias al "Default Value" (auth.uid()).
+                # --- ¡CORRECCIÓN APLICADA! ---
+                # Ya no enviamos 'user_id' desde Python.
+                # La base de datos lo rellenará automáticamente usando el
+                # "Default Value" (auth.uid()) que configuraste.
                 project_data = {
                     "project_name": project_name,
                     "project_brand": project_brand,
@@ -727,7 +728,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                     for v in matching_verbatims[:20]:
                                         st.markdown(f"> {v}")
                                     
-                                    if len(matching_form_verbatims) > 20:
+                                    if len(matching_verbatims) > 20:
                                         st.caption(f"...y {len(matching_verbatims) - 20} más. (Mostrando los primeros 20 ejemplos).")
 
                         except Exception as e:
@@ -856,5 +857,3 @@ def data_analysis_mode(db, selected_files):
         st.divider()
         
         show_project_list(user_id)
-
-        
