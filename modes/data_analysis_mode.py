@@ -150,10 +150,9 @@ def show_project_creator(user_id, plan_limit):
                     file_options={"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
                 )
                 
-                # --- ¡CORRECCIÓN APLICADA! ---
-                # Ya no enviamos 'user_id' desde Python.
-                # La base de datos lo rellenará automáticamente usando el
-                # "Default Value" (auth.uid()) que configuraste.
+                # --- AJUSTE FINAL (2025-11-08) ---
+                # Se elimina user_id. La BD lo insertará automáticamente
+                # gracias al "Default Value" (auth.uid()).
                 project_data = {
                     "project_name": project_name,
                     "project_brand": project_brand,
