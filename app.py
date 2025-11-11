@@ -23,11 +23,9 @@ from modes.onepager_mode import one_pager_ppt_mode
 from modes.data_analysis_mode import data_analysis_mode
 from utils import (
     extract_brand
-    # --- reset_chat_workflow y reset_report_workflow YA NO SE USAN AQUÍ ---
 )
 import constants as c
 
-# --- ¡INICIO DE LA FUNCIÓN MODIFICADA! ---
 def set_mode_and_reset(new_mode):
     """
     Refactorizado: En lugar de limpiar docenas de claves, 
@@ -38,7 +36,6 @@ def set_mode_and_reset(new_mode):
         st.session_state.mode_state = {} 
         
         st.session_state.current_mode = new_mode
-# --- ¡FIN DE LA FUNCIÓN MODIFICADA! ---
 
 # =====================================================
 # FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA CON EXPANDERS)
@@ -169,7 +166,11 @@ def run_user_mode(db_full, user_features, footer_html):
     
     st.sidebar.header("Filtros de Búsqueda")
     
-    run_filters = modo not in [c.MODE_TEXT_ANALYSIS] 
+    # --- ¡INICIO DE LA MODIFICACIÓN! ---
+    # Añadimos c.MODE_DATA_ANALYSIS a la lista de modos donde los filtros
+    # deben estar DESACTIVADOS.
+    run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS] 
+    # --- ¡FIN DE LA MODIFICACIÓN! ---
 
     db_filtered = db_full[:]
 
@@ -237,18 +238,11 @@ def main():
     if 'page' not in st.session_state: st.session_state.page = "login"
     if "api_key_index" not in st.session_state: st.session_state.api_key_index = 0
     
-    # --- ¡INICIO DE LA NUEVA INICIALIZACIÓN! ---
-    # Aseguramos que el 'cajón' de estado exista.
     if "mode_state" not in st.session_state: 
         st.session_state.mode_state = {}
-    # --- ¡FIN DE LA NUEVA INICIALIZACIÓN! ---
-
     
-    # --- ¡INICIO DE LA CORRECCIÓN DE AUTENTICACIÓN ROBUSTA! ---
     if st.session_state.get("logged_in"):
         if st.session_state.get("access_token"):
-            # Caso 1: El usuario está logueado Y tiene tokens.
-            # Re-autenticamos el cliente.
             try:
                 supabase.auth.set_session(
                     st.session_state.access_token, 
@@ -256,14 +250,11 @@ def main():
                 )
                 print("INFO: Sesión de Supabase re-autenticada.")
             except Exception as e:
-                # El token expiró. Forzamos logout.
                 st.error(f"Tu sesión ha expirado: {e}. Por favor, inicia sesión de nuevo.")
                 supabase.auth.sign_out()
                 st.session_state.clear()
                 st.rerun()
         else:
-            # Caso 2: El usuario está logueado PERO NO tiene tokens.
-            # Esta es una sesión "antigua" o rota. Forzamos logout.
             st.warning("Detectamos una sesión inválida. Por favor, inicia sesión de nuevo.")
             supabase.auth.sign_out()
             st.session_state.clear()
