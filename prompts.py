@@ -198,21 +198,105 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
 # --- Prompt para "Análisis de Notas y Transcripciones" (modes/transcript_mode.py) ---
 
 def get_transcript_prompt(combined_context, user_prompt):
-    """Prompt de transcripciones con citas. (ACTUALIZADO)"""
+    """
+    Prompt de transcripciones con citas. 
+    (MODIFICADO: AHORA RECIBE UN RESUMEN, NO EL TEXTO COMPLETO)
+    """
     return [
-        "Actúa como un asistente experto en análisis cualitativo. Tu tarea es responder la pregunta del usuario basándote únicamente en el texto de las transcripciones proporcionadas.",
-        f"\n\n**Información documentada (Transcripciones):**\n```\n{combined_context}\n```",
+        "Actúa como un asistente experto en análisis cualitativo. Tu tarea es responder la pregunta del usuario basándote únicamente en el **resumen de hallazgos** de las transcripciones proporcionadas.",
+        f"\n\n**Información documentada (Resumen de Hallazgos):**\n```\n{combined_context}\n```",
         f"\n\n**Pregunta del Usuario:**\n{user_prompt}",
         "\n\n**Instrucciones OBLIGATORIAS:**",
-        "1. **Fidelidad Absoluta:** Basa tu respuesta *estrictamente* en la información contenida en las transcripciones.",
-        "2. **Citas en Línea:** DEBES citar tus fuentes. Después de cada oración, añade un marcador de cita en texto plano, por ejemplo: [1], [2], etc.",
-        "3. **Crear Sección de Fuentes:** Al final de tu respuesta (después de un `---`), añade una sección llamada `## Fuentes`.",
-        "4. **Formato de Fuentes:** En la sección 'Fuentes', lista CADA cita en una **línea separada con su propia viñeta (`*`)**. La cita debe incluir el `Archivo:` del que tomaste la información (el nombre del archivo se provee en el contexto). Por ejemplo:\n"
-        "   * [1] Archivo: Entrevista_Usuario_1.docx\n"
-        "   * [2] Archivo: Focus_Group_A.docx\n"
-        "5. **Sin Información:** Si la respuesta no se encuentra en el texto, indica claramente: 'La información solicitada no se encuentra en las transcripciones proporcionadas.'",
+        "1. **Fidelidad Absoluta:** Basa tu respuesta *estrictamente* en el resumen de hallazgos.",
+        "2. **Citas:** Si el resumen incluye citas (ej. [Fuente: Archivo1.docx]), DEBES usarlas. Si no, responde basándote en el texto del resumen.",
+        "3. **Formato de Fuentes:** Si usas citas, crea una sección `## Fuentes` al final, listando los archivos mencionados en el resumen.",
+        "4. **Sin Información:** Si la respuesta no se encuentra en el resumen, indica: 'La información solicitada no se encuentra en el resumen de los documentos proporcionados.'",
         "\n\n**Respuesta:**"
     ]
+
+# --- ¡NUEVO PROMPT! (Para el Paso 1 de resumen) ---
+def get_text_analysis_summary_prompt(full_context):
+    """
+    Crea un prompt para que la IA lea múltiples transcripciones y 
+    genere un resumen ejecutivo que sirva como contexto futuro.
+    """
+    return f"""
+**Tarea:** Eres un investigador cualitativo experto. Tu trabajo es analizar las transcripciones de entrevistas/focus groups proporcionadas.
+Debes leer TODO el contexto y generar un **resumen ejecutivo detallado**.
+
+Este resumen será la ÚNICA fuente de información para un análisis posterior, por lo que debe ser completo.
+
+--- TRANSCRIPCIONES (INFORMACIÓN DOCUMENTADA) ---
+```{full_context}```
+
+**Formato de Salida OBLIGATORIO (Markdown):**
+Sigue esta estructura de Markdown exactamente:
+
+## Resumen Ejecutivo de Hallazgos
+Un párrafo (4-5 frases) que resuma los principales descubrimientos, tensiones o insights.
+
+## Temas Clave y Hallazgos Detallados
+
+### 1. [Nombre del Tema 1]
+* [Hallazgo detallado 1 sobre este tema. [Fuente: Nombre del Archivo]]
+* [Hallazgo detallado 2 sobre este tema. [Fuente: Nombre del Archivo]]
+* [Cita textual relevante: *"...cita..."* [Fuente: Nombre del Archivo]]
+
+### 2. [Nombre del Tema 2]
+* [Hallazgo detallado 1 sobre este tema. [Fuente: Nombre del Archivo]]
+* [Hallazgo detallado 2 sobre este tema. [Fuente: Nombre del Archivo]]
+* [Cita textual relevante: *"...cita..."* [Fuente: Nombre del Archivo]]
+
+### 3. [Nombre del Tema 3]
+* [Hallazgo detallado 1 sobre este tema. [Fuente: Nombre del Archivo]]
+* ...
+
+(Continuar con todos los temas relevantes)
+
+**Instrucciones Adicionales:**
+- **Exhaustivo:** Asegúrate de cubrir todos los temas importantes.
+- **Fuente de Cita:** DEBES indicar de qué archivo (ej. `[Fuente: Entrevista_Usuario_1.docx]`) proviene cada hallazgo o cita.
+"""
+
+# --- PROMPT MODIFICADO (Para ser más conciso) ---
+def get_autocode_prompt(context, main_topic):
+    """
+    Crea un prompt para que la IA lea un RESUMEN e identifique
+    temas clave (códigos) con citas de respaldo.
+    (MODIFICADO para ser más conciso y evitar límites de tokens)
+    """
+    return f"""
+**Tarea:** Eres un investigador cualitativo experto. Tu trabajo es analizar el **resumen de hallazgos** proporcionado sobre el tema '{main_topic}'.
+Debes identificar los **temas emergentes (códigos)** más importantes y respaldar cada tema con **una cita textual corta** del resumen.
+
+--- RESUMEN DE HALLAZGOS (INFORMACIÓN DOCUMENTADA) ---
+```{context}```
+
+**Formato de Salida OBLIGATORIO (Markdown):**
+Debes seguir esta estructura de Markdown exactamente:
+
+## Resumen de Temas Clave
+Un párrafo corto (2-3 frases) que resuma los principales hallazgos.
+
+## Temas Emergentes y Citas (Máx. 5-7 temas)
+
+### 1. [Nombre del Tema 1]
+> *"[Una cita textual CORTA que ilustre este tema]"* - (Fuente: [Nombre del Archivo de la cita])
+
+### 2. [Nombre del Tema 2]
+> *"[Una cita textual CORTA que ilustre este tema]"* - (Fuente: [Nombre del Archivo de la cita])
+
+### 3. [Nombre del Tema 3]
+> *"[Una cita textual CORTA que ilustre este tema]"* - (Fuente: [Nombre del Archivo de la cita])
+
+(...continuar con MÁXIMO 7 temas...)
+
+**Instrucciones Adicionales:**
+- **Brevedad:** Sé conciso. Prioriza los temas más importantes.
+- **Citas Textuales:** Las citas DEBEN ser copiadas palabra por palabra del resumen.
+- **Fuente de la Cita:** DEBES indicar la fuente (ej. `(Fuente: Entrevista_Usuario_1.docx)`) si el resumen la proporciona.
+"""
+
 
 # --- Prompt para "Análisis de Datos (Excel)" ---
 
@@ -352,45 +436,6 @@ def get_onepager_final_prompt(relevant_info, selected_template_name, tema_centra
     Tu tarea es sintetizar esta información para completar la plantilla '{selected_template_name}'.
     {prompt_template.format(tema_central=tema_central)}
     """
-
-def get_autocode_prompt(context, main_topic):
-    """
-    Crea un prompt para que la IA lea múltiples transcripciones e identifique
-    temas clave (códigos) con citas de respaldo.
-    """
-    return f"""
-**Tarea:** Eres un investigador cualitativo experto. Tu trabajo es analizar las transcripciones de entrevistas/focus groups proporcionadas sobre el tema '{main_topic}'.
-Debes identificar los **temas emergentes (códigos)** más importantes y respaldar cada tema con **citas textuales** de las transcripciones.
-
---- TRANSCRIPCIONES (INFORMACIÓN DOCUMENTADA) ---
-```{context}```
-
-**Formato de Salida OBLIGATORIO (Markdown):**
-Debes seguir esta estructura de Markdown exactamente:
-
-## Resumen de Temas Clave
-Un párrafo corto (2-3 frases) que resuma los principales hallazgos.
-
-## Temas Emergentes y Citas
-
-### 1. [Nombre del Tema 1]
-> *"[Cita textual 1 que ilustre este tema]"* - (Fuente: [Nombre del Archivo de la cita])
-
-> *"[Cita textual 2 que ilustre este tema]"* - (Fuente: [Nombre del Archivo de la cita])
-
-### 2. [Nombre del Tema 2]
-> *"[Cita textual 1 que ilustre este tema]"* - (Fuente: [Nombre del Archivo de la cita])
-
-### 3. [Nombre del Tema 3]
-> *"[Cita textual 1 que ilustre este tema]"* - (Fuente: [Nombre del Archivo de la cita])
-
-(...continuar con más temas si son relevantes...)
-
-**Instrucciones Adicionales:**
-- **Identifica Temas:** Los temas deben ser *insights* (ej. "Preferencia por la practicidad") no solo palabras (ej. "Empaque").
-- **Citas Textuales:** Las citas DEBEN ser copiadas palabra por palabra de las transcripciones.
-- **Fuente de la Cita:** DEBES indicar de qué archivo (ej. `(Fuente: Entrevista_Usuario_1.docx)`) proviene cada cita.
-"""
 
 def get_excel_autocode_prompt(main_topic, responses_sample):
     """
