@@ -7,13 +7,12 @@ from datetime import datetime
 import requests 
 import re 
 from services.gemini_api import call_gemini_api
-from services.supabase_db import log_query_event, supabase
 # --- ¡IMPORTACIÓN MODIFICADA! ---
+from services.supabase_db import log_query_event, supabase, get_daily_usage
 from prompts import get_transcript_prompt, get_autocode_prompt, get_text_analysis_summary_prompt
 import constants as c
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
-# --- ¡NUEVA IMPORTACIÓN! ---
 from utils import reset_transcript_chat_workflow
 
 # =====================================================
@@ -72,8 +71,7 @@ def load_text_project_data(storage_folder_path: str):
         st.error(f"Error al cargar los archivos del proyecto ({storage_folder_path}): {e}")
         return None
 
-# --- Funciones de UI (Sin cambios) ---
-
+# --- ¡INICIO DE FUNCIÓN MODIFICADA! ---
 def show_text_project_creator(user_id, plan_limit):
     st.subheader("Crear Nuevo Proyecto de Texto")
     
@@ -88,17 +86,28 @@ def show_text_project_creator(user_id, plan_limit):
         st.warning(f"Has alcanzado el límite de {int(plan_limit)} proyectos de texto para tu plan actual. Deberás eliminar un proyecto existente para crear uno nuevo.")
         return
 
+    # --- ¡NUEVA LÍNEA! Leemos el límite de archivos por proyecto ---
+    max_files_per_project = st.session_state.plan_features.get("text_analysis_max_files_per_project", 1)
+
     with st.form("new_text_project_form"):
         project_name = st.text_input("Nombre del Proyecto*", placeholder="Ej: Entrevistas NPS Q1 2024")
         project_brand = st.text_input("Marca*", placeholder="Ej: Marca X")
         project_year = st.number_input("Año*", min_value=2020, max_value=2030, value=datetime.now().year)
         
+        # --- ¡MODIFICADO! ---
         uploaded_files = st.file_uploader(
             "Archivos Word (.docx)*",
             type=["docx"],
-            accept_multiple_files=True
+            accept_multiple_files=True,
+            # --- ¡NUEVA LÍNEA! ---
+            help=f"Tu plan te permite subir un máximo de {int(max_files_per_project) if max_files_per_project != float('inf') else 'ilimitados'} archivos por proyecto."
         )
-        st.caption("Puedes cargar uno o varios archivos .docx. Se analizarán todos juntos.")
+        
+        # --- ¡MODIFICADO! ---
+        if max_files_per_project == float('inf'):
+            st.caption(f"Puedes cargar uno o varios archivos .docx. (Límite: Ilimitado)")
+        else:
+            st.caption(f"Puedes cargar uno o varios archivos .docx. (Límite de tu plan: {int(max_files_per_project)} archivos)")
 
         
         submitted = st.form_submit_button("Crear Proyecto")
@@ -107,6 +116,12 @@ def show_text_project_creator(user_id, plan_limit):
         if not all([project_name, project_brand, project_year, uploaded_files]):
             st.warning("Por favor, completa todos los campos obligatorios (*).")
             return
+
+        # --- ¡INICIO DEL NUEVO BLOQUE DE VALIDACIÓN! ---
+        if len(uploaded_files) > max_files_per_project and max_files_per_project != float('inf'):
+            st.error(f"Has intentado subir {len(uploaded_files)} archivos. Tu plan te permite un máximo de {int(max_files_per_project)} archivos por proyecto.")
+            return
+        # --- ¡FIN DEL NUEVO BLOQUE DE VALIDACIÓN! ---
 
         project_storage_folder = f"{user_id}/{uuid.uuid4()}" 
         
@@ -153,6 +168,7 @@ def show_text_project_creator(user_id, plan_limit):
                         supabase.storage.from_(TEXT_PROJECT_BUCKET).remove(uploaded_file_paths)
                 except:
                     pass 
+# --- ¡FIN DE FUNCIÓN MODIFICADA! ---
 
 def show_text_project_list(user_id):
     st.subheader("Mis Proyectos de Texto")
@@ -239,6 +255,17 @@ def show_text_project_analyzer(summary_context, project_name):
             with st.chat_message("user", avatar="👤"):
                 st.markdown(user_prompt)
 
+            # --- ¡INICIO DEL NUEVO BLOQUE DE LÍMITES! ---
+            question_limit = st.session_state.plan_features.get('text_analysis_questions_per_day', 5)
+            # Usamos c.MODE_TEXT_ANALYSIS como el "modo" para registrar la consulta
+            current_queries = get_daily_usage(st.session_state.user, c.MODE_TEXT_ANALYSIS) 
+
+            if current_queries >= question_limit and question_limit != float('inf'):
+                st.error(f"Has alcanzado tu límite de {int(question_limit)} preguntas diarias para el Análisis de Texto.")
+                st.session_state.mode_state["transcript_chat_history"].pop() # Eliminar la pregunta del historial
+                return # Detener la ejecución
+            # --- ¡FIN DEL NUEVO BLOQUE DE LÍMITES! ---
+
             with st.chat_message("assistant", avatar="✨"):
                 message_placeholder = st.empty(); message_placeholder.markdown("Analizando...")
                 
@@ -247,7 +274,9 @@ def show_text_project_analyzer(summary_context, project_name):
 
                 if response:
                     message_placeholder.markdown(response)
-                    log_query_event(user_prompt, mode=f"{c.MODE_TEXT_ANALYSIS} (Chat)")
+                    # --- ¡MODIFICADO! ---
+                    # Registramos la consulta (usando el modo principal para la analítica)
+                    log_query_event(user_prompt, mode=c.MODE_TEXT_ANALYSIS)
                     st.session_state.mode_state["transcript_chat_history"].append({
                         "role": "assistant", 
                         "content": response
@@ -257,12 +286,10 @@ def show_text_project_analyzer(summary_context, project_name):
                     message_placeholder.error("Error al obtener respuesta."); 
                     st.session_state.mode_state["transcript_chat_history"].pop()
 
-        # --- ¡INICIO DEL CÓDIGO AÑADIDO! ---
         if st.session_state.mode_state["transcript_chat_history"]:
-            st.divider() # Añadir un separador visual
+            st.divider() 
             col1, col2 = st.columns([1,1])
             with col1:
-                # Lógica de descarga de PDF
                 chat_content_raw = "\n\n".join(f"**{m['role']}:** {m['content']}" for m in st.session_state.mode_state["transcript_chat_history"])
                 chat_content_for_pdf = chat_content_raw.replace("](#)", "]")
                 pdf_bytes = generate_pdf_html(chat_content_for_pdf, title=f"Chat Análisis de Texto - {project_name}", banner_path=banner_file)
@@ -276,14 +303,12 @@ def show_text_project_analyzer(summary_context, project_name):
                         use_container_width=True
                     )
             with col2: 
-                # Lógica de Nueva Conversación
                 st.button(
                     "Nueva Conversación", 
-                    on_click=reset_transcript_chat_workflow, # <-- Usar la nueva función de reseteo
+                    on_click=reset_transcript_chat_workflow, 
                     key="new_transcript_chat_btn", 
                     use_container_width=True
                 )
-        # --- ¡FIN DEL CÓDIGO AÑADIDO! ---
 
     with tab_autocode:
         st.header("Auto-Codificación")
@@ -327,18 +352,21 @@ def show_text_project_analyzer(summary_context, project_name):
 
                         if response:
                             st.session_state.mode_state["autocode_result"] = response
+                            # Nota: No contamos esto como una "pregunta" de chat
                             log_query_event(f"Auto-codificación: {main_topic}", mode=f"{c.MODE_TEXT_ANALYSIS} (Autocode)")
                             st.rerun()
                         else:
                             st.error("Error al generar el análisis de temas.")
+# --- ¡FIN DE FUNCIÓN MODIFICADA! ---
 
-# --- ¡INICIO DE FUNCIÓN PRINCIPAL MODIFICADA! ---
+
 def text_analysis_mode():
     st.subheader(c.MODE_TEXT_ANALYSIS)
     st.markdown("Carga, gestiona y analiza tus proyectos de transcripciones (.docx).")
     st.divider()
 
     user_id = st.session_state.user_id
+    # --- ¡MODIFICADO! Leemos el límite de PROYECTOS ---
     plan_limit = st.session_state.plan_features.get('transcript_file_limit', 0)
 
     # --- LÓGICA DE CARGA Y RESUMEN (Todo con mode_state) ---
@@ -368,8 +396,6 @@ def text_analysis_mode():
                  
             summary_prompt = get_text_analysis_summary_prompt(full_ctx)
             
-            # Para esta llamada específica, permitimos una respuesta mucho más larga
-            # (16384 tokens) para evitar el corte del resumen.
             large_output_config = {
                 "max_output_tokens": 16384 
             }
@@ -406,6 +432,7 @@ def text_analysis_mode():
     # 5. VISTA DE GESTIÓN (PÁGINA PRINCIPAL)
     else:
         with st.expander("➕ Crear Nuevo Proyecto de Texto", expanded=True):
+            # --- ¡MODIFICADO! Pasamos el límite de proyectos ---
             show_text_project_creator(user_id, plan_limit)
         
         st.divider()
