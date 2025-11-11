@@ -195,26 +195,26 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
         f"{INSTRUCCIONES_DE_CITAS}\n"
     ]
 
-# --- Prompt para "Análisis de Notas y Transcripciones" (modes/transcript_mode.py) ---
-
+# --- ¡INICIO DE LA MODIFICACIÓN 1! ---
 def get_transcript_prompt(combined_context, user_prompt):
     """
     Prompt de transcripciones con citas. 
-    (MODIFICADO: AHORA RECIBE UN RESUMEN, NO EL TEXTO COMPLETO)
+    (MODIFICADO: Usa las INSTRUCCIONES_DE_CITAS estándar)
     """
-    return [
-        "Actúa como un asistente experto en análisis cualitativo. Tu tarea es responder la pregunta del usuario basándote únicamente en el **resumen de hallazgos** de las transcripciones proporcionadas.",
-        f"\n\n**Información documentada (Resumen de Hallazgos):**\n```\n{combined_context}\n```",
-        f"\n\n**Pregunta del Usuario:**\n{user_prompt}",
-        "\n\n**Instrucciones OBLIGATORIAS:**",
-        "1. **Fidelidad Absoluta:** Basa tu respuesta *estrictamente* en el resumen de hallazgos.",
-        "2. **Citas:** Si el resumen incluye citas (ej. [Fuente: Archivo1.docx]), DEBES usarlas. Si no, responde basándote en el texto del resumen.",
-        "3. **Formato de Fuentes:** Si usas citas, crea una sección `## Fuentes` al final, listando los archivos mencionados en el resumen.",
-        "4. **Sin Información:** Si la respuesta no se encuentra en el resumen, indica: 'La información solicitada no se encuentra en el resumen de los documentos proporcionados.'",
-        "\n\n**Respuesta:**"
-    ]
+    return (
+        "Actúa como un asistente experto en análisis cualitativo. Tu tarea es responder la pregunta del usuario basándote únicamente en el **resumen de hallazgos** de las transcripciones proporcionadas.\n\n"
+        f"**Información documentada (Resumen de Hallazgos):**\n```\n{combined_context}\n```\n\n"
+        f"**Pregunta del Usuario:**\n{user_prompt}\n\n"
+        
+        # ¡CAMBIO CLAVE! Se reemplazan las instrucciones personalizadas
+        # por el bloque de instrucciones estándar.
+        f"{INSTRUCCIONES_DE_CITAS}\n\n"
+        
+        "**Respuesta:**"
+    )
+# --- ¡FIN DE LA MODIFICACIÓN 1! ---
 
-# --- ¡NUEVO PROMPT! (Para el Paso 1 de resumen) ---
+
 def get_text_analysis_summary_prompt(full_context):
     """
     Crea un prompt para que la IA lea múltiples transcripciones y 
@@ -258,12 +258,12 @@ Un párrafo (4-5 frases) que resuma los principales descubrimientos, tensiones o
 - **Fuente de Cita:** DEBES indicar de qué archivo (ej. `[Fuente: Entrevista_Usuario_1.docx]`) proviene cada hallazgo o cita.
 """
 
-# --- PROMPT MODIFICADO (Para ser más conciso) ---
+# --- ¡INICIO DE LA MODIFICACIÓN 2! ---
 def get_autocode_prompt(context, main_topic):
     """
     Crea un prompt para que la IA lea un RESUMEN e identifique
     temas clave (códigos) con citas de respaldo.
-    (MODIFICADO para ser más conciso y evitar límites de tokens)
+    (MODIFICADO: Usa las INSTRUCCIONES_DE_CITAS estándar)
     """
     return f"""
 **Tarea:** Eres un investigador cualitativo experto. Tu trabajo es analizar el **resumen de hallazgos** proporcionado sobre el tema '{main_topic}'.
@@ -281,21 +281,25 @@ Un párrafo corto (2-3 frases) que resuma los principales hallazgos.
 ## Temas Emergentes y Citas (Máx. 5-7 temas)
 
 ### 1. [Nombre del Tema 1]
-> *"[Una cita textual CORTA que ilustre este tema]"* - (Fuente: [Nombre del Archivo de la cita])
+* [Hallazgo o insight sobre el Tema 1 [1]]
+* [Cita textual relevante: *"...cita..."* [2]]
 
 ### 2. [Nombre del Tema 2]
-> *"[Una cita textual CORTA que ilustre este tema]"* - (Fuente: [Nombre del Archivo de la cita])
+* [Hallazgo o insight sobre el Tema 2 [3]]
+* [Cita textual relevante: *"...cita..."* [1]]
 
 ### 3. [Nombre del Tema 3]
-> *"[Una cita textual CORTA que ilustre este tema]"* - (Fuente: [Nombre del Archivo de la cita])
+* [Hallazgo o insight sobre el Tema 3 [2]]
 
 (...continuar con MÁXIMO 7 temas...)
 
 **Instrucciones Adicionales:**
 - **Brevedad:** Sé conciso. Prioriza los temas más importantes.
-- **Citas Textuales:** Las citas DEBEN ser copiadas palabra por palabra del resumen.
-- **Fuente de la Cita:** DEBES indicar la fuente (ej. `(Fuente: Entrevista_Usuario_1.docx)`) si el resumen la proporciona.
+- **Citas:** Sigue las instrucciones de citas estándar para CUALQUIER información que tomes del resumen.
+
+{INSTRUCCIONES_DE_CITAS}
 """
+# --- ¡FIN DE LA MODIFICACIÓN 2! ---
 
 
 # --- Prompt para "Análisis de Datos (Excel)" ---
@@ -482,7 +486,7 @@ El JSON debe ser una lista de objetos, donde cada objeto representa una categor�
 4.  **JSON Válido:** Tu salida debe ser *solamente* el JSON, sin texto introductorio.
 """
 
-# --- ¡INICIO DE LOS 3 NUEVOS PROMPTS! ---
+# --- Prompts de Análisis de Datos ---
 
 def get_data_summary_prompt(data_snapshot_str):
     """
@@ -564,4 +568,3 @@ def get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups):
 * **Acción Recomendada:** [Indica una acción, ej: "No se puede concluir que haya una diferencia real entre los grupos para esta métrica."]
 """
     return prompt
-# --- ¡FIN DE LOS 3 NUEVOS PROMPTS! ---
