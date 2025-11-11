@@ -7,7 +7,8 @@ import time # Importar time
 
 from styles import apply_styles
 from config import PLAN_FEATURES, banner_file
-from services.storage import load_database
+# --- ¡MODIFICADO! 'load_database' ya no se usa aquí ---
+# from services.storage import load_database 
 from services.supabase_db import supabase
 from auth import show_login_page, show_signup_page, show_reset_password_page
 from admin.dashboard import show_admin_dashboard
@@ -32,9 +33,7 @@ def set_mode_and_reset(new_mode):
     simplemente borra el contenedor 'mode_state'.
     """
     if 'current_mode' not in st.session_state or st.session_state.current_mode != new_mode:
-        # ¡Esta es la única línea que necesitamos!
         st.session_state.mode_state = {} 
-        
         st.session_state.current_mode = new_mode
 
 # =====================================================
@@ -44,8 +43,8 @@ def run_user_mode(db_full, user_features, footer_html):
 
     # --- ¡BLOQUE DE HEARTBEAT CON "TEMPORIZADOR SUAVE"! ---
     
-    GRACE_PERIOD_SECONDS = 5 # Período de gracia post-login
-    HEARTBEAT_INTERVAL_SECONDS = 60 # Chequear solo cada 60 segundos
+    GRACE_PERIOD_SECONDS = 5 
+    HEARTBEAT_INTERVAL_SECONDS = 60 
     current_time = time.time()
     
     login_time = st.session_state.get("login_timestamp", 0)
@@ -61,7 +60,6 @@ def run_user_mode(db_full, user_features, footer_html):
                     st.session_state.clear()
                     st.rerun()
 
-                # Aseguramos que el cliente esté autenticado ANTES de la llamada
                 if st.session_state.get("access_token"):
                     supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
                 
@@ -98,7 +96,6 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
     st.sidebar.divider()
-    # --- FIN DE LA SECCIÓN DE SIDEBAR ---
 
     st.sidebar.header("Seleccione el modo de uso")
     
@@ -166,11 +163,7 @@ def run_user_mode(db_full, user_features, footer_html):
     
     st.sidebar.header("Filtros de Búsqueda")
     
-    # --- ¡INICIO DE LA MODIFICACIÓN! ---
-    # Añadimos c.MODE_DATA_ANALYSIS a la lista de modos donde los filtros
-    # deben estar DESACTIVADOS.
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS] 
-    # --- ¡FIN DE LA MODIFICACIÓN! ---
 
     db_filtered = db_full[:]
 
@@ -193,7 +186,6 @@ def run_user_mode(db_full, user_features, footer_html):
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         try:
             if 'user_id' in st.session_state:
-                # Aseguramos que el cliente esté autenticado ANTES de la llamada
                 if st.session_state.get("access_token"):
                     supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
                 supabase.table("users").update({"active_session_id": None}).eq("id", st.session_state.user_id).execute()
@@ -289,11 +281,19 @@ def main():
         st.markdown(footer_html, unsafe_allow_html=True)
         st.stop()
 
+    # --- ¡INICIO DE LA LÍNEA MODIFICADA! ---
+    # Leemos la BD desde la sesión, donde 'auth.py' la guardó.
     try:
-        db_full = load_database(st.session_state.cliente)
+        db_full = st.session_state.db_full
+    except AttributeError:
+        # Esto puede pasar si la sesión se corrompe. Forzamos un reinicio.
+        st.error("Error de sesión al cargar la base de datos. Por favor, inicia sesión de nuevo.")
+        st.session_state.clear()
+        st.rerun()
     except Exception as e:
-        st.error(f"Error crítico al cargar BD: {e}")
+        st.error(f"Error crítico al leer la BD de la sesión: {e}")
         st.stop()
+    # --- ¡FIN DE LA LÓGICA MODIFICADA! ---
 
     user_features = st.session_state.plan_features
 
