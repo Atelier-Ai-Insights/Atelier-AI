@@ -57,7 +57,7 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
             # --- ¡INICIO DE LA CORRECCIÓN DE TIPO! ---
             # El modelo correcto es 'gemini-2.5-flash'
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash",
+                model_name="gemini-2.5-flash",
                 generation_config=final_gen_config, 
                 safety_settings=final_safety_settings
             )
