@@ -1,19 +1,18 @@
 import streamlit as st
 import docx
 import io
-import os  # Asegúrate de que 'os' esté importado
+import os  
 import uuid
 from datetime import datetime
 import requests 
 import re 
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event, supabase
-from prompts import get_transcript_prompt, get_autocode_prompt
+# --- ¡IMPORTACIONES MODIFICADAS! ---
+from prompts import get_transcript_prompt, get_autocode_prompt, get_text_analysis_summary_prompt
 import constants as c
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
-
-# --- AJUSTE v5 (Lógica de MÚLTIPLES archivos) ---
 
 # =====================================================
 # MODO: ANÁLISIS DE TEXTOS (VERSIÓN PROYECTOS)
@@ -21,7 +20,7 @@ from config import banner_file
 
 TEXT_PROJECT_BUCKET = "text_project_files"
 
-# --- Funciones de Carga de Datos ---
+# --- Funciones de Carga de Datos (Sin cambios) ---
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_text_project_data(storage_folder_path: str):
@@ -79,7 +78,7 @@ def load_text_project_data(storage_folder_path: str):
         st.error(f"Error al cargar los archivos del proyecto ({storage_folder_path}): {e}")
         return None
 
-# --- Funciones de UI ---
+# --- Funciones de UI (Sin cambios) ---
 
 def show_text_project_creator(user_id, plan_limit):
     st.subheader("Crear Nuevo Proyecto de Texto")
@@ -230,19 +229,22 @@ def show_text_project_list(user_id):
                         except Exception as e:
                             st.error(f"Error al eliminar: {e}")
 
-def show_text_project_analyzer(combined_context, project_name):
+# --- ¡INICIO DE FUNCIÓN MODIFICADA! ---
+def show_text_project_analyzer(summary_context, project_name):
     """
     Muestra la UI de análisis (Chat y Autocode) para el proyecto cargado.
-    (Esta función no requiere cambios)
+    (MODIFICADO: AHORA RECIBE 'summary_context' EN LUGAR DE 'combined_context')
     """
     
     st.markdown(f"### Analizando: **{project_name}**")
     
     if st.button("← Volver a la lista de proyectos"):
+        # --- Limpieza de sesión actualizada ---
         st.session_state.pop("ta_selected_project_id", None)
         st.session_state.pop("ta_selected_project_name", None)
         st.session_state.pop("ta_storage_path", None)
-        st.session_state.pop("ta_combined_context", None)
+        st.session_state.pop("ta_combined_context", None) # Limpiar el contexto completo
+        st.session_state.pop("ta_summary_context", None)  # Limpiar el resumen
         st.session_state.pop("transcript_chat_history", None)
         st.session_state.pop("autocode_result", None)
         st.rerun()
@@ -253,7 +255,7 @@ def show_text_project_analyzer(combined_context, project_name):
 
     with tab_chat:
         st.header("Análisis de Notas y Transcripciones")
-        st.markdown("Haz preguntas específicas sobre el contenido del archivo cargado.")
+        st.markdown("Haz preguntas específicas sobre el **resumen de hallazgos** del proyecto.")
         
         if "transcript_chat_history" not in st.session_state: 
             st.session_state.transcript_chat_history = []
@@ -272,12 +274,10 @@ def show_text_project_analyzer(combined_context, project_name):
             with st.chat_message("assistant", avatar="✨"):
                 message_placeholder = st.empty(); message_placeholder.markdown("Analizando...")
                 
-                MAX_CONTEXT_LENGTH = 800000 
-                if len(combined_context) > MAX_CONTEXT_LENGTH:
-                    combined_context = combined_context[:MAX_CONTEXT_LENGTH] + "\n\n...(contexto truncado)..."
-                    st.warning("Contexto truncado.", icon="⚠️")
-                    
-                chat_prompt = get_transcript_prompt(combined_context, user_prompt)
+                # --- ¡CAMBIO CLAVE! ---
+                # Ya no se usa 'combined_context', se usa 'summary_context'.
+                # Ya no se necesita truncar, el resumen es pequeño.
+                chat_prompt = get_transcript_prompt(summary_context, user_prompt)
                 response = call_gemini_api(chat_prompt) 
 
                 if response:
@@ -315,7 +315,7 @@ def show_text_project_analyzer(combined_context, project_name):
                     st.rerun()
         
         else:
-            st.markdown("Esta herramienta leerá el archivo cargado y generará un reporte de temas clave y citas de respaldo.")
+            st.markdown("Esta herramienta leerá el **resumen de hallazgos** y generará un reporte de temas clave y citas de respaldo.")
             main_topic = st.text_input(
                 "¿Cuál es el tema principal de estas entrevistas?", 
                 placeholder="Ej: Percepción de snacks saludables, Experiencia de compra, etc.",
@@ -326,14 +326,12 @@ def show_text_project_analyzer(combined_context, project_name):
                 if not main_topic.strip():
                     st.warning("Por favor, describe el tema principal.")
                 else:
-                    with st.spinner("Analizando temas emergentes... (Esto puede tardar unos minutos)"):
+                    with st.spinner("Analizando temas emergentes..."):
                         
-                        MAX_CONTEXT_LENGTH = 1_000_000 
-                        if len(combined_context) > MAX_CONTEXT_LENGTH:
-                            combined_context = combined_context[:MAX_CONTEXT_LENGTH] + "\n\n...(contexto truncado)..."
-                            st.warning("El contexto de las transcripciones es muy largo y ha sido truncado.", icon="⚠️")
-                        
-                        prompt = get_autocode_prompt(combined_context, main_topic)
+                        # --- ¡CAMBIO CLAVE! ---
+                        # Ya no se usa 'combined_context', se usa 'summary_context'.
+                        # Ya no se necesita truncar.
+                        prompt = get_autocode_prompt(summary_context, main_topic)
                         response = call_gemini_api(prompt)
 
                         if response:
@@ -342,9 +340,10 @@ def show_text_project_analyzer(combined_context, project_name):
                             st.rerun()
                         else:
                             st.error("Error al generar el análisis de temas.")
+# --- ¡FIN DE FUNCIÓN MODIFICADA! ---
 
-# --- FUNCIÓN PRINCIPAL DEL MODO (NUEVA ARQUITECTURA) ---
 
+# --- ¡INICIO DE FUNCIÓN PRINCIPAL MODIFICADA! ---
 def text_analysis_mode():
     st.subheader(c.MODE_TEXT_ANALYSIS)
     st.markdown("Carga, gestiona y analiza tus proyectos de transcripciones (.docx).")
@@ -353,33 +352,70 @@ def text_analysis_mode():
     user_id = st.session_state.user_id
     plan_limit = st.session_state.plan_features.get('transcript_file_limit', 0)
 
-    # --- VISTA DE ANÁLISIS ---
+    # --- LÓGICA DE CARGA Y RESUMEN ---
     
+    # 1. Cargar el CONTEXTO COMPLETO (si está seleccionado pero no cargado)
     if "ta_selected_project_id" in st.session_state and "ta_combined_context" not in st.session_state:
         with st.spinner("Cargando datos del proyecto de texto..."):
-            # Llama a la función de carga múltiple
             context = load_text_project_data(st.session_state.ta_storage_path) 
             if context is not None:
                 st.session_state.ta_combined_context = context
             else:
                 st.error("No se pudieron cargar los datos del proyecto.")
-                st.session_state.pop("ta_selected_project_id")
-                st.session_state.pop("ta_selected_project_name")
-                st.session_state.pop("ta_storage_path")
+                # Limpiar para volver a la lista
+                st.session_state.pop("ta_selected_project_id", None)
+                st.session_state.pop("ta_selected_project_name", None)
+                st.session_state.pop("ta_storage_path", None)
 
-    if "ta_combined_context" in st.session_state:
-        show_text_project_analyzer(
-            st.session_state.ta_combined_context,
+    # 2. Generar el RESUMEN (si el contexto completo está cargado pero el resumen no)
+    if "ta_combined_context" in st.session_state and "ta_summary_context" not in st.session_state:
+        with st.spinner("Generando resumen de IA por única vez... (Esto puede tardar un minuto)"):
+            
+            # Usar el contexto completo para generar el resumen
+            full_ctx = st.session_state.ta_combined_context
+            
+            # Truncar solo si es absolutamente masivo, para la llamada de resumen
+            MAX_SUMMARY_INPUT = 1_000_000
+            if len(full_ctx) > MAX_SUMMARY_INPUT:
+                 full_ctx = full_ctx[:MAX_SUMMARY_INPUT] + "\n\n...(contexto truncado para resumen)..."
+                 st.warning(f"El contexto es muy grande (>{MAX_SUMMARY_INPUT} caracteres) y ha sido truncado para generar el resumen inicial.", icon="⚠️")
+                 
+            summary_prompt = get_text_analysis_summary_prompt(full_ctx)
+            summary = call_gemini_api(summary_prompt)
+            
+            if summary:
+                st.session_state.ta_summary_context = summary
+                st.rerun() # Re-ejecutar para pasar a la vista de análisis
+            else:
+                st.error("No se pudo generar el resumen inicial de IA. No se puede continuar.")
+                # Limpiar para volver a la lista
+                st.session_state.pop("ta_selected_project_id", None)
+                st.session_state.pop("ta_selected_project_name", None)
+                st.session_state.pop("ta_storage_path", None)
+                st.session_state.pop("ta_combined_context", None)
+                st.rerun()
+
+    # --- LÓGICA DE VISTA (QUÉ MOSTRAR AL USUARIO) ---
+
+    # 3. VISTA DE ANÁLISIS (Si el resumen ya está listo)
+    if "ta_summary_context" in st.session_state:
+        show_text_project_analyzer( # <-- Pasa el resumen
+            st.session_state.ta_summary_context,
             st.session_state.ta_selected_project_name
         )
     
-    # --- VISTA DE GESTIÓN (PÁGINA PRINCIPAL) ---
+    # 4. VISTA DE CARGA (Si el proyecto está seleccionado pero el resumen aún no está listo)
+    elif "ta_selected_project_id" in st.session_state:
+        # Esto se mostrará mientras el resumen se genera en el paso 2
+        st.info("Preparando análisis... (Generando resumen de IA)")
+        st.spinner("Cargando y resumiendo proyecto...") 
+    
+    # 5. VISTA DE GESTIÓN (PÁGINA PRINCIPAL)
     else:
         with st.expander("➕ Crear Nuevo Proyecto de Texto", expanded=True):
-            # Llama a la función de creación múltiple (corregida)
             show_text_project_creator(user_id, plan_limit)
         
         st.divider()
         
-        # Llama a la función de listado (con borrado múltiple)
         show_text_project_list(user_id)
+# --- ¡FIN DE FUNCIÓN PRINCIPAL MODIFICADA! ---
