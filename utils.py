@@ -3,20 +3,23 @@ import unicodedata
 import json
 import io
 import fitz  # PyMuPDF
-import nltk # <-- ¡NUEVA IMPORTACIÓN!
+import nltk 
 
 # ==============================
-# Funciones de Reset
+# Funciones de Reset (MODIFICADAS)
 # ==============================
+
 def reset_report_workflow():
-    for k in ["report", "last_question", "report_question", "personalization", "rating"]:
-        st.session_state.pop(k, None)
+    """Limpia el estado del modo REPORTE DENTRO de mode_state."""
+    for k in ["report", "last_question"]:
+        st.session_state.mode_state.pop(k, None) # <-- MODIFICADO
 
 def reset_chat_workflow():
-    st.session_state.pop("chat_history", None)
+    """Limpia el estado del modo CHAT DENTRO de mode_state."""
+    st.session_state.mode_state.pop("chat_history", None) # <-- MODIFICADO
 
 # ==============================
-# FUNCIONES AUXILIARES 
+# FUNCIONES AUXILIARES (Sin cambios)
 # ==============================
 def normalize_text(text):
     if not text: return ""
@@ -38,7 +41,6 @@ def clean_text(text):
     if not isinstance(text, str): text = str(text)
     return text
 
-# --- ¡INICIO DE FUNCIÓN MODIFICADA! ---
 @st.cache_resource
 def get_stopwords():
     """Descarga y cachea las stopwords en español Y EN INGLÉS de NLTK."""
@@ -72,7 +74,6 @@ def get_stopwords():
     # Combinar todas las listas
     final_stopwords = set(spanish_stopwords) | set(english_stopwords) | set(custom_list)
     return final_stopwords
-# --- ¡FIN DE FUNCIÓN MODIFICADA! ---
 
 
 # ==============================
