@@ -5,7 +5,7 @@ from services.supabase_db import log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 from prompts import get_ideation_prompt
-import constants as c # <--- IMPORTACIÓN AÑADIDA
+import constants as c 
 
 # =====================================================
 # MODO: CONVERSACIONES CREATIVAS (IDEACIÓN)
@@ -15,19 +15,20 @@ def ideacion_mode(db, selected_files):
     st.subheader("Conversaciones Creativas")
     st.markdown("Explora ideas novedosas basadas en hallazgos.")
     
-    if "chat_history" not in st.session_state: 
-        st.session_state.chat_history = []
+    # --- ¡MODIFICADO! ---
+    if "chat_history" not in st.session_state.mode_state: 
+        st.session_state.mode_state["chat_history"] = []
         
-    # --- Bucle de visualización REVERTIDO ---
-    for msg in st.session_state.chat_history:
+    # --- ¡MODIFICADO! ---
+    for msg in st.session_state.mode_state["chat_history"]:
         with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
             st.markdown(msg['message'])
-            # Se eliminó la llamada a st.feedback()
             
     user_input = st.chat_input("Lanza una idea o pregunta...")
     
     if user_input:
-        st.session_state.chat_history.append({"role": "Usuario", "message": user_input})
+        # --- ¡MODIFICADO! ---
+        st.session_state.mode_state["chat_history"].append({"role": "Usuario", "message": user_input})
         with st.chat_message("Usuario", avatar="👤"): 
             st.markdown(user_input)
             
@@ -36,7 +37,8 @@ def ideacion_mode(db, selected_files):
             message_placeholder.markdown("Generando ideas...")
             
             relevant = get_relevant_info(db, user_input, selected_files)
-            conv_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.chat_history[-10:])
+            # --- ¡MODIFICADO! ---
+            conv_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.mode_state["chat_history"][-10:])
             
             conv_prompt = get_ideation_prompt(conv_history, relevant)
             
@@ -44,9 +46,9 @@ def ideacion_mode(db, selected_files):
             
             if resp: 
                 message_placeholder.markdown(resp)
-                # --- Lógica de guardado REVERTIDA ---
-                log_query_event(user_input, mode=c.MODE_IDEATION) # <-- MODIFICADO
-                st.session_state.chat_history.append({
+                log_query_event(user_input, mode=c.MODE_IDEATION) 
+                # --- ¡MODIFICADO! ---
+                st.session_state.mode_state["chat_history"].append({
                     "role": "Asistente", 
                     "message": resp
                 })
@@ -54,10 +56,12 @@ def ideacion_mode(db, selected_files):
             else: 
                 message_placeholder.error("Error generando respuesta.")
                 
-    if st.session_state.chat_history:
+    # --- ¡MODIFICADO! ---
+    if st.session_state.mode_state["chat_history"]:
         col1, col2 = st.columns([1,1])
         with col1:
-            chat_content_raw = "\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.chat_history)
+            # --- ¡MODIFICADO! ---
+            chat_content_raw = "\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.mode_state["chat_history"])
             chat_content_for_pdf = chat_content_raw.replace("](#)", "]")
             pdf_bytes = generate_pdf_html(chat_content_for_pdf, title="Historial Creativo", banner_path=banner_file)
             
