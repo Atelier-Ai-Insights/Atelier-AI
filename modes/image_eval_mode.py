@@ -44,36 +44,37 @@ def image_evaluation_mode(db, selected_files):
             prompt_parts = get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context)
             image_data = Image.open(BytesIO(image_bytes))
             
-            # --- MODIFICADO ---
-            # Eliminamos la lógica 'try...except' que generaba la advertencia.
-            # Simplemente añadimos la imagen al final de la lista de partes del prompt.
             prompt_parts.append("\n\n**Imagen para evaluar:**")
             prompt_parts.append(image_data)
-            # --- FIN DE LA MODIFICACIÓN ---
             
             evaluation_result = call_gemini_api(prompt_parts)
             
             if evaluation_result: 
-                st.session_state.image_evaluation_result = evaluation_result
-                # --- Lógica de guardado REVERTIDA ---
+                # --- ¡MODIFICADO! ---
+                st.session_state.mode_state["image_evaluation_result"] = evaluation_result
                 log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode=c.MODE_IMAGE_EVAL)
                 st.rerun()
             else: 
                 st.error("No se pudo generar evaluación.")
-                st.session_state.pop("image_evaluation_result", None)
+                # --- ¡MODIFICADO! ---
+                st.session_state.mode_state.pop("image_evaluation_result", None)
                 
-    if "image_evaluation_result" in st.session_state:
+    # --- ¡MODIFICADO! ---
+    if "image_evaluation_result" in st.session_state.mode_state:
         st.markdown("---"); st.markdown("### Resultados Evaluación:")
-        st.markdown(st.session_state.image_evaluation_result)
+        # --- ¡MODIFICADO! ---
+        st.markdown(st.session_state.mode_state["image_evaluation_result"])
         
         col1, col2 = st.columns(2)
         with col1:
-            pdf_bytes = generate_pdf_html(st.session_state.image_evaluation_result, title=f"Evaluacion Visual - {uploaded_file.name if uploaded_file else 'Imagen'}", banner_path=banner_file)
+            # --- ¡MODIFICADO! ---
+            pdf_bytes = generate_pdf_html(st.session_state.mode_state["image_evaluation_result"], title=f"Evaluacion Visual - {uploaded_file.name if uploaded_file else 'Imagen'}", banner_path=banner_file)
             if pdf_bytes: 
                 st.download_button(label="Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion_{uploaded_file.name if uploaded_file else 'imagen'}.pdf", mime="application/pdf", use_container_width=True)
             else: 
                 st.error("Error al generar PDF.")
         with col2:
             if st.button("Evaluar Otra Imagen", use_container_width=True): 
-                st.session_state.pop("image_evaluation_result", None)
+                # --- ¡MODIFICADO! ---
+                st.session_state.mode_state.pop("image_evaluation_result", None)
                 st.rerun()
