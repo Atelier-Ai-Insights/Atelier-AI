@@ -22,42 +22,23 @@ from modes.text_analysis_mode import text_analysis_mode
 from modes.onepager_mode import one_pager_ppt_mode
 from modes.data_analysis_mode import data_analysis_mode
 from utils import (
-    extract_brand, reset_chat_workflow, reset_report_workflow
+    extract_brand
+    # --- reset_chat_workflow y reset_report_workflow YA NO SE USAN AQUÍ ---
 )
 import constants as c
 
+# --- ¡INICIO DE LA FUNCIÓN MODIFICADA! ---
 def set_mode_and_reset(new_mode):
+    """
+    Refactorizado: En lugar de limpiar docenas de claves, 
+    simplemente borra el contenedor 'mode_state'.
+    """
     if 'current_mode' not in st.session_state or st.session_state.current_mode != new_mode:
-        reset_chat_workflow()
-        st.session_state.pop("generated_concept", None)
-        st.session_state.pop("evaluation_result", None)
-        st.session_state.pop("report", None)
-        st.session_state.pop("last_question", None)
-        st.session_state.pop("image_evaluation_result", None)
-        st.session_state.pop("video_evaluation_result", None)
-        st.session_state.pop("generated_ppt_bytes", None)
-        
-        # --- Limpieza Modo Análisis Numérico ---
-        st.session_state.pop("data_analysis_df", None)
-        st.session_state.pop("da_selected_project_id", None)
-        st.session_state.pop("da_selected_project_name", None)
-        st.session_state.pop("da_storage_path", None)
-        st.session_state.pop("da_current_sub_mode", None)
-        
-        # --- Limpieza Modo Análisis de Texto ---
-        st.session_state.pop("ta_selected_project_id", None)
-        st.session_state.pop("ta_selected_project_name", None)
-        st.session_state.pop("ta_storage_path", None)
-        st.session_state.pop("ta_combined_context", None)
-        st.session_state.pop("transcript_chat_history", None)
-        st.session_state.pop("autocode_result", None)
-        
-        # Limpieza del modo volátil anterior (por si acaso)
-        st.session_state.pop("text_analysis_files_dict", None)
-        st.session_state.pop("text_analysis_combined_context", None)
-        st.session_state.pop("text_analysis_file_names", None)
+        # ¡Esta es la única línea que necesitamos!
+        st.session_state.mode_state = {} 
         
         st.session_state.current_mode = new_mode
+# --- ¡FIN DE LA FUNCIÓN MODIFICADA! ---
 
 # =====================================================
 # FUNCIÓN PARA EL MODO USUARIO (REFACTORIZADA CON EXPANDERS)
@@ -256,6 +237,13 @@ def main():
     if 'page' not in st.session_state: st.session_state.page = "login"
     if "api_key_index" not in st.session_state: st.session_state.api_key_index = 0
     
+    # --- ¡INICIO DE LA NUEVA INICIALIZACIÓN! ---
+    # Aseguramos que el 'cajón' de estado exista.
+    if "mode_state" not in st.session_state: 
+        st.session_state.mode_state = {}
+    # --- ¡FIN DE LA NUEVA INICIALIZACIÓN! ---
+
+    
     # --- ¡INICIO DE LA CORRECCIÓN DE AUTENTICACIÓN ROBUSTA! ---
     if st.session_state.get("logged_in"):
         if st.session_state.get("access_token"):
@@ -334,4 +322,3 @@ def main():
 # ==============================
 if __name__ == "__main__":
     main()
-
