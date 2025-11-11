@@ -44,36 +44,37 @@ def video_evaluation_mode(db, selected_files):
             video_file_data = {'mime_type': uploaded_file.type, 'data': video_bytes}
             prompt_parts = get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context)
             
-            # --- MODIFICADO ---
-            # Eliminamos la lógica 'try...except' que generaba la advertencia.
-            # Simplemente añadimos el video al final de la lista de partes del prompt.
             prompt_parts.append("\n\n**Video para evaluar:**")
             prompt_parts.append(video_file_data)
-            # --- FIN DE LA MODIFICACIÓN ---
             
             evaluation_result = call_gemini_api(prompt_parts)
             
             if evaluation_result: 
-                st.session_state.video_evaluation_result = evaluation_result
-                # --- Lógica de guardado REVERTIDA ---
+                # --- ¡MODIFICADO! ---
+                st.session_state.mode_state["video_evaluation_result"] = evaluation_result
                 log_query_event(f"Evaluación Video: {uploaded_file.name}", mode=c.MODE_VIDEO_EVAL)
                 st.rerun()
             else: 
                 st.error("No se pudo generar evaluación video.")
-                st.session_state.pop("video_evaluation_result", None)
+                # --- ¡MODIFICADO! ---
+                st.session_state.mode_state.pop("video_evaluation_result", None)
                 
-    if "video_evaluation_result" in st.session_state:
+    # --- ¡MODIFICADO! ---
+    if "video_evaluation_result" in st.session_state.mode_state:
         st.markdown("---"); st.markdown("### Resultados Evaluación:")
-        st.markdown(st.session_state.video_evaluation_result)
+        # --- ¡MODIFICADO! ---
+        st.markdown(st.session_state.mode_state["video_evaluation_result"])
         
         col1, col2 = st.columns(2)
         with col1:
-            pdf_bytes = generate_pdf_html(st.session_state.video_evaluation_result, title=f"Evaluacion Video - {uploaded_file.name if uploaded_file else 'Video'}", banner_path=banner_file)
+            # --- ¡MODIFICADO! ---
+            pdf_bytes = generate_pdf_html(st.session_state.mode_state["video_evaluation_result"], title=f"Evaluacion Video - {uploaded_file.name if uploaded_file else 'Video'}", banner_path=banner_file)
             if pdf_bytes: 
                 st.download_button(label="Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion_{uploaded_file.name if uploaded_file else 'video'}.pdf", mime="application/pdf", use_container_width=True)
             else: 
                 st.error("Error al generar PDF.")
         with col2:
             if st.button("Evaluar Otro Video", use_container_width=True): 
-                st.session_state.pop("video_evaluation_result", None)
+                # --- ¡MODIFICADO! ---
+                st.session_state.mode_state.pop("video_evaluation_result", None)
                 st.rerun()
