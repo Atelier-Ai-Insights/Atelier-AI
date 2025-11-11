@@ -3,7 +3,7 @@ from utils import get_relevant_info
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event
 from prompts import get_idea_eval_prompt 
-import constants as c # <--- IMPORTACIÓN AÑADIDA
+import constants as c 
 
 # =====================================================
 # MODO: EVALUACIÓN DE PRE-IDEAS
@@ -13,13 +13,16 @@ def idea_evaluator_mode(db, selected_files):
     st.subheader("Evaluación de Pre-Ideas")
     st.markdown("Evalúa potencial de idea contra hallazgos.")
     
-    if "evaluation_result" in st.session_state:
+    # --- ¡MODIFICADO! ---
+    if "evaluation_result" in st.session_state.mode_state:
         st.markdown("---")
         st.markdown("### Evaluación")
-        st.markdown(st.session_state.evaluation_result)
+        # --- ¡MODIFICADO! ---
+        st.markdown(st.session_state.mode_state["evaluation_result"])
 
         if st.button("Evaluar otra idea", use_container_width=True): 
-            del st.session_state["evaluation_result"]
+            # --- ¡MODIFICADO! ---
+            del st.session_state.mode_state["evaluation_result"]
             st.rerun()
     else:
         idea_input = st.text_area("Describe la idea a evaluar:", height=150, placeholder="Ej: Yogures con probióticos...")
@@ -34,9 +37,9 @@ def idea_evaluator_mode(db, selected_files):
                 response = call_gemini_api(prompt)
                 
                 if response: 
-                    st.session_state.evaluation_result = response
-                    # --- Lógica de guardado REVERTIDA ---
-                    log_query_event(idea_input, mode=c.MODE_IDEA_EVAL) # <-- MODIFICADO
+                    # --- ¡MODIFICADO! ---
+                    st.session_state.mode_state["evaluation_result"] = response
+                    log_query_event(idea_input, mode=c.MODE_IDEA_EVAL)
                     st.rerun()
                 else: 
                     st.error("No se pudo generar evaluación.")
