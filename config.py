@@ -10,7 +10,9 @@ PLAN_FEATURES = {
         "has_concept_generation": False, "has_idea_evaluation": False,
         "has_image_evaluation": False, "has_video_evaluation": False,
         "transcript_file_limit": 1, "ppt_downloads_per_month": 2,
-        "project_upload_limit": 1, # <-- LÍNEA NUEVA
+        "project_upload_limit": 1,
+        "text_analysis_max_files_per_project": 1,
+        "text_analysis_questions_per_day": 5,
     },
     "Strategist": {
         "reports_per_month": 0, "chat_queries_per_day": float('inf'), "projects_per_year": 10,
@@ -18,7 +20,9 @@ PLAN_FEATURES = {
         "has_concept_generation": True, "has_idea_evaluation": False,
         "has_image_evaluation": False, "has_video_evaluation": False,
         "transcript_file_limit": 5, "ppt_downloads_per_month": 4,
-        "project_upload_limit": 5, # <-- LÍNEA NUEVA
+        "project_upload_limit": 5,
+        "text_analysis_max_files_per_project": 4,
+        "text_analysis_questions_per_day": 10,
     },
     "Enterprise": {
         "reports_per_month": float('inf'), "chat_queries_per_day": float('inf'), "projects_per_year": float('inf'),
@@ -26,7 +30,9 @@ PLAN_FEATURES = {
         "has_concept_generation": True, "has_idea_evaluation": True,
         "has_image_evaluation": True, "has_video_evaluation": True,
         "transcript_file_limit": 10, "ppt_downloads_per_month": float('inf'),
-        "project_upload_limit": float('inf'), # <-- LÍNEA NUEVA
+        "project_upload_limit": float('inf'),
+        "text_analysis_max_files_per_project": 6,
+        "text_analysis_questions_per_day": float('inf'),
     }
 }
 
