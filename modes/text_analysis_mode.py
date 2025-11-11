@@ -8,10 +8,13 @@ import requests
 import re 
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event, supabase
+# --- ¡IMPORTACIÓN MODIFICADA! ---
 from prompts import get_transcript_prompt, get_autocode_prompt, get_text_analysis_summary_prompt
 import constants as c
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
+# --- ¡NUEVA IMPORTACIÓN! ---
+from utils import reset_transcript_chat_workflow
 
 # =====================================================
 # MODO: ANÁLISIS DE TEXTOS (VERSIÓN PROYECTOS)
@@ -202,8 +205,7 @@ def show_text_project_list(user_id):
                         except Exception as e:
                             st.error(f"Error al eliminar: {e}")
 
-# --- Funciones de UI de Análisis (Sin cambios) ---
-
+# --- ¡INICIO DE FUNCIÓN MODIFICADA! ---
 def show_text_project_analyzer(summary_context, project_name):
     """
     Muestra la UI de análisis (Chat y Autocode) para el proyecto cargado.
@@ -254,6 +256,34 @@ def show_text_project_analyzer(summary_context, project_name):
                 else:
                     message_placeholder.error("Error al obtener respuesta."); 
                     st.session_state.mode_state["transcript_chat_history"].pop()
+
+        # --- ¡INICIO DEL CÓDIGO AÑADIDO! ---
+        if st.session_state.mode_state["transcript_chat_history"]:
+            st.divider() # Añadir un separador visual
+            col1, col2 = st.columns([1,1])
+            with col1:
+                # Lógica de descarga de PDF
+                chat_content_raw = "\n\n".join(f"**{m['role']}:** {m['content']}" for m in st.session_state.mode_state["transcript_chat_history"])
+                chat_content_for_pdf = chat_content_raw.replace("](#)", "]")
+                pdf_bytes = generate_pdf_html(chat_content_for_pdf, title=f"Chat Análisis de Texto - {project_name}", banner_path=banner_file)
+                
+                if pdf_bytes: 
+                    st.download_button(
+                        "Descargar Chat PDF", 
+                        data=pdf_bytes, 
+                        file_name=f"chat_analisis_texto_{project_name.lower().replace(' ','_')}.pdf", 
+                        mime="application/pdf", 
+                        use_container_width=True
+                    )
+            with col2: 
+                # Lógica de Nueva Conversación
+                st.button(
+                    "Nueva Conversación", 
+                    on_click=reset_transcript_chat_workflow, # <-- Usar la nueva función de reseteo
+                    key="new_transcript_chat_btn", 
+                    use_container_width=True
+                )
+        # --- ¡FIN DEL CÓDIGO AÑADIDO! ---
 
     with tab_autocode:
         st.header("Auto-Codificación")
@@ -338,7 +368,6 @@ def text_analysis_mode():
                  
             summary_prompt = get_text_analysis_summary_prompt(full_ctx)
             
-            # --- ¡INICIO DE LA CORRECCIÓN! ---
             # Para esta llamada específica, permitimos una respuesta mucho más larga
             # (16384 tokens) para evitar el corte del resumen.
             large_output_config = {
@@ -348,7 +377,6 @@ def text_analysis_mode():
                 summary_prompt, 
                 generation_config_override=large_output_config
             )
-            # --- ¡FIN DE LA CORRECCIÓN! ---
             
             if summary:
                 st.session_state.mode_state["ta_summary_context"] = summary
