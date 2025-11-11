@@ -5,7 +5,7 @@ from services.supabase_db import get_monthly_usage, log_query_event
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 from prompts import get_report_prompt1, get_report_prompt2
-import constants as c # <--- IMPORTACIÓN AÑADIDA
+import constants as c 
 
 # =====================================================
 # MODO: GENERAR REPORTE DE REPORTES
@@ -26,35 +26,41 @@ def report_mode(db, selected_files):
     st.markdown("### Generar Reporte de Reportes")
     st.markdown("Herramienta potente para síntesis. Analiza estudios seleccionados y genera informe consolidado.")
     
-    if "report" in st.session_state and st.session_state["report"]:
-        st.markdown("---"); st.markdown("### Informe Generado"); st.markdown(st.session_state["report"], unsafe_allow_html=True); st.markdown("---")
+    # --- ¡MODIFICADO! ---
+    if "report" in st.session_state.mode_state and st.session_state.mode_state["report"]:
+        st.markdown("---"); st.markdown("### Informe Generado"); 
+        # --- ¡MODIFICADO! ---
+        st.markdown(st.session_state.mode_state["report"], unsafe_allow_html=True); st.markdown("---")
     
-    question = st.text_area("Escribe tu consulta para el reporte…", value=st.session_state.get("last_question", ""), height=150, key="report_question")
+    # --- ¡MODIFICADO! ---
+    question = st.text_area("Escribe tu consulta para el reporte…", value=st.session_state.mode_state.get("last_question", ""), height=150, key="report_question")
     
     if st.button("Generar Reporte", use_container_width=True):
         report_limit = st.session_state.plan_features.get('reports_per_month', 0)
-        current_reports = get_monthly_usage(st.session_state.user, c.MODE_REPORT) # <-- MODIFICADO
+        current_reports = get_monthly_usage(st.session_state.user, c.MODE_REPORT) 
         if current_reports >= report_limit and report_limit != float('inf'): st.error(f"Límite de {int(report_limit)} reportes alcanzado."); return
         if not question.strip(): st.warning("Ingresa una consulta."); return
         
-        st.session_state["last_question"] = question
+        # --- ¡MODIFICADO! ---
+        st.session_state.mode_state["last_question"] = question
         with st.spinner("Generando informe..."): 
             report = generate_final_report(question, db, selected_files)
             
         if report is None: 
-            st.error("No se pudo generar."); st.session_state.pop("report", None)
+            # --- ¡MODIFICADO! ---
+            st.error("No se pudo generar."); st.session_state.mode_state.pop("report", None)
         else: 
-            st.session_state["report"] = report
-            # --- Lógica de guardado REVERTIDA ---
-            log_query_event(question, mode=c.MODE_REPORT) # <-- MODIFICADO
+            # --- ¡MODIFICADO! ---
+            st.session_state.mode_state["report"] = report
+            log_query_event(question, mode=c.MODE_REPORT)
             
             st.rerun() 
             
-    if "report" in st.session_state and st.session_state["report"]:
+    # --- ¡MODIFICADO! ---
+    if "report" in st.session_state.mode_state and st.session_state.mode_state["report"]:
         
-
-        # (Botones de descarga y nueva consulta)
-        pdf_bytes = generate_pdf_html(st.session_state["report"], title="Informe Final", banner_path=banner_file)
+        # --- ¡MODIFICADO! ---
+        pdf_bytes = generate_pdf_html(st.session_state.mode_state["report"], title="Informe Final", banner_path=banner_file)
         col1, col2 = st.columns(2)
         with col1:
             if pdf_bytes: 
@@ -62,4 +68,5 @@ def report_mode(db, selected_files):
             else: 
                 st.button("Error PDF", disabled=True, use_container_width=True)
         with col2: 
+            # Esta función ya fue actualizada en utils.py
             st.button("Nueva consulta", on_click=reset_report_workflow, key="new_report_query_btn", use_container_width=True)
