@@ -8,7 +8,6 @@ import requests
 import re 
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event, supabase
-# --- ¡IMPORTACIONES MODIFICADAS! ---
 from prompts import get_transcript_prompt, get_autocode_prompt, get_text_analysis_summary_prompt
 import constants as c
 from reporting.pdf_generator import generate_pdf_html
@@ -35,14 +34,12 @@ def load_text_project_data(storage_folder_path: str):
     combined_context = ""
     
     try:
-        # 1. Listar los archivos en la carpeta del proyecto
         files_list = supabase.storage.from_(TEXT_PROJECT_BUCKET).list(storage_folder_path)
         
         if not files_list:
             st.warning("El proyecto no contiene archivos.")
-            return "" # Retorna contexto vacío
+            return "" 
 
-        # Filtrar solo archivos .docx
         docx_files = [f for f in files_list if f['name'].endswith('.docx')]
         
         if not docx_files:
@@ -51,26 +48,20 @@ def load_text_project_data(storage_folder_path: str):
 
         st.write(f"Cargando {len(docx_files)} archivo(s) del proyecto...")
 
-        # 2. Iterar, descargar y leer cada archivo
         for file_info in docx_files:
             file_name = file_info['name']
-            full_file_path = f"{storage_folder_path}/{file_name}" # Ruta completa al archivo
+            full_file_path = f"{storage_folder_path}/{file_name}"
             
             try:
-                # 2.1. Descargar el archivo
                 response_file_bytes = supabase.storage.from_(TEXT_PROJECT_BUCKET).download(full_file_path)
-                
-                # 2.2. Leer el .docx
                 file_stream = io.BytesIO(response_file_bytes)
                 document = docx.Document(file_stream)
                 full_text = "\n".join([para.text for para in document.paragraphs if para.text.strip()])
-                
-                # 2.3. Añadir al contexto combinado
                 combined_context += f"\n\n--- INICIO DOCUMENTO: {file_name} ---\n\n{full_text}\n\n--- FIN DOCUMENTO: {file_name} ---\n"
             
             except Exception as e_file:
                 st.error(f"Error al procesar el archivo '{file_name}': {e_file}")
-                continue # Continúa con el siguiente archivo
+                continue 
         
         return combined_context
         
@@ -99,7 +90,6 @@ def show_text_project_creator(user_id, plan_limit):
         project_brand = st.text_input("Marca*", placeholder="Ej: Marca X")
         project_year = st.number_input("Año*", min_value=2020, max_value=2030, value=datetime.now().year)
         
-        # UI para carga múltiple
         uploaded_files = st.file_uploader(
             "Archivos Word (.docx)*",
             type=["docx"],
@@ -111,36 +101,28 @@ def show_text_project_creator(user_id, plan_limit):
         submitted = st.form_submit_button("Crear Proyecto")
 
     if submitted:
-        # Validación para lista de archivos
         if not all([project_name, project_brand, project_year, uploaded_files]):
             st.warning("Por favor, completa todos los campos obligatorios (*).")
             return
 
-        # 1. Generar una RUTA DE CARPETA única para el proyecto
         project_storage_folder = f"{user_id}/{uuid.uuid4()}" 
         
         spinner_text = f"Creando proyecto y subiendo {len(uploaded_files)} archivo(s)..."
         with st.spinner(spinner_text):
             try:
-                # 2. Subir TODOS los archivos
-                uploaded_file_paths = [] # Para la limpieza en caso de error
+                uploaded_file_paths = [] 
                 
-                for uploaded_file in uploaded_files: # Bucle sobre los archivos
-                    # Sanitización del nombre de cada archivo
+                for uploaded_file in uploaded_files: 
                     base_name = uploaded_file.name.replace(' ', '_')
                     safe_name = re.sub(r'[^\w._-]', '', base_name)
-                    
-                    # --- ¡CORRECCIÓN APLICADA AQUÍ! (os.path.splitext) ---
                     file_ext = os.path.splitext(safe_name)[1]
                     
                     if not safe_name or safe_name.startswith('.'):
                         safe_name = f"archivo_{uuid.uuid4()}{file_ext if file_ext else '.docx'}"
 
-                    # Ruta completa del archivo DENTRO de la carpeta del proyecto
                     storage_file_path = f"{project_storage_folder}/{safe_name}"
-                    uploaded_file_paths.append(storage_file_path) # Guardar para posible limpieza
+                    uploaded_file_paths.append(storage_file_path) 
 
-                    # Subir el archivo actual
                     file_bytes = uploaded_file.getvalue()
                     supabase.storage.from_(TEXT_PROJECT_BUCKET).upload(
                         path=storage_file_path,
@@ -148,16 +130,14 @@ def show_text_project_creator(user_id, plan_limit):
                         file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
                     )
 
-                # 3. Definir los datos del proyecto
                 project_data = {
                     "project_name": project_name,
                     "project_brand": project_brand,
                     "project_year": int(project_year),
-                    "storage_path": project_storage_folder, # Guarda la RUTA DE CARPETA
+                    "storage_path": project_storage_folder, 
                     "user_id": user_id
                 }
                 
-                # 4. Insertar en la base de datos
                 supabase.table("text_projects").insert(project_data).execute()
                 
                 st.success(f"¡Proyecto '{project_name}' creado exitosamente!")
@@ -165,9 +145,8 @@ def show_text_project_creator(user_id, plan_limit):
 
             except Exception as e:
                 st.error(f"Error al crear el proyecto: {e}")
-                # Lógica de limpieza (intenta borrar los archivos ya subidos)
                 try:
-                    if uploaded_file_paths: # Si se subió alguno
+                    if uploaded_file_paths: 
                         supabase.storage.from_(TEXT_PROJECT_BUCKET).remove(uploaded_file_paths)
                 except:
                     pass 
@@ -191,7 +170,7 @@ def show_text_project_list(user_id):
         proj_name = proj['project_name']
         proj_brand = proj.get('project_brand', 'N/A')
         proj_year = proj.get('project_year', 'N/A')
-        storage_path = proj['storage_path'] # Esta es la RUTA A LA CARPETA
+        storage_path = proj['storage_path'] 
         
         with st.container(border=True):
             col1, col2, col3 = st.columns([4, 1, 1])
@@ -201,27 +180,22 @@ def show_text_project_list(user_id):
             
             with col2:
                 if st.button("Analizar", key=f"analizar_txt_{proj_id}", use_container_width=True, type="primary"):
-                    st.session_state.ta_selected_project_id = proj_id
-                    st.session_state.ta_selected_project_name = proj_name
-                    st.session_state.ta_storage_path = storage_path # Pasa la ruta de la CARPETA
+                    # --- ¡MODIFICADO! ---
+                    st.session_state.mode_state["ta_selected_project_id"] = proj_id
+                    st.session_state.mode_state["ta_selected_project_name"] = proj_name
+                    st.session_state.mode_state["ta_storage_path"] = storage_path
                     st.rerun()
             
             with col3:
-                # Lógica de eliminación de carpeta
                 if st.button("Eliminar", key=f"eliminar_txt_{proj_id}", use_container_width=True):
                     with st.spinner("Eliminando proyecto y sus archivos..."):
                         try:
-                            # Nueva lógica para eliminar TODOS los archivos de la CARPETA
                             if storage_path:
-                                # 1. Listar todos los archivos en la carpeta
                                 files_in_project = supabase.storage.from_(TEXT_PROJECT_BUCKET).list(storage_path)
                                 if files_in_project:
-                                    # 2. Crear la lista de rutas completas a eliminar
                                     paths_to_remove = [f"{storage_path}/{f['name']}" for f in files_in_project]
-                                    # 3. Eliminar los archivos
                                     supabase.storage.from_(TEXT_PROJECT_BUCKET).remove(paths_to_remove)
                             
-                            # Borrar el registro de la DB
                             supabase.table("text_projects").delete().eq("id", proj_id).execute()
                             
                             st.success(f"Proyecto '{proj_name}' eliminado.")
@@ -233,20 +207,14 @@ def show_text_project_list(user_id):
 def show_text_project_analyzer(summary_context, project_name):
     """
     Muestra la UI de análisis (Chat y Autocode) para el proyecto cargado.
-    (MODIFICADO: AHORA RECIBE 'summary_context' EN LUGAR DE 'combined_context')
     """
     
     st.markdown(f"### Analizando: **{project_name}**")
     
     if st.button("← Volver a la lista de proyectos"):
-        # --- Limpieza de sesión actualizada ---
-        st.session_state.pop("ta_selected_project_id", None)
-        st.session_state.pop("ta_selected_project_name", None)
-        st.session_state.pop("ta_storage_path", None)
-        st.session_state.pop("ta_combined_context", None) # Limpiar el contexto completo
-        st.session_state.pop("ta_summary_context", None)  # Limpiar el resumen
-        st.session_state.pop("transcript_chat_history", None)
-        st.session_state.pop("autocode_result", None)
+        # --- ¡MODIFICADO! ---
+        # Simplemente limpiamos todo el estado del modo.
+        st.session_state.mode_state = {}
         st.rerun()
         
     st.divider()
@@ -257,50 +225,56 @@ def show_text_project_analyzer(summary_context, project_name):
         st.header("Análisis de Notas y Transcripciones")
         st.markdown("Haz preguntas específicas sobre el **resumen de hallazgos** del proyecto.")
         
-        if "transcript_chat_history" not in st.session_state: 
-            st.session_state.transcript_chat_history = []
+        # --- ¡MODIFICADO! ---
+        if "transcript_chat_history" not in st.session_state.mode_state: 
+            st.session_state.mode_state["transcript_chat_history"] = []
 
-        for msg in st.session_state.transcript_chat_history:
+        # --- ¡MODIFICADO! ---
+        for msg in st.session_state.mode_state["transcript_chat_history"]:
             with st.chat_message(msg["role"], avatar="✨" if msg['role'] == "assistant" else "👤"):
                 st.markdown(msg["content"])
 
         user_prompt = st.chat_input("Haz una pregunta sobre las transcripciones...")
 
         if user_prompt:
-            st.session_state.transcript_chat_history.append({"role": "user", "content": user_prompt})
+            # --- ¡MODIFICADO! ---
+            st.session_state.mode_state["transcript_chat_history"].append({"role": "user", "content": user_prompt})
             with st.chat_message("user", avatar="👤"):
                 st.markdown(user_prompt)
 
             with st.chat_message("assistant", avatar="✨"):
                 message_placeholder = st.empty(); message_placeholder.markdown("Analizando...")
                 
-                # --- ¡CAMBIO CLAVE! ---
-                # Ya no se usa 'combined_context', se usa 'summary_context'.
-                # Ya no se necesita truncar, el resumen es pequeño.
                 chat_prompt = get_transcript_prompt(summary_context, user_prompt)
                 response = call_gemini_api(chat_prompt) 
 
                 if response:
                     message_placeholder.markdown(response)
                     log_query_event(user_prompt, mode=f"{c.MODE_TEXT_ANALYSIS} (Chat)")
-                    st.session_state.transcript_chat_history.append({
+                    # --- ¡MODIFICADO! ---
+                    st.session_state.mode_state["transcript_chat_history"].append({
                         "role": "assistant", 
                         "content": response
                     })
                     st.rerun()
                 else:
-                    message_placeholder.error("Error al obtener respuesta."); st.session_state.transcript_chat_history.pop()
+                    message_placeholder.error("Error al obtener respuesta."); 
+                    # --- ¡MODIFICADO! ---
+                    st.session_state.mode_state["transcript_chat_history"].pop()
 
     with tab_autocode:
         st.header("Auto-Codificación")
         
-        if "autocode_result" in st.session_state:
+        # --- ¡MODIFICADO! ---
+        if "autocode_result" in st.session_state.mode_state:
             st.markdown("### Reporte de Temas Generado")
-            st.markdown(st.session_state.autocode_result)
+            # --- ¡MODIFICADO! ---
+            st.markdown(st.session_state.mode_state["autocode_result"])
             
             col1, col2 = st.columns(2)
             with col1:
-                pdf_bytes = generate_pdf_html(st.session_state.autocode_result, title="Reporte de Auto-Codificación", banner_path=banner_file)
+                # --- ¡MODIFICADO! ---
+                pdf_bytes = generate_pdf_html(st.session_state.mode_state["autocode_result"], title="Reporte de Auto-Codificación", banner_path=banner_file)
                 if pdf_bytes: 
                     st.download_button(
                         "Descargar Reporte PDF", 
@@ -311,7 +285,8 @@ def show_text_project_analyzer(summary_context, project_name):
                     )
             with col2:
                 if st.button("Generar nuevo reporte", use_container_width=True, type="secondary"):
-                    st.session_state.pop("autocode_result", None)
+                    # --- ¡MODIFICADO! ---
+                    st.session_state.mode_state.pop("autocode_result", None)
                     st.rerun()
         
         else:
@@ -328,14 +303,12 @@ def show_text_project_analyzer(summary_context, project_name):
                 else:
                     with st.spinner("Analizando temas emergentes..."):
                         
-                        # --- ¡CAMBIO CLAVE! ---
-                        # Ya no se usa 'combined_context', se usa 'summary_context'.
-                        # Ya no se necesita truncar.
                         prompt = get_autocode_prompt(summary_context, main_topic)
                         response = call_gemini_api(prompt)
 
                         if response:
-                            st.session_state.autocode_result = response
+                            # --- ¡MODIFICADO! ---
+                            st.session_state.mode_state["autocode_result"] = response
                             log_query_event(f"Auto-codificación: {main_topic}", mode=f"{c.MODE_TEXT_ANALYSIS} (Autocode)")
                             st.rerun()
                         else:
@@ -352,29 +325,26 @@ def text_analysis_mode():
     user_id = st.session_state.user_id
     plan_limit = st.session_state.plan_features.get('transcript_file_limit', 0)
 
-    # --- LÓGICA DE CARGA Y RESUMEN ---
+    # --- LÓGICA DE CARGA Y RESUMEN (Todo con mode_state) ---
     
-    # 1. Cargar el CONTEXTO COMPLETO (si está seleccionado pero no cargado)
-    if "ta_selected_project_id" in st.session_state and "ta_combined_context" not in st.session_state:
+    # 1. Cargar el CONTEXTO COMPLETO
+    if "ta_selected_project_id" in st.session_state.mode_state and "ta_combined_context" not in st.session_state.mode_state:
         with st.spinner("Cargando datos del proyecto de texto..."):
-            context = load_text_project_data(st.session_state.ta_storage_path) 
+            context = load_text_project_data(st.session_state.mode_state["ta_storage_path"]) 
             if context is not None:
-                st.session_state.ta_combined_context = context
+                st.session_state.mode_state["ta_combined_context"] = context
             else:
                 st.error("No se pudieron cargar los datos del proyecto.")
-                # Limpiar para volver a la lista
-                st.session_state.pop("ta_selected_project_id", None)
-                st.session_state.pop("ta_selected_project_name", None)
-                st.session_state.pop("ta_storage_path", None)
+                st.session_state.mode_state.pop("ta_selected_project_id", None)
+                st.session_state.mode_state.pop("ta_selected_project_name", None)
+                st.session_state.mode_state.pop("ta_storage_path", None)
 
-    # 2. Generar el RESUMEN (si el contexto completo está cargado pero el resumen no)
-    if "ta_combined_context" in st.session_state and "ta_summary_context" not in st.session_state:
+    # 2. Generar el RESUMEN
+    if "ta_combined_context" in st.session_state.mode_state and "ta_summary_context" not in st.session_state.mode_state:
         with st.spinner("Generando resumen de IA por única vez... (Esto puede tardar un minuto)"):
             
-            # Usar el contexto completo para generar el resumen
-            full_ctx = st.session_state.ta_combined_context
+            full_ctx = st.session_state.mode_state["ta_combined_context"]
             
-            # Truncar solo si es absolutamente masivo, para la llamada de resumen
             MAX_SUMMARY_INPUT = 1_000_000
             if len(full_ctx) > MAX_SUMMARY_INPUT:
                  full_ctx = full_ctx[:MAX_SUMMARY_INPUT] + "\n\n...(contexto truncado para resumen)..."
@@ -384,29 +354,27 @@ def text_analysis_mode():
             summary = call_gemini_api(summary_prompt)
             
             if summary:
-                st.session_state.ta_summary_context = summary
-                st.rerun() # Re-ejecutar para pasar a la vista de análisis
+                st.session_state.mode_state["ta_summary_context"] = summary
+                st.rerun() 
             else:
                 st.error("No se pudo generar el resumen inicial de IA. No se puede continuar.")
-                # Limpiar para volver a la lista
-                st.session_state.pop("ta_selected_project_id", None)
-                st.session_state.pop("ta_selected_project_name", None)
-                st.session_state.pop("ta_storage_path", None)
-                st.session_state.pop("ta_combined_context", None)
+                st.session_state.mode_state.pop("ta_selected_project_id", None)
+                st.session_state.mode_state.pop("ta_selected_project_name", None)
+                st.session_state.mode_state.pop("ta_storage_path", None)
+                st.session_state.mode_state.pop("ta_combined_context", None)
                 st.rerun()
 
     # --- LÓGICA DE VISTA (QUÉ MOSTRAR AL USUARIO) ---
 
-    # 3. VISTA DE ANÁLISIS (Si el resumen ya está listo)
-    if "ta_summary_context" in st.session_state:
-        show_text_project_analyzer( # <-- Pasa el resumen
-            st.session_state.ta_summary_context,
-            st.session_state.ta_selected_project_name
+    # 3. VISTA DE ANÁLISIS
+    if "ta_summary_context" in st.session_state.mode_state:
+        show_text_project_analyzer( 
+            st.session_state.mode_state["ta_summary_context"],
+            st.session_state.mode_state["ta_selected_project_name"]
         )
     
-    # 4. VISTA DE CARGA (Si el proyecto está seleccionado pero el resumen aún no está listo)
-    elif "ta_selected_project_id" in st.session_state:
-        # Esto se mostrará mientras el resumen se genera en el paso 2
+    # 4. VISTA DE CARGA
+    elif "ta_selected_project_id" in st.session_state.mode_state:
         st.info("Preparando análisis... (Generando resumen de IA)")
         st.spinner("Cargando y resumiendo proyecto...") 
     
