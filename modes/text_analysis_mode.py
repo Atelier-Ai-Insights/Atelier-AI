@@ -180,7 +180,6 @@ def show_text_project_list(user_id):
             
             with col2:
                 if st.button("Analizar", key=f"analizar_txt_{proj_id}", use_container_width=True, type="primary"):
-                    # --- ¡MODIFICADO! ---
                     st.session_state.mode_state["ta_selected_project_id"] = proj_id
                     st.session_state.mode_state["ta_selected_project_name"] = proj_name
                     st.session_state.mode_state["ta_storage_path"] = storage_path
@@ -203,7 +202,8 @@ def show_text_project_list(user_id):
                         except Exception as e:
                             st.error(f"Error al eliminar: {e}")
 
-# --- ¡INICIO DE FUNCIÓN MODIFICADA! ---
+# --- Funciones de UI de Análisis (Sin cambios) ---
+
 def show_text_project_analyzer(summary_context, project_name):
     """
     Muestra la UI de análisis (Chat y Autocode) para el proyecto cargado.
@@ -212,8 +212,6 @@ def show_text_project_analyzer(summary_context, project_name):
     st.markdown(f"### Analizando: **{project_name}**")
     
     if st.button("← Volver a la lista de proyectos"):
-        # --- ¡MODIFICADO! ---
-        # Simplemente limpiamos todo el estado del modo.
         st.session_state.mode_state = {}
         st.rerun()
         
@@ -225,11 +223,9 @@ def show_text_project_analyzer(summary_context, project_name):
         st.header("Análisis de Notas y Transcripciones")
         st.markdown("Haz preguntas específicas sobre el **resumen de hallazgos** del proyecto.")
         
-        # --- ¡MODIFICADO! ---
         if "transcript_chat_history" not in st.session_state.mode_state: 
             st.session_state.mode_state["transcript_chat_history"] = []
 
-        # --- ¡MODIFICADO! ---
         for msg in st.session_state.mode_state["transcript_chat_history"]:
             with st.chat_message(msg["role"], avatar="✨" if msg['role'] == "assistant" else "👤"):
                 st.markdown(msg["content"])
@@ -237,7 +233,6 @@ def show_text_project_analyzer(summary_context, project_name):
         user_prompt = st.chat_input("Haz una pregunta sobre las transcripciones...")
 
         if user_prompt:
-            # --- ¡MODIFICADO! ---
             st.session_state.mode_state["transcript_chat_history"].append({"role": "user", "content": user_prompt})
             with st.chat_message("user", avatar="👤"):
                 st.markdown(user_prompt)
@@ -251,7 +246,6 @@ def show_text_project_analyzer(summary_context, project_name):
                 if response:
                     message_placeholder.markdown(response)
                     log_query_event(user_prompt, mode=f"{c.MODE_TEXT_ANALYSIS} (Chat)")
-                    # --- ¡MODIFICADO! ---
                     st.session_state.mode_state["transcript_chat_history"].append({
                         "role": "assistant", 
                         "content": response
@@ -259,21 +253,17 @@ def show_text_project_analyzer(summary_context, project_name):
                     st.rerun()
                 else:
                     message_placeholder.error("Error al obtener respuesta."); 
-                    # --- ¡MODIFICADO! ---
                     st.session_state.mode_state["transcript_chat_history"].pop()
 
     with tab_autocode:
         st.header("Auto-Codificación")
         
-        # --- ¡MODIFICADO! ---
         if "autocode_result" in st.session_state.mode_state:
             st.markdown("### Reporte de Temas Generado")
-            # --- ¡MODIFICADO! ---
             st.markdown(st.session_state.mode_state["autocode_result"])
             
             col1, col2 = st.columns(2)
             with col1:
-                # --- ¡MODIFICADO! ---
                 pdf_bytes = generate_pdf_html(st.session_state.mode_state["autocode_result"], title="Reporte de Auto-Codificación", banner_path=banner_file)
                 if pdf_bytes: 
                     st.download_button(
@@ -285,7 +275,6 @@ def show_text_project_analyzer(summary_context, project_name):
                     )
             with col2:
                 if st.button("Generar nuevo reporte", use_container_width=True, type="secondary"):
-                    # --- ¡MODIFICADO! ---
                     st.session_state.mode_state.pop("autocode_result", None)
                     st.rerun()
         
@@ -307,14 +296,11 @@ def show_text_project_analyzer(summary_context, project_name):
                         response = call_gemini_api(prompt)
 
                         if response:
-                            # --- ¡MODIFICADO! ---
                             st.session_state.mode_state["autocode_result"] = response
                             log_query_event(f"Auto-codificación: {main_topic}", mode=f"{c.MODE_TEXT_ANALYSIS} (Autocode)")
                             st.rerun()
                         else:
                             st.error("Error al generar el análisis de temas.")
-# --- ¡FIN DE FUNCIÓN MODIFICADA! ---
-
 
 # --- ¡INICIO DE FUNCIÓN PRINCIPAL MODIFICADA! ---
 def text_analysis_mode():
@@ -351,7 +337,18 @@ def text_analysis_mode():
                  st.warning(f"El contexto es muy grande (>{MAX_SUMMARY_INPUT} caracteres) y ha sido truncado para generar el resumen inicial.", icon="⚠️")
                  
             summary_prompt = get_text_analysis_summary_prompt(full_ctx)
-            summary = call_gemini_api(summary_prompt)
+            
+            # --- ¡INICIO DE LA CORRECCIÓN! ---
+            # Para esta llamada específica, permitimos una respuesta mucho más larga
+            # (16384 tokens) para evitar el corte del resumen.
+            large_output_config = {
+                "max_output_tokens": 16384 
+            }
+            summary = call_gemini_api(
+                summary_prompt, 
+                generation_config_override=large_output_config
+            )
+            # --- ¡FIN DE LA CORRECCIÓN! ---
             
             if summary:
                 st.session_state.mode_state["ta_summary_context"] = summary
@@ -386,4 +383,3 @@ def text_analysis_mode():
         st.divider()
         
         show_text_project_list(user_id)
-# --- ¡FIN DE FUNCIÓN PRINCIPAL MODIFICADA! ---
