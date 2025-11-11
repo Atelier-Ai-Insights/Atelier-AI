@@ -5,7 +5,7 @@ from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event, supabase
 from prompts import (
     get_survey_articulation_prompt, get_excel_autocode_prompt,
-    get_data_summary_prompt, get_correlation_prompt, get_stat_test_prompt # <-- Importamos los nuevos prompts
+    get_data_summary_prompt, get_correlation_prompt, get_stat_test_prompt 
 )
 import constants as c
 import io 
@@ -150,9 +150,6 @@ def show_project_creator(user_id, plan_limit):
                     file_options={"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
                 )
                 
-                # --- AJUSTE FINAL (2025-11-08) ---
-                # Se elimina user_id. La BD lo insertará automáticamente
-                # gracias al "Default Value" (auth.uid()).
                 project_data = {
                     "project_name": project_name,
                     "project_brand": project_brand,
@@ -201,10 +198,11 @@ def show_project_list(user_id):
             
             with col2:
                 if st.button("Analizar", key=f"analizar_{proj_id}", use_container_width=True, type="primary"):
-                    st.session_state.da_selected_project_id = proj_id
-                    st.session_state.da_selected_project_name = proj_name
-                    st.session_state.da_storage_path = storage_path
-                    st.session_state.da_current_sub_mode = "Resumen Ejecutivo IA" # <-- NUEVO DEFAULT
+                    # --- ¡MODIFICADO! ---
+                    st.session_state.mode_state["da_selected_project_id"] = proj_id
+                    st.session_state.mode_state["da_selected_project_name"] = proj_name
+                    st.session_state.mode_state["da_storage_path"] = storage_path
+                    st.session_state.mode_state["da_current_sub_mode"] = "Resumen Ejecutivo IA"
                     st.rerun()
             
             with col3:
@@ -218,7 +216,7 @@ def show_project_list(user_id):
                         except Exception as e:
                             st.error(f"Error al eliminar: {e}")
 
-# --- INICIO DE LA FUNCIÓN MODIFICADA ---
+# --- ¡INICIO DE LA FUNCIÓN MODIFICADA! ---
 def show_project_analyzer(df, db_filtered, selected_files):
     """
     Muestra la UI de análisis completa (con 8 funciones)
@@ -226,34 +224,24 @@ def show_project_analyzer(df, db_filtered, selected_files):
     
     # --- 1. Lógica de Navegación de Sub-Modo ---
     def set_da_sub_mode(new_mode):
-        st.session_state.da_current_sub_mode = new_mode
+        # --- ¡MODIFICADO! ---
+        st.session_state.mode_state["da_current_sub_mode"] = new_mode
 
-    if "da_current_sub_mode" not in st.session_state:
-        st.session_state.da_current_sub_mode = "Resumen Ejecutivo IA" # Default
+    # --- ¡MODIFICADO! ---
+    if "da_current_sub_mode" not in st.session_state.mode_state:
+        st.session_state.mode_state["da_current_sub_mode"] = "Resumen Ejecutivo IA"
     
-    sub_modo = st.session_state.da_current_sub_mode
+    sub_modo = st.session_state.mode_state["da_current_sub_mode"]
     
-    st.markdown(f"### Analizando: **{st.session_state.da_selected_project_name}**")
+    # --- ¡MODIFICADO! ---
+    st.markdown(f"### Analizando: **{st.session_state.mode_state['da_selected_project_name']}**")
     
     if st.button("← Volver a la lista de proyectos"):
-        st.session_state.pop("data_analysis_df", None)
-        st.session_state.pop("da_selected_project_id", None)
-        st.session_state.pop("da_selected_project_name", None)
-        st.session_state.pop("da_storage_path", None)
-        st.session_state.pop("da_freq_table", None)
-        st.session_state.pop("da_pivot_table", None)
-        st.session_state.pop("da_wordcloud_fig", None)
-        st.session_state.pop("da_freq_table_cloud", None)
-        st.session_state.pop("da_current_sub_mode", None)
-        
-        st.session_state.pop("da_autocode_results_df", None)
-        st.session_state.pop("da_autocode_json", None)
-        st.session_state.pop("da_autocode_selected_col", None)
-        
-        st.session_state.pop("da_summary_result", None)
-        st.session_state.pop("da_corr_interpretation", None)
-        st.session_state.pop("da_stat_test_interpretation", None)
-        
+        # --- ¡MODIFICADO! ---
+        # Simplemente limpiamos todo el estado del modo, 
+        # `app.py` se encargará de esto si cambiamos de modo,
+        # pero aquí lo hacemos explícito para esta acción.
+        st.session_state.mode_state = {}
         st.rerun()
         
     # --- 2. Nuevo layout de navegación con st.columns y st.expander ---
@@ -279,58 +267,54 @@ def show_project_analyzer(df, db_filtered, selected_files):
     
     # --- 3. Lógica condicional para mostrar el contenido ---
 
-    if "data_analysis_stats_context" not in st.session_state:
-        st.session_state.data_analysis_stats_context = ""
+    # --- ¡MODIFICADO! ---
+    if "data_analysis_stats_context" not in st.session_state.mode_state:
+        st.session_state.mode_state["data_analysis_stats_context"] = ""
     
     # --- ¡INICIO NUEVA FUNCIÓN 1: RESUMEN EJECUTIVO IA! ---
     if sub_modo == "Resumen Ejecutivo IA":
         st.header("Resumen Ejecutivo")
         st.markdown("Un primer vistazo a tus datos para identificar los hallazgos más evidentes y las hipótesis de exploración más interesantes.")
 
-        if "da_summary_result" in st.session_state:
-            st.markdown(st.session_state.da_summary_result)
+        # --- ¡MODIFICADO! ---
+        if "da_summary_result" in st.session_state.mode_state:
+            st.markdown(st.session_state.mode_state["da_summary_result"])
             if st.button("Generar nuevo resumen", use_container_width=True, type="secondary"):
-                st.session_state.pop("da_summary_result")
+                # --- ¡MODIFICADO! ---
+                st.session_state.mode_state.pop("da_summary_result")
                 st.rerun()
         else:
             if st.button("Generar Resumen Ejecutivo", use_container_width=True, type="primary"):
                 with st.spinner("Analizando la estructura de los datos..."):
                     try:
-                        # 1. Crear el "snapshot" de los datos
+                        # ... (lógica interna sin cambios) ...
                         snapshot_buffer = io.StringIO()
                         snapshot_buffer.write(f"Resumen del DataFrame (Total Filas: {len(df)})\n\n")
                         snapshot_buffer.write("### Columnas y Tipos de Datos:\n")
-                        
                         df.info(buf=snapshot_buffer, verbose=False)
-                        
                         snapshot_buffer.write("\n\n")
-
-                        # 2. Resumen de columnas numéricas
                         numeric_cols = df.select_dtypes(include=['number']).columns
                         if not numeric_cols.empty:
                             snapshot_buffer.write("### Resumen de Métricas Numéricas:\n")
                             snapshot_buffer.write(df[numeric_cols].describe().to_string(float_format="%.2f"))
                             snapshot_buffer.write("\n\n")
-                        
-                        # 3. Resumen de columnas categóricas (top 5 valores)
                         cat_cols = df.select_dtypes(include=['object', 'category']).columns
                         if not cat_cols.empty:
                             snapshot_buffer.write("### Resumen de Distribución Categórica (Top 5):\n")
                             for col in cat_cols:
-                                if df[col].nunique() < 50: # Solo para columnas con < 50 valores únicos
+                                if df[col].nunique() < 50:
                                     snapshot_buffer.write(f"\n**Columna: {col}**\n")
                                     snapshot_buffer.write(df[col].value_counts(normalize=True).head(5).to_string(float_format="%.1f%%"))
                                     snapshot_buffer.write("\n")
-                        
                         data_snapshot = snapshot_buffer.getvalue()
                         snapshot_buffer.close()
-
-                        # 4. Llamar a la IA
+                        
                         prompt = get_data_summary_prompt(data_snapshot)
                         response = call_gemini_api(prompt)
 
                         if response:
-                            st.session_state.da_summary_result = response
+                            # --- ¡MODIFICADO! ---
+                            st.session_state.mode_state["da_summary_result"] = response
                             log_query_event("Generar Resumen Ejecutivo IA", mode=c.MODE_DATA_ANALYSIS)
                             st.rerun()
                         else:
@@ -352,6 +336,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
         else:
             col_to_num = st.selectbox("Selecciona una columna numérica:", numeric_cols, key="num_select")
             if col_to_num:
+                # ... (lógica interna sin cambios) ...
                 mean_val = df[col_to_num].mean()
                 median_val = df[col_to_num].median()
                 mode_val = df[col_to_num].mode().tolist() 
@@ -368,20 +353,24 @@ def show_project_analyzer(df, db_filtered, selected_files):
         else:
             col_to_cat = st.selectbox("Selecciona una columna categórica:", cat_cols, key="cat_select")
             if col_to_cat:
+                # ... (lógica interna sin cambios) ...
                 counts = df[col_to_cat].value_counts()
                 percentages = df[col_to_cat].value_counts(normalize=True)
                 df_freq = pd.DataFrame({'Conteo': counts, 'Porcentaje (%)': percentages.apply(lambda x: f"{x*100:.1f}%")})
                 st.dataframe(df_freq, use_container_width=True)
                 st.bar_chart(counts)
-                st.session_state.da_freq_table = df_freq 
+                # --- ¡MODIFICADO! ---
+                st.session_state.mode_state["da_freq_table"] = df_freq 
                 context_buffer.write(f"Distribución de la columna '{col_to_cat}':\n{df_freq.to_string()}\n\n")
 
-        st.session_state.data_analysis_stats_context = context_buffer.getvalue()
+        # --- ¡MODIFICADO! ---
+        st.session_state.mode_state["data_analysis_stats_context"] = context_buffer.getvalue()
         context_buffer.close()
 
     if sub_modo == "Tabla Dinámica":
         st.header("Generador de Tabla Dinámica")
         st.markdown("Crea tablas cruzadas para explorar relaciones entre variables.")
+        # ... (lógica interna sin cambios) ...
         all_cols = ["(Ninguno)"] + df.columns.tolist()
         numeric_cols_pivot = df.select_dtypes(include=['number']).columns.tolist()
         if not numeric_cols_pivot:
@@ -408,10 +397,13 @@ def show_project_analyzer(df, db_filtered, selected_files):
                     st.info("Selecciona al menos una 'Fila (Index)' para generar una tabla.")
                 if pivot_df_raw is not None:
                     pivot_df_raw = pivot_df_raw.fillna(0)
-                    st.session_state.da_pivot_table = pivot_df_raw
+                    # --- ¡MODIFICADO! ---
+                    st.session_state.mode_state["da_pivot_table"] = pivot_df_raw
                     context_title = f"Tabla ({val_col} por {index_col})"
                     if col_col != "(Ninguno)": context_title += f"/{col_col}"
-                    st.session_state.data_analysis_stats_context += f"\n{context_title}:\n{pivot_df_raw.to_string()}\n\n"
+                    # --- ¡MODIFICADO! ---
+                    st.session_state.mode_state["data_analysis_stats_context"] += f"\n{context_title}:\n{pivot_df_raw.to_string()}\n\n"
+                    
                     st.markdown("#### Resultado de la Tabla Dinámica")
                     display_df = pivot_df_raw.copy() 
                     if display_mode == "% del Total General":
@@ -426,6 +418,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                     else:
                         st.dataframe(display_df.fillna(0).style.format("{:.1%}"), use_container_width=True)
                     if show_sig and agg_func == 'count':
+                        # ... (lógica de Chi-Squared sin cambios) ...
                         st.markdown("---")
                         st.subheader("Prueba de Significación (Chi-Squared)")
                         is_valid_shape = (pivot_df_raw.ndim == 1 and pivot_df_raw.shape[0] > 1) or (pivot_df_raw.ndim == 2 and pivot_df_raw.shape[0] > 1 and pivot_df_raw.shape[1] > 1)
@@ -462,6 +455,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
             if col_to_cloud:
                 with st.spinner("Generando nube de palabras y tabla..."):
                     try:
+                        # ... (lógica interna sin cambios) ...
                         stopwords = get_stopwords()
                         text = " ".join(str(review) for review in df[col_to_cloud].dropna())
                         if not text.strip():
@@ -479,15 +473,20 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 st.pyplot(fig)
                                 img_stream = io.BytesIO()
                                 fig.savefig(img_stream, format='png', bbox_inches='tight')
-                                st.session_state.da_wordcloud_fig = img_stream
+                                # --- ¡MODIFICADO! ---
+                                st.session_state.mode_state["da_wordcloud_fig"] = img_stream
+                                
                                 st.subheader("Tabla de Frecuencias")
                                 df_freq = pd.DataFrame(frequencies.items(), columns=['Palabra', 'Frecuencia']).sort_values(by='Frecuencia', ascending=False).reset_index(drop=True)
                                 st.dataframe(df_freq, use_container_width=True)
-                                st.session_state.da_freq_table_cloud = df_freq
+                                # --- ¡MODIFICADO! ---
+                                st.session_state.mode_state["da_freq_table_cloud"] = df_freq
+                                
                                 excel_bytes = to_excel(df_freq)
                                 st.download_button(label="📥 Descargar Frecuencias como Excel", data=excel_bytes, file_name=f"frecuencias_{col_to_cloud}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
                                 top_words = ', '.join(df_freq['Palabra'].head(10))
-                                st.session_state.data_analysis_stats_context += f"\nPalabras clave de '{col_to_cloud}': {top_words}...\n\n"
+                                # --- ¡MODIFICADO! ---
+                                st.session_state.mode_state["data_analysis_stats_context"] += f"\nPalabras clave de '{col_to_cloud}': {top_words}...\n\n"
                     except Exception as e:
                         st.error(f"Error al generar la nube de palabras: {e}")
 
@@ -506,21 +505,20 @@ def show_project_analyzer(df, db_filtered, selected_files):
                 st.info("Por favor, selecciona al menos 2 columnas.")
             else:
                 try:
-                    # 1. Calcular Matriz
+                    # ... (lógica interna sin cambios) ...
                     corr_matrix = df[selected_cols].corr()
-                    
-                    # 2. Dibujar Heatmap
                     st.subheader("Mapa de Calor de Correlación")
                     fig, ax = plt.subplots()
                     sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap="coolwarm", ax=ax)
                     st.pyplot(fig)
                     
-                    # 3. Interpretación con IA
                     st.subheader("Interpretación de la IA")
-                    if "da_corr_interpretation" in st.session_state:
-                        st.markdown(st.session_state.da_corr_interpretation)
+                    # --- ¡MODIFICADO! ---
+                    if "da_corr_interpretation" in st.session_state.mode_state:
+                        st.markdown(st.session_state.mode_state["da_corr_interpretation"])
                         if st.button("Generar nueva interpretación", key="new_corr_interp", type="secondary"):
-                            st.session_state.pop("da_corr_interpretation")
+                            # --- ¡MODIFICADO! ---
+                            st.session_state.mode_state.pop("da_corr_interpretation")
                             st.rerun()
                     else:
                         if st.button("Interpretar Correlaciones", type="primary"):
@@ -529,7 +527,8 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 prompt = get_correlation_prompt(matrix_str)
                                 response = call_gemini_api(prompt)
                                 if response:
-                                    st.session_state.da_corr_interpretation = response
+                                    # --- ¡MODIFICADO! ---
+                                    st.session_state.mode_state["da_corr_interpretation"] = response
                                     log_query_event(f"Interpretación Correlación: {', '.join(selected_cols)}", mode=c.MODE_DATA_ANALYSIS)
                                     st.rerun()
                                 else:
@@ -556,15 +555,14 @@ def show_project_analyzer(df, db_filtered, selected_files):
             
             if cat_col and num_col:
                 try:
+                    # ... (lógica interna sin cambios) ...
                     st.markdown("---")
                     st.subheader("Resultado de la Prueba")
                     
-                    # 1. Preparar los datos
                     groups = df[cat_col].unique()
                     num_groups = len(groups)
                     group_data = [df[num_col][df[cat_col] == g].dropna() for g in groups]
                     
-                    # 2. Ejecutar la prueba
                     if num_groups == 2:
                         test_type = "Prueba T (T-Test)"
                         stat, p_value = stats.ttest_ind(group_data[0], group_data[1], nan_policy='omit')
@@ -578,11 +576,12 @@ def show_project_analyzer(df, db_filtered, selected_files):
                     col1.metric("Prueba Realizada", test_type)
                     col2.metric("P-Value", f"{p_value:.4f}")
 
-                    # 3. Interpretación con IA
-                    if "da_stat_test_interpretation" in st.session_state:
-                        st.markdown(st.session_state.da_stat_test_interpretation)
+                    # --- ¡MODIFICADO! ---
+                    if "da_stat_test_interpretation" in st.session_state.mode_state:
+                        st.markdown(st.session_state.mode_state["da_stat_test_interpretation"])
                         if st.button("Generar nueva interpretación", key="new_stat_interp", type="secondary"):
-                            st.session_state.pop("da_stat_test_interpretation")
+                            # --- ¡MODIFICADO! ---
+                            st.session_state.mode_state.pop("da_stat_test_interpretation")
                             st.rerun()
                     else:
                         if st.button("Interpretar Resultado", type="primary"):
@@ -590,7 +589,8 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 prompt = get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups)
                                 response = call_gemini_api(prompt)
                                 if response:
-                                    st.session_state.da_stat_test_interpretation = response
+                                    # --- ¡MODIFICADO! ---
+                                    st.session_state.mode_state["da_stat_test_interpretation"] = response
                                     log_query_event(f"Interpretación {test_type}: {num_col} vs {cat_col}", mode=c.MODE_DATA_ANALYSIS)
                                     st.rerun()
                                 else:
@@ -609,40 +609,48 @@ def show_project_analyzer(df, db_filtered, selected_files):
             st.info("Asegúrate de que la plantilla base esté subida al repositorio de la app.")
         else:
             st.markdown("#### Seleccionar Contenido")
-            include_freq = st.checkbox("Incluir Tabla de Frecuencias", value=True, disabled=not "da_freq_table" in st.session_state)
-            include_pivot = st.checkbox("Incluir Tabla Dinámica", value=True, disabled=not "da_pivot_table" in st.session_state)
-            include_cloud_img = st.checkbox("Incluir Nube de Palabras", value=True, disabled=not "da_wordcloud_fig" in st.session_state)
-            include_cloud_table = st.checkbox("Incluir Tabla de Frecuencias (de Nube de Palabras)", value=False, disabled=not "da_freq_table_cloud" in st.session_state)
-            
-            include_autocode = st.checkbox("Incluir Tabla de Auto-Codificación", value=True, disabled=not "da_autocode_results_df" in st.session_state)
+            # --- ¡MODIFICADO! ---
+            include_freq = st.checkbox("Incluir Tabla de Frecuencias", value=True, disabled=not "da_freq_table" in st.session_state.mode_state)
+            include_pivot = st.checkbox("Incluir Tabla Dinámica", value=True, disabled=not "da_pivot_table" in st.session_state.mode_state)
+            include_cloud_img = st.checkbox("Incluir Nube de Palabras", value=True, disabled=not "da_wordcloud_fig" in st.session_state.mode_state)
+            include_cloud_table = st.checkbox("Incluir Tabla de Frecuencias (de Nube de Palabras)", value=False, disabled=not "da_freq_table_cloud" in st.session_state.mode_state)
+            include_autocode = st.checkbox("Incluir Tabla de Auto-Codificación", value=True, disabled=not "da_autocode_results_df" in st.session_state.mode_state)
             
             if st.button("Generar Presentación", use_container_width=True, type="primary"):
                 with st.spinner("Creando archivo .pptx..."):
                     try:
                         prs = Presentation(template_file)
-                        add_title_slide(prs, f"Análisis de Datos: {st.session_state.da_selected_project_name}")
-                        if include_freq and "da_freq_table" in st.session_state:
-                            add_table_slide(prs, "Análisis de Frecuencias", st.session_state.da_freq_table)
-                        if include_pivot and "da_pivot_table" in st.session_state:
-                            add_table_slide(prs, "Tabla Dinámica", st.session_state.da_pivot_table)
-                        if include_cloud_img and "da_wordcloud_fig" in st.session_state:
-                            add_image_slide(prs, "Nube de Palabras", st.session_state.da_wordcloud_fig)
-                        if include_cloud_table and "da_freq_table_cloud" in st.session_state:
-                            add_table_slide(prs, "Tabla de Frecuencias (Nube)", st.session_state.da_freq_table_cloud)
+                        # --- ¡MODIFICADO! ---
+                        add_title_slide(prs, f"Análisis de Datos: {st.session_state.mode_state['da_selected_project_name']}")
+                        if include_freq and "da_freq_table" in st.session_state.mode_state:
+                            add_table_slide(prs, "Análisis de Frecuencias", st.session_state.mode_state["da_freq_table"])
+                        if include_pivot and "da_pivot_table" in st.session_state.mode_state:
+                            add_table_slide(prs, "Tabla Dinámica", st.session_state.mode_state["da_pivot_table"])
+                        if include_cloud_img and "da_wordcloud_fig" in st.session_state.mode_state:
+                            add_image_slide(prs, "Nube de Palabras", st.session_state.mode_state["da_wordcloud_fig"])
+                        if include_cloud_table and "da_freq_table_cloud" in st.session_state.mode_state:
+                            add_table_slide(prs, "Tabla de Frecuencias (Nube)", st.session_state.mode_state["da_freq_table_cloud"])
                         
-                        if include_autocode and "da_autocode_results_df" in st.session_state:
-                            df_autocode_export = st.session_state.da_autocode_results_df.copy()
+                        if include_autocode and "da_autocode_results_df" in st.session_state.mode_state:
+                            df_autocode_export = st.session_state.mode_state["da_autocode_results_df"].copy()
                             df_autocode_export["Porcentaje (%)"] = df_autocode_export["Porcentaje (%)"].apply(lambda x: f"{x:.1f}%")
                             add_table_slide(prs, "Auto-Codificación de Pregunta Abierta", df_autocode_export)
                         
                         ppt_stream = io.BytesIO()
                         prs.save(ppt_stream)
                         ppt_stream.seek(0)
-                        st.session_state.generated_data_ppt = ppt_stream.getvalue()
+                        # --- ¡MODIFICADO! ---
+                        st.session_state.mode_state["generated_data_ppt"] = ppt_stream.getvalue()
                     except Exception as e:
                         st.error(f"Error al generar la presentación: {e}")
-            if "generated_data_ppt" in st.session_state:
-                st.download_button(label="📥 Descargar Presentación (.pptx)", data=st.session_state.generated_data_ppt, file_name=f"analisis_{st.session_state.da_selected_project_name}.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation", use_container_width=True)
+            
+            # --- ¡MODIFICADO! ---
+            if "generated_data_ppt" in st.session_state.mode_state:
+                st.download_button(label="📥 Descargar Presentación (.pptx)", 
+                                   data=st.session_state.mode_state["generated_data_ppt"], 
+                                   file_name=f"analisis_{st.session_state.mode_state['da_selected_project_name']}.pptx", 
+                                   mime="application/vnd.openxmlformats-officedocument.presentationml.presentation", 
+                                   use_container_width=True)
 
     if sub_modo == "Auto-Codificación":
         st.header("Auto-Codificación (Preguntas Abiertas)")
@@ -657,24 +665,28 @@ def show_project_analyzer(df, db_filtered, selected_files):
         if not text_cols:
             st.warning("El archivo no contiene columnas de texto/categoría para este análisis.")
         else:
-            if "da_autocode_results_df" in st.session_state:
+            # --- ¡MODIFICADO! ---
+            if "da_autocode_results_df" in st.session_state.mode_state:
                 st.subheader("Resultados de la Codificación")
                 st.dataframe(
-                    st.session_state.da_autocode_results_df,
+                    # --- ¡MODIFICADO! ---
+                    st.session_state.mode_state["da_autocode_results_df"],
                     column_config={
                         "Categoría": st.column_config.TextColumn(width="large"),
                         "Menciones (N)": st.column_config.NumberColumn(format="%d"),
                         "Porcentaje (%)": st.column_config.ProgressColumn(
                             format="%.1f%%",
                             min_value=0,
-                            max_value=st.session_state.da_autocode_results_df["Porcentaje (%)"].max() if not st.session_state.da_autocode_results_df["Porcentaje (%)"].empty else 100
+                            # --- ¡MODIFICADO! ---
+                            max_value=st.session_state.mode_state["da_autocode_results_df"]["Porcentaje (%)"].max() if not st.session_state.mode_state["da_autocode_results_df"]["Porcentaje (%)"].empty else 100
                         ),
                     },
                     use_container_width=True,
                     hide_index=True
                 )
                 
-                excel_bytes = to_excel(st.session_state.da_autocode_results_df)
+                # --- ¡MODIFICADO! ---
+                excel_bytes = to_excel(st.session_state.mode_state["da_autocode_results_df"])
                 st.download_button(
                     label="📥 Descargar Tabla como Excel", 
                     data=excel_bytes, 
@@ -684,46 +696,49 @@ def show_project_analyzer(df, db_filtered, selected_files):
                 )
 
                 if st.button("Analizar otra columna", use_container_width=True, type="secondary"):
-                    st.session_state.pop("da_autocode_results_df", None)
-                    st.session_state.pop("da_autocode_json", None)
-                    st.session_state.pop("da_autocode_selected_col", None) # <-- Limpiar
+                    # --- ¡MODIFICADO! ---
+                    st.session_state.mode_state.pop("da_autocode_results_df", None)
+                    st.session_state.mode_state.pop("da_autocode_json", None)
+                    st.session_state.mode_state.pop("da_autocode_selected_col", None)
                     st.rerun()
                 
                 st.divider()
                 st.subheader("Explorar Verbatims por Categoría")
                 
-                categories_list = ["(Selecciona una categoría)"] + st.session_state.da_autocode_results_df['Categoría'].tolist()
+                # --- ¡MODIFICADO! ---
+                categories_list = ["(Selecciona una categoría)"] + st.session_state.mode_state["da_autocode_results_df"]['Categoría'].tolist()
                 selected_cat = st.selectbox("Selecciona una categoría para ver ejemplos:", categories_list, key="verbatim_select")
 
                 if selected_cat != "(Selecciona una categoría)":
                     
-                    if "da_autocode_selected_col" not in st.session_state:
+                    # --- ¡MODIFICADO! ---
+                    if "da_autocode_selected_col" not in st.session_state.mode_state:
                         st.error("Error de estado: No se guardó la columna de origen. Por favor, haz clic en 'Analizar otra columna' y vuelve a generar el análisis.")
                     else:
                         try:
-                            cat_json = next(item for item in st.session_state.da_autocode_json if item["categoria"] == selected_cat)
+                            # --- ¡MODIFICADO! ---
+                            cat_json = next(item for item in st.session_state.mode_state["da_autocode_json"] if item["categoria"] == selected_cat)
                             keywords = cat_json.get("keywords", [])
                             
-                            col_name = st.session_state.da_autocode_selected_col
-                            full_series = st.session_state.data_analysis_df[col_name].astype(str)
+                            # --- ¡MODIFICADO! ---
+                            col_name = st.session_state.mode_state["da_autocode_selected_col"]
+                            full_series = st.session_state.mode_state["data_analysis_df"][col_name].astype(str)
 
                             valid_keywords = [re.escape(k.strip()) for k in keywords if k.strip()]
                             if not valid_keywords:
                                 st.warning("No se definieron keywords para esta categoría.")
                             else:
+                                # ... (lógica interna sin cambios) ...
                                 regex_pattern = r'\b(' + '|'.join(valid_keywords) + r')\b'
-                                
                                 matching_verbatims = full_series[
                                     full_series.str.contains(regex_pattern, case=False, na=False, regex=True)
                                 ].dropna().unique() 
-
                                 st.markdown(f"**Mostrando ejemplos de verbatims para '{selected_cat}':**")
                                 if len(matching_verbatims) == 0:
                                     st.info("No se encontraron verbatims coincidentes (esto podría indicar un error si N > 0).")
                                 else:
                                     for v in matching_verbatims[:20]:
                                         st.markdown(f"> {v}")
-                                    
                                     if len(matching_verbatims) > 20:
                                         st.caption(f"...y {len(matching_verbatims) - 20} más. (Mostrando los primeros 20 ejemplos).")
 
@@ -740,12 +755,12 @@ def show_project_analyzer(df, db_filtered, selected_files):
                     else:
                         with st.spinner("Analizando respuestas y generando categorías (IA)..."):
                             try:
+                                # ... (lógica interna sin cambios) ...
                                 non_null_responses = df[col_to_autocode].dropna().unique()
                                 if len(non_null_responses) == 0:
                                     st.error("La columna seleccionada está vacía o no tiene datos válidos."); return
                                 
-                                sample_list = list(non_null_responses[:100]) # <-- Muestra reducida a 100
-                                
+                                sample_list = list(non_null_responses[:100]) 
                                 prompt = get_excel_autocode_prompt(main_topic, sample_list)
                                 json_config = {"response_mime_type": "application/json"}
                                 no_safety = [
@@ -754,47 +769,40 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                     {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
                                     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
                                 ]
-                                
                                 response_text = call_gemini_api(
                                     prompt,
                                     generation_config_override=json_config,
                                     safety_settings_override=no_safety
                                 )
-                                
                                 if not response_text:
                                     st.error("La IA no pudo generar una respuesta. Inténtalo de nuevo."); return
 
                                 categories_json = json.loads(response_text)
-                                st.session_state.da_autocode_json = categories_json
-                                
-                                st.session_state.da_autocode_selected_col = col_to_autocode
+                                # --- ¡MODIFICADO! ---
+                                st.session_state.mode_state["da_autocode_json"] = categories_json
+                                st.session_state.mode_state["da_autocode_selected_col"] = col_to_autocode
                                 
                                 total_participants = len(df)
                                 full_series = df[col_to_autocode].astype(str)
                                 results = []
                                 
                                 for cat in categories_json:
+                                    # ... (lógica interna sin cambios) ...
                                     category_name = cat.get('categoria', 'Sin Categoría')
                                     keywords = cat.get('keywords', [])
-                                    
                                     if not keywords or not isinstance(keywords, list):
                                         continue
-                                    
                                     valid_keywords = [re.escape(k.strip()) for k in keywords if k.strip()]
                                     if not valid_keywords:
                                         continue
-                                        
                                     regex_pattern = r'\b(' + '|'.join(valid_keywords) + r')\b'
-                                    
                                     mentions_count = full_series.str.contains(
                                         regex_pattern, 
                                         case=False,
                                         na=False,
                                         regex=True
                                     ).sum()
-                                    
                                     percentage = (mentions_count / total_participants) * 100 if total_participants > 0 else 0
-                                    
                                     results.append({
                                         "Categoría": category_name,
                                         "Menciones (N)": int(mentions_count),
@@ -805,7 +813,8 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                     st.warning("La IA generó categorías, pero no se encontraron menciones con esas keywords.")
                                 else:
                                     df_results = pd.DataFrame(results).sort_values(by="Menciones (N)", ascending=False)
-                                    st.session_state.da_autocode_results_df = df_results
+                                    # --- ¡MODIFICADO! ---
+                                    st.session_state.mode_state["da_autocode_results_df"] = df_results
                                     log_query_event(f"Auto-Codificación: {main_topic} ({col_to_autocode})", mode=c.MODE_DATA_ANALYSIS)
                                     st.rerun()
 
@@ -814,7 +823,8 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 st.code(response_text)
                             except re.error as e:
                                 st.error(f"Error de Regex: La IA generó keywords inválidas. {e}")
-                                st.code(st.session_state.get("da_autocode_json"))
+                                # --- ¡MODIFICADO! ---
+                                st.code(st.session_state.mode_state.get("da_autocode_json"))
                             except Exception as e:
                                 st.error(f"Ocurrió un error inesperado: {e}")
                                 st.code(traceback.format_exc())
@@ -829,19 +839,20 @@ def data_analysis_mode(db, selected_files):
     user_id = st.session_state.user_id
     plan_limit = st.session_state.plan_features.get('project_upload_limit', 0)
 
-    if "da_selected_project_id" in st.session_state and "data_analysis_df" not in st.session_state:
+    # --- ¡INICIO DE LA LÓGICA MODIFICADA! ---
+    if "da_selected_project_id" in st.session_state.mode_state and "data_analysis_df" not in st.session_state.mode_state:
         with st.spinner("Cargando datos del proyecto..."):
-            df = load_project_data(st.session_state.da_storage_path)
+            df = load_project_data(st.session_state.mode_state["da_storage_path"])
             if df is not None:
-                st.session_state.data_analysis_df = df
+                st.session_state.mode_state["data_analysis_df"] = df
             else:
                 st.error("No se pudieron cargar los datos del proyecto.")
-                st.session_state.pop("da_selected_project_id")
-                st.session_state.pop("da_selected_project_name")
-                st.session_state.pop("da_storage_path")
+                st.session_state.mode_state.pop("da_selected_project_id")
+                st.session_state.mode_state.pop("da_selected_project_name")
+                st.session_state.mode_state.pop("da_storage_path")
 
-    if "data_analysis_df" in st.session_state:
-        show_project_analyzer(st.session_state.data_analysis_df, db, selected_files)
+    if "data_analysis_df" in st.session_state.mode_state:
+        show_project_analyzer(st.session_state.mode_state["data_analysis_df"], db, selected_files)
     
     else:
         with st.expander("➕ Crear Nuevo Proyecto", expanded=True):
@@ -850,4 +861,4 @@ def data_analysis_mode(db, selected_files):
         st.divider()
         
         show_project_list(user_id)
-
+    # --- ¡FIN DE LA LÓGICA MODIFICADA! ---
