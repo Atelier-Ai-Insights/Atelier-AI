@@ -1,9 +1,8 @@
 import streamlit as st
 import json
 from services.supabase_db import get_monthly_usage, log_query_event
-# import google.generativeai as genai <--- ELIMINADO
 from config import safety_settings
-from services.gemini_api import call_gemini_api # <--- MODIFICADO
+from services.gemini_api import call_gemini_api 
 from reporting.ppt_generator import crear_ppt_desde_json
 from utils import get_relevant_info, extract_text_from_pdfs
 from prompts import PROMPTS_ONEPAGER, get_onepager_final_prompt
@@ -29,19 +28,23 @@ def one_pager_ppt_mode(db_filtered, selected_files):
         {limit_text}
     """)
 
-    if "generated_ppt_bytes" in st.session_state:
-        st.success(f"¡Tu diapositiva '{st.session_state.get('generated_ppt_template_name', 'Estratégica')}' está lista!")
+    # --- ¡MODIFICADO! ---
+    if "generated_ppt_bytes" in st.session_state.mode_state:
+        # --- ¡MODIFICADO! ---
+        st.success(f"¡Tu diapositiva '{st.session_state.mode_state.get('generated_ppt_template_name', 'Estratégica')}' está lista!")
         
         st.download_button(
             label=f"Descargar Diapositiva (.pptx)",
-            data=st.session_state.generated_ppt_bytes,
-            file_name=f"diapositiva_{st.session_state.get('generated_ppt_template_name', 'estrategica').lower().replace(' ','_')}.pptx",
+            # --- ¡MODIFICADO! ---
+            data=st.session_state.mode_state["generated_ppt_bytes"],
+            file_name=f"diapositiva_{st.session_state.mode_state.get('generated_ppt_template_name', 'estrategica').lower().replace(' ','_')}.pptx",
             mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
             use_container_width=True
         )
         if st.button("Generar nueva Diapositiva", use_container_width=True, type="secondary"):
-            del st.session_state.generated_ppt_bytes
-            st.session_state.pop('generated_ppt_template_name', None)
+            # --- ¡MODIFICADO! ---
+            del st.session_state.mode_state["generated_ppt_bytes"]
+            st.session_state.mode_state.pop('generated_ppt_template_name', None)
             st.rerun()
         return
 
@@ -90,26 +93,20 @@ def one_pager_ppt_mode(db_filtered, selected_files):
         with st.spinner(f"Generando contenido para '{selected_template_name}'..."):
             response_text = None
             try:
-                # --- INICIO DE MODIFICACIÓN ---
-                # Definimos la configuración JSON
                 json_generation_config = {"response_mime_type": "application/json"}
                 
-                # Llamamos a la función API centralizada con el override
                 response_text = call_gemini_api(
                     final_prompt_json,
                     generation_config_override=json_generation_config
                 )
                 
                 if response_text is None:
-                    # El error ya se mostró en la UI por call_gemini_api
                     raise Exception("La API de Gemini falló al generar el JSON.")
 
                 data_json = json.loads(response_text)
-                # --- FIN DE MODIFICACIÓN ---
 
             except json.JSONDecodeError: st.error("Error: La IA no devolvió un JSON válido."); st.code(response_text); return
             except Exception as e: 
-                # Si el error no fue JSONDecode, imprimirlo (aunque call_gemini_api ya lo habrá hecho)
                 if "JSON" not in str(e):
                     st.error(f"Error API Gemini: {e}")
                 st.code(str(response_text)); 
@@ -119,10 +116,10 @@ def one_pager_ppt_mode(db_filtered, selected_files):
             with st.spinner("Ensamblando diapositiva .pptx..."):
                 ppt_bytes = crear_ppt_desde_json(data_json)
             if ppt_bytes:
-                st.session_state.generated_ppt_bytes = ppt_bytes
-                st.session_state.generated_ppt_template_name = selected_template_name
+                # --- ¡MODIFICADO! ---
+                st.session_state.mode_state["generated_ppt_bytes"] = ppt_bytes
+                st.session_state.mode_state["generated_ppt_template_name"] = selected_template_name
                 
-                # --- Lógica de guardado REVERTIDA ---
                 query_text = f"{selected_template_name}: {tema_central}"
                 log_query_event(query_text, mode=c.MODE_ONEPAGER)
                 
