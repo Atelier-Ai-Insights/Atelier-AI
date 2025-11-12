@@ -111,7 +111,6 @@ def load_project_data(storage_path):
         st.error(f"Error al cargar el proyecto: {e}")
         return None
 
-# --- ¡INICIO DE FUNCIÓN MODIFICADA! ---
 def show_project_creator(user_id, plan_limit):
     st.subheader("Crear Nuevo Proyecto")
     
@@ -122,8 +121,6 @@ def show_project_creator(user_id, plan_limit):
         st.error(f"Error al verificar el conteo de proyectos: {e}")
         return
 
-    # --- ¡MODIFICADO! Leemos el límite de config.py ---
-    # (plan_limit ya se pasa a esta función, la cual lee el nuevo valor de config.py)
     if project_count >= plan_limit and plan_limit != float('inf'):
         if plan_limit == 1:
             st.warning(f"Has alcanzado el límite de {int(plan_limit)} proyecto para tu plan actual. Deberás eliminar tu proyecto existente para crear uno nuevo.")
@@ -174,7 +171,6 @@ def show_project_creator(user_id, plan_limit):
                     supabase.storage.from_(PROJECT_BUCKET).remove([storage_path])
                 except:
                     pass
-# --- ¡FIN DE FUNCIÓN MODIFICADA! ---
 
 def show_project_list(user_id):
     st.subheader("Mis Proyectos")
@@ -222,13 +218,12 @@ def show_project_list(user_id):
                         except Exception as e:
                             st.error(f"Error al eliminar: {e}")
 
-# --- ¡INICIO DE FUNCIÓN MODIFICADA! ---
+# --- FUNCIÓN show_project_analyzer MODIFICADA ---
 def show_project_analyzer(df, db_filtered, selected_files):
     """
     Muestra la UI de análisis completa (con 8 funciones)
     """
     
-    # --- ¡NUEVO! Leemos los permisos del plan ---
     plan_features = st.session_state.plan_features
     
     # --- 1. Lógica de Navegación de Sub-Modo ---
@@ -236,11 +231,9 @@ def show_project_analyzer(df, db_filtered, selected_files):
         st.session_state.mode_state["da_current_sub_mode"] = new_mode
 
     if "da_current_sub_mode" not in st.session_state.mode_state:
-        # Default al Resumen Ejecutivo (que todos los planes tienen)
         st.session_state.mode_state["da_current_sub_mode"] = "Resumen Ejecutivo IA"
     
-    # --- ¡NUEVO! Control si el modo por defecto no está permitido ---
-    # (Aunque en este caso, "Resumen Ejecutivo IA" sí está permitido para todos)
+    # Control si el modo por defecto no está permitido
     current_default = st.session_state.mode_state["da_current_sub_mode"]
     
     if (current_default == "Resumen Ejecutivo IA" and not plan_features.get("da_has_summary")) or \
@@ -252,13 +245,11 @@ def show_project_analyzer(df, db_filtered, selected_files):
        (current_default == "Análisis de Correlación" and not plan_features.get("da_has_correlation")) or \
        (current_default == "Comparación de Grupos" and not plan_features.get("da_has_group_comparison")):
            
-           # Si el modo actual no está permitido, busca el primero que SÍ lo esté
            if plan_features.get("da_has_summary"):
                st.session_state.mode_state["da_current_sub_mode"] = "Resumen Ejecutivo IA"
            elif plan_features.get("da_has_quick_analysis"):
                st.session_state.mode_state["da_current_sub_mode"] = "Análisis Rápido"
            else:
-               # Si no hay ninguno (plan muy restrictivo), default a Resumen
                st.session_state.mode_state["da_current_sub_mode"] = "Resumen Ejecutivo IA"
 
     
@@ -270,13 +261,13 @@ def show_project_analyzer(df, db_filtered, selected_files):
         st.session_state.mode_state = {}
         st.rerun()
         
-    # --- 2. Layout de navegación (AHORA CONDICIONAL) ---
+    # --- 2. Layout de navegación ---
     
     st.markdown("##### Selecciona una función de análisis:")
     col_ia, col_stats = st.columns(2)
 
     with col_ia:
-        with st.expander("Funciones de IA Generativa", expanded=True):
+        with st.expander("📊 Funciones de IA Generativa", expanded=True):
             if plan_features.get("da_has_summary"):
                 st.button("Resumen Ejecutivo", on_click=set_da_sub_mode, args=("Resumen Ejecutivo IA",), use_container_width=True, type="primary" if sub_modo == "Resumen Ejecutivo IA" else "secondary")
             if plan_features.get("da_has_autocode"):
@@ -287,7 +278,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                 st.button("Exportar a PPT", on_click=set_da_sub_mode, args=("Exportar a PPT",), use_container_width=True, type="primary" if sub_modo == "Exportar a PPT" else "secondary")
 
     with col_stats:
-        with st.expander("Análisis Estadístico y Cruces", expanded=True):
+        with st.expander("📈 Análisis Estadístico y Cruces", expanded=True):
             if plan_features.get("da_has_quick_analysis"):
                 st.button("Análisis Rápido", on_click=set_da_sub_mode, args=("Análisis Rápido",), use_container_width=True, type="primary" if sub_modo == "Análisis Rápido" else "secondary")
             if plan_features.get("da_has_pivot_table"):
@@ -299,9 +290,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
 
     st.divider()
     
-    # --- 3. Lógica condicional para mostrar el contenido (Sin cambios) ---
-    # (El 'sub_modo' ya está filtrado por los botones, así que esta lógica
-    # funcionará sin necesidad de más 'if plan_features...')
+    # --- 3. Lógica condicional para mostrar el contenido ---
 
     if "data_analysis_stats_context" not in st.session_state.mode_state:
         st.session_state.mode_state["data_analysis_stats_context"] = ""
@@ -722,18 +711,15 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 st.warning("No se definieron keywords para esta categoría.")
                             else:
                                 regex_pattern = r'\b(' + '|'.join(valid_keywords) + r')\b'
-                                
                                 matching_verbatims = full_series[
                                     full_series.str.contains(regex_pattern, case=False, na=False, regex=True)
                                 ].dropna().unique() 
-
                                 st.markdown(f"**Mostrando ejemplos de verbatims para '{selected_cat}':**")
                                 if len(matching_verbatims) == 0:
                                     st.info("No se encontraron verbatims coincidentes (esto podría indicar un error si N > 0).")
                                 else:
                                     for v in matching_verbatims[:20]:
                                         st.markdown(f"> {v}")
-                                    
                                     if len(matching_verbatims) > 20:
                                         st.caption(f"...y {len(matching_verbatims) - 20} más. (Mostrando los primeros 20 ejemplos).")
 
@@ -755,22 +741,22 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                     st.error("La columna seleccionada está vacía o no tiene datos válidos."); return
                                 
                                 sample_list = list(non_null_responses[:100]) 
-                                
                                 prompt = get_excel_autocode_prompt(main_topic, sample_list)
-                                json_config = {"response_mime_type": "application/json"}
+                                json_config = {
+                                    "response_mime_type": "application/json",
+                                    "max_output_tokens": 16384 # Increased limit
+                                }
                                 no_safety = [
                                     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                                     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
                                     {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
                                     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
                                 ]
-                                
                                 response_text = call_gemini_api(
                                     prompt,
                                     generation_config_override=json_config,
                                     safety_settings_override=no_safety
                                 )
-                                
                                 if not response_text:
                                     st.error("La IA no pudo generar una respuesta. Inténtalo de nuevo."); return
 
@@ -785,25 +771,19 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 for cat in categories_json:
                                     category_name = cat.get('categoria', 'Sin Categoría')
                                     keywords = cat.get('keywords', [])
-                                    
                                     if not keywords or not isinstance(keywords, list):
                                         continue
-                                    
                                     valid_keywords = [re.escape(k.strip()) for k in keywords if k.strip()]
                                     if not valid_keywords:
                                         continue
-                                        
                                     regex_pattern = r'\b(' + '|'.join(valid_keywords) + r')\b'
-                                    
                                     mentions_count = full_series.str.contains(
                                         regex_pattern, 
                                         case=False,
                                         na=False,
                                         regex=True
                                     ).sum()
-                                    
                                     percentage = (mentions_count / total_participants) * 100 if total_participants > 0 else 0
-                                    
                                     results.append({
                                         "Categoría": category_name,
                                         "Menciones (N)": int(mentions_count),
@@ -832,11 +812,10 @@ def show_project_analyzer(df, db_filtered, selected_files):
 
 def data_analysis_mode(db, selected_files):
     st.subheader(c.MODE_DATA_ANALYSIS)
-    st.markdown("Carga, gestiona y analiza tus proyectos de datos (Excel).")
+    st.markdown("Carga, gestiona y analiza tus proyectos de datos (Excel). Articula tus hallazgos cuantitativos con el repositorio cualitativo.")
     st.divider()
 
     user_id = st.session_state.user_id
-    # --- ¡MODIFICADO! Leemos el límite de proyectos del plan ---
     plan_limit = st.session_state.plan_features.get('project_upload_limit', 0)
 
     if "da_selected_project_id" in st.session_state.mode_state and "data_analysis_df" not in st.session_state.mode_state:
@@ -855,7 +834,6 @@ def data_analysis_mode(db, selected_files):
     
     else:
         with st.expander("➕ Crear Nuevo Proyecto", expanded=True):
-            # --- ¡MODIFICADO! Pasamos el límite de proyectos numéricos
             show_project_creator(user_id, plan_limit)
         
         st.divider()
