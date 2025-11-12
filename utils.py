@@ -18,11 +18,13 @@ def reset_chat_workflow():
     """Limpia el estado del modo CHAT DENTRO de mode_state."""
     st.session_state.mode_state.pop("chat_history", None) 
 
-# --- ¡INICIO DE LA NUEVA FUNCIÓN! ---
 def reset_transcript_chat_workflow():
     """Limpia el historial del chat de transcripciones DENTRO de mode_state."""
     st.session_state.mode_state.pop("transcript_chat_history", None)
-# --- ¡FIN DE LA NUEVA FUNCIÓN! ---
+
+def reset_etnochat_chat_workflow():
+    """Limpia el historial del chat de EtnoChat DENTRO de mode_state."""
+    st.session_state.mode_state.pop("etno_chat_history", None)
 
 # ==============================
 # FUNCIONES AUXILIARES (Sin cambios)
