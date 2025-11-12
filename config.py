@@ -11,12 +11,10 @@ PLAN_FEATURES = {
         "has_image_evaluation": False, "has_video_evaluation": False,
         "transcript_file_limit": 1, "ppt_downloads_per_month": 2,
         
-        # --- ¡LÍMITES DE ANÁLISIS NUMÉRICO (MODIFICADOS)! ---
-        "project_upload_limit": 1, # Límite de proyectos numéricos
+        "project_upload_limit": 1, 
         "text_analysis_max_files_per_project": 1,
         "text_analysis_questions_per_day": 5,
 
-        # --- Permisos de Sub-modos Numéricos ---
         "da_has_summary": True,
         "da_has_autocode": False,
         "da_has_wordcloud": False,
@@ -25,6 +23,12 @@ PLAN_FEATURES = {
         "da_has_pivot_table": False,
         "da_has_correlation": False,
         "da_has_group_comparison": False,
+
+        # --- ¡NUEVAS LÍNEAS ETNOCHAT! ---
+        "has_etnochat_analysis": True,
+        "etnochat_project_limit": 1,
+        "etnochat_max_files_per_project": 3,  # ej. 1 txt, 1 img, 1 audio
+        "etnochat_questions_per_day": 5,
     },
     "Strategist": {
         "reports_per_month": 0, "chat_queries_per_day": float('inf'), "projects_per_year": 10,
@@ -33,12 +37,10 @@ PLAN_FEATURES = {
         "has_image_evaluation": False, "has_video_evaluation": False,
         "transcript_file_limit": 5, "ppt_downloads_per_month": 4,
         
-        # --- ¡LÍMITES DE ANÁLISIS NUMÉRICO (MODIFICADOS)! ---
-        "project_upload_limit": 2, # Límite de proyectos numéricos
+        "project_upload_limit": 2, 
         "text_analysis_max_files_per_project": 4,
         "text_analysis_questions_per_day": 10,
 
-        # --- Permisos de Sub-modos Numéricos ---
         "da_has_summary": True,
         "da_has_autocode": False,
         "da_has_wordcloud": True,
@@ -47,6 +49,12 @@ PLAN_FEATURES = {
         "da_has_pivot_table": True,
         "da_has_correlation": False,
         "da_has_group_comparison": False,
+
+        # --- ¡NUEVAS LÍNEAS ETNOCHAT! ---
+        "has_etnochat_analysis": True,
+        "etnochat_project_limit": 3,
+        "etnochat_max_files_per_project": 10,
+        "etnochat_questions_per_day": 15,
     },
     "Enterprise": {
         "reports_per_month": float('inf'), "chat_queries_per_day": float('inf'), "projects_per_year": float('inf'),
@@ -55,12 +63,10 @@ PLAN_FEATURES = {
         "has_image_evaluation": True, "has_video_evaluation": True,
         "transcript_file_limit": 10, "ppt_downloads_per_month": float('inf'),
         
-        # --- ¡LÍMITES DE ANÁLISIS NUMÉRICO (MODIFICADOS)! ---
-        "project_upload_limit": 5, # Límite de proyectos numéricos
+        "project_upload_limit": 5, 
         "text_analysis_max_files_per_project": 6,
         "text_analysis_questions_per_day": float('inf'),
 
-        # --- Permisos de Sub-modos Numéricos ---
         "da_has_summary": True,
         "da_has_autocode": True,
         "da_has_wordcloud": True,
@@ -69,6 +75,12 @@ PLAN_FEATURES = {
         "da_has_pivot_table": True,
         "da_has_correlation": True,
         "da_has_group_comparison": True,
+
+        # --- ¡NUEVAS LÍNEAS ETNOCHAT! ---
+        "has_etnochat_analysis": True,
+        "etnochat_project_limit": 10,
+        "etnochat_max_files_per_project": 25,
+        "etnochat_questions_per_day": float('inf'),
     }
 }
 
