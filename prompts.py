@@ -299,8 +299,38 @@ Un párrafo corto (2-3 frases) que resuma los principales hallazgos.
 
 {INSTRUCCIONES_DE_CITAS}
 """
-# --- ¡FIN DE LA MODIFICACIÓN 2! ---
+   
+# --- Prompt para "EtnoChat" ---
 
+def get_etnochat_prompt(conversation_history, text_context):
+    """
+    Crea el prompt de texto para el modo EtnoChat.
+    Este prompt irá acompañado de los archivos de imagen y audio.
+    """
+    return (
+        "**Tarea:** Eres un asistente experto en investigación etnográfica y análisis cualitativo. Tu tarea es responder la **última pregunta** del Usuario.\n\n"
+        "**Contexto Multimodal:**"
+        "Tu respuesta debe basarse en TODAS las fuentes proporcionadas:\n"
+        "1.  **Historial de Chat:** La conversación que estamos teniendo.\n"
+        "2.  **Transcripciones de Texto:** El contexto de texto que se te proporciona a continuación.\n"
+        "3.  **Archivos Multimedia:** Los archivos de IMAGEN y AUDIO que se han cargado (la IA los procesará automáticamente).\n\n"
+        
+        "**Instrucciones:**\n"
+        "-   Sintetiza la información de *todas* las fuentes (texto, imágenes, audios) para dar una respuesta completa.\n"
+        "-   Puedes (y debes) referirte a los archivos por su nombre (ej. `foto_sala.png` o `audio_entrevista_1.m4a`) cuando sean la fuente de un hallazgo.\n"
+        "-   Al citar, usa el nombre del archivo como la fuente, siguiendo el formato de citas estándar.\n\n"
+        
+        f"**Historial (reciente):**\n{conversation_history}\n\n"
+        
+        f"**Información documentada (Transcripciones de Texto):**\n"
+        "```\n"
+        f"{text_context}\n"
+        "```\n\n"
+        
+        f"{INSTRUCCIONES_DE_CITAS}\n\n"
+        
+        "**Respuesta:**"
+    )
 
 # --- Prompt para "Análisis de Datos (Excel)" ---
 
