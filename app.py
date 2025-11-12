@@ -7,8 +7,7 @@ import time # Importar time
 
 from styles import apply_styles
 from config import PLAN_FEATURES, banner_file
-# --- ¡MODIFICADO! 'load_database' ya no se usa aquí ---
-# from services.storage import load_database 
+from services.storage import load_database 
 from services.supabase_db import supabase
 from auth import show_login_page, show_signup_page, show_reset_password_page
 from admin.dashboard import show_admin_dashboard
@@ -22,6 +21,7 @@ from modes.video_eval_mode import video_evaluation_mode
 from modes.text_analysis_mode import text_analysis_mode
 from modes.onepager_mode import one_pager_ppt_mode
 from modes.data_analysis_mode import data_analysis_mode
+from modes.etnochat_mode import etnochat_mode # <-- ¡NUEVA IMPORTACIÓN!
 from utils import (
     extract_brand
 )
@@ -41,7 +41,7 @@ def set_mode_and_reset(new_mode):
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
 
-    # --- ¡BLOQUE DE HEARTBEAT CON "TEMPORIZADOR SUAVE"! ---
+    # --- BLOQUE DE HEARTBEAT (Sin cambios) ---
     
     GRACE_PERIOD_SECONDS = 5 
     HEARTBEAT_INTERVAL_SECONDS = 60 
@@ -101,11 +101,13 @@ def run_user_mode(db_full, user_features, footer_html):
     
     modo = st.session_state.current_mode
 
+    # --- ¡INICIO DE SECCIÓN MODIFICADA! ---
     all_categories = {
         "Análisis": {
             c.MODE_CHAT: True,
             c.MODE_TEXT_ANALYSIS: user_features.get("transcript_file_limit", 0) > 0,
-            c.MODE_DATA_ANALYSIS: True
+            c.MODE_DATA_ANALYSIS: True,
+            c.MODE_ETNOCHAT: user_features.get("has_etnochat_analysis"), # <-- ¡NUEVA LÍNEA!
         },
         "Evaluación": {
             c.MODE_IDEA_EVAL: user_features.get("has_idea_evaluation"),
@@ -121,6 +123,7 @@ def run_user_mode(db_full, user_features, footer_html):
             c.MODE_CONCEPT: user_features.get("has_concept_generation")
         }
     }
+    # --- ¡FIN DE SECCIÓN MODIFICADA! ---
     
     default_expanded = ""
     for category, modes in all_categories.items():
@@ -128,6 +131,7 @@ def run_user_mode(db_full, user_features, footer_html):
             default_expanded = category
             break
 
+    # --- ¡INICIO DE SECCIÓN MODIFICADA! ---
     if any(all_categories["Análisis"].values()):
         with st.sidebar.expander("Análisis", expanded=(default_expanded == "Análisis")):
             if all_categories["Análisis"][c.MODE_CHAT]:
@@ -136,7 +140,11 @@ def run_user_mode(db_full, user_features, footer_html):
                 st.button(c.MODE_TEXT_ANALYSIS, on_click=set_mode_and_reset, args=(c.MODE_TEXT_ANALYSIS,), use_container_width=True, type="primary" if modo == c.MODE_TEXT_ANALYSIS else "secondary")
             if all_categories["Análisis"][c.MODE_DATA_ANALYSIS]:
                 st.button(c.MODE_DATA_ANALYSIS, on_click=set_mode_and_reset, args=(c.MODE_DATA_ANALYSIS,), use_container_width=True, type="primary" if modo == c.MODE_DATA_ANALYSIS else "secondary")
+            # --- ¡NUEVA LÍNEA! ---
+            if all_categories["Análisis"][c.MODE_ETNOCHAT]:
+                st.button(c.MODE_ETNOCHAT, on_click=set_mode_and_reset, args=(c.MODE_ETNOCHAT,), use_container_width=True, type="primary" if modo == c.MODE_ETNOCHAT else "secondary")
 
+    # --- (El resto de los expanders no cambia) ---
     if any(all_categories["Evaluación"].values()):
         with st.sidebar.expander("Evaluación", expanded=(default_expanded == "Evaluación")):
             if all_categories["Evaluación"][c.MODE_IDEA_EVAL]:
@@ -163,7 +171,10 @@ def run_user_mode(db_full, user_features, footer_html):
     
     st.sidebar.header("Filtros de Búsqueda")
     
-    run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS] 
+    # --- ¡INICIO DE LÍNEA MODIFICADA! ---
+    # Añadimos c.MODE_ETNOCHAT a la lista de modos que desactivan los filtros
+    run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT] 
+    # --- ¡FIN DE LÍNEA MODIFICADA! ---
 
     db_filtered = db_full[:]
 
@@ -204,6 +215,7 @@ def run_user_mode(db_full, user_features, footer_html):
     if run_filters and not selected_files and modo not in [c.MODE_REPORT, c.MODE_IMAGE_EVAL, c.MODE_VIDEO_EVAL, c.MODE_ONEPAGER]:
          st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
 
+    # --- ¡INICIO DE SECCIÓN MODIFICADA! ---
     if modo == c.MODE_REPORT: report_mode(db_filtered, selected_files)
     elif modo == c.MODE_IDEATION: ideacion_mode(db_filtered, selected_files)
     elif modo == c.MODE_CONCEPT: concept_generation_mode(db_filtered, selected_files)
@@ -214,6 +226,8 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == c.MODE_TEXT_ANALYSIS: text_analysis_mode()
     elif modo == c.MODE_ONEPAGER: one_pager_ppt_mode(db_filtered, selected_files)
     elif modo == c.MODE_DATA_ANALYSIS: data_analysis_mode(db_filtered, selected_files)
+    elif modo == c.MODE_ETNOCHAT: etnochat_mode() # <-- ¡NUEVA LÍNEA!
+    # --- ¡FIN DE SECCIÓN MODIFICADA! ---
     
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
@@ -281,19 +295,15 @@ def main():
         st.markdown(footer_html, unsafe_allow_html=True)
         st.stop()
 
-    # --- ¡INICIO DE LA LÍNEA MODIFICADA! ---
-    # Leemos la BD desde la sesión, donde 'auth.py' la guardó.
     try:
         db_full = st.session_state.db_full
     except AttributeError:
-        # Esto puede pasar si la sesión se corrompe. Forzamos un reinicio.
         st.error("Error de sesión al cargar la base de datos. Por favor, inicia sesión de nuevo.")
         st.session_state.clear()
         st.rerun()
     except Exception as e:
         st.error(f"Error crítico al leer la BD de la sesión: {e}")
         st.stop()
-    # --- ¡FIN DE LA LÓGICA MODIFICADA! ---
 
     user_features = st.session_state.plan_features
 
