@@ -276,7 +276,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
     col_ia, col_stats = st.columns(2)
 
     with col_ia:
-        with st.expander("📊 Funciones de IA Generativa", expanded=True):
+        with st.expander("Funciones de IA Generativa", expanded=True):
             if plan_features.get("da_has_summary"):
                 st.button("Resumen Ejecutivo", on_click=set_da_sub_mode, args=("Resumen Ejecutivo IA",), use_container_width=True, type="primary" if sub_modo == "Resumen Ejecutivo IA" else "secondary")
             if plan_features.get("da_has_autocode"):
@@ -287,7 +287,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                 st.button("Exportar a PPT", on_click=set_da_sub_mode, args=("Exportar a PPT",), use_container_width=True, type="primary" if sub_modo == "Exportar a PPT" else "secondary")
 
     with col_stats:
-        with st.expander("📈 Análisis Estadístico y Cruces", expanded=True):
+        with st.expander("Análisis Estadístico y Cruces", expanded=True):
             if plan_features.get("da_has_quick_analysis"):
                 st.button("Análisis Rápido", on_click=set_da_sub_mode, args=("Análisis Rápido",), use_container_width=True, type="primary" if sub_modo == "Análisis Rápido" else "secondary")
             if plan_features.get("da_has_pivot_table"):
@@ -832,7 +832,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
 
 def data_analysis_mode(db, selected_files):
     st.subheader(c.MODE_DATA_ANALYSIS)
-    st.markdown("Carga, gestiona y analiza tus proyectos de datos (Excel). Articula tus hallazgos cuantitativos con el repositorio cualitativo.")
+    st.markdown("Carga, gestiona y analiza tus proyectos de datos (Excel).")
     st.divider()
 
     user_id = st.session_state.user_id
