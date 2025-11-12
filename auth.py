@@ -3,15 +3,15 @@ from services.supabase_db import supabase
 from config import PLAN_FEATURES
 import uuid
 import time 
-# --- ¡NUEVA IMPORTACIÓN! ---
 from services.storage import load_database 
+# --- ¡NUEVA IMPORTACIÓN! ---
+from services.logger import log_error, log_action
 
 # ==============================
 # Autenticación con Supabase Auth
 # ==============================
 
 def show_signup_page():
-    # ... (Esta función no cambia) ...
     st.header("Crear Nueva Cuenta")
     email = st.text_input("Tu Correo Electrónico")
     password = st.text_input("Crea una Contraseña", type="password")
@@ -26,6 +26,7 @@ def show_signup_page():
             client_response = supabase.table("clients").select("id").eq("invite_code", invite_code).single().execute()
             if not client_response.data:
                 st.error("El código de invitación no es válido.")
+                log_action(f"Intento de registro fallido: Código inválido '{invite_code}' para {email}", module="Auth")
                 return
             selected_client_id = client_response.data['id']
             auth_response = supabase.auth.sign_up({
@@ -33,15 +34,15 @@ def show_signup_page():
                 "options": { "data": { 'client_id': selected_client_id } }
             })
             st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
+            log_action(f"Nuevo usuario registrado: {email}", module="Auth")
         except Exception as e:
-            print(f"----------- ERROR DETALLADO DE REGISTRO -----------\n{e}\n-------------------------------------------------")
             st.error(f"Error en el registro: {e}")
+            log_error(f"Error crítico en registro de usuario {email}", module="Auth", error=e)
 
     if st.button("¿Ya tienes cuenta? Inicia Sesión", type="secondary", use_container_width=True):
          st.session_state.page = "login"
          st.rerun()
 
-# --- ¡INICIO DE FUNCIÓN MODIFICADA! ---
 def show_login_page():
     st.header("Iniciar Sesión")
 
@@ -78,16 +79,16 @@ def show_login_page():
                     st.session_state.is_admin = (user_profile.data.get('rol', '') == 'admin')
                     st.session_state.login_timestamp = time.time() 
                     
-                    # --- ¡NUEVO BLOQUE DE CARGA DE BD! ---
                     with st.spinner("Cargando repositorio de conocimiento..."):
                         st.session_state.db_full = load_database(st.session_state.cliente)
-                    # --- FIN DEL NUEVO BLOQUE ---
 
                     st.session_state.pop('pending_login_info')
+                    log_action(f"Login forzado exitoso: {st.session_state.user}", module="Auth")
                     st.rerun()
                     
                 except Exception as e:
                     st.error(f"Error al forzar inicio de sesión: {e}")
+                    log_error("Error forzando sesión", module="Auth", error=e)
 
         with col2:
             if st.button("Cancelar", use_container_width=True, type="secondary"):
@@ -139,17 +140,20 @@ def show_login_page():
                         st.session_state.is_admin = (user_profile.data.get('rol', '') == 'admin')
                         st.session_state.login_timestamp = time.time() 
 
-                        # --- ¡NUEVO BLOQUE DE CARGA DE BD! ---
                         with st.spinner("Cargando repositorio de conocimiento..."):
                             st.session_state.db_full = load_database(st.session_state.cliente)
-                        # --- FIN DEL NUEVO BLOQUE ---
                         
+                        log_action(f"Login exitoso: {email}", module="Auth")
                         st.rerun()
                     else:
                         st.error("Perfil de usuario no encontrado. Contacta al administrador.")
+                        log_error(f"Usuario autenticado pero sin perfil en tabla 'users': {email}", module="Auth", level="ERROR")
                         
             except Exception as e:
-                st.error(f"Credenciales incorrectas o cuenta no confirmada. Error: {e}")
+                st.error(f"Credenciales incorrectas o cuenta no confirmada.")
+                # No logueamos el error completo para no llenar el log de intentos fallidos normales, 
+                # pero podrías hacerlo si quisieras auditoría estricta.
+                log_action(f"Intento fallido de login: {email}", module="Auth")
 
         if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
             st.session_state.page = "signup"
@@ -158,7 +162,6 @@ def show_login_page():
         if st.button("¿Olvidaste tu contraseña?", type="secondary", use_container_width=True):
             st.session_state.page = "reset_password"
             st.rerun()
-# --- ¡FIN DE FUNCIÓN MODIFICADA! ---
 
 def show_reset_password_page():
     # ... (Esta función no cambia) ...
@@ -175,8 +178,10 @@ def show_reset_password_page():
             supabase.auth.reset_password_for_email(email)
             st.success("¡Correo enviado! Revisa tu bandeja de entrada.")
             st.info("Sigue las instrucciones del correo para crear una nueva contraseña. Una vez creada, podrás iniciar sesión.")
+            log_action(f"Solicitud recuperación contraseña: {email}", module="Auth")
         except Exception as e:
             st.error(f"Error al enviar el correo: {e}")
+            log_error(f"Fallo envío correo recuperación: {email}", module="Auth", error=e)
 
     if st.button("Volver a Iniciar Sesión", type="secondary", use_container_width=True):
          st.session_state.page = "login"
