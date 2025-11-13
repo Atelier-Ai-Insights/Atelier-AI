@@ -42,7 +42,7 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
             continue 
 
         try:
-            # --- ¡CAMBIO CRÍTICO! Usamos 'gemini-2.5-' por estabilidad ---
+            # --- ¡CAMBIO CRÍTICO! Usamos 'gemini-2.5' por estabilidad ---
             model = genai.GenerativeModel(
                 model_name="gemini-2.5", 
                 generation_config=final_gen_config, 
