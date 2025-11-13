@@ -16,7 +16,7 @@ def _configure_gemini(key_index):
 
 def call_gemini_api(prompt, generation_config_override=None, safety_settings_override=None):
     """
-    Llama a la API de Gemini con lógica de rotación de claves y logging robusto.
+    Llama a la API de  con lógica de rotación de claves y logging robusto.
     """
     start_index = st.session_state.get("api_key_index", 0)
     num_keys = len(api_keys)
@@ -42,9 +42,9 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
             continue 
 
         try:
-            # --- ¡CAMBIO CRÍTICO! Usamos 'gemini-1.5-pro' por estabilidad ---
+            # --- ¡CAMBIO CRÍTICO! Usamos 'gemini-2.5-' por estabilidad ---
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-pro", 
+                model_name="gemini-2.5", 
                 generation_config=final_gen_config, 
                 safety_settings=final_safety_settings
             )
