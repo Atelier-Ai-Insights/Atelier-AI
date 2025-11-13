@@ -42,9 +42,9 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
             continue 
 
         try:
-            # --- ¡CORRECCIÓN AQUÍ! Usamos la versión específica ---
+            # --- ¡CAMBIO CRÍTICO! Usamos 'gemini-1.5-pro' por estabilidad ---
             model = genai.GenerativeModel(
-                model_name="gemini-2.5", 
+                model_name="gemini-1.5-pro", 
                 generation_config=final_gen_config, 
                 safety_settings=final_safety_settings
             )
