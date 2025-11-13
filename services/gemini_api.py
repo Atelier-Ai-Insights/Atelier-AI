@@ -2,7 +2,6 @@ import streamlit as st
 import google.generativeai as genai
 import html
 from config import api_keys, generation_config, safety_settings
-# --- ¡NUEVA IMPORTACIÓN! ---
 from services.logger import log_error, log_action 
 
 def _configure_gemini(key_index):
@@ -10,8 +9,6 @@ def _configure_gemini(key_index):
     try:
         api_key = api_keys[key_index]
         genai.configure(api_key=api_key)
-        # Usamos log_action en lugar de print
-        # log_action(f"Configurando API Key #{key_index + 1}", module="GeminiAPI") 
         return True
     except Exception as e:
         log_error(f"Error configurando API Key #{key_index + 1}", module="GeminiAPI", error=e, level="WARNING")
@@ -45,16 +42,18 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
             continue 
 
         try:
-            # El modelo correcto es 'gemini-2.5-flash'
+            # --- ¡CORRECCIÓN AQUÍ! Usamos la versión específica ---
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash",
+                model_name="gemini-1.5-flash-001", 
                 generation_config=final_gen_config, 
                 safety_settings=final_safety_settings
             )
 
             if isinstance(prompt, list):
+                # Para EtnoChat (multimodal)
                 response = model.generate_content(prompt)
             else:
+                # Para texto normal
                 response = model.generate_content([prompt])
             
             if not response.candidates:
@@ -72,7 +71,7 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
 
             elif finish_reason_name == "MAX_TOKENS":
                 st.warning("Advertencia: La respuesta de la IA fue muy larga y ha sido cortada. (MAX_TOKENS)")
-                log_action("Respuesta truncada por MAX_TOKENS", module="GeminiAPI") # Info log
+                log_action("Respuesta truncada por MAX_TOKENS", module="GeminiAPI")
                 st.session_state.api_key_index = (current_key_index + 1) % num_keys
                 if candidate.content.parts:
                     partial_text = candidate.content.parts[0].text
@@ -100,5 +99,5 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
     # Si llegamos aquí, todas fallaron
     critical_msg = f"Todas las claves API fallaron. Último error: {last_error}"
     st.error(f"Error API Gemini: {critical_msg}")
-    log_error(critical_msg, module="GeminiAPI", level="CRITICAL") # Esto va a la base de datos
+    log_error(critical_msg, module="GeminiAPI", level="CRITICAL") 
     return None
