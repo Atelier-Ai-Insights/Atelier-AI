@@ -1,6 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 import html
+import time
 from config import api_keys, generation_config, safety_settings
 from services.logger import log_error, log_action 
 
@@ -15,9 +16,16 @@ def _configure_gemini(key_index):
         return False
 
 def call_gemini_api(prompt, generation_config_override=None, safety_settings_override=None):
-    """
-    Llama a la API de  con lógica de rotación de claves y logging robusto.
-    """
+    """Llama a la API de Gemini y espera la respuesta completa (NO Streaming)."""
+    return _execute_gemini_call(prompt, stream=False, gen_config=generation_config_override, safety=safety_settings_override)
+
+# --- ¡NUEVA FUNCIÓN QUE FALTABA! ---
+def call_gemini_stream(prompt, generation_config_override=None, safety_settings_override=None):
+    """Llama a la API de Gemini y devuelve un generador para Streaming."""
+    return _execute_gemini_call(prompt, stream=True, gen_config=generation_config_override, safety=safety_settings_override)
+
+def _execute_gemini_call(prompt, stream=False, gen_config=None, safety=None):
+    """Lógica central unificada para llamadas normales y streaming."""
     start_index = st.session_state.get("api_key_index", 0)
     num_keys = len(api_keys)
     
@@ -25,12 +33,12 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
     if 'max_output_tokens' not in final_gen_config:
         final_gen_config['max_output_tokens'] = 8192 
 
-    if generation_config_override:
-        final_gen_config.update(generation_config_override) 
+    if gen_config:
+        final_gen_config.update(gen_config) 
 
     final_safety_settings = safety_settings 
-    if safety_settings_override is not None:
-        final_safety_settings = safety_settings_override 
+    if safety is not None:
+        final_safety_settings = safety 
 
     last_error = None
 
@@ -42,23 +50,25 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
             continue 
 
         try:
-            # --- ¡CAMBIO CRÍTICO! Usamos 'gemini-2.5-flash' por estabilidad ---
             model = genai.GenerativeModel(
-                model_name="gemini-2.5-flash", 
+                model_name="gemini-2.5-flash", # Tu modelo validado
                 generation_config=final_gen_config, 
                 safety_settings=final_safety_settings
             )
 
             if isinstance(prompt, list):
-                # Para EtnoChat (multimodal)
-                response = model.generate_content(prompt)
+                response = model.generate_content(prompt, stream=stream)
             else:
-                # Para texto normal
-                response = model.generate_content([prompt])
+                response = model.generate_content([prompt], stream=stream)
             
+            # --- MANEJO DE STREAMING ---
+            if stream:
+                return _stream_generator_wrapper(response, current_key_index, num_keys)
+            
+            # --- MANEJO NORMAL (NO STREAMING) ---
             if not response.candidates:
                 error_msg = "La respuesta de la API no tuvo candidatos válidos."
-                log_error(f"Intento fallido Key #{current_key_index + 1}: {error_msg}", module="GeminiAPI", level="WARNING")
+                log_error(f"Key #{current_key_index + 1}: {error_msg}", module="GeminiAPI", level="WARNING")
                 last_error = error_msg
                 continue 
 
@@ -70,34 +80,38 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
                 return html.unescape(response.text) 
 
             elif finish_reason_name == "MAX_TOKENS":
-                st.warning("Advertencia: La respuesta de la IA fue muy larga y ha sido cortada. (MAX_TOKENS)")
+                st.warning("Advertencia: La respuesta fue cortada (MAX_TOKENS).")
                 log_action("Respuesta truncada por MAX_TOKENS", module="GeminiAPI")
                 st.session_state.api_key_index = (current_key_index + 1) % num_keys
                 if candidate.content.parts:
-                    partial_text = candidate.content.parts[0].text
-                    return html.unescape(partial_text) + "\n\n... (Respuesta truncada por MAX_TOKENS)"
+                    return html.unescape(candidate.content.parts[0].text) + "\n\n..."
                 else:
-                    last_error = "MAX_TOKENS sin contenido parcial."
-                    log_error(f"Key #{current_key_index + 1}: {last_error}", module="GeminiAPI", level="WARNING")
-                    continue 
-            
+                    continue
             else:
-                last_error = f"Generación detenida por: {finish_reason_name}"
-                try:
-                    if candidate.safety_ratings:
-                        last_error += f" | Ratings: {str(candidate.safety_ratings)}"
-                except: pass
-                
-                log_error(f"Key #{current_key_index + 1} bloqueada/fallida: {last_error}", module="GeminiAPI", level="WARNING")
+                last_error = f"Detenido por: {finish_reason_name}"
+                log_error(f"Key #{current_key_index + 1}: {last_error}", module="GeminiAPI", level="WARNING")
                 continue 
 
         except Exception as e:
             last_error = e
-            log_error(f"Excepción en Key #{current_key_index + 1}", module="GeminiAPI", error=e, level="WARNING")
-            # Continuar el bucle
+            log_error(f"Excepción Key #{current_key_index + 1}", module="GeminiAPI", error=e, level="WARNING")
+            # Continuar loop
         
-    # Si llegamos aquí, todas fallaron
-    critical_msg = f"Todas las claves API fallaron. Último error: {last_error}"
-    st.error(f"Error API Gemini: {critical_msg}")
-    log_error(critical_msg, module="GeminiAPI", level="CRITICAL") 
-    return None
+    # Si no es stream y todo falló
+    if not stream:
+        critical_msg = f"Todas las claves fallaron. Error: {last_error}"
+        st.error(f"Error API Gemini: {critical_msg}")
+        log_error(critical_msg, module="GeminiAPI", level="CRITICAL") 
+        return None
+
+def _stream_generator_wrapper(response_stream, key_index, num_keys):
+    """Envuelve el stream para manejar errores durante la generación."""
+    try:
+        for chunk in response_stream:
+            if chunk.text:
+                yield chunk.text
+        # Si termina bien, actualizamos la llave
+        st.session_state.api_key_index = (key_index + 1) % num_keys
+    except Exception as e:
+        log_error(f"Error durante Streaming Key #{key_index + 1}", module="GeminiAPI", error=e)
+        yield f"\n\n[Error de conexión interrumpida: {str(e)}]"
