@@ -332,6 +332,19 @@ def get_etnochat_prompt(conversation_history, text_context):
         "**Respuesta:**"
     )
 
+def get_media_transcription_prompt():
+    """
+    Prompt simple para convertir audio/video a texto detallado.
+    """
+    return """
+    **Tarea:** Eres un transcriptor experto. Tu objetivo es generar una transcripción detallada y descriptiva del archivo multimedia proporcionado (audio o video).
+    
+    **Instrucciones:**
+    1.  **Transcripción:** Transcribe lo que se dice en el audio/video.
+    2.  **Descripción Visual (si es video):** Si hay elementos visuales clave (acciones, entorno, emociones faciales), descríbelos entre corchetes [Ej: El usuario señala el producto con el ceño fruncido].
+    3.  **Formato:** Devuelve *únicamente* el texto de la transcripción/descripción. No añadas introducciones ni conclusiones.
+    """
+   
 # --- Prompt para "Análisis de Datos (Excel)" ---
 
 def get_survey_articulation_prompt(survey_context, repository_context, conversation_history):
