@@ -19,7 +19,6 @@ def call_gemini_api(prompt, generation_config_override=None, safety_settings_ove
     """Llama a la API de Gemini y espera la respuesta completa (NO Streaming)."""
     return _execute_gemini_call(prompt, stream=False, gen_config=generation_config_override, safety=safety_settings_override)
 
-# --- ¡NUEVA FUNCIÓN QUE FALTABA! ---
 def call_gemini_stream(prompt, generation_config_override=None, safety_settings_override=None):
     """Llama a la API de Gemini y devuelve un generador para Streaming."""
     return _execute_gemini_call(prompt, stream=True, gen_config=generation_config_override, safety=safety_settings_override)
@@ -108,8 +107,22 @@ def _stream_generator_wrapper(response_stream, key_index, num_keys):
     """Envuelve el stream para manejar errores durante la generación."""
     try:
         for chunk in response_stream:
-            if chunk.text:
-                yield chunk.text
+            # --- CORRECCIÓN: Manejo seguro de chunks vacíos ---
+            try:
+                # Intentamos acceder al texto. Si es un chunk vacío de finalización,
+                # esto lanzará un ValueError, que capturamos abajo.
+                text_chunk = chunk.text
+                if text_chunk:
+                    yield text_chunk
+            except ValueError:
+                # Si el chunk no tiene texto (es solo señal de parada o metadata),
+                # lo ignoramos silenciosamente y seguimos.
+                pass
+            except Exception:
+                # Cualquier otro error raro, lo dejamos pasar al bloque externo
+                raise
+            # --------------------------------------------------
+            
         # Si termina bien, actualizamos la llave
         st.session_state.api_key_index = (key_index + 1) % num_keys
     except Exception as e:
