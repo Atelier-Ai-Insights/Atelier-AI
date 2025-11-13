@@ -1,22 +1,58 @@
 import streamlit as st
 from utils import get_relevant_info
-from services.gemini_api import call_gemini_stream # <-- Usar Stream
+from services.gemini_api import call_gemini_stream 
 from services.supabase_db import log_query_event
 from prompts import get_idea_eval_prompt 
-import constants as c 
+import constants as c
+# --- ¡NUEVAS IMPORTACIONES NECESARIAS! ---
+from reporting.pdf_generator import generate_pdf_html
+from config import banner_file
+
+# =====================================================
+# MODO: EVALUACIÓN DE PRE-IDEAS
+# =====================================================
 
 def idea_evaluator_mode(db, selected_files):
     st.subheader("Evaluación de Pre-Ideas")
     st.markdown("Evalúa potencial de idea contra hallazgos.")
     
+    # --- PANTALLA DE RESULTADOS ---
     if "evaluation_result" in st.session_state.mode_state:
         st.markdown("---")
         st.markdown("### Evaluación")
         st.markdown(st.session_state.mode_state["evaluation_result"])
 
-        if st.button("Evaluar otra idea", use_container_width=True): 
-            del st.session_state.mode_state["evaluation_result"]
-            st.rerun()
+        st.divider() # Línea separadora visual
+        
+        # --- BOTONES DE ACCIÓN ---
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Generar el PDF usando el contenido del resultado
+            pdf_bytes = generate_pdf_html(
+                st.session_state.mode_state["evaluation_result"], 
+                title="Evaluación de Idea", 
+                banner_path=banner_file
+            )
+            
+            if pdf_bytes:
+                st.download_button(
+                    label="Descargar Evaluación PDF", 
+                    data=pdf_bytes, 
+                    file_name="evaluacion_idea.pdf", 
+                    mime="application/pdf", 
+                    use_container_width=True
+                )
+            else:
+                st.error("No se pudo generar el PDF.")
+
+        with col2:
+            if st.button("Evaluar otra idea", use_container_width=True): 
+                # Limpiar el estado para volver al formulario
+                st.session_state.mode_state.pop("evaluation_result", None)
+                st.rerun()
+
+    # --- PANTALLA DE FORMULARIO (Si no hay resultados aún) ---
     else:
         idea_input = st.text_area("Describe la idea a evaluar:", height=150, placeholder="Ej: Yogures con probióticos...")
         
@@ -24,7 +60,6 @@ def idea_evaluator_mode(db, selected_files):
             if not idea_input.strip(): 
                 st.warning("Describe una idea."); return
                 
-            # El spinner se muestra solo mientras conecta, luego arranca el stream
             with st.spinner("Conectando con analista virtual..."):
                 context_info = get_relevant_info(db, idea_input, selected_files)
                 prompt = get_idea_eval_prompt(idea_input, context_info)
@@ -35,10 +70,14 @@ def idea_evaluator_mode(db, selected_files):
                 if stream:
                     st.markdown("---")
                     st.markdown("### Evaluación")
+                    # Usamos write_stream para el efecto visual
                     response = st.write_stream(stream)
                     
+                    # Guardamos el resultado final en el estado
                     st.session_state.mode_state["evaluation_result"] = response
                     log_query_event(idea_input, mode=c.MODE_IDEA_EVAL)
-                    # No hacemos rerun aquí para mantener el texto en pantalla recién generado
+                    
+                    # Rerun para mostrar los botones de descarga inmediatamente
+                    st.rerun()
                 else: 
                     st.error("No se pudo generar evaluación.")
