@@ -8,21 +8,21 @@ import re
 from PIL import Image
 import fitz # PyMuPDF
 
-from services.gemini_api import call_gemini_api
+# --- IMPORTACIONES ---
+from services.gemini_api import call_gemini_api, call_gemini_stream 
 from services.supabase_db import log_query_event, supabase, get_daily_usage
-from prompts import get_etnochat_prompt
+from prompts import get_etnochat_prompt, get_media_transcription_prompt # <-- Nuevo prompt importado
 import constants as c
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 from utils import reset_etnochat_chat_workflow
 
 # =====================================================
-# MODO: ANÁLISIS DE ETNOCHAT
+# MODO: ANÁLISIS DE ETNOCHAT (OPTIMIZADO)
 # =====================================================
 
 ETNOCHAT_BUCKET = "etnochat_projects"
 
-# Diccionario de Mime types para la carga
 MIME_TYPES = {
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".txt": "text/plain",
@@ -33,10 +33,9 @@ MIME_TYPES = {
     ".mp3": "audio/mpeg",
     ".m4a": "audio/m4a",
     ".wav": "audio/wav",
-    ".mp4": "video/mp4", # Soportado por Gemini
-    ".mov": "video/quicktime" # Soportado por Gemini
+    ".mp4": "video/mp4", 
+    ".mov": "video/quicktime"
 }
-# Lista de extensiones permitidas para el file_uploader
 ALLOWED_EXTENSIONS = list(MIME_TYPES.keys())
 
 # --- Funciones de Carga de Datos ---
@@ -44,42 +43,53 @@ ALLOWED_EXTENSIONS = list(MIME_TYPES.keys())
 @st.cache_data(ttl=600, show_spinner=False)
 def load_etnochat_project_data(storage_folder_path: str):
     """
-    Descarga TODOS los archivos (texto, audio, imagen) de una carpeta 
-    en Supabase Storage y los prepara para la API multimodal.
-    
-    Devuelve: (context_string, file_parts)
-    - context_string: Un solo string con todo el texto extraído.
-    - file_parts: Una lista de dicts {mime_type, data} para archivos de imagen/audio/video.
+    Descarga archivos. 
+    OPTIMIZACIÓN: Convierte Audio/Video a texto UNA VEZ y guarda el resultado (.txt) 
+    para no re-procesar el archivo pesado en cada consulta.
     """
     if not storage_folder_path:
         st.error("Error: La ruta de la carpeta del proyecto está vacía.")
         return None, None
         
     text_context_parts = []
-    file_parts = []
+    file_parts = [] # Aquí solo irán las IMÁGENES (que siguen siendo útiles visualmente)
     
     try:
+        # 1. Listar archivos
         files_list = supabase.storage.from_(ETNOCHAT_BUCKET).list(storage_folder_path)
-        
         if not files_list:
             st.warning("El proyecto no contiene archivos.")
             return "", []
 
-        st.write(f"Cargando {len(files_list)} archivo(s) del proyecto...")
+        # Mapa rápido de archivos existentes para verificar si ya existe el transcript
+        existing_filenames = {f['name'] for f in files_list}
 
-        for file_info in files_list:
+        st.write(f"Procesando {len(files_list)} archivo(s) del proyecto...")
+        
+        # Barra de progreso para cargas pesadas
+        progress_bar = st.progress(0)
+        total_files = len(files_list)
+
+        for i, file_info in enumerate(files_list):
             file_name = file_info['name']
+            
+            # Ignorar los archivos de transcripción generados automáticamente para no duplicarlos
+            if file_name.endswith("_transcript.txt"):
+                progress_bar.progress((i + 1) / total_files)
+                continue
+
             full_file_path = f"{storage_folder_path}/{file_name}"
             file_ext = os.path.splitext(file_name)[1].lower()
             
             try:
+                # Descargar archivo
                 response_bytes = supabase.storage.from_(ETNOCHAT_BUCKET).download(full_file_path)
                 file_stream = io.BytesIO(response_bytes)
                 
                 header = f"\n\n--- INICIO DOCUMENTO: {file_name} ---\n\n"
                 footer = f"\n\n--- FIN DOCUMENTO: {file_name} ---\n"
                 
-                # 1. Procesar Archivos de Texto
+                # --- CASO 1: DOCUMENTOS DE TEXTO ---
                 if file_ext == ".txt":
                     text = file_stream.read().decode('utf-8')
                     text_context_parts.append(f"{header}{text}{footer}")
@@ -95,25 +105,65 @@ def load_etnochat_project_data(storage_folder_path: str):
                     text = "\n".join([para.text for para in document.paragraphs if para.text.strip()])
                     text_context_parts.append(f"{header}{text}{footer}")
 
-                # 2. Procesar Imágenes (Guardar como objeto PIL Image)
+                # --- CASO 2: IMÁGENES (Se mantienen como multimedia) ---
                 elif file_ext in [".jpg", ".jpeg", ".png"]:
-                    # Pasamos el objeto Image directamente a Gemini
                     img = Image.open(file_stream)
                     file_parts.append(img)
-                    # Añadimos una referencia en el texto para que la IA sepa que existe
-                    text_context_parts.append(f"[Archivo de Imagen Cargado: {file_name}]")
+                    text_context_parts.append(f"[Archivo de Imagen Cargado: {file_name} - La IA puede ver esta imagen]")
 
-                # 3. Procesar Audio/Video (Guardar como dict mime/data)
-                elif file_ext in MIME_TYPES:
-                    mime_type = MIME_TYPES[file_ext]
-                    file_parts.append({"mime_type": mime_type, "data": response_bytes})
-                    # Añadimos una referencia en el texto
-                    text_context_parts.append(f"[Archivo Multimedia Cargado: {file_name}]")
-            
+                # --- CASO 3: AUDIO Y VIDEO (¡OPTIMIZACIÓN!) ---
+                elif file_ext in MIME_TYPES and ("audio" in MIME_TYPES[file_ext] or "video" in MIME_TYPES[file_ext]):
+                    
+                    transcript_filename = f"{file_name}_transcript.txt"
+                    transcript_full_path = f"{storage_folder_path}/{transcript_filename}"
+                    
+                    transcript_text = ""
+
+                    # A. Verificar si ya existe la transcripción en el bucket
+                    if transcript_filename in existing_filenames:
+                        # ¡Bingo! Ya existe. La descargamos.
+                        # print(f"INFO: Usando transcripción existente para {file_name}")
+                        try:
+                            trans_bytes = supabase.storage.from_(ETNOCHAT_BUCKET).download(transcript_full_path)
+                            transcript_text = trans_bytes.decode('utf-8')
+                        except Exception as e:
+                            st.warning(f"Error leyendo transcripción existente {transcript_filename}: {e}")
+                    
+                    # B. Si no existe, la generamos con Gemini
+                    if not transcript_text:
+                        # print(f"INFO: Generando nueva transcripción para {file_name}")
+                        with st.spinner(f"Transcribiendo {file_name} con IA... (Una sola vez)"):
+                            media_data = {"mime_type": MIME_TYPES[file_ext], "data": response_bytes}
+                            prompt_transcribe = get_media_transcription_prompt()
+                            
+                            # Llamada NO-streaming para obtener el texto completo
+                            # Usamos un limite alto de tokens para asegurar transcripción completa
+                            generated_transcript = call_gemini_api([prompt_transcribe, media_data], generation_config_override={"max_output_tokens": 8192})
+                            
+                            if generated_transcript:
+                                transcript_text = generated_transcript
+                                # C. Guardar la transcripción en Supabase para el futuro
+                                try:
+                                    supabase.storage.from_(ETNOCHAT_BUCKET).upload(
+                                        path=transcript_full_path,
+                                        file=generated_transcript.encode('utf-8'),
+                                        file_options={"content-type": "text/plain"}
+                                    )
+                                except Exception as e_upload:
+                                    print(f"Error subiendo transcripción automática: {e_upload}")
+                            else:
+                                transcript_text = "[Error: No se pudo transcribir este archivo multimedia]"
+
+                    # Añadir el texto resultante al contexto
+                    text_context_parts.append(f"{header}[TRANSCRIPCIÓN AUTOMÁTICA DE {file_name}]\n{transcript_text}{footer}")
+
             except Exception as e_file:
                 st.error(f"Error al procesar el archivo '{file_name}': {e_file}")
-                continue 
+                continue
+            
+            progress_bar.progress((i + 1) / total_files)
         
+        progress_bar.empty()
         combined_text_context = "\n".join(text_context_parts)
         return combined_text_context, file_parts
         
@@ -145,7 +195,8 @@ def show_etnochat_project_creator(user_id, project_limit, files_per_project_limi
         uploaded_files = st.file_uploader(
             "Cargar Archivos (txt, docx, pdf, jpg, png, mp3, m4a, mp4, mov)*",
             type=[ext.lstrip('.') for ext in ALLOWED_EXTENSIONS],
-            accept_multiple_files=True
+            accept_multiple_files=True,
+            help=f"Tu plan te permite subir un máximo de {int(files_per_project_limit) if files_per_project_limit != float('inf') else 'ilimitados'} archivos."
         )
         
         if files_per_project_limit == float('inf'):
@@ -153,7 +204,6 @@ def show_etnochat_project_creator(user_id, project_limit, files_per_project_limi
         else:
             st.caption(f"Puedes cargar múltiples archivos. (Límite de tu plan: {int(files_per_project_limit)} archivos)")
 
-        
         submitted = st.form_submit_button("Crear Proyecto")
 
     if submitted:
@@ -289,14 +339,13 @@ def show_etnochat_project_analyzer(text_context, file_parts, project_name):
         with st.chat_message(msg["role"], avatar="✨" if msg['role'] == "assistant" else "👤"):
             st.markdown(msg["content"])
 
-    user_prompt = st.chat_input("Haz una pregunta sobre los archivos (ej. 'Resume el audio 1 y compáralo con la foto 3')...")
+    user_prompt = st.chat_input("Haz una pregunta sobre los archivos...")
 
     if user_prompt:
         st.session_state.mode_state["etno_chat_history"].append({"role": "user", "content": user_prompt})
         with st.chat_message("user", avatar="👤"):
             st.markdown(user_prompt)
 
-        # Verificar límites de preguntas
         question_limit = st.session_state.plan_features.get('etnochat_questions_per_day', 5)
         current_queries = get_daily_usage(st.session_state.user, c.MODE_ETNOCHAT) 
 
@@ -306,29 +355,30 @@ def show_etnochat_project_analyzer(text_context, file_parts, project_name):
             return
 
         with st.chat_message("assistant", avatar="✨"):
-            message_placeholder = st.empty(); message_placeholder.markdown("Analizando todos los archivos...")
             
             history_str = "\n".join(f"{m['role']}: {m['content']}" for m in st.session_state.mode_state["etno_chat_history"][-10:])
             
             # 1. Crear el prompt de texto
             prompt_text = get_etnochat_prompt(history_str, text_context)
             
-            # 2. Crear la lista final para la API
-            #    El prompt de texto DEBE ir primero
+            # 2. Crear la lista final. Nota que ahora file_parts SOLO tiene imágenes.
+            # Los audios/videos ya fueron convertidos a text_context.
             final_prompt_list = [prompt_text] + file_parts
             
-            response = call_gemini_api(final_prompt_list) 
+            # --- STREAMING ---
+            stream = call_gemini_stream(final_prompt_list) 
 
-            if response:
-                message_placeholder.markdown(response)
+            if stream:
+                response_text = st.write_stream(stream) # Efecto visual
+                
                 log_query_event(user_prompt, mode=c.MODE_ETNOCHAT)
                 st.session_state.mode_state["etno_chat_history"].append({
                     "role": "assistant", 
-                    "content": response
+                    "content": response_text
                 })
-                st.rerun()
             else:
-                message_placeholder.error("Error al obtener respuesta multimodal."); 
+                message_placeholder = st.empty()
+                message_placeholder.error("Error al obtener respuesta multimodal.")
                 st.session_state.mode_state["etno_chat_history"].pop()
 
     # Añadir botones de descarga y nueva conversación
@@ -351,7 +401,7 @@ def show_etnochat_project_analyzer(text_context, file_parts, project_name):
         with col2: 
             st.button(
                 "Nueva Conversación", 
-                on_click=reset_etnochat_chat_workflow, # <-- Usar la nueva función de reseteo
+                on_click=reset_etnochat_chat_workflow, 
                 key="new_etno_chat_btn", 
                 use_container_width=True
             )
@@ -368,25 +418,24 @@ def etnochat_mode():
     project_limit = plan_features.get('etnochat_project_limit', 0)
     files_per_project_limit = plan_features.get('etnochat_max_files_per_project', 0)
 
-    # --- Lógica de Carga de Datos (una sola vez por proyecto) ---
-    
     # 1. Cargar los datos del proyecto si está seleccionado pero no cargado
     if "etno_selected_project_id" in st.session_state.mode_state and "etno_file_parts" not in st.session_state.mode_state:
-        with st.spinner("Cargando y procesando archivos del proyecto..."):
-            text_ctx, file_parts = load_etnochat_project_data(st.session_state.mode_state["etno_storage_path"]) 
-            
-            if text_ctx is not None and file_parts is not None:
-                st.session_state.mode_state["etno_context_str"] = text_ctx
-                st.session_state.mode_state["etno_file_parts"] = file_parts
-            else:
-                st.error("No se pudieron cargar los datos del proyecto.")
-                st.session_state.mode_state.pop("etno_selected_project_id", None)
-                st.session_state.mode_state.pop("etno_selected_project_name", None)
-                st.session_state.mode_state.pop("etno_storage_path", None)
+        
+        # El mensaje se muestra dentro de load_etnochat_project_data a través de la barra de progreso
+        text_ctx, file_parts = load_etnochat_project_data(st.session_state.mode_state["etno_storage_path"]) 
+        
+        if text_ctx is not None and file_parts is not None:
+            st.session_state.mode_state["etno_context_str"] = text_ctx
+            st.session_state.mode_state["etno_file_parts"] = file_parts
+        else:
+            st.error("No se pudieron cargar los datos del proyecto.")
+            st.session_state.mode_state.pop("etno_selected_project_id", None)
+            st.session_state.mode_state.pop("etno_selected_project_name", None)
+            st.session_state.mode_state.pop("etno_storage_path", None)
 
     # --- Lógica de Vistas ---
 
-    # 1. VISTA DE ANÁLISIS (Si los datos del proyecto ya están cargados)
+    # 1. VISTA DE ANÁLISIS
     if "etno_file_parts" in st.session_state.mode_state:
         show_etnochat_project_analyzer( 
             st.session_state.mode_state["etno_context_str"],
@@ -394,12 +443,11 @@ def etnochat_mode():
             st.session_state.mode_state["etno_selected_project_name"]
         )
     
-    # 2. VISTA DE CARGA (Si está seleccionado pero cargando)
+    # 2. VISTA DE CARGA (Mientras se procesa)
     elif "etno_selected_project_id" in st.session_state.mode_state:
-        st.info("Preparando análisis...")
-        st.spinner("Cargando y procesando archivos del proyecto...") 
+        st.info("Iniciando carga y transcripción de archivos multimedia...")
     
-    # 3. VISTA DE GESTIÓN (Página principal del modo)
+    # 3. VISTA DE GESTIÓN
     else:
         with st.expander("➕ Crear Nuevo Proyecto EtnoChat", expanded=True):
             show_etnochat_project_creator(user_id, project_limit, files_per_project_limit)
