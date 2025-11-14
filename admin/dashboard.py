@@ -32,7 +32,7 @@ def show_repository_dashboard(db_full):
     st.markdown("#### Distribución de Estudios")
     
     # Gráfico de Año (Vertical)
-    st.markdown("**Estudios por Año (campo 'marca')**")
+    st.markdown("**Estudios por Año**")
     year_counts = df['marca'].value_counts().sort_index()
     st.bar_chart(year_counts)
 
@@ -41,7 +41,7 @@ def show_repository_dashboard(db_full):
     # --- ¡INICIO DE MODIFICACIÓN! Se eliminaron las columnas ---
     
     # Gráfico de Cliente (Pie Chart)
-    st.markdown("**Estudios por Cliente (campo 'cliente')**")
+    st.markdown("**Estudios por Cliente**")
     
     try:
         cliente_counts_series = df['cliente'].value_counts()
@@ -76,7 +76,7 @@ def show_repository_dashboard(db_full):
     st.divider() # Separador añadido
 
     # Gráfico de Marca (Tabla)
-    st.markdown("**Estudios por Marca (campo 'filtro')**")
+    st.markdown("**Estudios por Marca**")
     filtro_counts = df['filtro'].value_counts().reset_index()
     filtro_counts.columns = ['Marca', 'Conteo']
     st.dataframe(filtro_counts.set_index('Marca'), use_container_width=True)
