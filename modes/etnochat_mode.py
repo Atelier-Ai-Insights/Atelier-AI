@@ -11,7 +11,7 @@ import fitz # PyMuPDF
 # --- IMPORTACIONES ---
 from services.gemini_api import call_gemini_api, call_gemini_stream 
 from services.supabase_db import log_query_event, supabase, get_daily_usage
-from prompts import get_etnochat_prompt, get_media_transcription_prompt # <-- Nuevo prompt importado
+from prompts import get_etnochat_prompt, get_media_transcription_prompt # <-- Importamos el nuevo prompt
 import constants as c
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
@@ -122,7 +122,6 @@ def load_etnochat_project_data(storage_folder_path: str):
                     # A. Verificar si ya existe la transcripción en el bucket
                     if transcript_filename in existing_filenames:
                         # ¡Bingo! Ya existe. La descargamos.
-                        # print(f"INFO: Usando transcripción existente para {file_name}")
                         try:
                             trans_bytes = supabase.storage.from_(ETNOCHAT_BUCKET).download(transcript_full_path)
                             transcript_text = trans_bytes.decode('utf-8')
@@ -131,7 +130,6 @@ def load_etnochat_project_data(storage_folder_path: str):
                     
                     # B. Si no existe, la generamos con Gemini
                     if not transcript_text:
-                        # print(f"INFO: Generando nueva transcripción para {file_name}")
                         with st.spinner(f"Transcribiendo {file_name} con IA... (Una sola vez)"):
                             media_data = {"mime_type": MIME_TYPES[file_ext], "data": response_bytes}
                             prompt_transcribe = get_media_transcription_prompt()
@@ -319,6 +317,7 @@ def show_etnochat_project_list(user_id):
 def show_etnochat_project_analyzer(text_context, file_parts, project_name):
     """
     Muestra la UI de chat multimodal.
+    (file_parts ahora solo contiene imágenes)
     """
     
     st.markdown(f"### Analizando: **{project_name}**")
@@ -361,8 +360,8 @@ def show_etnochat_project_analyzer(text_context, file_parts, project_name):
             # 1. Crear el prompt de texto
             prompt_text = get_etnochat_prompt(history_str, text_context)
             
-            # 2. Crear la lista final. Nota que ahora file_parts SOLO tiene imágenes.
-            # Los audios/videos ya fueron convertidos a text_context.
+            # 2. Crear la lista final. 
+            # (file_parts ahora solo tiene imágenes, los audios/videos ya son texto)
             final_prompt_list = [prompt_text] + file_parts
             
             # --- STREAMING ---
@@ -421,7 +420,7 @@ def etnochat_mode():
     # 1. Cargar los datos del proyecto si está seleccionado pero no cargado
     if "etno_selected_project_id" in st.session_state.mode_state and "etno_file_parts" not in st.session_state.mode_state:
         
-        # El mensaje se muestra dentro de load_etnochat_project_data a través de la barra de progreso
+        # El mensaje se muestra dentro de load_etnochat_project_data
         text_ctx, file_parts = load_etnochat_project_data(st.session_state.mode_state["etno_storage_path"]) 
         
         if text_ctx is not None and file_parts is not None:
