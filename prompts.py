@@ -195,7 +195,8 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
         f"{INSTRUCCIONES_DE_CITAS}\n"
     ]
 
-# --- ¡INICIO DE LA MODIFICACIÓN 1! ---
+# --- Prompt para "Análisis de Notas y Transcripciones" (modes/transcript_mode.py) ---
+
 def get_transcript_prompt(combined_context, user_prompt):
     """
     Prompt de transcripciones con citas. 
@@ -206,13 +207,10 @@ def get_transcript_prompt(combined_context, user_prompt):
         f"**Información documentada (Resumen de Hallazgos):**\n```\n{combined_context}\n```\n\n"
         f"**Pregunta del Usuario:**\n{user_prompt}\n\n"
         
-        # ¡CAMBIO CLAVE! Se reemplazan las instrucciones personalizadas
-        # por el bloque de instrucciones estándar.
         f"{INSTRUCCIONES_DE_CITAS}\n\n"
         
         "**Respuesta:**"
     )
-# --- ¡FIN DE LA MODIFICACIÓN 1! ---
 
 
 def get_text_analysis_summary_prompt(full_context):
@@ -258,7 +256,6 @@ Un párrafo (4-5 frases) que resuma los principales descubrimientos, tensiones o
 - **Fuente de Cita:** DEBES indicar de qué archivo (ej. `[Fuente: Entrevista_Usuario_1.docx]`) proviene cada hallazgo o cita.
 """
 
-# --- ¡INICIO DE LA MODIFICACIÓN 2! ---
 def get_autocode_prompt(context, main_topic):
     """
     Crea un prompt para que la IA lea un RESUMEN e identifique
@@ -299,7 +296,7 @@ Un párrafo corto (2-3 frases) que resuma los principales hallazgos.
 
 {INSTRUCCIONES_DE_CITAS}
 """
-   
+    
 # --- Prompt para "EtnoChat" ---
 
 def get_etnochat_prompt(conversation_history, text_context):
@@ -332,6 +329,7 @@ def get_etnochat_prompt(conversation_history, text_context):
         "**Respuesta:**"
     )
 
+# --- ¡NUEVO PROMPT PARA OPTIMIZACIÓN ETNOCHAT! ---
 def get_media_transcription_prompt():
     """
     Prompt simple para convertir audio/video a texto detallado.
@@ -344,7 +342,7 @@ def get_media_transcription_prompt():
     2.  **Descripción Visual (si es video):** Si hay elementos visuales clave (acciones, entorno, emociones faciales), descríbelos entre corchetes [Ej: El usuario señala el producto con el ceño fruncido].
     3.  **Formato:** Devuelve *únicamente* el texto de la transcripción/descripción. No añadas introducciones ni conclusiones.
     """
-   
+    
 # --- Prompt para "Análisis de Datos (Excel)" ---
 
 def get_survey_articulation_prompt(survey_context, repository_context, conversation_history):
