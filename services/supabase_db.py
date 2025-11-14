@@ -17,29 +17,35 @@ if "SUPABASE_SERVICE_KEY" in st.secrets:
 
 def log_query_event(query_text, mode, rating=None):
     """
-    Registra una consulta. (Versión revertida: no devuelve ID)
+    Registra una consulta en la base de datos, incluyendo costos de tokens.
     """
     try:
-        # Generamos el ID de texto manualmente, como en tu schema original.
         generated_id = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
         
+        # --- RECUPERAR TOKENS DE LA SESIÓN (GUARDADOS POR GEMINI_API) ---
+        token_data = st.session_state.get("last_token_usage", {"prompt_tokens": 0, "candidates_tokens": 0, "total_tokens": 0})
+        
         data = {
-            "id": generated_id, # Usamos el ID de texto generado
+            "id": generated_id,
             "user_name": st.session_state.user,
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "mode": mode,
             "query": query_text,
-            "rating": None # La columna 'rating' simplemente quedará en NULL
+            "rating": None,
+            
+            # --- COLUMNAS DE COSTOS ---
+            "tokens_input": token_data.get("prompt_tokens", 0),
+            "tokens_output": token_data.get("candidates_tokens", 0),
+            "total_tokens": token_data.get("total_tokens", 0)
         }
         
-        # Insertamos los datos (sin .select() y sin return)
         supabase.table("queries").insert(data).execute()
+        
+        # Limpiar para la próxima
+        st.session_state.last_token_usage = {"prompt_tokens": 0, "candidates_tokens": 0, "total_tokens": 0}
         
     except Exception as e: 
         print(f"Error log query: {e}")
-    # No devuelve nada
-
-# --- La función log_query_feedback ha sido eliminada ---
 
 def get_monthly_usage(username, action_type):
     try: 
