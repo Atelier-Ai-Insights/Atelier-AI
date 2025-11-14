@@ -200,30 +200,21 @@ def main():
     if "mode_state" not in st.session_state: 
         st.session_state.mode_state = {}
     
-    # --- ¡INICIO DEL BLOQUE DE DETECCIÓN MODIFICADO! ---
-    if not st.session_state.get("logged_in"):
-        params = st.query_params
-        
-        # 1. Si el token está en la URL, lo capturamos
-        if params.get("type") == "recovery" and "access_token" in params:
-            try:
-                # Guardamos el token en la sesión para que sobreviva al rerun
-                st.session_state.recovery_token = params.get("access_token")
-                
-                # Forzamos la página a nuestro nuevo formulario
-                st.session_state.page = "set_new_password"
-                
-                # Limpiamos la URL
-                st.query_params.clear() 
-                st.rerun() # Forzamos la recarga
-                
-            except Exception as e:
-                st.error(f"Error al procesar el enlace de recuperación: {e}")
-                st.session_state.page = "login"
-    # --- ¡FIN DEL BLOQUE DE DETECCIÓN MODIFICADO! ---
-
+    # --- ¡INICIO DEL BLOQUE DE LÓGICA MODIFICADO! ---
     
-    if st.session_state.get("logged_in"):
+    # Capturamos los parámetros de la URL
+    params = st.query_params
+    
+    # Verificamos si es un enlace de recuperación ANTES de revisar si está logueado
+    if params.get("type") == "recovery" and "access_token" in params:
+        # Si es un enlace de recuperación, forzamos la página de reseteo
+        # y guardamos el token para que la use `auth.py`
+        access_token = params.get("access_token")
+        st.session_state.page = "set_new_password"
+        st.query_params.clear() # Limpiamos la URL
+    
+    # Ahora, manejamos el estado de logueo normal
+    elif st.session_state.get("logged_in"):
         if st.session_state.get("access_token"):
             try:
                 supabase.auth.set_session(
@@ -241,6 +232,7 @@ def main():
             supabase.auth.sign_out()
             st.session_state.clear()
             st.rerun()
+    # --- ¡FIN DEL BLOQUE DE LÓGICA MODIFICADO! ---
     
     if 'current_mode' not in st.session_state:
         st.session_state.current_mode = c.MODE_CHAT
@@ -248,6 +240,7 @@ def main():
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
+    # --- PANTALLA DE LOGIN / REGISTRO / RESETEO ---
     if not st.session_state.get("logged_in"):
         
         st.markdown("""
@@ -264,6 +257,8 @@ def main():
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
             st.image("LogoDataStudio.png")
+            
+            # Ruteo de páginas de autenticación
             if st.session_state.page == "login": 
                 show_login_page()
             elif st.session_state.page == "signup": 
@@ -271,12 +266,17 @@ def main():
             elif st.session_state.page == "reset_password": 
                 show_reset_password_page()
             elif st.session_state.page == "set_new_password":
-                show_set_new_password_page() 
+                # Le pasamos el token que debe estar en los params
+                # (Nota: st.query_params se resetea en cada carga, 
+                # así que debemos leerlo de nuevo si estamos en este flujo)
+                token_from_url = st.query_params.get("access_token")
+                show_set_new_password_page(token_from_url) 
                 
         st.divider()
         st.markdown(footer_html, unsafe_allow_html=True)
-        st.stop()
+        st.stop() # Detenemos la app aquí si no está logueado
 
+    # --- PANTALLA DE APLICACIÓN PRINCIPAL (Si está logueado) ---
     try:
         db_full = st.session_state.db_full
     except AttributeError:
