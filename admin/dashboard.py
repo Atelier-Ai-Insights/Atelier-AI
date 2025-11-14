@@ -3,7 +3,7 @@ import pandas as pd
 from services.supabase_db import supabase, supabase_admin_client
 from config import PLAN_FEATURES
 from supabase import create_client 
-import altair as alt # <-- ¡NUEVA IMPORTACIÓN!
+import altair as alt 
 
 # =====================================================
 # FUNCIÓN DEL DASHBOARD DEL REPOSITORIO (MODIFICADA)
@@ -38,98 +38,129 @@ def show_repository_dashboard(db_full):
 
     st.divider()
     
-    col1, col2 = st.columns(2)
+    # --- ¡INICIO DE MODIFICACIÓN! Se eliminaron las columnas ---
     
-    with col1:
-        # Gráfico de Cliente (Pie Chart)
-        st.markdown("**Estudios por Cliente (campo 'cliente')**")
+    # Gráfico de Cliente (Pie Chart)
+    st.markdown("**Estudios por Cliente (campo 'cliente')**")
+    
+    try:
+        cliente_counts_series = df['cliente'].value_counts()
+        cliente_counts_df = cliente_counts_series.reset_index()
+        cliente_counts_df.columns = ['Cliente', 'Conteo']
         
-        # --- ¡INICIO DE LA CORRECCIÓN (con Altair)! ---
-        try:
-            cliente_counts_series = df['cliente'].value_counts()
-            cliente_counts_df = cliente_counts_series.reset_index()
-            cliente_counts_df.columns = ['Cliente', 'Conteo']
-            
-            if not cliente_counts_df.empty:
-                # 1. Crear el gráfico base
-                base = alt.Chart(cliente_counts_df).encode(
-                   theta=alt.Theta("Conteo:Q", stack=True)
-                )
+        if not cliente_counts_df.empty:
+            base = alt.Chart(cliente_counts_df).encode(
+               theta=alt.Theta("Conteo:Q", stack=True)
+            )
 
-                # 2. Definir el gráfico de pastel
-                pie = base.mark_arc(outerRadius=120).encode(
-                    color=alt.Color("Cliente:N"),
-                    order=alt.Order("Conteo:Q", sort="descending"),
-                    tooltip=["Cliente", "Conteo"]
-                )
+            pie = base.mark_arc(outerRadius=120).encode(
+                color=alt.Color("Cliente:N"),
+                order=alt.Order("Conteo:Q", sort="descending"),
+                tooltip=["Cliente", "Conteo"]
+            )
 
-                # 3. Añadir el texto (porcentajes)
-                text = base.mark_text(radius=140).encode(
-                    text=alt.Text("Conteo:Q", format=".1%"),
-                    order=alt.Order("Conteo:Q", sort="descending"),
-                    color=alt.value("black")  # Color del texto
-                )
+            text = base.mark_text(radius=140).encode(
+                text=alt.Text("Conteo:Q", format=".1%"),
+                order=alt.Order("Conteo:Q", sort="descending"),
+                color=alt.value("black") 
+            )
 
-                # 4. Combinar y mostrar
-                chart = pie + text
-                st.altair_chart(chart, use_container_width=True)
-            else:
-                st.info("No hay datos de clientes para mostrar en el gráfico.")
-        
-        except Exception as e:
-            st.error(f"Se produjo un error al generar el gráfico de pastel: {e}")
-        # --- ¡FIN DE LA CORRECCIÓN! ---
+            chart = pie + text
+            st.altair_chart(chart, use_container_width=True)
+        else:
+            st.info("No hay datos de clientes para mostrar en el gráfico.")
+    
+    except Exception as e:
+        st.error(f"Se produjo un error al generar el gráfico de pastel: {e}")
 
-    with col2:
-        # Gráfico de Marca (Tabla)
-        st.markdown("**Estudios por Marca (campo 'filtro')**")
-        filtro_counts = df['filtro'].value_counts().reset_index()
-        filtro_counts.columns = ['Marca', 'Conteo']
-        st.dataframe(filtro_counts.set_index('Marca'), use_container_width=True)
+    st.divider() # Separador añadido
+
+    # Gráfico de Marca (Tabla)
+    st.markdown("**Estudios por Marca (campo 'filtro')**")
+    filtro_counts = df['filtro'].value_counts().reset_index()
+    filtro_counts.columns = ['Marca', 'Conteo']
+    st.dataframe(filtro_counts.set_index('Marca'), use_container_width=True)
+    
+    # --- ¡FIN DE MODIFICACIÓN! ---
 
 
 # =====================================================
 # PANEL DE ADMINISTRACIÓN (MODIFICADO)
 # =====================================================
-def show_admin_dashboard(db_full): # <-- ACEPTA db_full
-    # Asegurarnos que el cliente admin exista
+def show_admin_dashboard(db_full): 
     if not supabase_admin_client:
         st.error("Error: La 'SUPABASE_SERVICE_KEY' no está configurada...")
         return
 
-    # --- ¡NUEVA ESTRUCTURA DE PESTAÑAS! ---
-    tab_stats, tab_repo = st.tabs(["Estadísticas de Uso", "Dashboard del Repositorio"])
+    tab_stats, tab_repo = st.tabs(["Estadísticas y Costos", "Dashboard del Repositorio"])
 
-    # --- PESTAÑA 1: Estadísticas de Uso (Tu código antiguo) ---
     with tab_stats:
-        st.subheader("Estadísticas de Uso", divider="grey")
+        st.subheader("Estadísticas de Uso y Consumo (Tokens)", divider="grey")
         with st.spinner("Cargando estadísticas..."):
             try:
-                stats_response = supabase.table("queries").select("user_name, mode, timestamp, query").execute()
+                stats_response = supabase.table("queries").select("user_name, mode, timestamp, query, total_tokens").execute()
+                
                 if stats_response.data:
                     df_stats = pd.DataFrame(stats_response.data)
                     df_stats['timestamp'] = pd.to_datetime(df_stats['timestamp']).dt.tz_localize(None)
                     df_stats['date'] = df_stats['timestamp'].dt.date
                     
-                    col1, col2 = st.columns(2)
-                    with col1: 
-                        st.write("**Consultas por Usuario (Total)**")
-                        user_counts = df_stats.groupby('user_name')['mode'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False)
-                        st.dataframe(user_counts, use_container_width=True, hide_index=True)
-                    with col2: 
-                        st.write("**Consultas por Modo de Uso (Total)**")
-                        mode_counts = df_stats.groupby('mode')['user_name'].count().reset_index(name='Total Consultas').sort_values(by="Total Consultas", ascending=False)
-                        st.dataframe(mode_counts, use_container_width=True, hide_index=True)
+                    if 'total_tokens' in df_stats.columns:
+                        df_stats['total_tokens'] = df_stats['total_tokens'].fillna(0).astype(int)
+                    else:
+                        df_stats['total_tokens'] = 0 
+
+                    # --- Métricas Generales (Esto se mantiene en 3 columnas) ---
+                    total_queries = len(df_stats)
+                    total_tokens_consumed = df_stats['total_tokens'].sum()
+                    
+                    ESTIMATED_COST_PER_MILLION_TOKENS = 0.30 
+                    estimated_cost = (total_tokens_consumed / 1_000_000) * ESTIMATED_COST_PER_MILLION_TOKENS 
+
+                    m1, m2, m3 = st.columns(3)
+                    m1.metric("Total Consultas (Global)", total_queries)
+                    m2.metric("Total Tokens Procesados", f"{total_tokens_consumed:,.0f}")
+                    m3.metric("Costo Estimado (aprox.)", f"${estimated_cost:.4f} USD")
+                    st.divider()
+                    
+                    # --- ¡INICIO DE MODIFICACIÓN! Se eliminaron las columnas ---
+
+                    st.write("**Top Usuarios por Consumo (Tokens)**")
+                    user_tokens = df_stats.groupby('user_name')['total_tokens'].sum().reset_index(name='Tokens Totales').sort_values(by="Tokens Totales", ascending=False)
+                    st.dataframe(user_tokens, use_container_width=True, hide_index=True)
+                    st.bar_chart(user_tokens.set_index('user_name'))
+
+                    st.divider() # Separador añadido
+
+                    st.write("**Consumo por Modo de Uso (Tokens)**")
+                    mode_tokens = df_stats.groupby('mode')['total_tokens'].sum().reset_index(name='Tokens Totales').sort_values(by="Tokens Totales", ascending=False)
+                    st.dataframe(mode_tokens, use_container_width=True, hide_index=True)
+                    
+                    base = alt.Chart(mode_tokens).encode(
+                        theta=alt.Theta("Tokens Totales:Q", stack=True)
+                    ).properties(title="Distribución de Tokens por Modo")
+                    
+                    pie = base.mark_arc(outerRadius=120).encode(
+                        color=alt.Color("mode:N", title="Modo"),
+                        order=alt.Order("Tokens Totales", sort="descending"),
+                        tooltip=["mode", "Tokens Totales"]
+                    )
+                    st.altair_chart(pie, use_container_width=True)
                         
+                    st.divider() # Separador añadido
+                    
                     st.write("**Actividad Reciente (Últimas 50 consultas)**")
-                    df_recent = df_stats[['timestamp', 'user_name', 'mode', 'query']].sort_values(by="timestamp", ascending=False).head(50)
+                    df_recent = df_stats[['timestamp', 'user_name', 'mode', 'total_tokens', 'query']].sort_values(by="timestamp", ascending=False).head(50)
                     df_recent['timestamp'] = df_recent['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
                     st.dataframe(df_recent, use_container_width=True, hide_index=True)
+                    
+                    # --- ¡FIN DE MODIFICACIÓN! ---
                 else: 
                     st.info("Aún no hay datos de uso.")
             except Exception as e: 
                 st.error(f"Error cargando estadísticas: {e}")
 
+        # --- (Gestión de Clientes y Usuarios no cambia) ---
         st.subheader("Gestión de Clientes (Invitaciones)", divider="grey")
         try:
             clients_response = supabase_admin_client.table("clients").select("client_name, plan, invite_code, created_at").order("created_at", desc=True).execute()
@@ -241,6 +272,6 @@ def show_admin_dashboard(db_full): # <-- ACEPTA db_full
         except Exception as e:
             st.error(f"Error en la gestión de usuarios: {e}")
 
-    # --- PESTAÑA 2: Dashboard del Repositorio (Código Nuevo) ---
+    # --- PESTAÑA 2: Dashboard del Repositorio ---
     with tab_repo:
         show_repository_dashboard(db_full)
