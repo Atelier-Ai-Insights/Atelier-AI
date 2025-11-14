@@ -37,7 +37,6 @@ def set_mode_and_reset(new_mode):
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
     # ... (Esta función no cambia) ...
-    
     GRACE_PERIOD_SECONDS = 5 
     HEARTBEAT_INTERVAL_SECONDS = 60 
     current_time = time.time()
@@ -76,7 +75,6 @@ def run_user_mode(db_full, user_features, footer_html):
                 else:
                     print(f"Heartbeat check falló (ej. red), pero NO se expulsará al usuario. Error: {e}")
                     st.session_state.last_heartbeat_check = current_time
-
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
@@ -202,24 +200,28 @@ def main():
     if "mode_state" not in st.session_state: 
         st.session_state.mode_state = {}
     
+    # --- ¡INICIO DEL BLOQUE DE DETECCIÓN MODIFICADO! ---
     if not st.session_state.get("logged_in"):
         params = st.query_params
         
+        # 1. Si el token está en la URL, lo capturamos
         if params.get("type") == "recovery" and "access_token" in params:
             try:
-                access_token = params.get("access_token")
-                supabase.auth.set_session(access_token, None) 
+                # Guardamos el token en la sesión para que sobreviva al rerun
+                st.session_state.recovery_token = params.get("access_token")
                 
+                # Forzamos la página a nuestro nuevo formulario
                 st.session_state.page = "set_new_password"
-                st.query_params.clear() 
                 
-                # --- ¡LA LÍNEA QUE FALTABA! ---
-                st.rerun() 
-                # --------------------------------
+                # Limpiamos la URL
+                st.query_params.clear() 
+                st.rerun() # Forzamos la recarga
                 
             except Exception as e:
                 st.error(f"Error al procesar el enlace de recuperación: {e}")
                 st.session_state.page = "login"
+    # --- ¡FIN DEL BLOQUE DE DETECCIÓN MODIFICADO! ---
+
     
     if st.session_state.get("logged_in"):
         if st.session_state.get("access_token"):
