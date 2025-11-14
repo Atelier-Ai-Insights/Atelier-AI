@@ -4,7 +4,6 @@ from config import PLAN_FEATURES
 import uuid
 import time 
 from services.storage import load_database 
-# --- ¡NUEVA IMPORTACIÓN! ---
 from services.logger import log_error, log_action
 
 # ==============================
@@ -12,6 +11,7 @@ from services.logger import log_error, log_action
 # ==============================
 
 def show_signup_page():
+    # ... (Esta función no cambia) ...
     st.header("Crear Nueva Cuenta")
     email = st.text_input("Tu Correo Electrónico")
     password = st.text_input("Crea una Contraseña", type="password")
@@ -44,6 +44,7 @@ def show_signup_page():
          st.rerun()
 
 def show_login_page():
+    # ... (Esta función no cambia) ...
     st.header("Iniciar Sesión")
 
     if 'pending_login_info' in st.session_state:
@@ -151,8 +152,6 @@ def show_login_page():
                         
             except Exception as e:
                 st.error(f"Credenciales incorrectas o cuenta no confirmada.")
-                # No logueamos el error completo para no llenar el log de intentos fallidos normales, 
-                # pero podrías hacerlo si quisieras auditoría estricta.
                 log_action(f"Intento fallido de login: {email}", module="Auth")
 
         if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
@@ -186,3 +185,59 @@ def show_reset_password_page():
     if st.button("Volver a Iniciar Sesión", type="secondary", use_container_width=True):
          st.session_state.page = "login"
          st.rerun()
+
+
+# --- ¡INICIO DE LA NUEVA FUNCIÓN! ---
+def show_set_new_password_page():
+    """
+    Muestra el formulario para que el usuario (autenticado por token de URL)
+    establezca su nueva contraseña.
+    """
+    st.header("Establecer Nueva Contraseña")
+    st.write("Has verificado tu identidad. Por favor, crea una nueva contraseña.")
+    
+    new_password = st.text_input("Nueva Contraseña", type="password")
+    confirm_password = st.text_input("Confirmar Nueva Contraseña", type="password")
+
+    if st.button("Actualizar Contraseña", use_container_width=True):
+        if not new_password or not confirm_password:
+            st.error("Por favor, completa ambos campos.")
+            return
+        
+        if new_password != confirm_password:
+            st.error("Las contraseñas no coinciden.")
+            return
+            
+        if len(new_password) < 6:
+            st.error("La contraseña debe tener al menos 6 caracteres.")
+            return
+
+        try:
+            # El cliente de Supabase ya fue autenticado con el token en app.py
+            # por lo que esta llamada actualizará la contraseña del usuario correcto.
+            user_response = supabase.auth.update_user({
+                "password": new_password
+            })
+            
+            log_action(f"Contraseña actualizada exitosamente para: {user_response.user.email}", module="Auth")
+            
+            # Limpiamos la sesión del token de reseteo
+            supabase.auth.sign_out() 
+            
+            st.success("¡Contraseña actualizada con éxito!")
+            st.info("Ahora puedes iniciar sesión con tu nueva contraseña.")
+            time.sleep(2)
+            
+            # Enviamos al usuario a la página de login
+            st.session_state.page = "login"
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"Error al actualizar la contraseña: {e}")
+            log_error("Error crítico al actualizar contraseña post-reseteo", module="Auth", error=e)
+
+    if st.button("Cancelar", type="secondary", use_container_width=True):
+        supabase.auth.sign_out()
+        st.session_state.page = "login"
+        st.rerun()
+# --- ¡FIN DE LA NUEVA FUNCIÓN! ---
