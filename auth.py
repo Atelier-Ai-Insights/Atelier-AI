@@ -206,6 +206,9 @@ def show_set_new_password_page(access_token):
             st.info("Ahora puedes iniciar sesión con tu nueva contraseña.")
             time.sleep(2)
             
+            # --- ¡AQUÍ ESTÁ EL CAMBIO! ---
+            # Limpiamos los parámetros de la URL y volvemos al login
+            st.query_params.clear() 
             st.session_state.page = "login"
             st.rerun()
 
@@ -215,6 +218,7 @@ def show_set_new_password_page(access_token):
 
     if st.button("Cancelar", type="secondary", use_container_width=True):
         supabase.auth.sign_out()
+        st.query_params.clear() # Limpiar también al cancelar
         st.session_state.page = "login"
         st.rerun()
 # --- ¡FIN DE LA FUNCIÓN MODIFICADA! ---
