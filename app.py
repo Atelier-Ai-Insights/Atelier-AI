@@ -9,7 +9,6 @@ from styles import apply_styles
 from config import PLAN_FEATURES, banner_file
 from services.storage import load_database 
 from services.supabase_db import supabase
-# --- ¡MODIFICADO! Importar la nueva función ---
 from auth import show_login_page, show_signup_page, show_reset_password_page, show_set_new_password_page
 from admin.dashboard import show_admin_dashboard
 from modes.report_mode import report_mode
@@ -38,7 +37,7 @@ def set_mode_and_reset(new_mode):
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
     # ... (Esta función no cambia) ...
-    # --- ¡BLOQUE DE HEARTBEAT CON "TEMPORIZADOR SUAVE"! ---
+    
     GRACE_PERIOD_SECONDS = 5 
     HEARTBEAT_INTERVAL_SECONDS = 60 
     current_time = time.time()
@@ -77,7 +76,6 @@ def run_user_mode(db_full, user_features, footer_html):
                 else:
                     print(f"Heartbeat check falló (ej. red), pero NO se expulsará al usuario. Error: {e}")
                     st.session_state.last_heartbeat_check = current_time
-    # --- FIN DEL BLOQUE DE HEARTBEAT ---
 
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
@@ -204,30 +202,24 @@ def main():
     if "mode_state" not in st.session_state: 
         st.session_state.mode_state = {}
     
-    # --- ¡INICIO DEL NUEVO BLOQUE DE DETECCIÓN DE TOKEN! ---
     if not st.session_state.get("logged_in"):
-        # Capturamos los parámetros de la URL
         params = st.query_params
         
-        # Verificamos si es un enlace de recuperación de contraseña de Supabase
         if params.get("type") == "recovery" and "access_token" in params:
             try:
-                # Obtenemos el token y lo autenticamos en el cliente
                 access_token = params.get("access_token")
-                # (El refresh token no es necesario para update_user)
                 supabase.auth.set_session(access_token, None) 
                 
-                # Forzamos la página a nuestro nuevo formulario
                 st.session_state.page = "set_new_password"
-                
-                # Limpiamos la URL para que no quede el token visible
                 st.query_params.clear() 
+                
+                # --- ¡LA LÍNEA QUE FALTABA! ---
+                st.rerun() 
+                # --------------------------------
                 
             except Exception as e:
                 st.error(f"Error al procesar el enlace de recuperación: {e}")
                 st.session_state.page = "login"
-    # --- ¡FIN DEL NUEVO BLOQUE! ---
-
     
     if st.session_state.get("logged_in"):
         if st.session_state.get("access_token"):
@@ -270,7 +262,6 @@ def main():
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
             st.image("LogoDataStudio.png")
-            # --- ¡INICIO DE LA RUTA MODIFICADA! ---
             if st.session_state.page == "login": 
                 show_login_page()
             elif st.session_state.page == "signup": 
@@ -278,8 +269,7 @@ def main():
             elif st.session_state.page == "reset_password": 
                 show_reset_password_page()
             elif st.session_state.page == "set_new_password":
-                show_set_new_password_page() # <-- La nueva ruta
-            # --- ¡FIN DE LA RUTA MODIFICADA! ---
+                show_set_new_password_page() 
                 
         st.divider()
         st.markdown(footer_html, unsafe_allow_html=True)
