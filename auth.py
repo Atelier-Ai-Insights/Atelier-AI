@@ -16,12 +16,10 @@ def show_signup_page():
     email = st.text_input("Tu Correo Electrónico")
     password = st.text_input("Crea una Contraseña", type="password")
     invite_code = st.text_input("Código de Invitación de tu Empresa")
-
     if st.button("Registrarse", use_container_width=True):
         if not email or not password or not invite_code:
             st.error("Por favor, completa todos loscampos.")
             return
-
         try:
             client_response = supabase.table("clients").select("id").eq("invite_code", invite_code).single().execute()
             if not client_response.data:
@@ -38,7 +36,6 @@ def show_signup_page():
         except Exception as e:
             st.error(f"Error en el registro: {e}")
             log_error(f"Error crítico en registro de usuario {email}", module="Auth", error=e)
-
     if st.button("¿Ya tienes cuenta? Inicia Sesión", type="secondary", use_container_width=True):
          st.session_state.page = "login"
          st.rerun()
@@ -46,29 +43,21 @@ def show_signup_page():
 def show_login_page():
     # ... (Esta función no cambia) ...
     st.header("Iniciar Sesión")
-
     if 'pending_login_info' in st.session_state:
         st.warning("**Este usuario ya tiene una sesión activa en otro dispositivo.**")
         st.write("¿Qué deseas hacer?")
-        
         col1, col2 = st.columns(2)
-        
         with col1:
             if st.button("Cerrar la otra sesión e iniciar aquí", use_container_width=True, type="primary"):
                 try:
                     pending_info = st.session_state.pending_login_info
                     user_id = pending_info['user_id']
-                    
                     st.session_state.access_token = pending_info['access_token']
                     st.session_state.refresh_token = pending_info['refresh_token']
                     supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
-                    
                     new_session_id = str(uuid.uuid4())
-                    
                     supabase.table("users").update({"active_session_id": new_session_id}).eq("id", user_id).execute()
-                    
                     user_profile = supabase.table("users").select("*, rol, clients(client_name, plan)").eq("id", user_id).single().execute()
-                    
                     client_info = user_profile.data['clients']
                     st.session_state.logged_in = True
                     st.session_state.user = user_profile.data['email']
@@ -79,39 +68,29 @@ def show_login_page():
                     st.session_state.plan_features = PLAN_FEATURES.get(st.session_state.plan, PLAN_FEATURES['Explorer'])
                     st.session_state.is_admin = (user_profile.data.get('rol', '') == 'admin')
                     st.session_state.login_timestamp = time.time() 
-                    
                     with st.spinner("Cargando repositorio de conocimiento..."):
                         st.session_state.db_full = load_database(st.session_state.cliente)
-
                     st.session_state.pop('pending_login_info')
                     log_action(f"Login forzado exitoso: {st.session_state.user}", module="Auth")
                     st.rerun()
-                    
                 except Exception as e:
                     st.error(f"Error al forzar inicio de sesión: {e}")
                     log_error("Error forzando sesión", module="Auth", error=e)
-
         with col2:
             if st.button("Cancelar", use_container_width=True, type="secondary"):
                 st.session_state.pop('pending_login_info')
                 st.rerun()
-
     else:
         email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
         password = st.text_input("Contraseña", type="password", placeholder="password")
-
         if st.button("Ingresar", use_container_width=True):
             try:
                 response = supabase.auth.sign_in_with_password({"email": email, "password": password})
                 user_id = response.user.id
-                
                 access_token = response.session.access_token
                 refresh_token = response.session.refresh_token
-
                 supabase.auth.set_session(access_token, refresh_token)
-                
                 user_profile_check = supabase.table("users").select("active_session_id").eq("id", user_id).single().execute()
-
                 if user_profile_check.data and user_profile_check.data.get('active_session_id'):
                     st.session_state.pending_login_info = {
                         'user_id': user_id,
@@ -121,15 +100,11 @@ def show_login_page():
                     st.rerun()
                 else:
                     new_session_id = str(uuid.uuid4())
-                    
                     user_profile = supabase.table("users").select("*, rol, clients(client_name, plan)").eq("id", user_id).single().execute()
-                    
                     if user_profile.data and user_profile.data.get('clients'):
                         supabase.table("users").update({"active_session_id": new_session_id}).eq("id", user_id).execute()
-                        
                         st.session_state.access_token = access_token
                         st.session_state.refresh_token = refresh_token
-                        
                         client_info = user_profile.data['clients']
                         st.session_state.logged_in = True
                         st.session_state.user = user_profile.data['email']
@@ -140,24 +115,19 @@ def show_login_page():
                         st.session_state.plan_features = PLAN_FEATURES.get(st.session_state.plan, PLAN_FEATURES['Explorer'])
                         st.session_state.is_admin = (user_profile.data.get('rol', '') == 'admin')
                         st.session_state.login_timestamp = time.time() 
-
                         with st.spinner("Cargando repositorio de conocimiento..."):
                             st.session_state.db_full = load_database(st.session_state.cliente)
-                        
                         log_action(f"Login exitoso: {email}", module="Auth")
                         st.rerun()
                     else:
                         st.error("Perfil de usuario no encontrado. Contacta al administrador.")
                         log_error(f"Usuario autenticado pero sin perfil en tabla 'users': {email}", module="Auth", level="ERROR")
-                        
             except Exception as e:
                 st.error(f"Credenciales incorrectas o cuenta no confirmada.")
                 log_action(f"Intento fallido de login: {email}", module="Auth")
-
         if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
             st.session_state.page = "signup"
             st.rerun()
-
         if st.button("¿Olvidaste tu contraseña?", type="secondary", use_container_width=True):
             st.session_state.page = "reset_password"
             st.rerun()
@@ -167,12 +137,10 @@ def show_reset_password_page():
     st.header("Restablecer Contraseña")
     st.write("Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.")
     email = st.text_input("Tu Correo Electrónico")
-
     if st.button("Enviar enlace de recuperación", use_container_width=True):
         if not email:
             st.warning("Por favor, ingresa tu correo electrónico.")
             return
-
         try:
             supabase.auth.reset_password_for_email(email)
             st.success("¡Correo enviado! Revisa tu bandeja de entrada.")
@@ -181,21 +149,32 @@ def show_reset_password_page():
         except Exception as e:
             st.error(f"Error al enviar el correo: {e}")
             log_error(f"Fallo envío correo recuperación: {email}", module="Auth", error=e)
-
     if st.button("Volver a Iniciar Sesión", type="secondary", use_container_width=True):
          st.session_state.page = "login"
          st.rerun()
 
 
-# --- ¡INICIO DE LA NUEVA FUNCIÓN! ---
-def show_set_new_password_page():
+# --- ¡INICIO DE LA FUNCIÓN MODIFICADA! ---
+def show_set_new_password_page(access_token):
     """
-    Muestra el formulario para que el usuario (autenticado por token de URL)
+    Muestra el formulario para que el usuario (autenticado por token)
     establezca su nueva contraseña.
     """
     st.header("Establecer Nueva Contraseña")
     st.write("Has verificado tu identidad. Por favor, crea una nueva contraseña.")
-    
+
+    # 1. Validar el token en Supabase ANTES de mostrar el formulario
+    try:
+        supabase.auth.set_session(access_token, None)
+    except Exception as e:
+        st.error(f"Error al validar el token: {e}. El enlace puede haber expirado.")
+        log_error("Token de recuperación inválido o expirado", module="Auth", error=e)
+        if st.button("Volver a Iniciar Sesión", use_container_width=True):
+            st.session_state.page = "login"
+            st.rerun()
+        return
+
+    # 2. Mostrar el formulario
     new_password = st.text_input("Nueva Contraseña", type="password")
     confirm_password = st.text_input("Confirmar Nueva Contraseña", type="password")
 
@@ -213,22 +192,20 @@ def show_set_new_password_page():
             return
 
         try:
-            # El cliente de Supabase ya fue autenticado con el token en app.py
-            # por lo que esta llamada actualizará la contraseña del usuario correcto.
+            # 3. Actualizar la contraseña del usuario (el cliente ya está autenticado)
             user_response = supabase.auth.update_user({
                 "password": new_password
             })
             
             log_action(f"Contraseña actualizada exitosamente para: {user_response.user.email}", module="Auth")
             
-            # Limpiamos la sesión del token de reseteo
+            # 4. Limpiar todo
             supabase.auth.sign_out() 
             
             st.success("¡Contraseña actualizada con éxito!")
             st.info("Ahora puedes iniciar sesión con tu nueva contraseña.")
             time.sleep(2)
             
-            # Enviamos al usuario a la página de login
             st.session_state.page = "login"
             st.rerun()
 
@@ -240,4 +217,4 @@ def show_set_new_password_page():
         supabase.auth.sign_out()
         st.session_state.page = "login"
         st.rerun()
-# --- ¡FIN DE LA NUEVA FUNCIÓN! ---
+# --- ¡FIN DE LA FUNCIÓN MODIFICADA! ---
