@@ -73,7 +73,7 @@ def run_user_mode(db_full, user_features, footer_html):
                     st.session_state.clear()
                     st.rerun()
                 else:
-                    print(f"Heartbeat check falló (ej. red), pero NO se expulsará al usuario. Error: {e}")
+                    print(f"HeartB eat check falló (ej. red), pero NO se expulsará al usuario. Error: {e}")
                     st.session_state.last_heartbeat_check = current_time
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
@@ -184,7 +184,7 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == c.MODE_ETNOCHAT: etnochat_mode()
     
 # =====================================================
-# FUNCIÓN PRINCIPAL DE LA APLICACIÓN
+# FUNCIÓN PRINCIPAL DE LA APLICACIÓN (MODIFICADA)
 # =====================================================
 def main():
     
@@ -195,33 +195,49 @@ def main():
     
     apply_styles()
 
+    # Inicialización de estado
     if 'page' not in st.session_state: st.session_state.page = "login"
     if "api_key_index" not in st.session_state: st.session_state.api_key_index = 0
     if "mode_state" not in st.session_state: 
         st.session_state.mode_state = {}
     
-    # --- ¡INICIO DEL BLOQUE DE LÓGICA MODIFICADO! ---
-    
-    # Capturamos los parámetros de la URL
     params = st.query_params
-    
-    # Verificamos si es un enlace de recuperación ANTES de revisar si está logueado
+    footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
+    footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
+
+    # --- ¡INICIO DE LA LÓGICA DE RUTEO MEJORADA! ---
+
+    # ESTILO DE PÁGINA DE LOGIN
+    login_page_style = """
+        <style>
+            [data.testid="stAppViewContainer"] > .main { padding-top: 2rem; }
+            div[data.testid="stBlock"] { padding-top: 0rem; }
+        </style>
+    """
+
+    # RUTA 1: El usuario hace clic en el enlace de reseteo de contraseña
     if params.get("type") == "recovery" and "access_token" in params:
-        # Si es un enlace de recuperación, forzamos la página de reseteo
-        # y guardamos el token para que la use `auth.py`
         access_token = params.get("access_token")
-        st.session_state.page = "set_new_password"
-        st.query_params.clear() # Limpiamos la URL
-    
-    # Ahora, manejamos el estado de logueo normal
-    elif st.session_state.get("logged_in"):
+        st.query_params.clear() # Limpiar la URL para que el token no quede expuesto
+
+        # Dibujar solo la página de reseteo
+        st.markdown(login_page_style, unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            st.image("LogoDataStudio.png")
+            show_set_new_password_page(access_token) # Pasamos el token
+        st.divider()
+        st.markdown(footer_html, unsafe_allow_html=True)
+        st.stop() # Detener el script aquí.
+
+    # RUTA 2: El usuario ya está logueado (sesión normal)
+    if st.session_state.get("logged_in"):
         if st.session_state.get("access_token"):
             try:
                 supabase.auth.set_session(
                     st.session_state.access_token, 
                     st.session_state.refresh_token
                 )
-                print("INFO: Sesión de Supabase re-autenticada.")
             except Exception as e:
                 st.error(f"Tu sesión ha expirado: {e}. Por favor, inicia sesión de nuevo.")
                 supabase.auth.sign_out()
@@ -232,73 +248,51 @@ def main():
             supabase.auth.sign_out()
             st.session_state.clear()
             st.rerun()
-    # --- ¡FIN DEL BLOQUE DE LÓGICA MODIFICADO! ---
-    
-    if 'current_mode' not in st.session_state:
-        st.session_state.current_mode = c.MODE_CHAT
         
-    footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
-    footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
+        # Si la validación de sesión es exitosa, cargamos la BD
+        try:
+            db_full = st.session_state.db_full
+        except AttributeError:
+            st.error("Error de sesión al cargar la base de datos. Por favor, inicia sesión de nuevo.")
+            st.session_state.clear()
+            st.rerun()
+        
+        user_features = st.session_state.plan_features
+        
+        # Mostramos la app principal
+        if st.session_state.get("is_admin", False):
+            tab_user, tab_admin = st.tabs(["Modo Usuario", "Modo Administrador"])
+            with tab_user:
+                run_user_mode(db_full, user_features, footer_html)
+            with tab_admin:
+                st.title("Panel de Administración")
+                st.write(f"Gestionando como: {st.session_state.user}")
+                show_admin_dashboard(db_full)
+        else:
+            run_user_mode(db_full, user_features, footer_html)
+            
+        st.stop() # Detener el script aquí.
 
-    # --- PANTALLA DE LOGIN / REGISTRO / RESETEO ---
+    # RUTA 3: Usuario no logueado (Páginas de Login, Signup, Reset)
     if not st.session_state.get("logged_in"):
-        
-        st.markdown("""
-            <style>
-                [data.testid="stAppViewContainer"] > .main {
-                    padding-top: 2rem; 
-                }
-                div[data.testid="stBlock"] {
-                    padding-top: 0rem; 
-                }
-            </style>
-            """, unsafe_allow_html=True)
-
+        st.markdown(login_page_style, unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
             st.image("LogoDataStudio.png")
             
-            # Ruteo de páginas de autenticación
             if st.session_state.page == "login": 
                 show_login_page()
             elif st.session_state.page == "signup": 
                 show_signup_page()
             elif st.session_state.page == "reset_password": 
                 show_reset_password_page()
-            elif st.session_state.page == "set_new_password":
-                # Le pasamos el token que debe estar en los params
-                # (Nota: st.query_params se resetea en cada carga, 
-                # así que debemos leerlo de nuevo si estamos en este flujo)
-                token_from_url = st.query_params.get("access_token")
-                show_set_new_password_page(token_from_url) 
+            # (Ya no necesitamos "set_new_password" aquí, se maneja en la RUTA 1)
                 
         st.divider()
         st.markdown(footer_html, unsafe_allow_html=True)
-        st.stop() # Detenemos la app aquí si no está logueado
-
-    # --- PANTALLA DE APLICACIÓN PRINCIPAL (Si está logueado) ---
-    try:
-        db_full = st.session_state.db_full
-    except AttributeError:
-        st.error("Error de sesión al cargar la base de datos. Por favor, inicia sesión de nuevo.")
-        st.session_state.clear()
-        st.rerun()
-    except Exception as e:
-        st.error(f"Error crítico al leer la BD de la sesión: {e}")
         st.stop()
-
-    user_features = st.session_state.plan_features
-
-    if st.session_state.get("is_admin", False):
-        tab_user, tab_admin = st.tabs(["Modo Usuario", "Modo Administrador"])
-        with tab_user:
-            run_user_mode(db_full, user_features, footer_html)
-        with tab_admin:
-            st.title("Panel de Administración")
-            st.write(f"Gestionando como: {st.session_state.user}")
-            show_admin_dashboard(db_full)
-    else:
-        run_user_mode(db_full, user_features, footer_html)
+    
+    # --- ¡FIN DE LA LÓGICA DE RUTEO MEJORADA! ---
 
 # ==============================
 # PUNTO DE ENTRADA
