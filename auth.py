@@ -5,6 +5,8 @@ import uuid
 import time 
 from services.storage import load_database 
 from services.logger import log_error, log_action
+from supabase.lib.client_options import ClientOptions # Importar para tipado
+
 
 # ==============================
 # Autenticación con Supabase Auth
@@ -154,7 +156,7 @@ def show_reset_password_page():
          st.rerun()
 
 
-# --- ¡INICIO DE LA FUNCIÓN CORREGIDA (ARGUMENTOS POSICIONALES)! ---
+# --- ¡INICIO DE LA FUNCIÓN CORREGIDA (V5 - FINAL)! ---
 def show_set_new_password_page(access_token):
     """
     Muestra el formulario para que el usuario (autenticado por token)
@@ -190,21 +192,27 @@ def show_set_new_password_page(access_token):
             return
 
         try:
-            # --- ¡LA LÓGICA CORRECTA (POSICIONAL)! ---
+            # --- ¡LA LÓGICA CORRECTA (para v2.x)! ---
             #
-            # 1. NO llamamos a set_session (Esto causa el IndexError).
-            # 2. Llamamos a update_user usando argumentos posicionales:
-            #    - El primer argumento es POSICIONAL (el diccionario).
-            #    - El segundo argumento es el token (posicional).
+            # 1. Intercambiamos el TOKEN DE RECUPERACIÓN (access_token) por una SESIÓN real.
+            #    Esto es lo que faltaba.
+            session_response = supabase.auth.exchange_code_for_session({
+                "auth_code": access_token, 
+                "code_verifier": "unused_in_this_flow" 
+            }, auth_flow_type="pkce") # Usamos PKCE como un truco, aunque sea recovery
+
+            # 2. Si tiene éxito, AHORA SÍ tenemos una sesión válida
+            #    (Aunque el 'access_token' real de la sesión está en session_response.session.access_token)
             
+            # 3. Con esta sesión activa, AHORA SÍ podemos llamar a 'update_user'
+            #    para cambiar la contraseña del usuario autenticado.
             user_response = supabase.auth.update_user(
-                {"password": new_password},  # Argumento 1: Atributos
-                access_token                 # Argumento 2: El token
+                attributes={"password": new_password}
             )
             
             log_action(f"Contraseña actualizada exitosamente para: {user_response.user.email}", module="Auth")
             
-            # 3. Limpiar todo
+            # 4. Limpiar todo
             supabase.auth.sign_out() 
             
             st.success("¡Contraseña actualizada con éxito!")
@@ -216,7 +224,7 @@ def show_set_new_password_page(access_token):
             st.rerun()
 
         except Exception as e:
-            # Si esto falla, la librería es incompatible.
+            # Esto capturará errores de "Token expirado" o "Código inválido"
             st.error(f"Error al actualizar la contraseña: El token puede haber expirado o ser inválido.")
             log_error("Error crítico al actualizar contraseña post-reseteo", module="Auth", error=e)
 
