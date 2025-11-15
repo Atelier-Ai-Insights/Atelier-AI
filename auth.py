@@ -217,7 +217,7 @@ def show_set_new_password_page(access_token):
             
             user_response = supabase.auth.update_user(
                 attributes={"password": new_password},
-                access_token=access_token  # <-- Esta es la línea clave
+                access_token=access_token
             )
             
             log_action(f"Contraseña actualizada exitosamente para: {user_response.user.email}", module="Auth")
