@@ -172,6 +172,9 @@ def show_set_new_password_page(access_token):
             st.rerun()
         return
 
+    # --- ¡HEMOS ELIMINADO LA LLAMADA A 'set_session' QUE CAUSABA EL ERROR! ---
+    # Ya no hay bloque try/except aquí.
+
     # 2. Mostrar el formulario
     new_password = st.text_input("Nueva Contraseña", type="password")
     confirm_password = st.text_input("Confirmar Nueva Contraseña", type="password")
@@ -192,7 +195,6 @@ def show_set_new_password_page(access_token):
         try:
             # --- ¡LA LÓGICA CORRECTA! ---
             # 1. Autenticamos al cliente con el token de recuperación
-            # Esto NO da error 'list index', valida el token de recuperación
             supabase.auth.set_session(access_token, None) 
             
             # 2. Actualizamos la contraseña del usuario (ahora autenticado)
