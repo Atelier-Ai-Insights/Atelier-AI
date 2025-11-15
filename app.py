@@ -218,13 +218,20 @@ def main():
 
     # RUTA 1: El usuario hace clic en el enlace de reseteo de contraseña
     if params.get("type") == "recovery" and "access_token" in params:
-        # Guardamos el token en la sesión para que sobreviva a los reruns
-        st.session_state.recovery_token = params.get("access_token")
-        # Forzamos la página a nuestro nuevo formulario
-        st.session_state.page = "set_new_password"
-        # Limpiamos la URL por seguridad y forzamos la recarga
-        st.query_params.clear() 
-        st.rerun()
+        access_token = params.get("access_token")
+        
+        # --- ¡CAMBIO IMPORTANTE! ---
+        # NO limpiamos los query_params aquí. 
+        # Dejamos que el token permanezca en la URL.
+
+        st.markdown(login_page_style, unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            st.image("LogoDataStudio.png")
+            show_set_new_password_page(access_token) # Pasamos el token
+        st.divider()
+        st.markdown(footer_html, unsafe_allow_html=True)
+        st.stop() # Detener el script aquí.
 
     # RUTA 2: El usuario ya está logueado (sesión normal)
     if st.session_state.get("logged_in"):
@@ -254,7 +261,6 @@ def main():
         
         user_features = st.session_state.plan_features
         
-        # Mostramos la app principal
         if st.session_state.get("is_admin", False):
             tab_user, tab_admin = st.tabs(["Modo Usuario", "Modo Administrador"])
             with tab_user:
@@ -269,7 +275,7 @@ def main():
         st.stop() 
 
     # RUTA 3: Usuario no logueado (Páginas de Login, Signup, Reset)
-    # Esto solo se ejecuta si la RUTA 2 no se cumplió.
+    # Esto solo se ejecuta si la RUTA 1 y RUTA 2 no se cumplieron.
     if not st.session_state.get("logged_in"):
         st.markdown(login_page_style, unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1,2,1])
@@ -282,9 +288,6 @@ def main():
                 show_signup_page()
             elif st.session_state.page == "reset_password": 
                 show_reset_password_page()
-            elif st.session_state.page == "set_new_password":
-                # Esta página ahora leerá el token desde st.session_state
-                show_set_new_password_page() 
             else:
                 # Si no es ninguna de las anteriores, default a login
                 show_login_page()
