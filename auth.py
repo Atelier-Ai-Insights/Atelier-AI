@@ -172,7 +172,7 @@ def show_set_new_password_page(access_token):
             st.rerun()
         return
 
-   # --- ¡INICIO DE LA FUNCIÓN CORREGIDA (AHORA SÍ)! ---
+# --- ¡INICIO DE LA FUNCIÓN CORREGIDA (V3)! ---
 def show_set_new_password_page(access_token):
     """
     Muestra el formulario para que el usuario (autenticado por token)
@@ -181,7 +181,7 @@ def show_set_new_password_page(access_token):
     st.header("Establecer Nueva Contraseña")
     st.write("Has verificado tu identidad. Por favor, crea una nueva contraseña.")
 
-    # 1. Validar que el token exista (simple check)
+    # 1. Validar que el token exista
     if not access_token:
         st.error(f"Error al validar el token: El enlace es inválido o ha expirado.")
         log_error(f"Token de recuperación vacío o nulo (tipo: {type(access_token)})", module="Auth", level="ERROR")
@@ -189,9 +189,6 @@ def show_set_new_password_page(access_token):
             st.session_state.page = "login"
             st.rerun()
         return
-
-    # --- ¡Se eliminó la llamada a 'set_session' que causaba el IndexError! ---
-    # --- ¡Se eliminó la llamada a '.api' que causaba el AttributeError! ---
 
     # 2. Mostrar el formulario
     new_password = st.text_input("Nueva Contraseña", type="password")
@@ -211,13 +208,13 @@ def show_set_new_password_page(access_token):
             return
 
         try:
-            # --- ¡LA LÓGICA CORRECTA! ---
+            # --- ¡LA LÓGICA CORRECTA (para v1.x de la librería)! ---
             # Se llama a 'update_user' pasando los atributos A CAMBIAR
-            # y el 'access_token' (el token de recuperación) para autenticar la llamada.
+            # y el 'jwt' (el token de recuperación) para autenticar la llamada.
             
             user_response = supabase.auth.update_user(
                 attributes={"password": new_password},
-                access_token=access_token
+                jwt=access_token  # <-- ¡Cambiamos 'access_token=' por 'jwt='!
             )
             
             log_action(f"Contraseña actualizada exitosamente para: {user_response.user.email}", module="Auth")
