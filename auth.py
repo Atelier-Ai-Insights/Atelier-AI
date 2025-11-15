@@ -5,7 +5,8 @@ import uuid
 import time 
 from services.storage import load_database 
 from services.logger import log_error, log_action
-from supabase.lib.client_options import ClientOptions # Importar para tipado
+# ¡ESTA IMPORTACIÓN ES NECESARIA AHORA!
+from supabase.lib.client_options import ClientOptions 
 
 
 # ==============================
@@ -156,7 +157,7 @@ def show_reset_password_page():
          st.rerun()
 
 
-# --- ¡INICIO DE LA FUNCIÓN CORREGIDA (V5 - FINAL)! ---
+# --- ¡INICIO DE LA FUNCIÓN CORREGIDA (V6 - SINTAXIS v1)! ---
 def show_set_new_password_page(access_token):
     """
     Muestra el formulario para que el usuario (autenticado por token)
@@ -192,20 +193,27 @@ def show_set_new_password_page(access_token):
             return
 
         try:
-            # --- ¡LA LÓGICA CORRECTA (para v2.x)! ---
+            # --- ¡LA LÓGICA CORRECTA (para v1.x)! ---
             #
-            # 1. Intercambiamos el TOKEN DE RECUPERACIÓN (access_token) por una SESIÓN real.
-            #    Esto es lo que faltaba.
-            session_response = supabase.auth.exchange_code_for_session({
-                "auth_code": access_token, 
-                "code_verifier": "unused_in_this_flow" 
-            }, auth_flow_type="pkce") # Usamos PKCE como un truco, aunque sea recovery
+            # 1. Intercambiamos el TOKEN DE RECUPERACIÓN (access_token) por una SESIÓN.
+            #    La sintaxis v1 (que falló en auth_flow_type) era:
+            #    exchange_code_for_session(dict, auth_flow_type=...)
+            #    
+            #    La sintaxis v1 MÁS ANTIGUA era posicional:
+            #    exchange_code_for_session(auth_code_str, code_verifier_str)
+            #
+            #    El token de recuperación es el 'auth_code'. 
+            #    El 'code_verifier' no se usa pero la función lo requiere.
+            
+            session_response = supabase.auth.exchange_code_for_session(
+                access_token,  # Argumento 1: auth_code (el token)
+                "unused"       # Argumento 2: code_verifier (no usado pero requerido)
+            )
 
             # 2. Si tiene éxito, AHORA SÍ tenemos una sesión válida
-            #    (Aunque el 'access_token' real de la sesión está en session_response.session.access_token)
             
             # 3. Con esta sesión activa, AHORA SÍ podemos llamar a 'update_user'
-            #    para cambiar la contraseña del usuario autenticado.
+            #    (Esta llamada es para usuarios logueados, lo cual ya estamos)
             user_response = supabase.auth.update_user(
                 attributes={"password": new_password}
             )
