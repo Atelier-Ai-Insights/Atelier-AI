@@ -184,7 +184,7 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == c.MODE_ETNOCHAT: etnochat_mode()
     
 # =====================================================
-# FUNCIÓN PRINCIPAL DE LA APLICACIÓN (MODIFICADA)
+# FUNCIÓN PRINCIPAL DE LA APLICACIÓN (CORREGIDA)
 # =====================================================
 def main():
     
@@ -214,24 +214,29 @@ def main():
         </style>
     """
 
-    # --- ¡INICIO DE LA LÓGICA DE RUTEO MEJORADA! ---
+    # --- ¡INICIO DE LA LÓGICA DE RUTEO CORREGIDA! ---
 
     # RUTA 1: El usuario hace clic en el enlace de reseteo de contraseña
     if params.get("type") == "recovery" and "access_token" in params:
-        access_token = params.get("access_token")
         
-        # --- ¡CAMBIO IMPORTANTE! ---
-        # NO limpiamos los query_params aquí. 
-        # Dejamos que el token permanezca en la URL.
+        # --- ¡LA CORRECCIÓN! ---
+        # params.get("access_token") devuelve una LISTA, ej: ['token_valor']
+        # Necesitamos extraer el primer elemento (el string)
+        access_token_list = params.get("access_token")
+        access_token_string = None
+        if access_token_list:
+            access_token_string = access_token_list[0]
+        # --- FIN DE LA CORRECCIÓN ---
 
         st.markdown(login_page_style, unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
             st.image("LogoDataStudio.png")
-            show_set_new_password_page(access_token) # Pasamos el token
+            # Pasamos el string del token, no la lista
+            show_set_new_password_page(access_token_string) 
         st.divider()
         st.markdown(footer_html, unsafe_allow_html=True)
-        st.stop() # Detener el script aquí.
+        st.stop() 
 
     # RUTA 2: El usuario ya está logueado (sesión normal)
     if st.session_state.get("logged_in"):
@@ -275,7 +280,6 @@ def main():
         st.stop() 
 
     # RUTA 3: Usuario no logueado (Páginas de Login, Signup, Reset)
-    # Esto solo se ejecuta si la RUTA 1 y RUTA 2 no se cumplieron.
     if not st.session_state.get("logged_in"):
         st.markdown(login_page_style, unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1,2,1])
@@ -289,14 +293,13 @@ def main():
             elif st.session_state.page == "reset_password": 
                 show_reset_password_page()
             else:
-                # Si no es ninguna de las anteriores, default a login
                 show_login_page()
                 
         st.divider()
         st.markdown(footer_html, unsafe_allow_html=True)
         st.stop()
     
-    # --- ¡FIN DE LA LÓGICA DE RUTEO MEJORADA! ---
+    # --- ¡FIN DE LA LÓGICA DE RUTEO CORREGIDA! ---
 
 # ==============================
 # PUNTO DE ENTRADA
