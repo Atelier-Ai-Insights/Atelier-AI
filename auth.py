@@ -192,7 +192,6 @@ def show_set_new_password_page(access_token):
         try:
             # --- ¡LA LÓGICA CORRECTA! ---
             # 1. Autenticamos al cliente con el token de recuperación
-            # Esto NO da error 'list index', valida el token de recuperación
             supabase.auth.set_session(access_token, None) 
             
             # 2. Actualizamos la contraseña del usuario (ahora autenticado)
