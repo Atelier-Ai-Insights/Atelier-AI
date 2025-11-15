@@ -172,7 +172,7 @@ def show_set_new_password_page(access_token):
             st.rerun()
         return
 
-    # --- ¡INICIO DE LA FUNCIÓN CORREGIDA! ---
+   # --- ¡INICIO DE LA FUNCIÓN CORREGIDA (AHORA SÍ)! ---
 def show_set_new_password_page(access_token):
     """
     Muestra el formulario para que el usuario (autenticado por token)
@@ -190,7 +190,8 @@ def show_set_new_password_page(access_token):
             st.rerun()
         return
 
-    # --- ¡Se eliminó la llamada a 'set_session' que causaba el error! ---
+    # --- ¡Se eliminó la llamada a 'set_session' que causaba el IndexError! ---
+    # --- ¡Se eliminó la llamada a '.api' que causaba el AttributeError! ---
 
     # 2. Mostrar el formulario
     new_password = st.text_input("Nueva Contraseña", type="password")
@@ -211,19 +212,15 @@ def show_set_new_password_page(access_token):
 
         try:
             # --- ¡LA LÓGICA CORRECTA! ---
-            # Se llama a la API de bajo nivel 'update_user'
-            # pasando el token de recuperación (access_token)
-            # y los atributos a cambiar (la nueva contraseña).
+            # Se llama a 'update_user' pasando los atributos A CAMBIAR
+            # y el 'access_token' (el token de recuperación) para autenticar la llamada.
             
-            user_response = supabase.auth.api.update_user(
-                access_token=access_token,
-                attributes={'password': new_password}
+            user_response = supabase.auth.update_user(
+                attributes={"password": new_password},
+                access_token=access_token  # <-- Esta es la línea clave
             )
             
-            # Nota: user_response no es igual al objeto User de antes
-            # por lo que no podemos loguear el email tan fácil,
-            # pero el log de acción ya no es crítico aquí.
-            log_action(f"Contraseña actualizada exitosamente.", module="Auth")
+            log_action(f"Contraseña actualizada exitosamente para: {user_response.user.email}", module="Auth")
             
             # 3. Limpiar todo
             supabase.auth.sign_out() 
