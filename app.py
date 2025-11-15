@@ -36,7 +36,7 @@ def set_mode_and_reset(new_mode):
 # FUNCIÓN PARA EL MODO USUARIO 
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
-    # ... (Esta función no cambia) ...
+    # (Esta función no cambia)
     GRACE_PERIOD_SECONDS = 5 
     HEARTBEAT_INTERVAL_SECONDS = 60 
     current_time = time.time()
