@@ -172,8 +172,25 @@ def show_set_new_password_page(access_token):
             st.rerun()
         return
 
-    # --- ¡HEMOS ELIMINADO LA LLAMADA A 'set_session' QUE CAUSABA EL ERROR! ---
-    # Ya no hay bloque try/except aquí.
+    # --- ¡INICIO DE LA FUNCIÓN CORREGIDA! ---
+def show_set_new_password_page(access_token):
+    """
+    Muestra el formulario para que el usuario (autenticado por token)
+    establezca su nueva contraseña.
+    """
+    st.header("Establecer Nueva Contraseña")
+    st.write("Has verificado tu identidad. Por favor, crea una nueva contraseña.")
+
+    # 1. Validar que el token exista (simple check)
+    if not access_token:
+        st.error(f"Error al validar el token: El enlace es inválido o ha expirado.")
+        log_error(f"Token de recuperación vacío o nulo (tipo: {type(access_token)})", module="Auth", level="ERROR")
+        if st.button("Volver a Iniciar Sesión", use_container_width=True):
+            st.session_state.page = "login"
+            st.rerun()
+        return
+
+    # --- ¡Se eliminó la llamada a 'set_session' que causaba el error! ---
 
     # 2. Mostrar el formulario
     new_password = st.text_input("Nueva Contraseña", type="password")
@@ -194,15 +211,19 @@ def show_set_new_password_page(access_token):
 
         try:
             # --- ¡LA LÓGICA CORRECTA! ---
-            # 1. Autenticamos al cliente con el token de recuperación
-            supabase.auth.set_session(access_token, None) 
+            # Se llama a la API de bajo nivel 'update_user'
+            # pasando el token de recuperación (access_token)
+            # y los atributos a cambiar (la nueva contraseña).
             
-            # 2. Actualizamos la contraseña del usuario (ahora autenticado)
-            user_response = supabase.auth.update_user({
-                "password": new_password
-            })
+            user_response = supabase.auth.api.update_user(
+                access_token=access_token,
+                attributes={'password': new_password}
+            )
             
-            log_action(f"Contraseña actualizada exitosamente para: {user_response.user.email}", module="Auth")
+            # Nota: user_response no es igual al objeto User de antes
+            # por lo que no podemos loguear el email tan fácil,
+            # pero el log de acción ya no es crítico aquí.
+            log_action(f"Contraseña actualizada exitosamente.", module="Auth")
             
             # 3. Limpiar todo
             supabase.auth.sign_out() 
@@ -217,7 +238,7 @@ def show_set_new_password_page(access_token):
 
         except Exception as e:
             # Esto ahora capturará errores de "Token expirado" de Supabase
-            st.error(f"Error al actualizar la contraseña: {e}")
+            st.error(f"Error al actualizar la contraseña: El token puede haber expirado o ser inválido.")
             log_error("Error crítico al actualizar contraseña post-reseteo", module="Auth", error=e)
 
     if st.button("Cancelar", type="secondary", use_container_width=True):
