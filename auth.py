@@ -154,35 +154,28 @@ def show_reset_password_page():
          st.rerun()
 
 
-# --- ¡INICIO DE LA FUNCIÓN MODIFICADA! ---
-def show_set_new_password_page():
+# --- ¡INICIO DE LA FUNCIÓN CORREGIDA! ---
+# La función ahora ACEPTA el 'access_token' que le pasa app.py
+def show_set_new_password_page(access_token):
     """
-    Muestra el formulario para que el usuario establezca su nueva contraseña.
-    Lee el token desde st.session_state.recovery_token.
+    Muestra el formulario para que el usuario (autenticado por token)
+    establezca su nueva contraseña.
     """
     st.header("Establecer Nueva Contraseña")
     st.write("Has verificado tu identidad. Por favor, crea una nueva contraseña.")
 
-    # 1. Verificar que el token exista en la sesión
-    if "recovery_token" not in st.session_state:
-        st.error("Token de recuperación inválido o expirado. Por favor, solicita un nuevo enlace.")
+    # 1. Validar el token en Supabase ANTES de mostrar el formulario
+    try:
+        supabase.auth.set_session(access_token, None)
+    except Exception as e:
+        st.error(f"Error al validar el token: {e}. El enlace puede haber expirado.")
+        log_error("Token de recuperación inválido o expirado", module="Auth", error=e)
         if st.button("Volver a Iniciar Sesión", use_container_width=True):
             st.session_state.page = "login"
             st.rerun()
         return
 
-    # 2. Re-autenticar el cliente de Supabase en CADA carga de esta página
-    #    usando el token guardado.
-    try:
-        supabase.auth.set_session(st.session_state.recovery_token, None)
-    except Exception as e:
-        st.error(f"Error al validar el token: {e}")
-        st.session_state.pop("recovery_token", None)
-        st.session_state.page = "login"
-        st.rerun()
-        return
-
-    # 3. Mostrar el formulario
+    # 2. Mostrar el formulario
     new_password = st.text_input("Nueva Contraseña", type="password")
     confirm_password = st.text_input("Confirmar Nueva Contraseña", type="password")
 
@@ -200,21 +193,21 @@ def show_set_new_password_page():
             return
 
         try:
-            # 4. Actualizar la contraseña del usuario (el cliente ya está autenticado)
+            # 3. Actualizar la contraseña del usuario (el cliente ya está autenticado)
             user_response = supabase.auth.update_user({
                 "password": new_password
             })
             
             log_action(f"Contraseña actualizada exitosamente para: {user_response.user.email}", module="Auth")
             
-            # 5. Limpiar todo
+            # 4. Limpiar todo
             supabase.auth.sign_out() 
-            st.session_state.pop("recovery_token", None) # Limpiar el token
             
             st.success("¡Contraseña actualizada con éxito!")
             st.info("Ahora puedes iniciar sesión con tu nueva contraseña.")
             time.sleep(2)
             
+            st.query_params.clear() # Limpiamos la URL ahora que terminamos
             st.session_state.page = "login"
             st.rerun()
 
@@ -224,7 +217,7 @@ def show_set_new_password_page():
 
     if st.button("Cancelar", type="secondary", use_container_width=True):
         supabase.auth.sign_out()
-        st.session_state.pop("recovery_token", None) # Limpiar también al cancelar
+        st.query_params.clear() # Limpiar también al cancelar
         st.session_state.page = "login"
         st.rerun()
-# --- ¡FIN DE LA FUNCIÓN MODIFICADA! ---
+# --- ¡FIN DE LA FUNCIÓN CORREGIDA! ---
