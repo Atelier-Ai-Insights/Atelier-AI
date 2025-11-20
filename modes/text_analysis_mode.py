@@ -192,14 +192,14 @@ def show_text_project_list(user_id):
                 st.caption(f"Marca: {proj_brand} | Año: {proj_year}")
             
             with col2:
-                if st.button("Analizar", key=f"analizar_txt_{proj_id}", use_container_width=True, type="primary"):
+                if st.button("Analizar", key=f"analizar_txt_{proj_id}", width='stretch', type="primary"):
                     st.session_state.mode_state["ta_selected_project_id"] = proj_id
                     st.session_state.mode_state["ta_selected_project_name"] = proj_name
                     st.session_state.mode_state["ta_storage_path"] = storage_path
                     st.rerun()
             
             with col3:
-                if st.button("Eliminar", key=f"eliminar_txt_{proj_id}", use_container_width=True):
+                if st.button("Eliminar", key=f"eliminar_txt_{proj_id}", width='stretch'):
                     with st.spinner("Eliminando proyecto y sus archivos..."):
                         try:
                             if storage_path:
@@ -286,14 +286,14 @@ def show_text_project_analyzer(summary_context, project_name):
                         data=pdf_bytes, 
                         file_name=f"chat_analisis_texto_{project_name.lower().replace(' ','_')}.pdf", 
                         mime="application/pdf", 
-                        use_container_width=True
+                        width='stretch'
                     )
             with col2: 
                 st.button(
                     "Nueva Conversación", 
                     on_click=reset_transcript_chat_workflow, 
                     key="new_transcript_chat_btn", 
-                    use_container_width=True
+                    width='stretch'
                 )
 
     # --- Pestaña Auto-Codificación ---
@@ -313,10 +313,10 @@ def show_text_project_analyzer(summary_context, project_name):
                         data=pdf_bytes, 
                         file_name="reporte_temas.pdf", 
                         mime="application/pdf", 
-                        use_container_width=True
+                        width='stretch'
                     )
             with col2:
-                if st.button("Generar nuevo reporte", use_container_width=True, type="secondary"):
+                if st.button("Generar nuevo reporte", width='stretch', type="secondary"):
                     st.session_state.mode_state.pop("autocode_result", None)
                     st.rerun()
         
@@ -328,7 +328,7 @@ def show_text_project_analyzer(summary_context, project_name):
                 key="autocode_topic"
             )
 
-            if st.button("Analizar Temas", use_container_width=True, type="primary"):
+            if st.button("Analizar Temas", width='stretch', type="primary"):
                 if not main_topic.strip():
                     st.warning("Por favor, describe el tema principal.")
                 else:
