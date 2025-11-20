@@ -20,7 +20,7 @@ def image_evaluation_mode(db, selected_files):
     image_bytes = None
     if uploaded_file is not None: 
         image_bytes = uploaded_file.getvalue()
-        st.image(image_bytes, caption="Imagen a evaluar", use_container_width=True)
+        st.image(image_bytes, caption="Imagen a evaluar", width='stretch')
         
     st.markdown("---")
     
@@ -33,14 +33,14 @@ def image_evaluation_mode(db, selected_files):
         with col1:
             pdf_bytes = generate_pdf_html(st.session_state.mode_state["image_evaluation_result"], title=f"Evaluacion Visual - {uploaded_file.name if uploaded_file else 'Imagen'}", banner_path=banner_file)
             if pdf_bytes: 
-                st.download_button(label="Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion.pdf", mime="application/pdf", use_container_width=True)
+                st.download_button(label="Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion.pdf", mime="application/pdf", width='stretch')
         with col2:
-            if st.button("Evaluar Otra Imagen", use_container_width=True): 
+            if st.button("Evaluar Otra Imagen", width='stretch'): 
                 st.session_state.mode_state.pop("image_evaluation_result", None)
                 st.rerun()
     
     # Lógica de generación
-    elif st.button("Evaluar Imagen", use_container_width=True, disabled=(uploaded_file is None)):
+    elif st.button("Evaluar Imagen", width='stretch', disabled=(uploaded_file is None)):
         if not image_bytes or not target_audience.strip() or not comm_objectives.strip(): 
             st.warning("Completa todos los campos."); return
             
