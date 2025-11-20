@@ -182,7 +182,7 @@ def get_autocode_prompt(context, main_topic):
 ## Temas Clave
 (Resumen brevísimo)
 
-## Códigos Detectados (Máx 7)
+## Códigos Detectados
 ### 1. [Nombre Código]
 * [Explicación del hallazgo [x]]
 * [Cita de soporte [x]]
