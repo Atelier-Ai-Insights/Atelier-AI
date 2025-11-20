@@ -195,50 +195,46 @@ def show_set_new_password_page(access_token):
         try:
             # --- ¡LA LÓGICA CORRECTA (para v1.x)! ---
             #
-            # 1. Intercambiamos el TOKEN DE RECUPERACIÓN (access_token) por una SESIÓN.
-            #    La sintaxis v1 (que falló en auth_flow_type) era:
-            #    exchange_code_for_session(dict, auth_flow_type=...)
-            #    
-            #    La sintaxis v1 MÁS ANTIGUA era posicional:
-            #    exchange_code_for_session(auth_code_str, code_verifier_str)
-            #
-            #    El token de recuperación es el 'auth_code'. 
-            #    El 'code_verifier' no se usa pero la función lo requiere.
+            # 1. Ya existe una sesión activa (establecida en app.py con set_session)
+            #    Por lo tanto, el usuario está "logueado" temporalmente.
             
-            session_response = supabase.auth.exchange_code_for_session(
-                access_token,  # Argumento 1: auth_code (el token)
-                "unused"       # Argumento 2: code_verifier (no usado pero requerido)
-            )
-
-            # 2. Si tiene éxito, AHORA SÍ tenemos una sesión válida
+            # 2. Actualizamos el usuario directamente.
+            #    No es necesario intercambiar el código de nuevo si ya se hizo en app.py
+            #    o si el token de acceso ya es válido para la sesión.
             
-            # 3. Con esta sesión activa, AHORA SÍ podemos llamar a 'update_user'
-            #    (Esta llamada es para usuarios logueados, lo cual ya estamos)
             user_response = supabase.auth.update_user(
                 attributes={"password": new_password}
             )
             
             log_action(f"Contraseña actualizada exitosamente para: {user_response.user.email}", module="Auth")
             
-            # 4. Limpiar todo
+            # 3. Limpiar todo
             supabase.auth.sign_out() 
             
             st.success("¡Contraseña actualizada con éxito!")
             st.info("Ahora puedes iniciar sesión con tu nueva contraseña.")
             time.sleep(2)
             
-            st.query_params.clear() 
+            # Limpiar la URL
+            if hasattr(st, "query_params"):
+                 st.query_params.clear() 
+            else:
+                 st.experimental_set_query_params()
+
             st.session_state.page = "login"
             st.rerun()
 
         except Exception as e:
             # Esto capturará errores de "Token expirado" o "Código inválido"
-            st.error(f"Error al actualizar la contraseña: El token puede haber expirado o ser inválido.")
+            st.error(f"Error al actualizar la contraseña: {e}")
             log_error("Error crítico al actualizar contraseña post-reseteo", module="Auth", error=e)
 
     if st.button("Cancelar", type="secondary", width='stretch'):
         supabase.auth.sign_out()
-        st.query_params.clear() 
+        if hasattr(st, "query_params"):
+             st.query_params.clear() 
+        else:
+             st.experimental_set_query_params()
         st.session_state.page = "login"
         st.rerun()
 # --- ¡FIN DE LA FUNCIÓN CORREGIDA! ---
