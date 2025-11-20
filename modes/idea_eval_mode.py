@@ -41,13 +41,13 @@ def idea_evaluator_mode(db, selected_files):
                     data=pdf_bytes, 
                     file_name="evaluacion_idea.pdf", 
                     mime="application/pdf", 
-                    use_container_width=True
+                    width='stretch'
                 )
             else:
                 st.error("No se pudo generar el PDF.")
 
         with col2:
-            if st.button("Evaluar otra idea", use_container_width=True): 
+            if st.button("Evaluar otra idea", width='stretch'): 
                 # Limpiar el estado para volver al formulario
                 st.session_state.mode_state.pop("evaluation_result", None)
                 st.rerun()
@@ -56,7 +56,7 @@ def idea_evaluator_mode(db, selected_files):
     else:
         idea_input = st.text_area("Describe la idea a evaluar:", height=150, placeholder="Ej: Yogures con probióticos...")
         
-        if st.button("Evaluar Idea", use_container_width=True):
+        if st.button("Evaluar Idea", width='stretch'):
             if not idea_input.strip(): 
                 st.warning("Describe una idea."); return
                 
