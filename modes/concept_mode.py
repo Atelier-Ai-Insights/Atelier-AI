@@ -41,13 +41,13 @@ def concept_generation_mode(db, selected_files):
                     data=pdf_bytes, 
                     file_name="concepto_generado.pdf", 
                     mime="application/pdf", 
-                    use_container_width=True
+                    width='stretch'
                 )
             else:
                 st.error("No se pudo generar el PDF.")
 
         with col2:
-            if st.button("Generar nuevo concepto", use_container_width=True): 
+            if st.button("Generar nuevo concepto", width='stretch'): 
                 # Limpiar estado
                 st.session_state.mode_state.pop("generated_concept")
                 st.rerun()
@@ -56,7 +56,7 @@ def concept_generation_mode(db, selected_files):
     else:
         product_idea = st.text_area("Describe tu idea:", height=150, placeholder="Ej: Snack saludable...")
         
-        if st.button("Generar Concepto", use_container_width=True):
+        if st.button("Generar Concepto", width='stretch'):
             if not product_idea.strip(): 
                 st.warning("Describe tu idea."); return
                 
