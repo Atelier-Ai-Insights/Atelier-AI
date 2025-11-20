@@ -2,8 +2,10 @@ import streamlit as st
 import unicodedata
 import json
 import io
-import fitz  # PyMuPDF
-import nltk 
+import fitz
+import nltk
+import time
+from services.supabase_db import supabase
 
 # ==============================
 # Funciones de Reset (MODIFICADAS)
@@ -83,7 +85,6 @@ def get_stopwords():
     final_stopwords = set(spanish_stopwords) | set(english_stopwords) | set(custom_list)
     return final_stopwords
 
-
 # ==============================
 # FUNCIÓN RAG (Recuperación de Información S3)
 # ==============================
@@ -149,3 +150,48 @@ def extract_text_from_pdfs(uploaded_files):
             combined_text += f"\n\n--- ERROR AL PROCESAR: {file.name} ---\n"
             
     return combined_text
+
+# ==============================
+# GESTIÓN DE SESIÓN (NUEVO)
+# ==============================
+
+def validate_session_integrity():
+    """
+    Verifica si la sesión actual del navegador coincide con la sesión activa en la base de datos.
+    Si no coinciden (ej. se inició sesión en otro lado), cierra la sesión local.
+    """
+    # Si no está logueado, no hay nada que validar
+    if not st.session_state.get("logged_in"):
+        return
+
+    # Si faltan datos críticos, limpiar y salir
+    if 'user_id' not in st.session_state or 'session_id' not in st.session_state:
+        st.warning("Datos de sesión corruptos. Reiniciando...")
+        st.session_state.clear()
+        st.rerun()
+
+    try:
+        # Consultar solo el campo active_session_id para ser eficiente
+        response = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute()
+        
+        if response.data:
+            db_session_id = response.data.get('active_session_id')
+            
+            # CASO DE CONFLICTO: El ID en DB es diferente al del navegador
+            if db_session_id != st.session_state.session_id:
+                st.error("⚠️ Tu sesión ha sido cerrada porque se detectó un inicio de sesión en otro dispositivo.")
+                time.sleep(2) # Dar tiempo al usuario para leer
+                
+                # Cerrar sesión limpiamente
+                supabase.auth.sign_out()
+                st.session_state.clear()
+                st.rerun()
+        else:
+            # El usuario no existe en la tabla users (caso raro)
+            st.session_state.clear()
+            st.rerun()
+
+    except Exception as e:
+        # Si falla la conexión (ej. internet intermitente), no expulsamos inmediatamente al usuario
+        # pero registramos el error en consola.
+        print(f"Error validando sesión (Heartbeat): {e}")
