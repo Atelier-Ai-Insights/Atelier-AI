@@ -1,7 +1,6 @@
 import streamlit as st
 
-# --- BLOQUE DE INSTRUCCIONES DE CITAS (OPTIMIZADO - MENOS TOKENS) ---
-# Se redujo el texto explicativo manteniendo la rigurosidad.
+# --- BLOQUE DE INSTRUCCIONES DE CITAS (OPTIMIZADO) ---
 INSTRUCCIONES_DE_CITAS = """
 **REGLAS DE CITAS (ESTRICTO):**
 1. **Base:** Solo usa la 'Información documentada'. No alucines información externa.
@@ -17,7 +16,6 @@ INSTRUCCIONES_DE_CITAS = """
 # --- Prompts para "Generar un reporte de reportes" ---
 
 def get_report_prompt1(question, relevant_info):
-    """Extracción de hallazgos (Directo al grano)."""
     return (
         f"**Pregunta:** {question}\n\n"
         f"**Contexto:**\n{relevant_info}\n\n"
@@ -31,7 +29,6 @@ def get_report_prompt1(question, relevant_info):
     )
 
 def get_report_prompt2(question, result1, relevant_info):
-    """Redacción de informe (Estructura forzada)."""
     return (
         f"**Rol:** Analista experto de Atelier.\n"
         f"**Pregunta:** {question}\n"
@@ -48,7 +45,6 @@ def get_report_prompt2(question, result1, relevant_info):
 # --- Prompt para "Chat de Consulta Directa" ---
 
 def get_grounded_chat_prompt(conversation_history, relevant_info):
-    """Chat RAG estricto."""
     return (
         f"**Rol:** Asistente de investigación.\n"
         f"**Tarea:** Responde la ÚLTIMA pregunta del historial usando SOLO la 'Información Documentada'.\n\n"
@@ -61,7 +57,6 @@ def get_grounded_chat_prompt(conversation_history, relevant_info):
 # --- Prompt para "Conversaciones creativas" ---
 
 def get_ideation_prompt(conv_history, relevant):
-    """Ideación (Permite más flexibilidad en tono, estricto en datos)."""
     return (
         f"**Rol:** Estratega de Innovación Creativo.\n"
         f"**Objetivo:** Generar soluciones inspiradoras conectando los datos proporcionados.\n"
@@ -74,7 +69,6 @@ def get_ideation_prompt(conv_history, relevant):
 # --- Prompt para "Generación de conceptos" ---
 
 def get_concept_gen_prompt(product_idea, context_info):
-    """Concepto estructurado (Markdown forzado)."""
     return (
         f"**Rol:** Estratega de Producto.\n"
         f"**Tarea:** Desarrolla un concepto para la idea: \"{product_idea}\" usando este contexto: \"{context_info}\".\n\n"
@@ -91,7 +85,6 @@ def get_concept_gen_prompt(product_idea, context_info):
 # --- Prompt para "Evaluar una idea" ---
 
 def get_idea_eval_prompt(idea_input, context_info):
-    """Evaluación crítica."""
     return f"""
 **Rol:** Director de Estrategia.
 **Tarea:** Evaluar viabilidad de la idea contra la evidencia de mercado.
@@ -112,13 +105,12 @@ def get_idea_eval_prompt(idea_input, context_info):
 """
 
 # --- Prompt para "Evaluación Visual" y "Video" ---
-# Se han simplificado para reducir tokens de entrada.
 
 def get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context):
     return [
         "**Rol:** Director Creativo.",
         f"**Contexto:** Target: {target_audience} | Objetivos: {comm_objectives}",
-        f"**Datos:** {relevant_text_context[:8000]}", # Limitamos caracteres para eficiencia
+        f"**Datos:** {relevant_text_context[:8000]}",
         "**Tarea:** Analiza la imagen proporcionada.",
         "**Puntos a evaluar:**",
         "1. **Impacto:** ¿Atrae al target? (Usa citas de datos [1])",
@@ -144,19 +136,22 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
         INSTRUCCIONES_DE_CITAS
     ]
 
-# --- Prompt para "Análisis de Notas y Transcripciones" ---
+# --- Prompt para "Análisis de Notas y Transcripciones" (ACTUALIZADO) ---
 
 def get_transcript_prompt(combined_context, user_prompt):
     return (
-        f"**Rol:** Investigador Cualitativo.\n"
-        f"**Contexto (Hallazgos):**\n{combined_context}\n\n"
-        f"**Pregunta:** {user_prompt}\n"
-        f"**Instrucción:** Responde solo basado en el contexto.\n"
+        f"**Rol:** Investigador Cualitativo Senior.\n"
+        f"**Contexto (Resumen Global y Fragmentos Específicos):**\n{combined_context}\n\n"
+        f"**Pregunta del Usuario:** {user_prompt}\n\n"
+        f"**Instrucciones CRÍTICAS de Análisis:**\n"
+        f"1. **IGNORA LA LOGÍSTICA:** No menciones temas de 'encender cámaras', 'firmar consentimientos', 'presentaciones personales', 'normas de la sesión' o 'problemas de audio', a menos que el usuario pregunte explícitamente por ello.\n"
+        f"2. **PROFUNDIDAD:** Céntrate en opiniones, emociones, percepciones, barreras y motivadores profundos de los participantes.\n"
+        f"3. **SÍNTESIS INTELIGENTE:** Si la pregunta es amplia (ej. 'temas recurrentes'), apóyate en el 'Resumen Global'. Si es específica, usa los 'Fragmentos'.\n"
+        f"4. **CITAS:** Siempre que sea posible, respalda tus afirmaciones indicando [Fuente: NombreArchivo].\n\n"
         f"{INSTRUCCIONES_DE_CITAS}"
     )
 
 def get_text_analysis_summary_prompt(full_context):
-    """Resumen denso para contexto futuro."""
     return f"""
 **Rol:** Investigador Cualitativo.
 **Tarea:** Genera un Resumen Ejecutivo exhaustivo de las siguientes transcripciones. Será la ÚNICA fuente para análisis futuros.
@@ -168,8 +163,8 @@ def get_text_analysis_summary_prompt(full_context):
 ## Resumen Ejecutivo
 (4-5 frases síntesis macro)
 
-## Hallazgos por Tema
-### 1. [Tema]
+## Hallazgos por Tema (Ignorando logística/presentaciones)
+### 1. [Tema Relevante]
 * [Hallazgo detallado. Fuente: Archivo]
 * [Cita textual clave: "...". Fuente: Archivo]
 (Repetir para todos los temas relevantes)
@@ -196,7 +191,7 @@ def get_autocode_prompt(context, main_topic):
 {INSTRUCCIONES_DE_CITAS}
 """
 
-# --- Prompt para "EtnoChat" y Transcripción Multimedia ---
+# --- Prompt para "EtnoChat" ---
 
 def get_etnochat_prompt(conversation_history, text_context):
     return (
@@ -234,8 +229,6 @@ def get_survey_articulation_prompt(survey_context, repository_context, conversat
     )
 
 # --- Prompts para "Generador de One-Pager PPT" ---
-# OPTIMIZACIÓN JSON: Se eliminó el formato Markdown (```json) para evitar errores de parseo.
-# Se pide JSON puro.
 
 PROMPTS_ONEPAGER = {
     "Definición de Oportunidades": """
@@ -260,8 +253,6 @@ PROMPTS_ONEPAGER = {
           "amenazas": ["A1", "A2", "A3"]
         }}
         """,
-    # ... (Aplicar la misma lógica de "SOLO JSON crudo" a los demás templates para ahorrar espacio y errores)
-    # Aquí simplifico el ejemplo para no repetir todo el bloque largo, pero la lógica aplica a todos.
     "Mapa de Empatía": """
         Genera SOLO un JSON crudo (sin markdown):
         {{
@@ -326,9 +317,7 @@ def get_onepager_final_prompt(relevant_info, selected_template_name, tema_centra
     """
 
 def get_excel_autocode_prompt(main_topic, responses_sample):
-    # Optimizamos la lista para que ocupe menos tokens visualmente
-    sample_text = str(responses_sample) # Usar representación de lista raw ahorra tokens vs saltos de línea
-    
+    sample_text = str(responses_sample) 
     return f"""
 **Rol:** Codificador de Encuestas.
 **Tarea:** Define categorías (nodos) para analizar respuestas sobre '{main_topic}'.
