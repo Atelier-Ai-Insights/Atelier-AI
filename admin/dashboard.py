@@ -66,7 +66,7 @@ def show_repository_dashboard(db_full):
             )
 
             chart = pie + text
-            st.altair_chart(chart, use_container_width=True)
+            st.altair_chart(chart, width='stretch')
         else:
             st.info("No hay datos de clientes para mostrar en el gráfico.")
     
@@ -79,7 +79,7 @@ def show_repository_dashboard(db_full):
     st.markdown("**Estudios por Marca**")
     filtro_counts = df['filtro'].value_counts().reset_index()
     filtro_counts.columns = ['Marca', 'Conteo']
-    st.dataframe(filtro_counts.set_index('Marca'), use_container_width=True)
+    st.dataframe(filtro_counts.set_index('Marca'), width='stretch')
     
     # --- ¡FIN DE MODIFICACIÓN! ---
 
@@ -127,14 +127,14 @@ def show_admin_dashboard(db_full):
 
                     st.write("**Top Usuarios por Consumo (Tokens)**")
                     user_tokens = df_stats.groupby('user_name')['total_tokens'].sum().reset_index(name='Tokens Totales').sort_values(by="Tokens Totales", ascending=False)
-                    st.dataframe(user_tokens, use_container_width=True, hide_index=True)
+                    st.dataframe(user_tokens, width='stretch', hide_index=True)
                     st.bar_chart(user_tokens.set_index('user_name'))
 
                     st.divider() # Separador añadido
 
                     st.write("**Consumo por Modo de Uso (Tokens)**")
                     mode_tokens = df_stats.groupby('mode')['total_tokens'].sum().reset_index(name='Tokens Totales').sort_values(by="Tokens Totales", ascending=False)
-                    st.dataframe(mode_tokens, use_container_width=True, hide_index=True)
+                    st.dataframe(mode_tokens, width='stretch', hide_index=True)
                     
                     base = alt.Chart(mode_tokens).encode(
                         theta=alt.Theta("Tokens Totales:Q", stack=True)
@@ -145,14 +145,14 @@ def show_admin_dashboard(db_full):
                         order=alt.Order("Tokens Totales", sort="descending"),
                         tooltip=["mode", "Tokens Totales"]
                     )
-                    st.altair_chart(pie, use_container_width=True)
+                    st.altair_chart(pie, width='stretch')
                         
                     st.divider() # Separador añadido
                     
                     st.write("**Actividad Reciente (Últimas 50 consultas)**")
                     df_recent = df_stats[['timestamp', 'user_name', 'mode', 'total_tokens', 'query']].sort_values(by="timestamp", ascending=False).head(50)
                     df_recent['timestamp'] = df_recent['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
-                    st.dataframe(df_recent, use_container_width=True, hide_index=True)
+                    st.dataframe(df_recent, width='stretch', hide_index=True)
                     
                     # --- ¡FIN DE MODIFICACIÓN! ---
                 else: 
@@ -168,7 +168,7 @@ def show_admin_dashboard(db_full):
                 st.write("**Clientes Actuales**")
                 df_clients = pd.DataFrame(clients_response.data)
                 df_clients['created_at'] = pd.to_datetime(df_clients['created_at']).dt.strftime('%Y-%m-%d')
-                st.dataframe(df_clients, use_container_width=True, hide_index=True)
+                st.dataframe(df_clients, width='stretch', hide_index=True)
             else: 
                 st.info("No hay clientes.")
         except Exception as e: 
@@ -228,12 +228,12 @@ def show_admin_dashboard(db_full):
                         "cliente": st.column_config.TextColumn("Cliente", disabled=True), 
                         "plan": st.column_config.TextColumn("Plan", disabled=True)
                     }, 
-                    use_container_width=True, 
+                    width='stretch', 
                     hide_index=True, 
                     num_rows="fixed"
                 )
                 
-                if st.button("Guardar Cambios Usuarios", use_container_width=True):
+                if st.button("Guardar Cambios Usuarios", width='stretch'):
                     updates_to_make = []
                     original_users = st.session_state.original_users_df
                     edited_df_indexed = edited_df.set_index(original_df.index)
