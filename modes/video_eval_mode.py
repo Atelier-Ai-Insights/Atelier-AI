@@ -31,13 +31,13 @@ def video_evaluation_mode(db, selected_files):
         with col1:
             pdf_bytes = generate_pdf_html(st.session_state.mode_state["video_evaluation_result"], title="Evaluacion Video", banner_path=banner_file)
             if pdf_bytes: 
-                st.download_button(label="Descargar PDF", data=pdf_bytes, file_name="evaluacion_video.pdf", mime="application/pdf", use_container_width=True)
+                st.download_button(label="Descargar PDF", data=pdf_bytes, file_name="evaluacion_video.pdf", mime="application/pdf", width='stretch')
         with col2:
-            if st.button("Evaluar Otro Video", use_container_width=True): 
+            if st.button("Evaluar Otro Video", width='stretch'): 
                 st.session_state.mode_state.pop("video_evaluation_result", None)
                 st.rerun()
 
-    elif st.button("Evaluar Video", use_container_width=True, disabled=(uploaded_file is None)):
+    elif st.button("Evaluar Video", width='stretch', disabled=(uploaded_file is None)):
         if not video_bytes or not target_audience.strip() or not comm_objectives.strip(): 
             st.warning("Completa los campos."); return
             
