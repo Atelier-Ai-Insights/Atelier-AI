@@ -28,8 +28,10 @@ from modes.text_analysis_mode import text_analysis_mode
 from modes.onepager_mode import one_pager_ppt_mode
 from modes.data_analysis_mode import data_analysis_mode
 from modes.etnochat_mode import etnochat_mode
+# --- CAMBIO AQUÍ: Importamos la nueva función de validación ---
 from utils import (
-    extract_brand
+    extract_brand,
+    validate_session_integrity
 )
 import constants as c
 
@@ -42,45 +44,12 @@ def set_mode_and_reset(new_mode):
 # FUNCIÓN PARA EL MODO USUARIO 
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
-    # (Esta función no cambia)
-    GRACE_PERIOD_SECONDS = 5 
-    HEARTBEAT_INTERVAL_SECONDS = 60 
-    current_time = time.time()
-    login_time = st.session_state.get("login_timestamp", 0)
-    if (current_time - login_time) > GRACE_PERIOD_SECONDS:
-        last_check = st.session_state.get("last_heartbeat_check", 0)
-        if (current_time - last_check) > HEARTBEAT_INTERVAL_SECONDS:
-            print("--- Ejecutando Heartbeat de Sesión ---")
-            try:
-                if 'user_id' not in st.session_state or 'session_id' not in st.session_state:
-                    st.error("Error de sesión (faltan datos). Por favor, inicie sesión de nuevo.")
-                    st.session_state.clear()
-                    st.rerun()
-                if st.session_state.get("access_token"):
-                    supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
-                response = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute()
-                if response.data and 'active_session_id' in response.data:
-                    db_session_id = response.data['active_session_id']
-                    if db_session_id != st.session_state.session_id:
-                        st.error("Tu sesión ha sido cerrada porque iniciaste sesión en otro dispositivo.")
-                        st.session_state.clear()
-                        st.rerun()
-                    else:
-                        print("Heartbeat exitoso.")
-                        st.session_state.last_heartbeat_check = current_time
-                else:
-                    st.error("Error al verificar sesión (usuario no encontrado).")
-                    st.session_state.clear()
-                    st.rerun()
-            except Exception as e:
-                if "Invalid token" in str(e) or "JWT" in str(e):
-                    st.error(f"Tu sesión ha expirado: {e}. Por favor, inicia sesión de nuevo.")
-                    supabase.auth.sign_out()
-                    st.session_state.clear()
-                    st.rerun()
-                else:
-                    print(f"Heartbeat check falló (ej. red), pero NO se expulsará al usuario. Error: {e}")
-                    st.session_state.last_heartbeat_check = current_time
+    
+    # --- CAMBIO AQUÍ: Validación centralizada y limpia ---
+    # Esto reemplaza todo el bloque antiguo de "Heartbeat" con tiempos.
+    validate_session_integrity()
+    # ---------------------------------------------------
+
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
@@ -157,13 +126,11 @@ def run_user_mode(db_full, user_features, footer_html):
         db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
     brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered if extract_brand(d.get("nombre_archivo", ""))})
     
-    # --- MODIFICACIÓN: Límite eliminado ---
     selected_brands = st.sidebar.multiselect(
-        "Proyecto(s):", # Etiqueta limpia
+        "Proyecto(s):", 
         brands_options, 
         key="filter_projects", 
         disabled=not run_filters
-        # Se eliminó el parámetro max_selections
     )
     
     if run_filters and selected_brands:
@@ -199,7 +166,7 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == c.MODE_ETNOCHAT: etnochat_mode()
     
 # =====================================================
-# FUNCIÓN PRINCIPAL DE LA APLICACIÓN (CORREGIDA)
+# FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
 def main():
     
@@ -219,7 +186,7 @@ def main():
         st.session_state.current_mode = c.MODE_CHAT
     
     # --- LÓGICA DE RUTEO ROBUSTA ---
-    params = st.query_params # Usamos st.query_params moderno
+    params = st.query_params 
     
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
@@ -231,61 +198,51 @@ def main():
         </style>
     """
 
-    # RUTA 1: RECUPERACIÓN DE CONTRASEÑA (CORREGIDA)
-    # Detectamos si estamos en el flujo de recuperación
+    # RUTA 1: RECUPERACIÓN DE CONTRASEÑA
     if params.get("type") == "recovery":
         
-        # Capturar tokens de manera segura (manejando listas o strings)
         access_token = params.get("access_token")
         refresh_token = params.get("refresh_token") 
 
         if isinstance(access_token, list): access_token = access_token[0]
         if isinstance(refresh_token, list): refresh_token = refresh_token[0]
 
-        # --- CASO A: Tenemos sesión completa (Magic Link) ---
         if access_token and refresh_token:
             try:
-                # --- PASO CRÍTICO: Autenticar al usuario temporalmente ---
-                # Sin esto, update_user fallará porque no hay sesión activa.
                 supabase.auth.set_session(access_token, refresh_token)
                 
                 st.markdown(login_page_style, unsafe_allow_html=True)
                 col1, col2, col3 = st.columns([1,2,1])
                 with col2:
                     st.image("LogoDataStudio.png")
-                    # Mostramos el formulario de cambio de contraseña
                     show_set_new_password_page(access_token) 
                 
                 st.divider()
                 st.markdown(footer_html, unsafe_allow_html=True)
-                st.stop() # Detenemos aquí para que no cargue nada más
+                st.stop()
 
             except Exception as e:
                 st.error(f"El enlace de recuperación no es válido o ha expirado: {e}")
                 time.sleep(3)
-                # Limpiar params y redirigir
                 st.query_params.clear()
                 st.session_state.page = "login"
                 st.rerun()
         
-        # --- CASO B: Tenemos solo Código OTP (El caso de tu error) ---
         elif access_token and not refresh_token:
             
-            # Verificar si YA estamos logueados (puede pasar si el usuario recarga)
             if st.session_state.get("logged_in"):
                  st.markdown(login_page_style, unsafe_allow_html=True)
                  col1, col2, col3 = st.columns([1,2,1])
                  with col2:
                      st.image("LogoDataStudio.png")
-                     show_set_new_password_page(None) # Ya estamos logueados, no necesitamos token
+                     show_set_new_password_page(None) 
                  st.stop()
             
-            # Si NO estamos logueados, pedimos email para verificar el código
             st.markdown(login_page_style, unsafe_allow_html=True)
             col1, col2, col3 = st.columns([1,2,1])
             with col2:
                 st.image("LogoDataStudio.png")
-                show_otp_verification_page(access_token) # Usamos la nueva función de auth.py
+                show_otp_verification_page(access_token) 
             
             st.divider()
             st.markdown(footer_html, unsafe_allow_html=True)
@@ -294,7 +251,6 @@ def main():
         else:
              st.warning("Enlace de recuperación incompleto. Intenta solicitar uno nuevo.")
              st.stop()
-
 
     # RUTA 2: El usuario ya está logueado (sesión normal)
     if st.session_state.get("logged_in"):
@@ -356,11 +312,6 @@ def main():
         st.divider()
         st.markdown(footer_html, unsafe_allow_html=True)
         st.stop()
-    
-    # --- ¡FIN DE LA LÓGICA DE RUTEO CORREGIDA! ---
 
-# ==============================
-# PUNTO DE ENTRADA
-# ==============================
 if __name__ == "__main__":
     main()
