@@ -39,9 +39,9 @@ def one_pager_ppt_mode(db_filtered, selected_files):
             data=st.session_state.mode_state["generated_ppt_bytes"],
             file_name=f"diapositiva_{st.session_state.mode_state.get('generated_ppt_template_name', 'estrategica').lower().replace(' ','_')}.pptx",
             mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            use_container_width=True
+            width='stretch'
         )
-        if st.button("Generar nueva Diapositiva", use_container_width=True, type="secondary"):
+        if st.button("Generar nueva Diapositiva", width='stretch', type="secondary"):
             # --- ¡MODIFICADO! ---
             del st.session_state.mode_state["generated_ppt_bytes"]
             st.session_state.mode_state.pop('generated_ppt_template_name', None)
@@ -67,7 +67,7 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     tema_central = st.text_area("¿Cuál es el enfoque principal?", height=100, placeholder=f"Ej: {selected_template_name} para snacks saludables...")
     st.divider()
 
-    if st.button(f"Generar Diapositiva '{selected_template_name}'", use_container_width=True, type="primary"):
+    if st.button(f"Generar Diapositiva '{selected_template_name}'", width='stretch', type="primary"):
         current_ppt_usage = get_monthly_usage(st.session_state.user, c.MODE_ONEPAGER)
         if current_ppt_usage >= ppt_limit and ppt_limit != float('inf'): st.error(f"¡Límite alcanzado!"); return
         if not tema_central.strip(): st.warning("Por favor, describe el tema central."); return
