@@ -118,23 +118,43 @@ def get_concept_gen_prompt(product_idea, context_info):
 # --- Prompt para "Evaluar una idea" (modes/idea_eval_mode.py) ---
 
 def get_idea_eval_prompt(idea_input, context_info):
-    """Este prompt NO se modifica, ya que pide 'No citas explícitas'."""
-    return (
-        f"**Tarea:** Estratega Mkt/Innovación. Evalúa potencial de 'Idea' **solo** con 'Contexto' (hallazgos Atelier).\n\n"
-        f"**Idea:**\n\"{idea_input}\"\n\n"
-        f"**Contexto (Hallazgos):**\n\"{context_info}\"\n\n"
-        "**Instrucciones:**\nEvalúa en Markdown estructurado. Basa **cada punto** en 'Contexto'. No conocimiento externo. No citas explícitas.\n\n"
-        "---\n\n"
-        "### 1. Valoración General Potencial\n* Resume: Alto, Moderado con Desafíos, Bajo según Hallazgos.\n\n"
-        "### 2. Sustento Detallado (Basado en Contexto)\n"
-        "* **Positivos:** Conecta idea con necesidades/tensiones clave del contexto. Hallazgos específicos que respaldan.\n"
-        "* **Desafíos/Contradicciones:** Hallazgos que obstaculizan/contradicen.\n\n"
-        "### 3. Sugerencias Evaluación Consumidor (Basado en Contexto)\n"
-        "* 3-4 **hipótesis cruciales** (de hallazgos o vacíos). Para c/u:\n"
-        "    * **Hipótesis:** (Ej: \"Consumidores valoran X sobre Y...\").\n"
-        "    * **Pregunta Clave:** (Ej: \"¿Qué tan importante es X para Ud? ¿Por qué?\").\n"
-        "    * **Aporte Pregunta:** (Ej: \"Validar si beneficio X resuena...\")."
-    )
+    """
+    Genera el prompt para evaluar una idea contrastándola con la documentación,
+    forzando el uso de citas numéricas.
+    """
+    prompt = f"""
+Rol: Eres un Director de Innovación y Estrategia experto.
+Tarea: Evaluar la viabilidad y potencial de una "Idea de Producto/Servicio" basándote EXCLUSIVAMENTE en la "Información documentada" (hallazgos de mercado).
+
+{INSTRUCCIONES_DE_CITAS}
+
+---
+### Información documentada (Base de conocimiento):
+{context_info}
+---
+
+### Idea a evaluar:
+"{idea_input}"
+
+### Estructura de la Evaluación (Usa Markdown):
+
+1. **Veredicto Ejecutivo**: Una frase contundente sobre si la idea tiene potencial o no.
+
+2. **Análisis de Alineación (Sustentado)**:
+   - Analiza cómo la idea responde (o ignora) las necesidades detectadas en los estudios.
+   - **IMPORTANTE:** Cada afirmación debe tener su cita correspondiente [x].
+   - Ejemplo: "La idea de un snack saludable se alinea con la tendencia de búsqueda de bienestar mencionada en el estudio [1], donde el 60% de usuarios..."
+
+3. **Riesgos o Barreras**:
+   - Qué hallazgos sugieren que esto podría fallar (Cita [x]).
+
+4. **Recomendación Final**:
+   - Pasos a seguir (Ajustar, Lanzar, Descartar).
+
+## Fuentes
+(Lista las fuentes citadas aquí según las instrucciones).
+"""
+    return prompt
 
 # --- Prompt para "Evaluación Visual" (modes/image_eval_mode.py) ---
 
