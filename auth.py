@@ -19,7 +19,7 @@ def show_signup_page():
     email = st.text_input("Tu Correo Electrónico")
     password = st.text_input("Crea una Contraseña", type="password")
     invite_code = st.text_input("Código de Invitación de tu Empresa")
-    if st.button("Registrarse", use_container_width=True):
+    if st.button("Registrarse", width='stretch'):
         if not email or not password or not invite_code:
             st.error("Por favor, completa todos loscampos.")
             return
@@ -39,7 +39,7 @@ def show_signup_page():
         except Exception as e:
             st.error(f"Error en el registro: {e}")
             log_error(f"Error crítico en registro de usuario {email}", module="Auth", error=e)
-    if st.button("¿Ya tienes cuenta? Inicia Sesión", type="secondary", use_container_width=True):
+    if st.button("¿Ya tienes cuenta? Inicia Sesión", type="secondary", width='stretch'):
          st.session_state.page = "login"
          st.rerun()
 
@@ -51,7 +51,7 @@ def show_login_page():
         st.write("¿Qué deseas hacer?")
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("Cerrar la otra sesión e iniciar aquí", use_container_width=True, type="primary"):
+            if st.button("Cerrar la otra sesión e iniciar aquí", width='stretch', type="primary"):
                 try:
                     pending_info = st.session_state.pending_login_info
                     user_id = pending_info['user_id']
@@ -80,13 +80,13 @@ def show_login_page():
                     st.error(f"Error al forzar inicio de sesión: {e}")
                     log_error("Error forzando sesión", module="Auth", error=e)
         with col2:
-            if st.button("Cancelar", use_container_width=True, type="secondary"):
+            if st.button("Cancelar", width='stretch', type="secondary"):
                 st.session_state.pop('pending_login_info')
                 st.rerun()
     else:
         email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
         password = st.text_input("Contraseña", type="password", placeholder="password")
-        if st.button("Ingresar", use_container_width=True):
+        if st.button("Ingresar", width='stretch'):
             try:
                 response = supabase.auth.sign_in_with_password({"email": email, "password": password})
                 user_id = response.user.id
@@ -128,10 +128,10 @@ def show_login_page():
             except Exception as e:
                 st.error(f"Credenciales incorrectas o cuenta no confirmada.")
                 log_action(f"Intento fallido de login: {email}", module="Auth")
-        if st.button("¿No tienes cuenta? Regístrate", type="secondary", use_container_width=True):
+        if st.button("¿No tienes cuenta? Regístrate", type="secondary", width='stretch'):
             st.session_state.page = "signup"
             st.rerun()
-        if st.button("¿Olvidaste tu contraseña?", type="secondary", use_container_width=True):
+        if st.button("¿Olvidaste tu contraseña?", type="secondary", width='stretch'):
             st.session_state.page = "reset_password"
             st.rerun()
 
@@ -140,7 +140,7 @@ def show_reset_password_page():
     st.header("Restablecer Contraseña")
     st.write("Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.")
     email = st.text_input("Tu Correo Electrónico")
-    if st.button("Enviar enlace de recuperación", use_container_width=True):
+    if st.button("Enviar enlace de recuperación", width='stretch'):
         if not email:
             st.warning("Por favor, ingresa tu correo electrónico.")
             return
@@ -152,7 +152,7 @@ def show_reset_password_page():
         except Exception as e:
             st.error(f"Error al enviar el correo: {e}")
             log_error(f"Fallo envío correo recuperación: {email}", module="Auth", error=e)
-    if st.button("Volver a Iniciar Sesión", type="secondary", use_container_width=True):
+    if st.button("Volver a Iniciar Sesión", type="secondary", width='stretch'):
          st.session_state.page = "login"
          st.rerun()
 
@@ -170,7 +170,7 @@ def show_set_new_password_page(access_token):
     if not access_token:
         st.error(f"Error al validar el token: El enlace es inválido o ha expirado.")
         log_error(f"Token de recuperación vacío o nulo (tipo: {type(access_token)})", module="Auth", level="ERROR")
-        if st.button("Volver a Iniciar Sesión", use_container_width=True):
+        if st.button("Volver a Iniciar Sesión", width='stretch'):
             st.session_state.page = "login"
             st.rerun()
         return
@@ -179,7 +179,7 @@ def show_set_new_password_page(access_token):
     new_password = st.text_input("Nueva Contraseña", type="password")
     confirm_password = st.text_input("Confirmar Nueva Contraseña", type="password")
 
-    if st.button("Actualizar Contraseña", use_container_width=True):
+    if st.button("Actualizar Contraseña", width='stretch'):
         if not new_password or not confirm_password:
             st.error("Por favor, completa ambos campos.")
             return
@@ -236,7 +236,7 @@ def show_set_new_password_page(access_token):
             st.error(f"Error al actualizar la contraseña: El token puede haber expirado o ser inválido.")
             log_error("Error crítico al actualizar contraseña post-reseteo", module="Auth", error=e)
 
-    if st.button("Cancelar", type="secondary", use_container_width=True):
+    if st.button("Cancelar", type="secondary", width='stretch'):
         supabase.auth.sign_out()
         st.query_params.clear() 
         st.session_state.page = "login"
