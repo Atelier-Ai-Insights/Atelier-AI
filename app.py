@@ -110,33 +110,33 @@ def run_user_mode(db_full, user_features, footer_html):
     if any(all_categories["Análisis"].values()):
         with st.sidebar.expander("Análisis", expanded=(default_expanded == "Análisis")):
             if all_categories["Análisis"][c.MODE_CHAT]:
-                st.button(c.MODE_CHAT, on_click=set_mode_and_reset, args=(c.MODE_CHAT,), use_container_width=True, type="primary" if modo == c.MODE_CHAT else "secondary")
+                st.button(c.MODE_CHAT, on_click=set_mode_and_reset, args=(c.MODE_CHAT,), width='stretch', type="primary" if modo == c.MODE_CHAT else "secondary")
             if all_categories["Análisis"][c.MODE_TEXT_ANALYSIS]:
-                st.button(c.MODE_TEXT_ANALYSIS, on_click=set_mode_and_reset, args=(c.MODE_TEXT_ANALYSIS,), use_container_width=True, type="primary" if modo == c.MODE_TEXT_ANALYSIS else "secondary")
+                st.button(c.MODE_TEXT_ANALYSIS, on_click=set_mode_and_reset, args=(c.MODE_TEXT_ANALYSIS,), width='stretch', type="primary" if modo == c.MODE_TEXT_ANALYSIS else "secondary")
             if all_categories["Análisis"][c.MODE_DATA_ANALYSIS]:
-                st.button(c.MODE_DATA_ANALYSIS, on_click=set_mode_and_reset, args=(c.MODE_DATA_ANALYSIS,), use_container_width=True, type="primary" if modo == c.MODE_DATA_ANALYSIS else "secondary")
+                st.button(c.MODE_DATA_ANALYSIS, on_click=set_mode_and_reset, args=(c.MODE_DATA_ANALYSIS,), width='stretch', type="primary" if modo == c.MODE_DATA_ANALYSIS else "secondary")
             if all_categories["Análisis"][c.MODE_ETNOCHAT]:
-                st.button(c.MODE_ETNOCHAT, on_click=set_mode_and_reset, args=(c.MODE_ETNOCHAT,), use_container_width=True, type="primary" if modo == c.MODE_ETNOCHAT else "secondary")
+                st.button(c.MODE_ETNOCHAT, on_click=set_mode_and_reset, args=(c.MODE_ETNOCHAT,), width='stretch', type="primary" if modo == c.MODE_ETNOCHAT else "secondary")
     if any(all_categories["Evaluación"].values()):
         with st.sidebar.expander("Evaluación", expanded=(default_expanded == "Evaluación")):
             if all_categories["Evaluación"][c.MODE_IDEA_EVAL]:
-                st.button(c.MODE_IDEA_EVAL, on_click=set_mode_and_reset, args=(c.MODE_IDEA_EVAL,), use_container_width=True, type="primary" if modo == c.MODE_IDEA_EVAL else "secondary")
+                st.button(c.MODE_IDEA_EVAL, on_click=set_mode_and_reset, args=(c.MODE_IDEA_EVAL,), width='stretch', type="primary" if modo == c.MODE_IDEA_EVAL else "secondary")
             if all_categories["Evaluación"][c.MODE_IMAGE_EVAL]:
-                st.button(c.MODE_IMAGE_EVAL, on_click=set_mode_and_reset, args=(c.MODE_IMAGE_EVAL,), use_container_width=True, type="primary" if modo == c.MODE_IMAGE_EVAL else "secondary")
+                st.button(c.MODE_IMAGE_EVAL, on_click=set_mode_and_reset, args=(c.MODE_IMAGE_EVAL,), width='stretch', type="primary" if modo == c.MODE_IMAGE_EVAL else "secondary")
             if all_categories["Evaluación"][c.MODE_VIDEO_EVAL]:
-                st.button(c.MODE_VIDEO_EVAL, on_click=set_mode_and_reset, args=(c.MODE_VIDEO_EVAL,), use_container_width=True, type="primary" if modo == c.MODE_VIDEO_EVAL else "secondary")
+                st.button(c.MODE_VIDEO_EVAL, on_click=set_mode_and_reset, args=(c.MODE_VIDEO_EVAL,), width='stretch', type="primary" if modo == c.MODE_VIDEO_EVAL else "secondary")
     if any(all_categories["Reportes"].values()):
         with st.sidebar.expander("Reportes", expanded=(default_expanded == "Reportes")):
             if all_categories["Reportes"][c.MODE_REPORT]:
-                st.button(c.MODE_REPORT, on_click=set_mode_and_reset, args=(c.MODE_REPORT,), use_container_width=True, type="primary" if modo == c.MODE_REPORT else "secondary")
+                st.button(c.MODE_REPORT, on_click=set_mode_and_reset, args=(c.MODE_REPORT,), width='stretch', type="primary" if modo == c.MODE_REPORT else "secondary")
             if all_categories["Reportes"][c.MODE_ONEPAGER]:
-                st.button(c.MODE_ONEPAGER, on_click=set_mode_and_reset, args=(c.MODE_ONEPAGER,), use_container_width=True, type="primary" if modo == c.MODE_ONEPAGER else "secondary")
+                st.button(c.MODE_ONEPAGER, on_click=set_mode_and_reset, args=(c.MODE_ONEPAGER,), width='stretch', type="primary" if modo == c.MODE_ONEPAGER else "secondary")
     if any(all_categories["Creatividad"].values()):
         with st.sidebar.expander("Creatividad", expanded=(default_expanded == "Creatividad")):
             if all_categories["Creatividad"][c.MODE_IDEATION]:
-                st.button(c.MODE_IDEATION, on_click=set_mode_and_reset, args=(c.MODE_IDEATION,), use_container_width=True, type="primary" if modo == c.MODE_IDEATION else "secondary")
+                st.button(c.MODE_IDEATION, on_click=set_mode_and_reset, args=(c.MODE_IDEATION,), width='stretch', type="primary" if modo == c.MODE_IDEATION else "secondary")
             if all_categories["Creatividad"][c.MODE_CONCEPT]:
-                st.button(c.MODE_CONCEPT, on_click=set_mode_and_reset, args=(c.MODE_CONCEPT,), use_container_width=True, type="primary" if modo == c.MODE_CONCEPT else "secondary")
+                st.button(c.MODE_CONCEPT, on_click=set_mode_and_reset, args=(c.MODE_CONCEPT,), width='stretch', type="primary" if modo == c.MODE_CONCEPT else "secondary")
 
     st.sidebar.header("Filtros de Búsqueda")
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT] 
@@ -154,7 +154,7 @@ def run_user_mode(db_full, user_features, footer_html):
     if run_filters and selected_brands:
         db_filtered = [d for d in db_filtered if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
 
-    if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
+    if st.sidebar.button("Cerrar Sesión", key="logout_main", width='stretch'):
         try:
             if 'user_id' in st.session_state:
                 if st.session_state.get("access_token"):
