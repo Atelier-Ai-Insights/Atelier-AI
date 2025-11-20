@@ -17,7 +17,6 @@ import json
 import traceback 
 import seaborn as sns
 
-
 # --- Importaciones de Análisis ---
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
@@ -710,7 +709,8 @@ def show_project_analyzer(df, db_filtered, selected_files):
                             if not valid_keywords:
                                 st.warning("No se definieron keywords para esta categoría.")
                             else:
-                                regex_pattern = r'\b(' + '|'.join(valid_keywords) + r')\b'
+                                # CORRECCIÓN AQUÍ: Usamos (?:...) para agrupar sin capturar, evitando el UserWarning de Pandas
+                                regex_pattern = r'\b(?:' + '|'.join(valid_keywords) + r')\b'
                                 matching_verbatims = full_series[
                                     full_series.str.contains(regex_pattern, case=False, na=False, regex=True)
                                 ].dropna().unique() 
@@ -776,7 +776,8 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                     valid_keywords = [re.escape(k.strip()) for k in keywords if k.strip()]
                                     if not valid_keywords:
                                         continue
-                                    regex_pattern = r'\b(' + '|'.join(valid_keywords) + r')\b'
+                                    # CORRECCIÓN AQUÍ: Usamos (?:...) para agrupar sin capturar
+                                    regex_pattern = r'\b(?:' + '|'.join(valid_keywords) + r')\b'
                                     mentions_count = full_series.str.contains(
                                         regex_pattern, 
                                         case=False,
