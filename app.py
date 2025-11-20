@@ -14,7 +14,7 @@ from auth import (
     show_signup_page, 
     show_reset_password_page, 
     show_set_new_password_page,
-    show_otp_verification_page # <--- Nueva importación
+    show_otp_verification_page 
 )
 from admin.dashboard import show_admin_dashboard
 from modes.report_mode import report_mode
@@ -157,14 +157,13 @@ def run_user_mode(db_full, user_features, footer_html):
         db_filtered = [d for d in db_filtered if d.get("marca") in selected_years]
     brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_filtered if extract_brand(d.get("nombre_archivo", ""))})
     
-    # --- MODIFICACIÓN: Límite de 10 proyectos ---
+    # --- MODIFICACIÓN: Límite eliminado ---
     selected_brands = st.sidebar.multiselect(
-        "Proyecto(s) (Máx. 10):", 
+        "Proyecto(s):", # Etiqueta limpia
         brands_options, 
         key="filter_projects", 
-        disabled=not run_filters,
-        max_selections=10, # <--- ESTO BLOQUEA LA SELECCIÓN AL LLEGAR A 10
-        help="Selecciona un máximo de 10 proyectos para optimizar la precisión del análisis."
+        disabled=not run_filters
+        # Se eliminó el parámetro max_selections
     )
     
     if run_filters and selected_brands:
