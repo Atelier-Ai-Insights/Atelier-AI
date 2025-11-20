@@ -331,7 +331,7 @@ def get_excel_autocode_prompt(main_topic, responses_sample):
 **Rol:** Codificador de Encuestas.
 **Tarea:** Define categorías (nodos) para analizar respuestas sobre '{main_topic}'.
 
-**Muestra:**
+**Muestra de respuestas:**
 {sample_text}
 
 **Salida:** SOLO un JSON válido (Array de objetos). Sin Markdown.
@@ -340,9 +340,10 @@ Estructura:
   {{ "categoria": "Nombre corto", "keywords": ["k1", "k2"] }},
   ...
 ]
-**Reglas:**
-1. Categorías descriptivas breves.
-2. Keywords literales encontradas en la muestra.
+**Reglas CRÍTICAS de optimización:**
+1. Genera máximo **8-10 categorías** principales.
+2. Para cada categoría, incluye SOLO las **15 palabras clave o frases cortas más representativas** y repetidas (No listes todas las variaciones únicas).
+3. Las keywords deben ser literales (encontradas en el texto) para usarse en búsqueda exacta (Regex).
 """
 
 # --- Prompts Análisis de Datos ---
