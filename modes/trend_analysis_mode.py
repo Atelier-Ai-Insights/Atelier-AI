@@ -2,7 +2,8 @@ import streamlit as st
 from utils import get_relevant_info, extract_text_from_pdfs
 from services.gemini_api import call_gemini_stream 
 from services.supabase_db import log_query_event
-from prompts import get_trend_analysis_prompt
+# Importamos el diccionario SOURCE_LENSES para llenar el multiselect
+from prompts import get_trend_analysis_prompt, SOURCE_LENSES 
 import constants as c
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
@@ -13,111 +14,101 @@ from config import banner_file
 
 def trend_analysis_mode(db_filtered, selected_files):
     st.subheader("Análisis de Tendencias")
-    st.markdown("#### Función: Análisis Multifuente")
-    st.markdown("""
-    Identifica oportunidades estratégicas cruzando tres dimensiones de información:
-    1. **Memoria Organizacional** (Tu repositorio seleccionado).
-    2. **Información Nueva** (Archivos PDF que subas ahora).
-    3. **Contexto de Mercado** (Perspectiva de fuentes públicas).
-    """)
+    st.markdown("#### Función: Triangulación Estratégica")
+    
+    st.info(
+        "Este módulo cruza tu **Data Interna** con **Lentes de Mercado Externos** "
+        "para validar si tus hallazgos están alineados con la realidad nacional/global."
+    )
 
-    # --- Sección de Resultados (Si ya existen) ---
+    # --- Sección de Resultados ---
     if "trend_result" in st.session_state.mode_state:
         st.divider()
         st.markdown(st.session_state.mode_state["trend_result"])
         
         col1, col2 = st.columns(2)
         with col1:
-            # Generar PDF
             pdf_bytes = generate_pdf_html(
                 st.session_state.mode_state["trend_result"], 
                 title=f"Tendencias - {st.session_state.mode_state.get('trend_topic', 'Análisis')}", 
                 banner_path=banner_file
             )
             if pdf_bytes: 
-                st.download_button(
-                    label="Descargar Reporte PDF", 
-                    data=pdf_bytes, 
-                    file_name="analisis_tendencias.pdf", 
-                    mime="application/pdf", 
-                    width='stretch'
-                )
+                st.download_button("Descargar Reporte PDF", data=pdf_bytes, file_name="tendencias.pdf", mime="application/pdf", width='stretch')
         with col2:
             if st.button("Realizar Nuevo Análisis", width='stretch', type="secondary"):
                 st.session_state.mode_state.pop("trend_result", None)
-                st.session_state.mode_state.pop("trend_topic", None)
                 st.rerun()
         return
 
     st.divider()
 
-    # --- CONFIGURACIÓN DE FUENTES ---
+    # --- COLUMNAS DE FUENTES ---
+    c1, c2 = st.columns(2)
+    
+    with c1:
+        st.markdown("#### 1. Data Interna")
+        st.success(f"📚 **Repositorio:** {len(selected_files)} estudios activos.")
+        uploaded_pdfs = st.file_uploader("📂 **Cargar PDFs Adicionales (Opcional):**", type=["pdf"], accept_multiple_files=True, help="Reports de tendencias, papers, noticias.")
 
-    # 1. Repositorio (Ya viene filtrado desde el sidebar en app.py)
-    st.info(f"📚 **Fuente 1: Repositorio.** Se utilizarán los {len(selected_files)} estudios filtrados en el menú lateral.")
-
-    # 2. PDFs Cargados
-    st.markdown("**📂 Fuente 2: Archivos PDF Externos** (Opcional)")
-    uploaded_pdfs = st.file_uploader("Carga reportes de tendencias, papers o noticias:", type=["pdf"], accept_multiple_files=True)
-
-    # 3. Fuentes Públicas
-    st.markdown("**🌐 Fuente 3: Perspectiva de Fuentes Públicas**")
-    public_options = [
-        "DANE (Estadísticas Demográficas/Económicas)",
-        "Banco de la República (Macroeconomía)",
-        "Fenalco (Comercio)",
-        "Camacol (Construcción/Vivienda)",
-        "Euromonitor (Tendencias de Consumo Global)",
-        "Google Trends (Interés de Búsqueda)",
-        "McKinsey/Deloitte (Informes de Consultoría)",
-        "Superintendencia de Industria y Comercio"
-    ]
-    selected_public_sources = st.multiselect(
-        "Selecciona qué 'lentes' debe usar la IA para analizar el contexto:",
-        options=public_options,
-        help="La IA utilizará su conocimiento entrenado sobre estas entidades para enriquecer el análisis."
-    )
+    with c2:
+        st.markdown("#### 2. Validación Externa (Lentes)")
+        # Usamos las claves del diccionario que definimos en prompts.py
+        public_options = list(SOURCE_LENSES.keys())
+        
+        selected_public_sources = st.multiselect(
+            "Selecciona qué lentes aplicar para validar el mercado:",
+            options=public_options,
+            default=[public_options[0], public_options[5]], # DANE y Google Trends por defecto
+            help="La IA usará su conocimiento de estas entidades para contrastar tus datos."
+        )
+        
+        if selected_public_sources:
+            st.caption(f"🔍 Se contrastará la información con indicadores de: {', '.join([s.split('(')[0] for s in selected_public_sources])}.")
 
     st.divider()
 
     # --- TEMA E INPUT ---
     trend_topic = st.text_area(
-        "¿Qué tendencia o tema quieres analizar?", 
-        placeholder="Ej: El impacto del trabajo híbrido en el consumo de alimentos fuera del hogar...",
+        "¿Qué hipótesis, categoría o tendencia quieres validar?", 
+        placeholder="Ej: El aumento en el consumo de snacks saludables en estratos medios a pesar de la inflación...",
         height=100
     )
 
-    if st.button("Analizar Tendencia Multifuente", type="primary", width='stretch'):
+    if st.button("Ejecutar Triangulación de Fuentes", type="primary", width='stretch'):
         if not trend_topic.strip():
             st.warning("Por favor, define un tema para el análisis.")
             return
 
-        with st.spinner("Triangulando información de Repositorio, PDFs y Fuentes Públicas..."):
+        # Usamos st.status para mostrar el progreso multifuente
+        with st.status("Iniciando motor de inteligencia...", expanded=True) as status:
             
             # A. Procesar Repositorio
+            st.write("📚 Leyendo memoria organizacional (Repositorio)...")
             repo_text = get_relevant_info(db_filtered, trend_topic, selected_files)
-            if not repo_text:
-                repo_text = "No se encontró información relevante en el repositorio filtrado para este tema."
+            if not repo_text: repo_text = "Sin datos históricos relevantes."
 
             # B. Procesar PDFs
+            st.write("📂 Procesando documentos cargados...")
             pdf_text = ""
             if uploaded_pdfs:
                 try:
                     pdf_text = extract_text_from_pdfs(uploaded_pdfs)
-                except Exception as e:
-                    st.error(f"Error leyendo PDFs: {e}")
-            else:
-                pdf_text = "No se cargaron archivos PDF adicionales."
+                except Exception as e: st.error(f"Error PDFs: {e}")
+            else: pdf_text = "Sin archivos externos."
 
             # C. Construir Prompt
+            st.write("🌐 Conectando con lentes de conocimiento público...")
             final_prompt = get_trend_analysis_prompt(
                 topic=trend_topic,
                 repo_context=repo_text,
                 pdf_context=pdf_text,
                 public_sources_list=selected_public_sources
             )
+            
+            status.update(label="Triangulación completada. Generando reporte...", state="complete", expanded=False)
 
-            # D. Llamar a la IA (Streaming)
+            # D. Llamar a la IA
             stream = call_gemini_stream(final_prompt)
             
             if stream:
@@ -125,18 +116,16 @@ def trend_analysis_mode(db_filtered, selected_files):
                 response_container = st.empty()
                 full_response = ""
                 
-                # Efecto visual de escritura
                 for chunk in stream:
                     full_response += chunk
                     response_container.markdown(full_response + "▌")
                 
                 response_container.markdown(full_response)
                 
-                # Guardar estado
                 st.session_state.mode_state["trend_result"] = full_response
                 st.session_state.mode_state["trend_topic"] = trend_topic
                 
                 log_query_event(f"Trend Analysis: {trend_topic}", mode=c.MODE_TREND_ANALYSIS)
-                st.rerun() # Para mostrar los botones de descarga limpios
+                st.rerun()
             else:
                 st.error("No se pudo generar el análisis.")
