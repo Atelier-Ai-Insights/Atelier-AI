@@ -470,14 +470,18 @@ def show_project_analyzer(df, db_filtered, selected_files):
                 if col_to_autocode and main_topic:
                     with st.spinner("Analizando con IA (esto toma unos segundos)..."):
                         try:
+                            
                             # 1. Obtener muestra
                             sample = list(df[col_to_autocode].dropna().unique()[:100])
                             prompt = get_excel_autocode_prompt(main_topic, sample)
                             
-                            # 2. Llamar a la API
+                            # 2. Llamar a la API (AUMENTAMOS EL LÍMITE AQUÍ)
                             raw_response = call_gemini_api(
                                 prompt,
-                                generation_config_override={"response_mime_type": "application/json"}
+                                generation_config_override={
+                                    "response_mime_type": "application/json",
+                                    "max_output_tokens": 8192 # <--- AUMENTADO (Antes era default o bajo)
+                                }
                             )
                             
                             if not raw_response:
