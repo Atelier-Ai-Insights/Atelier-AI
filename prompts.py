@@ -379,3 +379,52 @@ def get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups):
         base += "\n**Conclusión:** ℹ️ No significativo. Las diferencias son azar."
     
     return base
+
+# --- Prompt para "Análisis de Tendencias Multifuente" ---
+
+def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_list):
+    sources_instruction = ""
+    if public_sources_list:
+        sources_text = ", ".join(public_sources_list)
+        sources_instruction = (
+            f"3. **Fuentes Públicas/Externas:** Integra tu conocimiento pre-entrenado sobre datos, informes y perspectivas "
+            f"habituales de las siguientes entidades: {sources_text}. Úsalos para contrastar o validar los hallazgos internos."
+        )
+
+    return f"""
+**Rol:** Analista de Tendencias y Estrategia de Mercado.
+**Objetivo:** Identificar oportunidades de negocio emergentes sobre el tema: "{topic}".
+
+**Fuentes de Información:**
+1. **Repositorio Interno (Histórico):**
+{repo_context}
+
+2. **Documentos Cargados (Nuevos Datos):**
+{pdf_context}
+
+{sources_instruction}
+
+**Instrucción:** Triangula la información de estas fuentes para detectar patrones.
+
+**Formato de Salida (Markdown Estricto - Estilo Slide Estratégica):**
+
+# Análisis de Tendencias: {topic}
+
+## Insight Clave
+(Una frase potente y reveladora que sintetice la verdad oculta detrás de los datos cruzados).
+
+## Hallazgos Principales (Cruce de Fuentes)
+* **[Hallazgo 1]:** Descripción del hecho. (Cita si viene del [Repositorio] o [PDF]).
+* **[Hallazgo 2]:** Descripción del hecho. (Cita fuente).
+* **[Perspectiva Externa]:** Cómo se alinea esto con las tendencias generales o datos de {sources_text if public_sources_list else 'el mercado'}.
+
+## Oportunidades de Negocio
+1. **[Oportunidad A]:** Explicación.
+2. **[Oportunidad B]:** Explicación.
+3. **[Oportunidad C]:** Explicación.
+
+## Recomendaciones Estratégicas
+(3-4 acciones concretas a corto/mediano plazo).
+
+{INSTRUCCIONES_DE_CITAS}
+"""
