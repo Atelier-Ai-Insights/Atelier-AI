@@ -19,12 +19,12 @@ et_xmlfile==2.0.0
 fonttools==4.60.1
 gitdb==4.0.12
 GitPython==3.1.41
-google-ai-generativelanguage==0.6.15
+google-ai-generativelanguage>=0.6.15
 google-api-core==2.28.1
 google-api-python-client==2.186.0
 google-auth==2.42.1
 google-auth-httplib2==0.2.1
-google-generativeai==0.8.5
+google-generativeai>=0.8.5
 googleapis-common-protos==1.71.0
 grpcio==1.76.0
 grpcio-status==1.71.2
