@@ -199,7 +199,7 @@ def show_project_list(user_id):
                 st.caption(f"Marca: {proj_brand} | Año: {proj_year}")
             
             with col2:
-                if st.button("Analizar", key=f"analizar_{proj_id}", use_container_width=True, type="primary"):
+                if st.button("Analizar", key=f"analizar_{proj_id}", width='stretch', type="primary"):
                     st.session_state.mode_state["da_selected_project_id"] = proj_id
                     st.session_state.mode_state["da_selected_project_name"] = proj_name
                     st.session_state.mode_state["da_storage_path"] = storage_path
@@ -207,7 +207,7 @@ def show_project_list(user_id):
                     st.rerun()
             
             with col3:
-                if st.button("Eliminar", key=f"eliminar_{proj_id}", use_container_width=True):
+                if st.button("Eliminar", key=f"eliminar_{proj_id}", width='stretch'):
                     with st.spinner("Eliminando proyecto..."):
                         try:
                             supabase.storage.from_(PROJECT_BUCKET).remove([storage_path])
@@ -268,24 +268,24 @@ def show_project_analyzer(df, db_filtered, selected_files):
     with col_ia:
         with st.expander("📊 Funciones de IA Generativa", expanded=True):
             if plan_features.get("da_has_summary"):
-                st.button("Resumen Ejecutivo", on_click=set_da_sub_mode, args=("Resumen Ejecutivo IA",), use_container_width=True, type="primary" if sub_modo == "Resumen Ejecutivo IA" else "secondary")
+                st.button("Resumen Ejecutivo", on_click=set_da_sub_mode, args=("Resumen Ejecutivo IA",), width='stretch', type="primary" if sub_modo == "Resumen Ejecutivo IA" else "secondary")
             if plan_features.get("da_has_autocode"):
-                st.button("Auto-Codificación", on_click=set_da_sub_mode, args=("Auto-Codificación",), use_container_width=True, type="primary" if sub_modo == "Auto-Codificación" else "secondary")
+                st.button("Auto-Codificación", on_click=set_da_sub_mode, args=("Auto-Codificación",), width='stretch', type="primary" if sub_modo == "Auto-Codificación" else "secondary")
             if plan_features.get("da_has_wordcloud"):
-                st.button("Nube de Palabras", on_click=set_da_sub_mode, args=("Nube de Palabras",), use_container_width=True, type="primary" if sub_modo == "Nube de Palabras" else "secondary")
+                st.button("Nube de Palabras", on_click=set_da_sub_mode, args=("Nube de Palabras",), width='stretch', type="primary" if sub_modo == "Nube de Palabras" else "secondary")
             if plan_features.get("da_has_ppt_export"):
-                st.button("Exportar a PPT", on_click=set_da_sub_mode, args=("Exportar a PPT",), use_container_width=True, type="primary" if sub_modo == "Exportar a PPT" else "secondary")
+                st.button("Exportar a PPT", on_click=set_da_sub_mode, args=("Exportar a PPT",), width='stretch', type="primary" if sub_modo == "Exportar a PPT" else "secondary")
 
     with col_stats:
         with st.expander("📈 Análisis Estadístico y Cruces", expanded=True):
             if plan_features.get("da_has_quick_analysis"):
-                st.button("Análisis Rápido", on_click=set_da_sub_mode, args=("Análisis Rápido",), use_container_width=True, type="primary" if sub_modo == "Análisis Rápido" else "secondary")
+                st.button("Análisis Rápido", on_click=set_da_sub_mode, args=("Análisis Rápido",), width='stretch', type="primary" if sub_modo == "Análisis Rápido" else "secondary")
             if plan_features.get("da_has_pivot_table"):
-                st.button("Tabla Dinámica", on_click=set_da_sub_mode, args=("Tabla Dinámica",), use_container_width=True, type="primary" if sub_modo == "Tabla Dinámica" else "secondary")
+                st.button("Tabla Dinámica", on_click=set_da_sub_mode, args=("Tabla Dinámica",), width='stretch', type="primary" if sub_modo == "Tabla Dinámica" else "secondary")
             if plan_features.get("da_has_correlation"):
-                st.button("Análisis de Correlación", on_click=set_da_sub_mode, args=("Análisis de Correlación",), use_container_width=True, type="primary" if sub_modo == "Análisis de Correlación" else "secondary")
+                st.button("Análisis de Correlación", on_click=set_da_sub_mode, args=("Análisis de Correlación",), width='stretch', type="primary" if sub_modo == "Análisis de Correlación" else "secondary")
             if plan_features.get("da_has_group_comparison"):
-                st.button("Comparación de Grupos", on_click=set_da_sub_mode, args=("Comparación de Grupos",), use_container_width=True, type="primary" if sub_modo == "Comparación de Grupos" else "secondary")
+                st.button("Comparación de Grupos", on_click=set_da_sub_mode, args=("Comparación de Grupos",), width='stretch', type="primary" if sub_modo == "Comparación de Grupos" else "secondary")
 
     st.divider()
     
@@ -300,11 +300,11 @@ def show_project_analyzer(df, db_filtered, selected_files):
 
         if "da_summary_result" in st.session_state.mode_state:
             st.markdown(st.session_state.mode_state["da_summary_result"])
-            if st.button("Generar nuevo resumen", use_container_width=True, type="secondary"):
+            if st.button("Generar nuevo resumen", width='stretch', type="secondary"):
                 st.session_state.mode_state.pop("da_summary_result")
                 st.rerun()
         else:
-            if st.button("Generar Resumen Ejecutivo", use_container_width=True, type="primary"):
+            if st.button("Generar Resumen Ejecutivo", width='stretch', type="primary"):
                 with st.spinner("Analizando la estructura de los datos..."):
                     try:
                         snapshot_buffer = io.StringIO()
@@ -377,7 +377,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                 counts = df[col_to_cat].value_counts()
                 percentages = df[col_to_cat].value_counts(normalize=True)
                 df_freq = pd.DataFrame({'Conteo': counts, 'Porcentaje (%)': percentages.apply(lambda x: f"{x*100:.1f}%")})
-                st.dataframe(df_freq, use_container_width=True)
+                st.dataframe(df_freq, width='stretch')
                 st.bar_chart(counts)
                 st.session_state.mode_state["da_freq_table"] = df_freq 
                 context_buffer.write(f"Distribución de la columna '{col_to_cat}':\n{df_freq.to_string()}\n\n")
@@ -428,9 +428,9 @@ def show_project_analyzer(df, db_filtered, selected_files):
                     elif display_mode == "% del Total de Columna":
                         display_df = display_df.apply(lambda x: x / x.sum(), axis=0)
                     if display_mode == "Valores Absolutos":
-                        st.dataframe(display_df.style.format("{:,.2f}"), use_container_width=True)
+                        st.dataframe(display_df.style.format("{:,.2f}"), width='stretch')
                     else:
-                        st.dataframe(display_df.fillna(0).style.format("{:.1%}"), use_container_width=True)
+                        st.dataframe(display_df.fillna(0).style.format("{:.1%}"), width='stretch')
                     if show_sig and agg_func == 'count':
                         st.markdown("---")
                         st.subheader("Prueba de Significación (Chi-Squared)")
@@ -446,14 +446,14 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                     st.success("✅ **Resultado Significativo (p < 0.05)**. Las diferencias en la tabla son reales y no se deben al azar.")
                                     st.markdown("##### Análisis de Residuos (Celdas Significativas)")
                                     std_residuals = (df_testable - expected) / np.sqrt(expected)
-                                    st.dataframe(std_residuals.style.applymap(style_residuals).format("{:.2f}"), use_container_width=True)
+                                    st.dataframe(std_residuals.style.applymap(style_residuals).format("{:.2f}"), width='stretch')
                                     st.caption("Verde (>1.96): Significativamente MÁS alto de lo esperado. Rojo (<-1.96): Significativamente MÁS BAJO de lo esperado.")
                                 else:
                                     st.info("ℹ️ **Resultado No Significativo (p > 0.05)**. Las diferencias observadas en la tabla son probablemente producto del azar.")
                             except Exception as e:
                                 st.error(f"Error al calcular Chi-Squared: {e}")
                     excel_bytes = to_excel(pivot_df_raw)
-                    st.download_button(label="📥 Descargar Tabla como Excel", data=excel_bytes, file_name=f"pivot_table_{index_col}_{col_col}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                    st.download_button(label="📥 Descargar Tabla como Excel", data=excel_bytes, file_name=f"pivot_table_{index_col}_{col_col}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width='stretch')
             except Exception as e:
                 st.error(f"Error al crear la tabla: {e}")
 
@@ -488,10 +488,10 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 st.session_state.mode_state["da_wordcloud_fig"] = img_stream
                                 st.subheader("Tabla de Frecuencias")
                                 df_freq = pd.DataFrame(frequencies.items(), columns=['Palabra', 'Frecuencia']).sort_values(by='Frecuencia', ascending=False).reset_index(drop=True)
-                                st.dataframe(df_freq, use_container_width=True)
+                                st.dataframe(df_freq, width='stretch')
                                 st.session_state.mode_state["da_freq_table_cloud"] = df_freq
                                 excel_bytes = to_excel(df_freq)
-                                st.download_button(label="📥 Descargar Frecuencias como Excel", data=excel_bytes, file_name=f"frecuencias_{col_to_cloud}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                                st.download_button(label="📥 Descargar Frecuencias como Excel", data=excel_bytes, file_name=f"frecuencias_{col_to_cloud}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width='stretch')
                                 top_words = ', '.join(df_freq['Palabra'].head(10))
                                 st.session_state.mode_state["data_analysis_stats_context"] += f"\nPalabras clave de '{col_to_cloud}': {top_words}...\n\n"
                     except Exception as e:
@@ -614,7 +614,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
             
             include_autocode = st.checkbox("Incluir Tabla de Auto-Codificación", value=True, disabled=not "da_autocode_results_df" in st.session_state.mode_state)
             
-            if st.button("Generar Presentación", use_container_width=True, type="primary"):
+            if st.button("Generar Presentación", width='stretch', type="primary"):
                 with st.spinner("Creando archivo .pptx..."):
                     try:
                         prs = Presentation(template_file)
@@ -640,7 +640,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                     except Exception as e:
                         st.error(f"Error al generar la presentación: {e}")
             if "generated_data_ppt" in st.session_state.mode_state:
-                st.download_button(label="📥 Descargar Presentación (.pptx)", data=st.session_state.mode_state["generated_data_ppt"], file_name=f"analisis_{st.session_state.mode_state['da_selected_project_name']}.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation", use_container_width=True)
+                st.download_button(label="📥 Descargar Presentación (.pptx)", data=st.session_state.mode_state["generated_data_ppt"], file_name=f"analisis_{st.session_state.mode_state['da_selected_project_name']}.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation", width='stretch')
 
     if sub_modo == "Auto-Codificación":
         st.header("Auto-Codificación (Preguntas Abiertas)")
@@ -668,7 +668,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                             max_value=st.session_state.mode_state["da_autocode_results_df"]["Porcentaje (%)"].max() if not st.session_state.mode_state["da_autocode_results_df"]["Porcentaje (%)"].empty else 100
                         ),
                     },
-                    use_container_width=True,
+                    width='stretch',
                     hide_index=True
                 )
                 
@@ -678,10 +678,10 @@ def show_project_analyzer(df, db_filtered, selected_files):
                     data=excel_bytes, 
                     file_name="auto_codificacion.xlsx", 
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-                    use_container_width=True
+                    width='stretch'
                 )
 
-                if st.button("Analizar otra columna", use_container_width=True, type="secondary"):
+                if st.button("Analizar otra columna", width='stretch', type="secondary"):
                     st.session_state.mode_state.pop("da_autocode_results_df", None)
                     st.session_state.mode_state.pop("da_autocode_json", None)
                     st.session_state.mode_state.pop("da_autocode_selected_col", None)
@@ -730,7 +730,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                 col_to_autocode = st.selectbox("Selecciona la columna de texto (pregunta abierta):", text_cols, key="autocode_select")
                 main_topic = st.text_input("¿Cuál es el tema principal de esta pregunta?", placeholder="Ej: 'Motivos de preferencia', 'Aspectos a mejorar'")
                 
-                if st.button("Generar Categorías y Conteo", use_container_width=True, type="primary"):
+                if st.button("Generar Categorías y Conteo", width='stretch', type="primary"):
                     if not col_to_autocode or not main_topic:
                         st.warning("Por favor, selecciona una columna y define el tema principal.")
                     else:
