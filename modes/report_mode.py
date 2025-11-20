@@ -36,14 +36,14 @@ def report_mode(db, selected_files):
         col1, col2 = st.columns(2)
         with col1:
             if pdf_bytes: 
-                st.download_button("Descargar PDF", data=pdf_bytes, file_name="Informe.pdf", mime="application/pdf", use_container_width=True)
+                st.download_button("Descargar PDF", data=pdf_bytes, file_name="Informe.pdf", mime="application/pdf", width='stretch')
         with col2: 
-            st.button("Nueva consulta", on_click=reset_report_workflow, key="new_rep_btn", use_container_width=True)
+            st.button("Nueva consulta", on_click=reset_report_workflow, key="new_rep_btn", width='stretch')
     
     else:
         question = st.text_area("Escribe tu consulta...", value=st.session_state.mode_state.get("last_question", ""), height=150)
         
-        if st.button("Generar Reporte", use_container_width=True):
+        if st.button("Generar Reporte", width='stretch'):
             # (Validaciones de límites igual que antes...)
             if not question.strip(): st.warning("Ingresa consulta."); return
             
