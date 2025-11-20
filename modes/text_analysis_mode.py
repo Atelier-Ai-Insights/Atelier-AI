@@ -5,6 +5,7 @@ import os
 import uuid
 from datetime import datetime
 import re 
+import time # Importamos time para controlar visualización si es necesario
 from services.gemini_api import call_gemini_api, call_gemini_stream 
 from services.supabase_db import log_query_event, supabase, get_daily_usage
 from prompts import get_transcript_prompt, get_autocode_prompt, get_text_analysis_summary_prompt
@@ -14,7 +15,7 @@ from config import banner_file
 from utils import reset_transcript_chat_workflow, build_rag_context
 
 # =====================================================
-# MODO: ANÁLISIS DE TEXTOS (OPTIMIZADO CON RAG)
+# MODO: ANÁLISIS DE TEXTOS (OPTIMIZADO CON RAG + UX DINÁMICA)
 # =====================================================
 
 TEXT_PROJECT_BUCKET = "text_project_files"
@@ -119,7 +120,7 @@ def show_text_project_list(user_id):
                     st.success("Eliminado."); st.rerun()
                 except Exception as e: st.error(f"Error: {e}")
 
-# --- Función de Análisis (ACTUALIZADA) ---
+# --- Función de Análisis (CON EFECTO DE CARGA DINÁMICO) ---
 
 def show_text_project_analyzer(summary_context, project_name, documents_list):
     st.markdown(f"### Analizando: **{project_name}**")
@@ -150,12 +151,17 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                 st.error(f"Límite diario alcanzado ({int(limit)}).")
             else:
                 with st.chat_message("assistant", avatar="✨"):
-                    # 1. RAG: Buscar fragmentos específicos
-                    with st.status("Analizando documentos...", expanded=False) as status:
-                        rag_chunks = build_rag_context(user_prompt, documents_list, max_chars=30000)
-                        status.update(label="Información procesada.", state="complete")
                     
-                    # 2. CONTEXTO HÍBRIDO (Sandwich)
+                    # --- INICIO EFECTO DINÁMICO DE CARGA ---
+                    # Creamos un contenedor vacío para actualizar el texto
+                    status_placeholder = st.empty()
+                    
+                    # PASO 1: Búsqueda RAG
+                    status_placeholder.markdown("🕵️ **Explorando tus documentos en busca de evidencia...**")
+                    rag_chunks = build_rag_context(user_prompt, documents_list, max_chars=30000)
+                    
+                    # PASO 2: Construcción de Contexto (Sandwich)
+                    status_placeholder.markdown("🔗 **Conectando hallazgos con el resumen global...**")
                     final_context_for_ai = f"""
                     --- RESUMEN GLOBAL DEL PROYECTO (CONTEXTO MACRO) ---
                     {summary_context}
@@ -163,9 +169,15 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                     --- FRAGMENTOS ESPECÍFICOS ENCONTRADOS (EVIDENCIA DETALLADA) ---
                     {rag_chunks if rag_chunks else "No se encontraron citas exactas, responde basándote en el Resumen Global."}
                     """
-                    
                     chat_prompt = get_transcript_prompt(final_context_for_ai, user_prompt)
+                    
+                    # PASO 3: Llamada a la IA
+                    status_placeholder.markdown("✨ **Generando respuesta detallada...**")
                     stream = call_gemini_stream(chat_prompt) 
+
+                    # PASO 4: Limpieza y Streaming
+                    # Borramos el mensaje de estado justo antes de que la IA empiece a escribir
+                    status_placeholder.empty()
 
                     if stream:
                         response_text = st.write_stream(stream)
@@ -193,14 +205,21 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
             if st.button("Analizar", type="primary", width='stretch'):
                 if not topic.strip(): st.warning("Describe el tema.")
                 else:
-                    with st.spinner("Analizando..."):
-                        prompt = get_autocode_prompt(summary_context, topic)
-                        stream = call_gemini_stream(prompt)
-                        if stream:
-                            res = st.write_stream(stream)
-                            st.session_state.mode_state["autocode_result"] = res
-                            log_query_event(f"Autocode: {topic}", mode=f"{c.MODE_TEXT_ANALYSIS} (Autocode)")
-                            st.rerun()
+                    # Mismo efecto para Autocodificación
+                    status_ph = st.empty()
+                    status_ph.markdown("🔍 **Analizando patrones en el resumen...**")
+                    
+                    prompt = get_autocode_prompt(summary_context, topic)
+                    status_ph.markdown("✍️ **Redactando reporte de códigos...**")
+                    
+                    stream = call_gemini_stream(prompt)
+                    status_ph.empty()
+                    
+                    if stream:
+                        res = st.write_stream(stream)
+                        st.session_state.mode_state["autocode_result"] = res
+                        log_query_event(f"Autocode: {topic}", mode=f"{c.MODE_TEXT_ANALYSIS} (Autocode)")
+                        st.rerun()
 
 def text_analysis_mode():
     st.subheader(c.MODE_TEXT_ANALYSIS); st.divider()
@@ -209,19 +228,28 @@ def text_analysis_mode():
 
     # 1. Cargar Docs
     if "ta_selected_project_id" in st.session_state.mode_state and "ta_documents_list" not in st.session_state.mode_state:
-        with st.spinner("Cargando..."):
-            docs = load_text_project_data(st.session_state.mode_state["ta_storage_path"]) 
-            if docs: st.session_state.mode_state["ta_documents_list"] = docs
-            else: st.error("Error carga."); st.session_state.mode_state = {}
+        # Usamos st.empty también para la carga inicial de documentos
+        loading_ph = st.empty()
+        loading_ph.info("📥 Descargando archivos del proyecto...")
+        docs = load_text_project_data(st.session_state.mode_state["ta_storage_path"]) 
+        loading_ph.empty()
+        
+        if docs: st.session_state.mode_state["ta_documents_list"] = docs
+        else: st.error("Error carga."); st.session_state.mode_state = {}
 
     # 2. Generar Resumen
     if "ta_documents_list" in st.session_state.mode_state and "ta_summary_context" not in st.session_state.mode_state:
-        with st.spinner("Generando resumen inicial..."):
-            docs = st.session_state.mode_state["ta_documents_list"]
-            summ_in = "".join([f"\nDoc: {d['source']}\n{d['content'][:2500]}\n..." for d in docs])
-            summ = call_gemini_api(get_text_analysis_summary_prompt(summ_in), generation_config_override={"max_output_tokens": 8192})
-            if summ: st.session_state.mode_state["ta_summary_context"] = summ; st.rerun()
-            else: st.error("Error resumen.")
+        gen_ph = st.empty()
+        gen_ph.info("🧠 Leyendo documentos para generar resumen inicial...")
+        docs = st.session_state.mode_state["ta_documents_list"]
+        summ_in = "".join([f"\nDoc: {d['source']}\n{d['content'][:2500]}\n..." for d in docs])
+        
+        gen_ph.info("📝 Escribiendo Resumen Ejecutivo...")
+        summ = call_gemini_api(get_text_analysis_summary_prompt(summ_in), generation_config_override={"max_output_tokens": 8192})
+        
+        gen_ph.empty()
+        if summ: st.session_state.mode_state["ta_summary_context"] = summ; st.rerun()
+        else: st.error("Error resumen.")
 
     # 3. Vistas
     if "ta_summary_context" in st.session_state.mode_state:
@@ -231,7 +259,7 @@ def text_analysis_mode():
             st.session_state.mode_state["ta_documents_list"]
         )
     elif "ta_selected_project_id" in st.session_state.mode_state:
-        st.info("Cargando...")
+        st.info("Cargando proyecto...")
     else:
         with st.expander("➕ Crear Proyecto", expanded=True): show_text_project_creator(uid, limit)
         st.divider(); show_text_project_list(uid)
