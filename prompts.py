@@ -1,631 +1,392 @@
-# --- BLOQUE DE INSTRUCCIONES DE CITAS REUTILIZABLE (CORREGIDO) ---
+import streamlit as st
 
+# --- BLOQUE DE INSTRUCCIONES DE CITAS (OPTIMIZADO - MENOS TOKENS) ---
+# Se redujo el texto explicativo manteniendo la rigurosidad.
 INSTRUCCIONES_DE_CITAS = """
-**Instrucciones de Respuesta OBLIGATORIAS:**
-1. **Fidelidad Absoluta:** Basa tu respuesta *estrictamente* en la 'Información documentada'. No inventes nada.
-2. **Respuesta Directa:** Responde a la última pregunta/tarea de forma clara y concisa.
-
-3. **Agrupación de Citas (¡MUY IMPORTANTE!):**
-   - **Asigna un número único a CADA documento** la primera vez que lo cites.
-   - **REUTILIZA ESE MISMO NÚMERO** cada vez que vuelvas a citar información de ese *mismo* documento.
-   - *Ejemplo de texto:* El producto A es popular [1]. El producto B es nuevo [2]. La popularidad de A se debe a su sabor [1].
-
-4. **Crear Sección de Fuentes:** Al final de tu respuesta (después de un `---`), añade una sección llamada `## Fuentes`.
-
-5. **Formato de Fuentes:** En la sección 'Fuentes', lista CADA número de cita **UNA SOLA VEZ**, con su `Documento:` correspondiente.
-   * [1] Documento: Informe Gelatina - Ecuador
-   * [2] Documento: Estudio Bocatto Salvaje 2023
-
-6. **Sin Información:** Si la respuesta no se encuentra en la 'Información documentada', responde *únicamente* con: "La información solicitada no se encuentra disponible en los documentos seleccionados."
+**REGLAS DE CITAS (ESTRICTO):**
+1. **Base:** Solo usa la 'Información documentada'. No alucines información externa.
+2. **Formato:** Asigna un ID numérico único [x] a cada documento la primera vez que lo uses. Reutiliza el ID para futuras referencias al mismo documento.
+3. **Sintaxis:** Frase del hallazgo [1]. Otra frase contrastada [2].
+4. **Sección Fuentes:** Al final, añade:
+   ---
+   ## Fuentes
+   * [1] Documento: (Nombre exacto del archivo)
+5. **Vacío:** Si la respuesta no está en los documentos, di: "Información no disponible en los documentos."
 """
 
-# --- Prompts para "Generar un reporte de reportes" (modes/report_mode.py) ---
+# --- Prompts para "Generar un reporte de reportes" ---
 
 def get_report_prompt1(question, relevant_info):
-    """Primer prompt para extraer hallazgos clave. (ACTUALIZADO)"""
+    """Extracción de hallazgos (Directo al grano)."""
     return (
-        f"Pregunta del Cliente: ***{question}***\n\n"
-        f"Contexto (Información documentada):\n```\n{relevant_info}\n```\n\n"
-        "**Tarea:** Extrae los hallazgos más relevantes del contexto para responder la pregunta.\n\n"
+        f"**Pregunta:** {question}\n\n"
+        f"**Contexto:**\n{relevant_info}\n\n"
+        f"**Tarea:** Extrae hallazgos fácticos del contexto que respondan la pregunta.\n"
         f"{INSTRUCCIONES_DE_CITAS}\n\n"
-        "**Respuesta (Solo Hallazgos y Fuentes):**\n"
-        "## Hallazgos Clave:\n"
-        "* [Hallazgo 1... [1]]\n"
-        "* [Hallazgo 2... [2]]\n"
-        "---\n"
-        "## Fuentes\n"
-        "* [1] Documento: ...\n"
-        "* [2] Documento: ...\n"
+        "**Salida (Markdown):**\n"
+        "## Hallazgos Clave\n"
+        "* [Hallazgo con cita [x]]\n"
+        "...\n"
+        "## Fuentes\n..."
     )
 
 def get_report_prompt2(question, result1, relevant_info):
-    """Segundo prompt para redactar el informe final. (ACTUALIZADO)"""
+    """Redacción de informe (Estructura forzada)."""
     return (
-        f"Pregunta: ***{question}***\n\n"
-        "**Tarea:** Actúa como un Analista experto. Redacta un informe completo y estructurado usando el Resumen de Hallazgos y el Contexto Adicional. Menciona que los estudios son de Atelier.\n\n"
-        "**Estructura del Informe (breve y preciso):**\n"
-        "- Introducción: Contexto y pregunta.\n"
-        "- Hallazgos Principales: Hechos relevantes respondiendo a la pregunta. DEBES citar las fuentes [1].\n"
-        "- Insights: Aprendizajes profundos.\n"
-        "- Conclusiones: Síntesis clara.\n"
-        "- Recomendaciones (3-4): Accionables.\n\n"
-        f"**Información documentada (Resumen y Contexto):**\n"
-        f"Resumen de Hallazgos:\n{result1}\n\n"
-        f"Contexto Adicional:\n{relevant_info}\n\n"
+        f"**Rol:** Analista experto de Atelier.\n"
+        f"**Pregunta:** {question}\n"
+        f"**Insumos:**\n1. Hallazgos Previos: {result1}\n2. Contexto Completo: {relevant_info}\n\n"
+        f"**Tarea:** Redacta informe ejecutivo estructurado.\n"
+        f"**Estructura:**\n"
+        f"1. **Introducción:** Contexto breve.\n"
+        f"2. **Hallazgos:** Hechos con citas [x].\n"
+        f"3. **Insights:** Interpretación profunda.\n"
+        f"4. **Conclusiones y Recomendaciones:** 3-4 acciones.\n\n"
         f"{INSTRUCCIONES_DE_CITAS}\n"
-        "\n**Redacta el informe completo:**"
     )
 
-# --- Prompt para "Chat de Consulta Directa" (modes/chat_mode.py) ---
+# --- Prompt para "Chat de Consulta Directa" ---
 
 def get_grounded_chat_prompt(conversation_history, relevant_info):
-    """Prompt de chat con citas. (ACTUALIZADO)"""
+    """Chat RAG estricto."""
     return (
-        f"**Tarea:** Eres un asistente de investigación experto. Responde la **última pregunta** del Usuario usando **únicamente** la 'Información documentada' y el 'Historial'.\n\n"
-        f"**Historial (reciente):**\n{conversation_history}\n\n"
-        f"**Información documentada (Tus únicas fuentes):**\n"
-        "```\n"
-        f"{relevant_info}\n"
-        "```\n\n"
-        f"{INSTRUCCIONES_DE_CITAS}\n\n"
+        f"**Rol:** Asistente de investigación.\n"
+        f"**Tarea:** Responde la ÚLTIMA pregunta del historial usando SOLO la 'Información Documentada'.\n\n"
+        f"**Info Documentada:**\n{relevant_info}\n\n"
+        f"**Historial:**\n{conversation_history}\n\n"
+        f"{INSTRUCCIONES_DE_CITAS}\n"
         "**Respuesta:**"
     )
 
-# --- Prompt para "Conversaciones creativas" (modes/ideation_mode.py) ---
+# --- Prompt para "Conversaciones creativas" ---
 
 def get_ideation_prompt(conv_history, relevant):
-    """Prompt de ideación con citas. (ACTUALIZADO)"""
+    """Ideación (Permite más flexibilidad en tono, estricto en datos)."""
     return (
-        f"**Tarea:** Experto Mkt/Innovación creativo. Conversación inspiradora con usuario sobre ideas/soluciones basadas **solo** en 'Información documentada' e 'Historial'.\n\n"
+        f"**Rol:** Estratega de Innovación Creativo.\n"
+        f"**Objetivo:** Generar soluciones inspiradoras conectando los datos proporcionados.\n"
+        f"**Contexto:**\n{relevant}\n\n"
         f"**Historial:**\n{conv_history}\n\n"
-        f"**Información documentada (Tus únicas fuentes):**\n{relevant}\n\n"
-        "**Instrucciones Adicionales:**\n"
-        "1. Rol: Experto creativo.\n"
-        "2. Objetivo: Ayudar a explorar soluciones creativas conectando datos.\n"
-        "3. Estilo: Claro, sintético, inspirador.\n\n"
-        f"{INSTRUCCIONES_DE_CITAS}\n\n"
-        "**Respuesta creativa:**"
+        f"**Instrucción:** Responde de forma sintética e inspiradora. Basa tus premisas en los datos.\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
     )
 
-# --- Prompt para "Generación de conceptos" (modes/concept_mode.py) ---
+# --- Prompt para "Generación de conceptos" ---
 
 def get_concept_gen_prompt(product_idea, context_info):
-    """Prompt de generación de conceptos con citas. (ACTUALIZADO)"""
+    """Concepto estructurado (Markdown forzado)."""
     return (
-        f"**Tarea:** Estratega Mkt/Innovación. Desarrolla concepto estructurado a partir de 'Idea' y 'Contexto'.\n\n"
-        f"**Idea:**\n\"{product_idea}\"\n\n"
-        f"**Información documentada (Contexto/Hallazgos):**\n\"{context_info}\"\n\n"
-        "**Instrucciones:**\n"
-        "Genera Markdown con estructura exacta. Basa tus respuestas en el contexto y **CITA TUS FUENTES** [1].\n\n"
-        "---\n\n"
-        "### 1. Necesidad Consumidor\n* Identifica tensiones/deseos clave del contexto. Conecta con oportunidad. (Citar fuentes)\n\n"
-        "### 2. Descripción Producto/Servicio\n* Basado en Idea y enriquecido por Contexto. (Citar fuentes)\n\n"
-        "### 3. Beneficios Clave (3-4)\n* Responde a necesidad (Pto 1). Sustentado en Contexto. (Citar fuentes)\n\n"
-        "### 4. Conceptos para Evaluar (2 Opc.)\n"
-        "* **Opción A:**\n"
-        "    * **Insight:** (Dolor + Deseo. Basado en contexto). (Citar fuentes)\n"
-        "    * **What:** (Características/Beneficios).\n"
-        "    * **RTB:** (¿Por qué creíble? Basado en contexto). (Citar fuentes)\n"
-        "    * **Claim:** (Esencia memorable).\n\n"
-        "* **Opción B:** (Alternativa)\n"
-        "    * **Insight:** ...\n"
-        "    * **What:** ...\n"
-        "    * **RTB:** ...\n"
-        "    * **Claim:** ...\n\n"
-        f"{INSTRUCCIONES_DE_CITAS}\n"
+        f"**Rol:** Estratega de Producto.\n"
+        f"**Tarea:** Desarrolla un concepto para la idea: \"{product_idea}\" usando este contexto: \"{context_info}\".\n\n"
+        f"**Formato Salida (Markdown):**\n"
+        f"### 1. Necesidad (Consumer Truth)\n(Sustentar con citas [x])\n\n"
+        f"### 2. Descripción Producto\n(Enriquecer idea con contexto)\n\n"
+        f"### 3. Beneficios (3-4)\n(Funcionales/Emocionales)\n\n"
+        f"### 4. Conceptos (2 Rutas)\n"
+        f"* **Opción A:** Insight + What + RTB (Reason to Believe con citas [x]) + Claim.\n"
+        f"* **Opción B:** (Variante alternativa).\n\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
     )
 
-# --- Prompt para "Evaluar una idea" (modes/idea_eval_mode.py) ---
+# --- Prompt para "Evaluar una idea" ---
 
 def get_idea_eval_prompt(idea_input, context_info):
-    """
-    Genera el prompt para evaluar una idea contrastándola con la documentación,
-    forzando el uso de citas numéricas.
-    """
-    prompt = f"""
-Rol: Eres un Director de Innovación y Estrategia experto.
-Tarea: Evaluar la viabilidad y potencial de una "Idea de Producto/Servicio" basándote EXCLUSIVAMENTE en la "Información documentada" (hallazgos de mercado).
+    """Evaluación crítica."""
+    return f"""
+**Rol:** Director de Estrategia.
+**Tarea:** Evaluar viabilidad de la idea contra la evidencia de mercado.
 
-{INSTRUCCIONES_DE_CITAS}
-
----
-### Información documentada (Base de conocimiento):
+**Evidencia:**
 {context_info}
----
 
-### Idea a evaluar:
+**Idea:**
 "{idea_input}"
 
-### Estructura de la Evaluación (Usa Markdown):
+**Salida (Markdown):**
+1. **Veredicto:** (Viable / Riesgoso / Descartar) en 1 frase.
+2. **Alineación:** ¿Responde a necesidades reales del estudio? (Cita [x]).
+3. **Barreras:** ¿Qué datos contradicen la idea? (Cita [x]).
+4. **Recomendación:** Pasos a seguir.
 
-1. **Veredicto Ejecutivo**: Una frase contundente sobre si la idea tiene potencial o no.
-
-2. **Análisis de Alineación (Sustentado)**:
-   - Analiza cómo la idea responde (o ignora) las necesidades detectadas en los estudios.
-   - **IMPORTANTE:** Cada afirmación debe tener su cita correspondiente [x].
-   - Ejemplo: "La idea de un snack saludable se alinea con la tendencia de búsqueda de bienestar mencionada en el estudio [1], donde el 60% de usuarios..."
-
-3. **Riesgos o Barreras**:
-   - Qué hallazgos sugieren que esto podría fallar (Cita [x]).
-
-4. **Recomendación Final**:
-   - Pasos a seguir (Ajustar, Lanzar, Descartar).
-
-## Fuentes
-(Lista las fuentes citadas aquí según las instrucciones).
+{INSTRUCCIONES_DE_CITAS}
 """
-    return prompt
 
-# --- Prompt para "Evaluación Visual" (modes/image_eval_mode.py) ---
+# --- Prompt para "Evaluación Visual" y "Video" ---
+# Se han simplificado para reducir tokens de entrada.
 
 def get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context):
-    """Prompt de evaluación de imagen con citas. (ACTUALIZADO)"""
     return [
-        "Actúa como director creativo/estratega mkt experto. Analiza la imagen en contexto de target/objetivos, usando hallazgos como referencia.",
-        f"\n\n**Target:**\n{target_audience}",
-        f"\n\n**Objetivos:**\n{comm_objectives}",
-        f"\n\n**Información documentada (Contexto/Hallazgos):**\n```\n{relevant_text_context[:10000]}\n```",
-        "\n\n**Evaluación Detallada (Markdown):**",
-        "\n### 1. Notoriedad/Impacto Visual",
-        "* ¿Capta la atención? ¿Atractiva/disruptiva para target?",
-        "* Elementos visuales clave y su aporte (apóyate en contexto si hay insights visuales y cítalos [1]).",
-        "\n### 2. Mensaje Clave/Claridad",
-        "* Mensajes principal/secundarios vs objetivos?",
-        "* ¿Claro para target? ¿Ambigüedad?",
-        "* ¿Mensaje vs insights del contexto? (Citar [1])",
-        "\n### 3. Branding/Identidad",
-        "* ¿Marca integrada efectivamente? ¿Reconocible?",
-        "* ¿Refuerza personalidad/valores marca (según contexto)? (Citar [l1])",
-        "\n### 4. Call to Action",
-        "* ¿Sugiere acción o genera emoción/pensamiento (curiosidad, deseo, etc.)?",
-        "* ¿Contexto sugiere que motivará al target? (Citar [1])",
-        "\n\n**Conclusión General:**",
-        "* Valoración efectividad, fortalezas, mejoras (conectando con insights si aplica [1]).",
-        "\n\n---\n"
-        f"{INSTRUCCIONES_DE_CITAS}\n"
+        "**Rol:** Director Creativo.",
+        f"**Contexto:** Target: {target_audience} | Objetivos: {comm_objectives}",
+        f"**Datos:** {relevant_text_context[:8000]}", # Limitamos caracteres para eficiencia
+        "**Tarea:** Analiza la imagen proporcionada.",
+        "**Puntos a evaluar:**",
+        "1. **Impacto:** ¿Atrae al target? (Usa citas de datos [1])",
+        "2. **Claridad:** ¿Comunica el objetivo?",
+        "3. **Branding:** ¿Coherente con la marca?",
+        "4. **Call to Action:** ¿Motiva?",
+        "**Conclusión:** Veredicto final.",
+        INSTRUCCIONES_DE_CITAS
     ]
-
-# --- Prompt para "Evaluación de Video" (modes/video_eval_mode.py) ---
 
 def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context):
-    """Prompt de evaluación de video con citas. (ACTUALIZADO)"""
     return [
-        "Actúa como director creativo/estratega mkt experto audiovisual. Analiza el video (visual/audio) en contexto de target/objetivos, usando hallazgos como referencia.",
-        f"\n\n**Target:**\n{target_audience}",
-        f"\n\n**Objetivos:**\n{comm_objectives}",
-        f"\n\n**Información documentada (Contexto/Hallazgos):**\n```\n{relevant_text_context[:8000]}\n```",
-        "\n\n**Evaluación Detallada (Markdown):**",
-        "\n### 1. Notoriedad/Impacto (Visual/Auditivo)",
-        "* ¿Capta la atención? ¿Memorable? ¿Destaca?",
-        "* Elementos clave (narrativa, ritmo, música, etc.) y su aporte (vs contexto y citar [1]).",
-        "* ¿Insights contexto sobre preferencias audiovisuales? (Citar [1])",
-        "\n### 2. Mensaje Clave/Claridad",
-        "* Mensajes principal/secundarios vs objetivos?",
-        "* ¿Claro/relevante para target? ¿Audio+Video OK?",
-        "* ¿Mensaje vs insights contexto? (Citar [1])",
-        "\n### 3. Branding/Identidad",
-        "* ¿Marca integrada natural/efectiva? ¿Cuándo/cómo?",
-        "* ¿Refuerza personalidad/valores marca? (Citar [1])",
-        "\n### 4. Call to Action",
-        "* ¿Sugiere acción o genera emoción/pensamiento?",
-        "* ¿Contexto sugiere que motivará? (Citar [1])",
-        "\n\n**Conclusión General:**",
-        "* Valoración efectividad, fortalezas, mejoras (conectando con insights si aplica [1]).",
-        "\n\n---\n"
-        f"{INSTRUCCIONES_DE_CITAS}\n"
+        "**Rol:** Director Audiovisual.",
+        f"**Contexto:** Target: {target_audience} | Objetivos: {comm_objectives}",
+        f"**Datos:** {relevant_text_context[:8000]}",
+        "**Tarea:** Analiza el video (audio/visual).",
+        "**Puntos a evaluar:**",
+        "1. **Impacto AV:** Ritmo, narrativa, audio. (Cita datos [1])",
+        "2. **Mensaje:** ¿Se entiende?",
+        "3. **Branding:** ¿Integración de marca?",
+        "4. **CTA:** ¿Efectividad?",
+        "**Conclusión:** Veredicto final.",
+        INSTRUCCIONES_DE_CITAS
     ]
 
-# --- Prompt para "Análisis de Notas y Transcripciones" (modes/transcript_mode.py) ---
+# --- Prompt para "Análisis de Notas y Transcripciones" ---
 
 def get_transcript_prompt(combined_context, user_prompt):
-    """
-    Prompt de transcripciones con citas. 
-    (MODIFICADO: Usa las INSTRUCCIONES_DE_CITAS estándar)
-    """
     return (
-        "Actúa como un asistente experto en análisis cualitativo. Tu tarea es responder la pregunta del usuario basándote únicamente en el **resumen de hallazgos** de las transcripciones proporcionadas.\n\n"
-        f"**Información documentada (Resumen de Hallazgos):**\n```\n{combined_context}\n```\n\n"
-        f"**Pregunta del Usuario:**\n{user_prompt}\n\n"
-        
-        f"{INSTRUCCIONES_DE_CITAS}\n\n"
-        
-        "**Respuesta:**"
+        f"**Rol:** Investigador Cualitativo.\n"
+        f"**Contexto (Hallazgos):**\n{combined_context}\n\n"
+        f"**Pregunta:** {user_prompt}\n"
+        f"**Instrucción:** Responde solo basado en el contexto.\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
     )
 
-
 def get_text_analysis_summary_prompt(full_context):
-    """
-    Crea un prompt para que la IA lea múltiples transcripciones y 
-    genere un resumen ejecutivo que sirva como contexto futuro.
-    """
+    """Resumen denso para contexto futuro."""
     return f"""
-**Tarea:** Eres un investigador cualitativo experto. Tu trabajo es analizar las transcripciones de entrevistas/focus groups proporcionadas.
-Debes leer TODO el contexto y generar un **resumen ejecutivo detallado**.
+**Rol:** Investigador Cualitativo.
+**Tarea:** Genera un Resumen Ejecutivo exhaustivo de las siguientes transcripciones. Será la ÚNICA fuente para análisis futuros.
 
-Este resumen será la ÚNICA fuente de información para un análisis posterior, por lo que debe ser completo.
+**Entrada:**
+{full_context}
 
---- TRANSCRIPCIONES (INFORMACIÓN DOCUMENTADA) ---
-```{full_context}```
+**Salida (Markdown):**
+## Resumen Ejecutivo
+(4-5 frases síntesis macro)
 
-**Formato de Salida OBLIGATORIO (Markdown):**
-Sigue esta estructura de Markdown exactamente:
-
-## Resumen Ejecutivo de Hallazgos
-Un párrafo (4-5 frases) que resuma los principales descubrimientos, tensiones o insights.
-
-## Temas Clave y Hallazgos Detallados
-
-### 1. [Nombre del Tema 1]
-* [Hallazgo detallado 1 sobre este tema. [Fuente: Nombre del Archivo]]
-* [Hallazgo detallado 2 sobre este tema. [Fuente: Nombre del Archivo]]
-* [Cita textual relevante: *"...cita..."* [Fuente: Nombre del Archivo]]
-
-### 2. [Nombre del Tema 2]
-* [Hallazgo detallado 1 sobre este tema. [Fuente: Nombre del Archivo]]
-* [Hallazgo detallado 2 sobre este tema. [Fuente: Nombre del Archivo]]
-* [Cita textual relevante: *"...cita..."* [Fuente: Nombre del Archivo]]
-
-### 3. [Nombre del Tema 3]
-* [Hallazgo detallado 1 sobre este tema. [Fuente: Nombre del Archivo]]
-* ...
-
-(Continuar con todos los temas relevantes)
-
-**Instrucciones Adicionales:**
-- **Exhaustivo:** Asegúrate de cubrir todos los temas importantes.
-- **Fuente de Cita:** DEBES indicar de qué archivo (ej. `[Fuente: Entrevista_Usuario_1.docx]`) proviene cada hallazgo o cita.
+## Hallazgos por Tema
+### 1. [Tema]
+* [Hallazgo detallado. Fuente: Archivo]
+* [Cita textual clave: "...". Fuente: Archivo]
+(Repetir para todos los temas relevantes)
 """
 
 def get_autocode_prompt(context, main_topic):
-    """
-    Crea un prompt para que la IA lea un RESUMEN e identifique
-    temas clave (códigos) con citas de respaldo.
-    (MODIFICADO: Usa las INSTRUCCIONES_DE_CITAS estándar)
-    """
     return f"""
-**Tarea:** Eres un investigador cualitativo experto. Tu trabajo es analizar el **resumen de hallazgos** proporcionado sobre el tema '{main_topic}'.
-Debes identificar los **temas emergentes (códigos)** más importantes y respaldar cada tema con **una cita textual corta** del resumen.
+**Rol:** Codificador Cualitativo.
+**Tarea:** Extrae temas emergentes (códigos) sobre '{main_topic}' del siguiente resumen.
 
---- RESUMEN DE HALLAZGOS (INFORMACIÓN DOCUMENTADA) ---
-```{context}```
+**Resumen:**
+{context}
 
-**Formato de Salida OBLIGATORIO (Markdown):**
-Debes seguir esta estructura de Markdown exactamente:
+**Salida (Markdown):**
+## Temas Clave
+(Resumen brevísimo)
 
-## Resumen de Temas Clave
-Un párrafo corto (2-3 frases) que resuma los principales hallazgos.
-
-## Temas Emergentes y Citas (Máx. 5-7 temas)
-
-### 1. [Nombre del Tema 1]
-* [Hallazgo o insight sobre el Tema 1 [1]]
-* [Cita textual relevante: *"...cita..."* [2]]
-
-### 2. [Nombre del Tema 2]
-* [Hallazgo o insight sobre el Tema 2 [3]]
-* [Cita textual relevante: *"...cita..."* [1]]
-
-### 3. [Nombre del Tema 3]
-* [Hallazgo o insight sobre el Tema 3 [2]]
-
-(...continuar con MÁXIMO 7 temas...)
-
-**Instrucciones Adicionales:**
-- **Brevedad:** Sé conciso. Prioriza los temas más importantes.
-- **Citas:** Sigue las instrucciones de citas estándar para CUALQUIER información que tomes del resumen.
+## Códigos Detectados (Máx 7)
+### 1. [Nombre Código]
+* [Explicación del hallazgo [x]]
+* [Cita de soporte [x]]
+(Repetir estructura)
 
 {INSTRUCCIONES_DE_CITAS}
 """
-    
-# --- Prompt para "EtnoChat" ---
+
+# --- Prompt para "EtnoChat" y Transcripción Multimedia ---
 
 def get_etnochat_prompt(conversation_history, text_context):
-    """
-    Crea el prompt de texto para el modo EtnoChat.
-    Este prompt irá acompañado de los archivos de imagen y audio.
-    """
     return (
-        "**Tarea:** Eres un asistente experto en investigación etnográfica y análisis cualitativo. Tu tarea es responder la **última pregunta** del Usuario.\n\n"
-        "**Contexto Multimodal:**"
-        "Tu respuesta debe basarse en TODAS las fuentes proporcionadas:\n"
-        "1.  **Historial de Chat:** La conversación que estamos teniendo.\n"
-        "2.  **Transcripciones de Texto:** El contexto de texto que se te proporciona a continuación.\n"
-        "3.  **Archivos Multimedia:** Los archivos de IMAGEN y AUDIO que se han cargado (la IA los procesará automáticamente).\n\n"
-        
-        "**Instrucciones:**\n"
-        "-   Sintetiza la información de *todas* las fuentes (texto, imágenes, audios) para dar una respuesta completa.\n"
-        "-   Puedes (y debes) referirte a los archivos por su nombre (ej. `foto_sala.png` o `audio_entrevista_1.m4a`) cuando sean la fuente de un hallazgo.\n"
-        "-   Al citar, usa el nombre del archivo como la fuente, siguiendo el formato de citas estándar.\n\n"
-        
-        f"**Historial (reciente):**\n{conversation_history}\n\n"
-        
-        f"**Información documentada (Transcripciones de Texto):**\n"
-        "```\n"
-        f"{text_context}\n"
-        "```\n\n"
-        
-        f"{INSTRUCCIONES_DE_CITAS}\n\n"
-        
-        "**Respuesta:**"
+        "**Rol:** Etnógrafo Digital.\n"
+        "**Tarea:** Responde al usuario sintetizando:\n"
+        "1. Historial de Chat.\n"
+        "2. Transcripciones (Contexto).\n"
+        "3. Archivos Multimedia (Imágenes/Audios adjuntos).\n\n"
+        f"**Historial:**\n{conversation_history}\n"
+        f"**Transcripciones:**\n{text_context}\n\n"
+        "**Nota:** Cita los archivos por nombre (ej. [foto1.jpg], [audio.mp3]).\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
     )
 
-# --- ¡NUEVO PROMPT PARA OPTIMIZACIÓN ETNOCHAT! ---
 def get_media_transcription_prompt():
-    """
-    Prompt simple para convertir audio/video a texto detallado.
-    """
     return """
-    **Tarea:** Eres un transcriptor experto. Tu objetivo es generar una transcripción detallada y descriptiva del archivo multimedia proporcionado (audio o video).
-    
-    **Instrucciones:**
-    1.  **Transcripción:** Transcribe lo que se dice en el audio/video.
-    2.  **Descripción Visual (si es video):** Si hay elementos visuales clave (acciones, entorno, emociones faciales), descríbelos entre corchetes [Ej: El usuario señala el producto con el ceño fruncido].
-    3.  **Formato:** Devuelve *únicamente* el texto de la transcripción/descripción. No añadas introducciones ni conclusiones.
+    **Rol:** Transcriptor.
+    **Tarea:**
+    1. Transcribe el audio palabra por palabra.
+    2. Si es video, describe acciones visuales clave entre corchetes [Ej: Cliente sonríe].
+    **Salida:** SOLO el texto plano. Sin introducciones.
     """
-    
+
 # --- Prompt para "Análisis de Datos (Excel)" ---
 
 def get_survey_articulation_prompt(survey_context, repository_context, conversation_history):
-    """
-    Crea un prompt que articula datos de encuestas (cuanti) con
-    datos del repositorio (cuali) para un chat.
-    """
     return (
-        f"**Tarea:** Eres un asistente experto en investigación de mercados. Tu tarea es responder la **última pregunta** del Usuario.\n\n"
-        f"**¡IMPORTANTE!** Debes articular tu respuesta usando AMBAS fuentes de información:\n"
-        f"1. **Contexto de Análisis de Datos (Cuantitativo):** Datos clave de un archivo Excel recién cargado. Úsalo como el 'QUÉ'.\n"
-        f"2. **Información documentada (Cualitativo):** Hallazgos del repositorio histórico (estudios). Úsalo como el 'PORQUÉ'.\n\n"
-        f"--- CONTEXTO DE ANÁLISIS DE DATOS (CUANTITATIVO) ---\n"
-        f"```\n{survey_context}\n```\n\n"
-        f"--- HISTORIAL DEL CHAT (RECIENTE) ---\n"
-        f"{conversation_history}\n\n"
-        f"--- INFORMACIÓN DOCUMENTADA (CUALITATIVO / REPOSITORIO) ---\n"
-        f"```\n{repository_context}\n```\n\n"
-        f"**Instrucciones de Articulación:**\n"
-        f"- Responde al usuario conectando los datos de la encuesta (ej. 'El 70% prefiere X...') con los hallazgos del repositorio (ej. '...esto se alinea con el estudio Y que dice que X se percibe como... [1]').\n"
-        f"- Si la pregunta solo se puede responder con una fuente, usa esa, pero prioriza la articulación.\n"
-        f"- Cita tus fuentes del repositorio cualitativo como siempre.\n\n"
-        f"{INSTRUCCIONES_DE_CITAS}\n\n"
-        f"**Respuesta Articulada:**"
+        f"**Rol:** Investigador de Mercados (Cuanti/Cuali).\n"
+        f"**Tarea:** Responde articulando datos duros (Excel) con hallazgos previos (Repositorio).\n\n"
+        f"**Excel (El QUÉ):**\n{survey_context}\n\n"
+        f"**Repositorio (El PORQUÉ):**\n{repository_context}\n\n"
+        f"**Historial:**\n{conversation_history}\n\n"
+        f"**Instrucción:** Conecta el dato numérico con la explicación cualitativa. Cita el repositorio [x].\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
     )
 
-# --- Prompts para "Generador de One-Pager PPT" (modes/onepager_mode.py) ---
+# --- Prompts para "Generador de One-Pager PPT" ---
+# OPTIMIZACIÓN JSON: Se eliminó el formato Markdown (```json) para evitar errores de parseo.
+# Se pide JSON puro.
 
-# (Estos prompts generan JSON, no Markdown para el usuario, por lo que no deben tener citas)
-
-# 1. El diccionario de plantillas
 PROMPTS_ONEPAGER = {
     "Definición de Oportunidades": """
-        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
+        Genera SOLO un JSON crudo (sin markdown) con esta estructura:
         {{
           "template_type": "oportunidades",
-          "titulo_diapositiva": "Un título principal corto y potente (máx. 6 palabras) sobre '{tema_central}'",
-          "insight_clave": "El insight o 'verdad oculta' más importante que encontraste (1 frase concisa).",
-          "hallazgos_principales": ["... (3 puntos) ..."],
-          "oportunidades": ["... (3 puntos) ..."],
-          "recomendacion_estrategica": "Una recomendación final clara y accionable (máx. 2 líneas)."
+          "titulo_diapositiva": "Título corto sobre {tema_central}",
+          "insight_clave": "Frase potente de verdad oculta.",
+          "hallazgos_principales": ["Hallazgo 1", "Hallazgo 2", "Hallazgo 3"],
+          "oportunidades": ["Oportunidad 1", "Oportunidad 2", "Oportunidad 3"],
+          "recomendacion_estrategica": "Acción final."
         }}
         """,
     "Análisis DOFA (SWOT)": """
-        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
+        Genera SOLO un JSON crudo (sin markdown) con esta estructura:
         {{
           "template_type": "dofa",
-          "titulo_diapositiva": "Análisis DOFA: {tema_central}",
-          "fortalezas": ["... (2-3 puntos) ..."],
-          "oportunidades": ["... (2-3 puntos) ..."],
-          "debilidades": ["... (2-3 puntos) ..."],
-          "amenazas": ["... (2-3 puntos) ..."]
+          "titulo_diapositiva": "DOFA: {tema_central}",
+          "fortalezas": ["F1", "F2", "F3"],
+          "oportunidades": ["O1", "O2", "O3"],
+          "debilidades": ["D1", "D2", "D3"],
+          "amenazas": ["A1", "A2", "A3"]
         }}
         """,
+    # ... (Aplicar la misma lógica de "SOLO JSON crudo" a los demás templates para ahorrar espacio y errores)
+    # Aquí simplifico el ejemplo para no repetir todo el bloque largo, pero la lógica aplica a todos.
     "Mapa de Empatía": """
-        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
+        Genera SOLO un JSON crudo (sin markdown):
         {{
           "template_type": "empatia",
-          "titulo_diapositapositiva": "Mapa de Empatía: {tema_central}",
-          "piensa_siente": ["... (2-3 puntos) ..."],
-          "ve": ["... (2-3 puntos) ..."],
-          "dice_hace": ["... (2-3 puntos) ..."],
-          "oye": ["... (2-3 puntos) ..."],
-          "esfuerzos": ["... (2 puntos) ..."],
-          "resultados": ["... (2 puntos) ..."]
+          "titulo_diapositiva": "Empatía: {tema_central}",
+          "piensa_siente": ["..."], "ve": ["..."], "dice_hace": ["..."], 
+          "oye": ["..."], "esfuerzos": ["..."], "resultados": ["..."]
         }}
         """,
     "Propuesta de Valor (Value Proposition)": """
-        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
+         Genera SOLO un JSON crudo (sin markdown):
         {{
           "template_type": "propuesta_valor",
-          "titulo_diapositiva": "Propuesta de Valor: {tema_central}",
-          "producto_servicio": "Descripción breve del producto/servicio central.",
-          "creadores_alegria": ["... (2-3 puntos) ..."],
-          "aliviadores_frustracion": ["... (2-3 puntos) ..."],
-          "trabajos_cliente": ["... (2-3 puntos) ..."],
-          "alegrias": ["... (2-3 puntos) ..."],
-          "frustraciones": ["... (2-3 puntos) ..."]
+          "titulo_diapositiva": "Propuesta: {tema_central}",
+          "producto_servicio": "Descripción.",
+          "creadores_alegria": ["..."], "aliviadores_frustracion": ["..."],
+          "trabajos_cliente": ["..."], "alegrias": ["..."], "frustraciones": ["..."]
         }}
         """,
     "Mapa del Viaje (Journey Map)": """
-        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
+        Genera SOLO un JSON crudo (sin markdown):
         {{
           "template_type": "journey_map",
-          "titulo_diapositiva": "Customer Journey Map: {tema_central}",
-          "etapa_1": {{"nombre_etapa": "Ej: Descubrimiento", "acciones": ["..."], "emociones": ["..."], "puntos_dolor": ["..."], "oportunidades": ["..."]}},
-          "etapa_2": {{"nombre_etapa": "Ej: Consideración", "acciones": ["..."], "emociones": ["..."], "puntos_dolor": ["..."], "oportunidades": ["..."]}},
-          "etapa_3": {{"nombre_etapa": "Ej: Compra/Uso", "acciones": ["..."], "emociones": ["..."], "puntos_dolor": ["..."], "oportunidades": ["..."]}},
-          "etapa_4": {{"nombre_etapa": "Ej: Post-Uso", "acciones": ["..."], "emociones": ["..."], "puntos_dolor": ["..."], "oportunidades": ["..."]}}
+          "titulo_diapositiva": "Journey: {tema_central}",
+          "etapa_1": {{"nombre_etapa": "Nombre", "acciones": ["..."], "emociones": ["..."], "puntos_dolor": ["..."], "oportunidades": ["..."]}},
+          "etapa_2": {{"nombre_etapa": "Nombre", "acciones": ["..."], "emociones": ["..."], "puntos_dolor": ["..."], "oportunidades": ["..."]}},
+          "etapa_3": {{"nombre_etapa": "Nombre", "acciones": ["..."], "emociones": ["..."], "puntos_dolor": ["..."], "oportunidades": ["..."]}}
         }}
         """,
     "Matriz de Posicionamiento (2x2)": """
-        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
+        Genera SOLO un JSON crudo (sin markdown):
         {{
           "template_type": "matriz_2x2",
-          "titulo_diapositiva": "Matriz de Posicionamiento: {tema_central}",
-          "eje_x_positivo": "Ej: Moderno",
-          "eje_x_negativo": "Ej: Tradicional",
-          "eje_y_positivo": "Ej: Calidad Percibida Alta",
-          "eje_y_negativo": "Ej: Calidad Percibida Baja",
-          "items_cuadrante_sup_izq": ["..."],
-          "items_cuadrante_sup_der": ["..."],
-          "items_cuadrante_inf_izq": ["..."],
-          "items_cuadrante_inf_der": ["..."],
-          "conclusion_clave": "El principal insight visual de la matriz."
+          "titulo_diapositiva": "Matriz: {tema_central}",
+          "eje_x_positivo": "Label X+", "eje_x_negativo": "Label X-",
+          "eje_y_positivo": "Label Y+", "eje_y_negativo": "Label Y-",
+          "items_cuadrante_sup_izq": ["..."], "items_cuadrante_sup_der": ["..."],
+          "items_cuadrante_inf_izq": ["..."], "items_cuadrante_inf_der": ["..."],
+          "conclusion_clave": "Insight visual."
         }}
         """,
     "Perfil de Buyer Persona": """
-        Genera ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
+        Genera SOLO un JSON crudo (sin markdown):
         {{
           "template_type": "buyer_persona",
-          "titulo_diapositiva": "Perfil de Buyer Persona: {tema_central}",
-          "perfil_nombre": "Un nombre ficticio y arquetipo (ej. 'Ana, la Profesional Ocupada')",
-          "perfil_demografia": "Un breve resumen demográfico/psicográfico (ej. 'Mujer, 30-40, urbana, valora la conveniencia...')",
-          "necesidades_jtbd": ["... (2-3 'Jobs to be Done' o necesidades clave del contexto) ..."],
-          "puntos_dolor_frustraciones": ["... (2-3 frustraciones o 'pain points' principales del contexto) ..."],
-          "deseos_motivaciones": ["... (2-3 deseos, ganancias o 'drivers' de decisión del contexto) ..."],
-          "citas_clave": ["... (1-2 citas literales IMPACTANTES del contexto que resumen su sentir) ..."]
+          "titulo_diapositiva": "Persona: {tema_central}",
+          "perfil_nombre": "Nombre/Arquetipo", "perfil_demografia": "Resumen demo",
+          "necesidades_jtbd": ["..."], "puntos_dolor_frustraciones": ["..."],
+          "deseos_motivaciones": ["..."], "citas_clave": ["..."]
         }}
-        """,
+        """
 }
 
-# 2. El formateador del prompt final
 def get_onepager_final_prompt(relevant_info, selected_template_name, tema_central):
-    """Devuelve el prompt final formateado para el modo One-Pager."""
-    
-    prompt_template = PROMPTS_ONEPAGER.get(selected_template_name, "{}") 
-    
+    prompt_template = PROMPTS_ONEPAGER.get(selected_template_name, "{}")
     return f"""
-    Actúa como un Analista Estratégico experto. Has analizado los siguientes hallazgos de investigación sobre '{tema_central}':
-
-    --- CONTEXTO ---
-    {relevant_info}
-    --- FIN CONTEXTO ---
-
-    Tu tarea es sintetizar esta información para completar la plantilla '{selected_template_name}'.
+    **Rol:** Analista Estratégico.
+    **Info:** {relevant_info}
+    **Tarea:** Completa el template JSON '{selected_template_name}' sobre '{tema_central}'.
+    **Salida:** Solo el JSON válido, sin bloques de código markdown.
     {prompt_template.format(tema_central=tema_central)}
     """
 
 def get_excel_autocode_prompt(main_topic, responses_sample):
-    """
-    Crea un prompt para que la IA lea una MUESTRA de respuestas de una
-    pregunta abierta de Excel y genere categorías (nodos) con 
-    palabras clave de búsqueda.
-    """
-    
-    # Convertimos la lista de respuestas de Python a un string formateado
-    sample_text = "\n".join([f"- {r}" for r in responses_sample])
+    # Optimizamos la lista para que ocupe menos tokens visualmente
+    sample_text = str(responses_sample) # Usar representación de lista raw ahorra tokens vs saltos de línea
     
     return f"""
-**Tarea:** Eres un investigador cualitativo experto en codificación. Tu trabajo es analizar la siguiente MUESTRA de respuestas de una encuesta sobre el tema '{main_topic}'.
+**Rol:** Codificador de Encuestas.
+**Tarea:** Define categorías (nodos) para analizar respuestas sobre '{main_topic}'.
 
-Tu objetivo es definir un **esquema de codificación (nodos)** para categorizar estas respuestas.
+**Muestra:**
+{sample_text}
 
---- MUESTRA DE RESPUESTAS ---
-```{sample_text}```
-
-**Instrucciones de Salida (JSON OBLIGATORIO):**
-Analiza la muestra y genera ÚNICAMENTE un objeto JSON válido.
-El JSON debe ser una lista de objetos, donde cada objeto representa una categoría (nodo) que encuentres.
-
-**Formato JSON Exacto:**
-`[
-  {{
-    "categoria": "Nombre de la Categoría 1",
-    "keywords": ["palabra clave 1", "frase clave 1", "sinónimo 1"]
-  }},
-  {{
-    "categoria": "Nombre de la Categoría 2",
-    "keywords": ["palabra 2", "frase 2"]
-  }},
-  {{
-    "categoria": "Otro Tema Emergente",
-    "keywords": ["palabra 3", "palabra 4", "frase clave 3"]
-  }}
-]`
-
-**Reglas Importantes:**
-1.  **Categorías Claras:** Las "categorias" deben ser nombres cortos y descriptivos (ej. "Precio Alto", "Sabor Agradable", "Problemas con Empaque").
-2.  **Keywords de Búsqueda:** Los "keywords" deben ser las palabras o frases literales que la gente usa en la muestra y que definen esa categoría. Incluye variaciones (ej. "caro", "costoso", "precio alto").
-3.  **No Inventes:** Basa tus categorías y keywords *estrictamente* en la muestra de respuestas.
-4.  **JSON Válido:** Tu salida debe ser *solamente* el JSON, sin texto introductorio.
+**Salida:** SOLO un JSON válido (Array de objetos). Sin Markdown.
+Estructura:
+[
+  {{ "categoria": "Nombre corto", "keywords": ["k1", "k2"] }},
+  ...
+]
+**Reglas:**
+1. Categorías descriptivas breves.
+2. Keywords literales encontradas en la muestra.
 """
 
-# --- Prompts de Análisis de Datos ---
+# --- Prompts Análisis de Datos ---
 
 def get_data_summary_prompt(data_snapshot_str):
-    """
-    Crea un prompt para que la IA genere un resumen ejecutivo de un DataFrame.
-    """
     return f"""
-**Tarea:** Eres un analista de investigación de mercados senior. Tu trabajo es analizar un resumen estructural de un archivo de datos (encuesta) y generar un resumen ejecutivo para tu cliente.
+**Rol:** Analista de Datos.
+**Tarea:** Resumen ejecutivo basado en la estructura del dataset.
 
---- RESUMEN ESTRUCTURAL DE DATOS ---
-```{data_snapshot_str}```
+**Datos:**
+{data_snapshot_str}
 
-**Formato de Salida OBLIGATORIO (Markdown):**
-Basándote *únicamente* en el resumen estructural, identifica los 3-5 hallazgos más evidentes o las hipótesis más interesantes que valdría la pena explorar.
+**Salida (Markdown):**
+## Resumen Datos
+(Breve descripción)
 
-## Resumen Ejecutivo de Datos
-Un párrafo corto (2-3 frases) que describa la naturaleza de los datos.
-
-## Hallazgos Clave e Hipótesis
-* **[Hallazgo 1]:** [Explica el hallazgo o la hipótesis. Por ejemplo: "La 'Satisfacción' (media: 4.2) parece alta, pero la 'Intención de Recompra' (media: 3.1) es baja. Esto sugiere un problema de lealtad..."]
-* **[Hallazgo 2]:** [Explica el hallazgo o la hipótesis. Por ejemplo: "La mayoría de los encuestados son del 'Segmento A' (60%). Sería crucial cruzar todas las métricas clave contra el 'Segmento' para ver si el 'Segmento B' opina diferente..."]
-* **[Hallazgo 3]:** [...]
-* **[Hallazgo 4]:** [...]
+## Hallazgos Clave (3-5)
+* **[Hallazgo]:** Interpretación de medias, frecuencias o faltantes notables.
 """
 
 def get_correlation_prompt(correlation_matrix_str):
-    """
-    Crea un prompt para que la IA interprete una matriz de correlación.
-    """
     return f"""
-**Tarea:** Eres un analista de datos experto. Interpreta la siguiente matriz de correlación en lenguaje sencillo.
+**Rol:** Analista de Datos.
+**Tarea:** Interpreta esta matriz de correlación. Destaca las 3 relaciones más fuertes (pos/neg).
 
---- MATRIZ DE CORRELACIÓN ---
-```{correlation_matrix_str}```
+**Matriz:**
+{correlation_matrix_str}
 
-**Instrucciones:**
-1.  Define brevemente qué es una correlación (positiva vs. negativa).
-2.  Identifica las 2 o 3 relaciones **más fuertes** (positivas o negativas) de la matriz (ignora las correlaciones de 1.00 de una variable consigo misma).
-3.  Explica qué significa cada una de esas relaciones en la práctica.
-4.  Si no hay correlaciones fuertes (todas < 0.3 y > -0.3), indícalo.
-
-**Respuesta (en Markdown):**
-## Interpretación de Correlaciones
-...
+**Salida (Markdown):**
+## Interpretación
+1. Explicación breve de correlaciones fuertes encontradas y su sentido práctico.
 """
 
 def get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups):
-    """
-    Crea un prompt para que la IA interprete un resultado de T-Test o ANOVA.
-    """
-    
-    prompt = f"""
-**Tarea:** Eres un estadístico experto. Interpreta el siguiente resultado de una prueba estadística para un cliente, en lenguaje muy sencillo.
-
-**Contexto de la Prueba:**
-* **Prueba Realizada:** {test_type}
-* **Objetivo:** Comparar la media de la métrica '{num_col}' entre los {num_groups} grupos de la variable '{cat_col}'.
-* **Resultado (P-Value):** {p_value}
-
-**Instrucciones:**
-1.  Define el "P-Value" de forma simple (umbral 0.05).
-2.  Indica si el resultado es "Estadísticamente Significativo" (p < 0.05) o "No Significativo" (p >= 0.05).
-3.  Explica qué significa ese resultado en la práctica para '{num_col}' y '{cat_col}'.
-
-**Respuesta (en Markdown):**
+    base = f"""
+**Rol:** Estadístico.
+**Tarea:** Interpretar prueba {test_type} para '{num_col}' por grupos de '{cat_col}'.
+**P-Value:** {p_value} (Umbral 0.05)
 """
-    
     if p_value < 0.05:
-        prompt += f"""
-## ✅ Resultado Significativo
-* **Explicación:** El P-Value de {p_value:.4f} es *menor* que 0.05.
-* **Conclusión:** Esto significa que las diferencias observadas en la media de '{num_col}' entre los diferentes grupos de '{cat_col}' son **reales y estadísticamente significativas**. No se deben al azar.
-* **Acción Recomendada:** [Indica una acción, ej: "Vale la pena analizar qué grupo tuvo la media más alta o más baja."]
-"""
+        base += "\n**Conclusión:** ✅ Significativo. Hay diferencias reales entre grupos. Analizar medias."
     else:
-        prompt += f"""
-## ℹ️ Resultado No Significativo
-* **Explicación:** El P-Value de {p_value:.4f} es *mayor* que 0.05.
-* **Conclusión:** Esto significa que cualquier diferencia que se observe en la media de '{num_col}' entre los grupos de '{cat_col}' es **probablemente producto del azar**.
-* **Acción Recomendada:** [Indica una acción, ej: "No se puede concluir que haya una diferencia real entre los grupos para esta métrica."]
-"""
-    return prompt
+        base += "\n**Conclusión:** ℹ️ No significativo. Las diferencias son azar."
+    
+    return base
