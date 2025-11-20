@@ -28,6 +28,9 @@ from modes.text_analysis_mode import text_analysis_mode
 from modes.onepager_mode import one_pager_ppt_mode
 from modes.data_analysis_mode import data_analysis_mode
 from modes.etnochat_mode import etnochat_mode
+# --- (A) NUEVA IMPORTACIÓN ---
+from modes.trend_analysis_mode import trend_analysis_mode 
+
 from utils import (
     extract_brand,
     validate_session_integrity # Importamos la validación
@@ -53,12 +56,15 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.divider()
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.session_state.current_mode
+    
+    # --- (B) CONFIGURACIÓN DE CATEGORÍAS ---
     all_categories = {
         "Análisis": {
             c.MODE_CHAT: True,
             c.MODE_TEXT_ANALYSIS: user_features.get("transcript_file_limit", 0) > 0,
             c.MODE_DATA_ANALYSIS: True,
-            c.MODE_ETNOCHAT: user_features.get("has_etnochat_analysis"), 
+            c.MODE_ETNOCHAT: user_features.get("has_etnochat_analysis"),
+            c.MODE_TREND_ANALYSIS: True, # Nuevo Modo Habilitado
         },
         "Evaluación": {
             c.MODE_IDEA_EVAL: user_features.get("has_idea_evaluation"),
@@ -74,11 +80,13 @@ def run_user_mode(db_full, user_features, footer_html):
             c.MODE_CONCEPT: user_features.get("has_concept_generation")
         }
     }
+    
     default_expanded = ""
     for category, modes in all_categories.items():
         if modo in modes:
             default_expanded = category
             break
+            
     if any(all_categories["Análisis"].values()):
         with st.sidebar.expander("Análisis", expanded=(default_expanded == "Análisis")):
             if all_categories["Análisis"][c.MODE_CHAT]:
@@ -89,6 +97,11 @@ def run_user_mode(db_full, user_features, footer_html):
                 st.button(c.MODE_DATA_ANALYSIS, on_click=set_mode_and_reset, args=(c.MODE_DATA_ANALYSIS,), use_container_width=True, type="primary" if modo == c.MODE_DATA_ANALYSIS else "secondary")
             if all_categories["Análisis"][c.MODE_ETNOCHAT]:
                 st.button(c.MODE_ETNOCHAT, on_click=set_mode_and_reset, args=(c.MODE_ETNOCHAT,), use_container_width=True, type="primary" if modo == c.MODE_ETNOCHAT else "secondary")
+            
+            # --- (C) BOTÓN EN SIDEBAR ---
+            if all_categories["Análisis"][c.MODE_TREND_ANALYSIS]:
+                st.button(c.MODE_TREND_ANALYSIS, on_click=set_mode_and_reset, args=(c.MODE_TREND_ANALYSIS,), use_container_width=True, type="primary" if modo == c.MODE_TREND_ANALYSIS else "secondary")
+
     if any(all_categories["Evaluación"].values()):
         with st.sidebar.expander("Evaluación", expanded=(default_expanded == "Evaluación")):
             if all_categories["Evaluación"][c.MODE_IDEA_EVAL]:
@@ -111,7 +124,10 @@ def run_user_mode(db_full, user_features, footer_html):
                 st.button(c.MODE_CONCEPT, on_click=set_mode_and_reset, args=(c.MODE_CONCEPT,), use_container_width=True, type="primary" if modo == c.MODE_CONCEPT else "secondary")
 
     st.sidebar.header("Filtros de Búsqueda")
+    # Agregamos TREND_ANALYSIS a los modos que NO usan los filtros estándar si fuera necesario,
+    # pero en este caso SÍ los usa, así que lo dejamos fuera de la lista de exclusión.
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT] 
+    
     db_filtered = db_full[:]
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
     selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas", disabled=not run_filters)
@@ -147,9 +163,14 @@ def run_user_mode(db_full, user_features, footer_html):
 
     st.sidebar.divider()
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
+    
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
-    if run_filters and not selected_files and modo not in [c.MODE_REPORT, c.MODE_IMAGE_EVAL, c.MODE_VIDEO_EVAL, c.MODE_ONEPAGER]:
+    
+    # Ajustar advertencia de filtros vacíos para incluir el nuevo modo
+    if run_filters and not selected_files and modo not in [c.MODE_REPORT, c.MODE_IMAGE_EVAL, c.MODE_VIDEO_EVAL, c.MODE_ONEPAGER, c.MODE_TREND_ANALYSIS]:
          st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
+         
+    # --- ENRUTAMIENTO DE MODOS ---
     if modo == c.MODE_REPORT: report_mode(db_filtered, selected_files)
     elif modo == c.MODE_IDEATION: ideacion_mode(db_filtered, selected_files)
     elif modo == c.MODE_CONCEPT: concept_generation_mode(db_filtered, selected_files)
@@ -161,6 +182,8 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == c.MODE_ONEPAGER: one_pager_ppt_mode(db_filtered, selected_files)
     elif modo == c.MODE_DATA_ANALYSIS: data_analysis_mode(db_filtered, selected_files)
     elif modo == c.MODE_ETNOCHAT: etnochat_mode()
+    # --- (D) NUEVA RUTA ---
+    elif modo == c.MODE_TREND_ANALYSIS: trend_analysis_mode(db_filtered, selected_files)
     
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
@@ -197,7 +220,6 @@ def main():
 
     # RUTA 1: RECUPERACIÓN DE CONTRASEÑA
     if params.get("type") == "recovery":
-        # ... (Lógica de recuperación se mantiene igual) ...
         access_token = params.get("access_token")
         refresh_token = params.get("refresh_token") 
 
@@ -250,7 +272,6 @@ def main():
         
         # --- ¡CAMBIO CLAVE AQUÍ! ---
         # Validar la integridad de la sesión ANTES de cargar cualquier cosa.
-        # Esto cubre Modo Usuario, Modo Admin y cualquier estado intermedio.
         validate_session_integrity()
         # ---------------------------
 
