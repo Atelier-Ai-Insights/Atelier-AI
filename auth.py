@@ -156,32 +156,61 @@ def show_reset_password_page():
          st.session_state.page = "login"
          st.rerun()
 
-
-# --- ¡INICIO DE LA FUNCIÓN CORREGIDA (V6 - SINTAXIS v1)! ---
-def show_set_new_password_page(access_token):
+# --- NUEVA FUNCIÓN PARA VALIDAR EL CÓDIGO OTP ---
+def show_otp_verification_page(otp_code):
     """
-    Muestra el formulario para que el usuario (autenticado por token)
-    establezca su nueva contraseña.
+    Muestra una pantalla para confirmar el correo cuando el enlace solo tiene un código.
+    """
+    st.header("Verificación de Seguridad")
+    st.write("Hemos detectado un código de recuperación. Para continuar, confirma tu correo electrónico.")
+    
+    # Campo para que el usuario confirme su email
+    email_verify = st.text_input("Confirma tu Correo Electrónico")
+    
+    if st.button("Verificar y Continuar", width='stretch', type="primary"):
+        if not email_verify:
+            st.warning("Debes ingresar tu correo.")
+            return
+            
+        try:
+            # Usamos verify_otp para canjear el código por una sesión
+            res = supabase.auth.verify_otp({
+                "email": email_verify,
+                "token": otp_code,
+                "type": "recovery"
+            })
+            
+            if res.session:
+                # Guardamos la sesión para que app.py sepa que estamos logueados
+                st.session_state.access_token = res.session.access_token
+                st.session_state.refresh_token = res.session.refresh_token
+                st.session_state.logged_in = True # Importante para saltar al form de password
+                
+                st.success("Identidad verificada. Redirigiendo...")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.error("El código es válido pero no se pudo iniciar la sesión.")
+        except Exception as e:
+            st.error(f"Error de verificación: {e}")
+            log_error("Fallo verificación OTP recuperación", module="Auth", error=e)
+
+
+# --- FUNCIÓN CORREGIDA PARA ACTUALIZAR PASSWORD ---
+def show_set_new_password_page(access_token=None):
+    """
+    Muestra el formulario para cambiar la contraseña.
+    Ahora acepta access_token opcional, porque si venimos del OTP, ya tenemos sesión.
     """
     st.header("Establecer Nueva Contraseña")
-    st.write("Has verificado tu identidad. Por favor, crea una nueva contraseña.")
+    st.write("Por favor, crea una nueva contraseña.")
 
-    # 1. Validar que el token exista
-    if not access_token:
-        st.error(f"Error al validar el token: El enlace es inválido o ha expirado.")
-        log_error(f"Token de recuperación vacío o nulo (tipo: {type(access_token)})", module="Auth", level="ERROR")
-        if st.button("Volver a Iniciar Sesión", width='stretch'):
-            st.session_state.page = "login"
-            st.rerun()
-        return
-
-    # 2. Mostrar el formulario
     new_password = st.text_input("Nueva Contraseña", type="password")
     confirm_password = st.text_input("Confirmar Nueva Contraseña", type="password")
 
     if st.button("Actualizar Contraseña", width='stretch'):
         if not new_password or not confirm_password:
-            st.error("Por favor, completa ambos campos.")
+            st.error("Completa ambos campos.")
             return
         
         if new_password != confirm_password:
@@ -193,29 +222,24 @@ def show_set_new_password_page(access_token):
             return
 
         try:
-            # --- ¡LA LÓGICA CORRECTA (para v1.x)! ---
-            #
-            # 1. Ya existe una sesión activa (establecida en app.py con set_session)
-            #    Por lo tanto, el usuario está "logueado" temporalmente.
-            
-            # 2. Actualizamos el usuario directamente.
-            #    No es necesario intercambiar el código de nuevo si ya se hizo en app.py
-            #    o si el token de acceso ya es válido para la sesión.
-            
+            # Al usar update_user, Supabase usa la sesión activa.
+            # No necesitamos pasar el token manualmente si ya hicimos set_session o verify_otp.
             user_response = supabase.auth.update_user(
                 attributes={"password": new_password}
             )
             
             log_action(f"Contraseña actualizada exitosamente para: {user_response.user.email}", module="Auth")
             
-            # 3. Limpiar todo
+            # Cerrar sesión para obligar al usuario a entrar con la nueva clave
             supabase.auth.sign_out() 
+            st.session_state.logged_in = False
+            st.session_state.clear()
             
             st.success("¡Contraseña actualizada con éxito!")
             st.info("Ahora puedes iniciar sesión con tu nueva contraseña.")
-            time.sleep(2)
+            time.sleep(3)
             
-            # Limpiar la URL
+            # Limpiar URL y redirigir
             if hasattr(st, "query_params"):
                  st.query_params.clear() 
             else:
@@ -225,9 +249,8 @@ def show_set_new_password_page(access_token):
             st.rerun()
 
         except Exception as e:
-            # Esto capturará errores de "Token expirado" o "Código inválido"
             st.error(f"Error al actualizar la contraseña: {e}")
-            log_error("Error crítico al actualizar contraseña post-reseteo", module="Auth", error=e)
+            log_error("Error crítico al actualizar contraseña", module="Auth", error=e)
 
     if st.button("Cancelar", type="secondary", width='stretch'):
         supabase.auth.sign_out()
@@ -237,4 +260,3 @@ def show_set_new_password_page(access_token):
              st.experimental_set_query_params()
         st.session_state.page = "login"
         st.rerun()
-# --- ¡FIN DE LA FUNCIÓN CORREGIDA! ---
