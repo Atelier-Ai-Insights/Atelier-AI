@@ -9,7 +9,13 @@ from styles import apply_styles
 from config import PLAN_FEATURES, banner_file
 from services.storage import load_database 
 from services.supabase_db import supabase
-from auth import show_login_page, show_signup_page, show_reset_password_page, show_set_new_password_page
+from auth import (
+    show_login_page, 
+    show_signup_page, 
+    show_reset_password_page, 
+    show_set_new_password_page,
+    show_otp_verification_page # <--- Nueva importación
+)
 from admin.dashboard import show_admin_dashboard
 from modes.report_mode import report_mode
 from modes.chat_mode import grounded_chat_mode
@@ -237,6 +243,7 @@ def main():
         if isinstance(access_token, list): access_token = access_token[0]
         if isinstance(refresh_token, list): refresh_token = refresh_token[0]
 
+        # --- CASO A: Tenemos sesión completa (Magic Link) ---
         if access_token and refresh_token:
             try:
                 # --- PASO CRÍTICO: Autenticar al usuario temporalmente ---
@@ -248,8 +255,6 @@ def main():
                 with col2:
                     st.image("LogoDataStudio.png")
                     # Mostramos el formulario de cambio de contraseña
-                    # Nota: Ya estamos "logueados", así que show_set_new_password_page 
-                    # puede usar supabase.auth.update_user() directamente.
                     show_set_new_password_page(access_token) 
                 
                 st.divider()
@@ -263,6 +268,30 @@ def main():
                 st.query_params.clear()
                 st.session_state.page = "login"
                 st.rerun()
+        
+        # --- CASO B: Tenemos solo Código OTP (El caso de tu error) ---
+        elif access_token and not refresh_token:
+            
+            # Verificar si YA estamos logueados (puede pasar si el usuario recarga)
+            if st.session_state.get("logged_in"):
+                 st.markdown(login_page_style, unsafe_allow_html=True)
+                 col1, col2, col3 = st.columns([1,2,1])
+                 with col2:
+                     st.image("LogoDataStudio.png")
+                     show_set_new_password_page(None) # Ya estamos logueados, no necesitamos token
+                 st.stop()
+            
+            # Si NO estamos logueados, pedimos email para verificar el código
+            st.markdown(login_page_style, unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([1,2,1])
+            with col2:
+                st.image("LogoDataStudio.png")
+                show_otp_verification_page(access_token) # Usamos la nueva función de auth.py
+            
+            st.divider()
+            st.markdown(footer_html, unsafe_allow_html=True)
+            st.stop()
+
         else:
              st.warning("Enlace de recuperación incompleto. Intenta solicitar uno nuevo.")
              st.stop()
