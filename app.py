@@ -28,10 +28,9 @@ from modes.text_analysis_mode import text_analysis_mode
 from modes.onepager_mode import one_pager_ppt_mode
 from modes.data_analysis_mode import data_analysis_mode
 from modes.etnochat_mode import etnochat_mode
-# --- CAMBIO AQUÍ: Importamos la nueva función de validación ---
 from utils import (
     extract_brand,
-    validate_session_integrity
+    validate_session_integrity # Importamos la validación
 )
 import constants as c
 
@@ -45,11 +44,9 @@ def set_mode_and_reset(new_mode):
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
     
-    # --- CAMBIO AQUÍ: Validación centralizada y limpia ---
-    # Esto reemplaza todo el bloque antiguo de "Heartbeat" con tiempos.
-    validate_session_integrity()
-    # ---------------------------------------------------
-
+    # NOTA: Ya no necesitamos llamar validate_session_integrity() aquí
+    # porque la llamaremos globalmente más abajo.
+    
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
@@ -200,7 +197,7 @@ def main():
 
     # RUTA 1: RECUPERACIÓN DE CONTRASEÑA
     if params.get("type") == "recovery":
-        
+        # ... (Lógica de recuperación se mantiene igual) ...
         access_token = params.get("access_token")
         refresh_token = params.get("refresh_token") 
 
@@ -210,13 +207,11 @@ def main():
         if access_token and refresh_token:
             try:
                 supabase.auth.set_session(access_token, refresh_token)
-                
                 st.markdown(login_page_style, unsafe_allow_html=True)
                 col1, col2, col3 = st.columns([1,2,1])
                 with col2:
                     st.image("LogoDataStudio.png")
                     show_set_new_password_page(access_token) 
-                
                 st.divider()
                 st.markdown(footer_html, unsafe_allow_html=True)
                 st.stop()
@@ -229,7 +224,6 @@ def main():
                 st.rerun()
         
         elif access_token and not refresh_token:
-            
             if st.session_state.get("logged_in"):
                  st.markdown(login_page_style, unsafe_allow_html=True)
                  col1, col2, col3 = st.columns([1,2,1])
@@ -243,7 +237,6 @@ def main():
             with col2:
                 st.image("LogoDataStudio.png")
                 show_otp_verification_page(access_token) 
-            
             st.divider()
             st.markdown(footer_html, unsafe_allow_html=True)
             st.stop()
@@ -254,6 +247,13 @@ def main():
 
     # RUTA 2: El usuario ya está logueado (sesión normal)
     if st.session_state.get("logged_in"):
+        
+        # --- ¡CAMBIO CLAVE AQUÍ! ---
+        # Validar la integridad de la sesión ANTES de cargar cualquier cosa.
+        # Esto cubre Modo Usuario, Modo Admin y cualquier estado intermedio.
+        validate_session_integrity()
+        # ---------------------------
+
         if st.session_state.get("access_token"):
             try:
                 supabase.auth.set_session(
