@@ -66,6 +66,6 @@ def ideacion_mode(db, selected_files):
             pdf_bytes = generate_pdf_html(chat_content_for_pdf, title="Historial Creativo", banner_path=banner_file)
             
             if pdf_bytes: 
-                st.download_button("Descargar Chat PDF", data=pdf_bytes, file_name="chat_creativo.pdf", mime="application/pdf", use_container_width=True)
+                st.download_button("Descargar Chat PDF", data=pdf_bytes, file_name="chat_creativo.pdf", mime="application/pdf", width='stretch')
         with col2: 
-            st.button("Nueva conversación", on_click=reset_chat_workflow, key="new_chat_btn", use_container_width=True)
+            st.button("Nueva conversación", on_click=reset_chat_workflow, key="new_chat_btn", width='stretch')
