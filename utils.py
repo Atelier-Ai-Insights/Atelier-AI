@@ -195,3 +195,88 @@ def validate_session_integrity():
         # Si falla la conexión (ej. internet intermitente), no expulsamos inmediatamente al usuario
         # pero registramos el error en consola.
         print(f"Error validando sesión (Heartbeat): {e}")
+
+# ==============================
+# RAG LIGERO (Búsqueda Inteligente de Texto)
+# ==============================
+
+def build_rag_context(query, documents, max_chars=100000):
+    """
+    Filtra y construye un contexto relevante basado en la pregunta del usuario.
+    
+    Args:
+        query (str): La pregunta del usuario.
+        documents (list): Lista de dicts {'source': nombre, 'content': texto}.
+        max_chars (int): Límite aproximado de caracteres para enviar a la IA.
+    
+    Returns:
+        str: Contexto formateado con solo las partes relevantes.
+    """
+    if not query or not documents:
+        return ""
+
+    # 1. Normalizar query para búsqueda (minusculas, sin tildes básicas)
+    query_terms = set(normalize_text(query).split())
+    # Eliminamos stopwords para mejorar la búsqueda
+    stopwords = get_stopwords()
+    keywords = [w for w in query_terms if w not in stopwords and len(w) > 3]
+    
+    if not keywords: # Si la query es muy corta o genérica, devolvemos un contexto truncado general
+        keywords = query_terms 
+
+    scored_chunks = []
+
+    # 2. Fragmentar y Puntuar (Chunking & Scoring)
+    for doc in documents:
+        source = doc.get('source', 'Desconocido')
+        content = doc.get('content', '')
+        
+        # Dividir en párrafos o bloques de ~1000 caracteres
+        # Usamos saltos de línea dobles como separador natural de párrafos
+        paragraphs = content.split('\n\n')
+        
+        for i, para in enumerate(paragraphs):
+            if len(para) < 50: continue # Ignorar párrafos muy cortos/ruido
+            
+            # Puntuar el párrafo según coincidencia de keywords
+            para_norm = normalize_text(para)
+            score = sum(1 for kw in keywords if kw in para_norm)
+            
+            # Bonus: Si es el inicio del documento, darle un poco de peso (contexto general)
+            if i == 0: score += 0.5
+            
+            if score > 0:
+                scored_chunks.append({
+                    'score': score,
+                    'source': source,
+                    'text': para
+                })
+
+    # 3. Ordenar por relevancia (Score más alto primero)
+    scored_chunks.sort(key=lambda x: x['score'], reverse=True)
+
+    # 4. Construir el contexto final hasta llenar el presupuesto (max_chars)
+    final_context = ""
+    current_chars = 0
+    
+    # Si no encontramos coincidencias (score 0), usamos el inicio de los docs como fallback
+    if not scored_chunks:
+        print("RAG: No se encontraron coincidencias exactas. Usando inicio de documentos.")
+        for doc in documents[:5]: # Tomar primeros 5 docs
+            snippet = doc['content'][:2000] # Primeros 2k caracteres de cada uno
+            final_context += f"\nDocumento: {doc['source']}\n{snippet}\n...\n"
+        return final_context
+
+    # Si hay coincidencias, armamos el puzzle
+    docs_included = set()
+    for chunk in scored_chunks:
+        if current_chars + len(chunk['text']) > max_chars:
+            break
+        
+        citation = f"\n[Fuente: {chunk['source']}]"
+        final_context += f"{citation}\n{chunk['text']}\n..."
+        current_chars += len(chunk['text'])
+        docs_included.add(chunk['source'])
+
+    print(f"RAG: Contexto construido con {current_chars} chars de {len(docs_included)} documentos.")
+    return final_context
