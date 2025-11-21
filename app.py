@@ -1,6 +1,6 @@
 import streamlit as st
 import time 
-from datetime import datetime, timezone # Importaciones para la lógica de tiempo del demo
+from datetime import datetime, timezone
 
 # ==============================
 # 1. IMPORTAR MÓDULOS
@@ -46,8 +46,6 @@ def set_mode_and_reset(new_mode):
 # FUNCIÓN PARA EL MODO USUARIO 
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
-    
-    # Validación de sesión ya se hace en main(), no es necesario repetirla aquí
     
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
@@ -121,6 +119,13 @@ def run_user_mode(db_full, user_features, footer_html):
 
     st.sidebar.header("Filtros de Búsqueda")
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT] 
+    
+    # --- LÓGICA DEMO: RESTRICCIÓN DE MARCA ---
+    # Si el cliente es "atelier demo", forzamos que la base de datos disponible
+    # contenga SOLO proyectos donde la marca sea "Atelier" (o contenga la palabra).
+    if st.session_state.get("cliente") == "atelier demo":
+        db_full = [doc for doc in db_full if doc.get("filtro") and "atelier" in str(doc.get("filtro")).lower()]
+    # -----------------------------------------
     
     db_filtered = db_full[:]
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
