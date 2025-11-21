@@ -5,7 +5,6 @@ import uuid
 import time 
 from services.storage import load_database 
 from services.logger import log_error, log_action
-# ¡ESTA IMPORTACIÓN ES NECESARIA AHORA!
 from supabase.lib.client_options import ClientOptions 
 
 
@@ -24,23 +23,35 @@ def show_signup_page():
             st.error("Por favor, completa todos los campos.")
             return
         try:
-            client_response = supabase.table("clients").select("id").eq("invite_code", invite_code).maybe_single().execute()
-            if not client_response.data:
-                st.error("El código de invitación no es válido.")
-                log_action(f"Intento de registro fallido: Código inválido '{invite_code}' para {email}", module="Auth")
+            # --- CORRECCIÓN ROBUSTA: Consulta estándar (Lista) ---
+            # 1. Limpiamos espacios en blanco del código por si acaso
+            code_limpio = invite_code.strip()
+            
+            # 2. Consultamos como lista simple (evita el error 204 de single/maybe_single)
+            client_response = supabase.table("clients").select("id").eq("invite_code", code_limpio).execute()
+            
+            # 3. Verificamos manualmente si la lista está vacía
+            if not client_response.data or len(client_response.data) == 0:
+                st.error("El código de invitación no es válido. Verifica mayúsculas y espacios.")
+                log_action(f"Registro fallido: Código '{code_limpio}' no existe.", module="Auth")
                 return
-            selected_client_id = client_response.data['id']
+            
+            # Tomamos el primer resultado (seguro porque invite_code es único)
+            selected_client_id = client_response.data[0]['id']
             
             # Registro en Supabase Auth
             auth_response = supabase.auth.sign_up({
                 "email": email, "password": password,
                 "options": { "data": { 'client_id': selected_client_id } }
             })
+            
             st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
+            st.info("Importante: No podrás iniciar sesión hasta hacer clic en el enlace que te enviamos.")
             log_action(f"Nuevo usuario registrado: {email}", module="Auth")
+            
         except Exception as e:
-            st.error(f"Error en el registro: {e}")
-            log_error(f"Error crítico en registro de usuario {email}", module="Auth", error=e)
+            st.error(f"Error técnico en el registro: {e}")
+            log_error(f"Error crítico auth.sign_up usuario {email}", module="Auth", error=e)
             
     if st.button("¿Ya tienes cuenta? Inicia Sesión", type="secondary", width='stretch'):
          st.session_state.page = "login"
@@ -67,7 +78,6 @@ def show_login_page():
                     supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
                     
                     # 2. Generar nuevo ID de sesión y ACTUALIZAR DB PRIMERO
-                    # Esto invalida inmediatamente la sesión en el otro dispositivo
                     new_session_id = str(uuid.uuid4())
                     supabase.table("users").update({"active_session_id": new_session_id}).eq("id", user_id).execute()
                     
@@ -78,7 +88,7 @@ def show_login_page():
                     st.session_state.logged_in = True
                     st.session_state.user = user_profile.data['email']
                     st.session_state.user_id = user_id
-                    st.session_state.session_id = new_session_id # IMPORTANTE: Debe coincidir con DB
+                    st.session_state.session_id = new_session_id 
                     
                     st.session_state.cliente = client_info['client_name'].lower()
                     st.session_state.plan = client_info.get('plan', 'Explorer')
@@ -114,14 +124,13 @@ def show_login_page():
                 access_token = response.session.access_token
                 refresh_token = response.session.refresh_token
                 
-                # Establecer sesión temporalmente para consultar
+                # Establecer sesión temporalmente
                 supabase.auth.set_session(access_token, refresh_token)
                 
-                # Verificar si ya hay una sesión activa
+                # Verificar sesión activa
                 user_profile_check = supabase.table("users").select("active_session_id").eq("id", user_id).single().execute()
                 
                 if user_profile_check.data and user_profile_check.data.get('active_session_id'):
-                    # Si hay sesión activa, guardamos info y recargamos para mostrar opciones de forzado
                     st.session_state.pending_login_info = {
                         'user_id': user_id,
                         'access_token': access_token,
@@ -129,14 +138,13 @@ def show_login_page():
                     }
                     st.rerun()
                 else:
-                    # Si NO hay sesión activa, creamos una nueva limpiamente
+                    # Sesión nueva
                     new_session_id = str(uuid.uuid4())
                     
                     # Cargar perfil completo
                     user_profile = supabase.table("users").select("*, rol, clients(client_name, plan)").eq("id", user_id).single().execute()
                     
                     if user_profile.data and user_profile.data.get('clients'):
-                        # Actualizar DB con la nueva sesión
                         supabase.table("users").update({"active_session_id": new_session_id}).eq("id", user_id).execute()
                         
                         st.session_state.access_token = access_token
@@ -146,7 +154,7 @@ def show_login_page():
                         st.session_state.logged_in = True
                         st.session_state.user = user_profile.data['email']
                         st.session_state.user_id = user_id
-                        st.session_state.session_id = new_session_id # IMPORTANTE
+                        st.session_state.session_id = new_session_id
                         
                         st.session_state.cliente = client_info['client_name'].lower()
                         st.session_state.plan = client_info.get('plan', 'Explorer')
@@ -161,11 +169,9 @@ def show_login_page():
                         st.rerun()
                     else:
                         st.error("Perfil de usuario no encontrado. Contacta al administrador.")
-                        log_error(f"Usuario autenticado pero sin perfil en tabla 'users': {email}", module="Auth", level="ERROR")
                         
             except Exception as e:
                 st.error(f"Credenciales incorrectas o cuenta no confirmada.")
-                log_action(f"Intento fallido de login: {email}", module="Auth")
                 
         if st.button("¿No tienes cuenta? Regístrate", type="secondary", width='stretch'):
             st.session_state.page = "signup"
@@ -185,11 +191,9 @@ def show_reset_password_page():
         try:
             supabase.auth.reset_password_for_email(email)
             st.success("¡Correo enviado! Revisa tu bandeja de entrada.")
-            st.info("Sigue las instrucciones del correo para crear una nueva contraseña. Una vez creada, podrás iniciar sesión.")
-            log_action(f"Solicitud recuperación contraseña: {email}", module="Auth")
+            log_action(f"Solicitud recuperación: {email}", module="Auth")
         except Exception as e:
             st.error(f"Error al enviar el correo: {e}")
-            log_error(f"Fallo envío correo recuperación: {email}", module="Auth", error=e)
     if st.button("Volver a Iniciar Sesión", type="secondary", width='stretch'):
          st.session_state.page = "login"
          st.rerun()
@@ -197,26 +201,22 @@ def show_reset_password_page():
 def show_otp_verification_page(otp_code):
     st.header("Verificación de Seguridad")
     st.write("Hemos detectado un código de recuperación. Para continuar, confirma tu correo electrónico.")
-    
     email_verify = st.text_input("Confirma tu Correo Electrónico")
     
     if st.button("Verificar y Continuar", width='stretch', type="primary"):
         if not email_verify:
             st.warning("Debes ingresar tu correo.")
             return
-            
         try:
             res = supabase.auth.verify_otp({
                 "email": email_verify,
                 "token": otp_code,
                 "type": "recovery"
             })
-            
             if res.session:
                 st.session_state.access_token = res.session.access_token
                 st.session_state.refresh_token = res.session.refresh_token
                 st.session_state.logged_in = True 
-                
                 st.success("Identidad verificada. Redirigiendo...")
                 time.sleep(1)
                 st.rerun()
@@ -224,61 +224,38 @@ def show_otp_verification_page(otp_code):
                 st.error("El código es válido pero no se pudo iniciar la sesión.")
         except Exception as e:
             st.error(f"Error de verificación: {e}")
-            log_error("Fallo verificación OTP recuperación", module="Auth", error=e)
 
 def show_set_new_password_page(access_token=None):
     st.header("Establecer Nueva Contraseña")
     st.write("Por favor, crea una nueva contraseña.")
-
     new_password = st.text_input("Nueva Contraseña", type="password")
     confirm_password = st.text_input("Confirmar Nueva Contraseña", type="password")
 
     if st.button("Actualizar Contraseña", width='stretch'):
         if not new_password or not confirm_password:
-            st.error("Completa ambos campos.")
-            return
-        
+            st.error("Completa ambos campos."); return
         if new_password != confirm_password:
-            st.error("Las contraseñas no coinciden.")
-            return
-            
+            st.error("Las contraseñas no coinciden."); return
         if len(new_password) < 6:
-            st.error("La contraseña debe tener al menos 6 caracteres.")
-            return
+            st.error("La contraseña debe tener al menos 6 caracteres."); return
 
         try:
-            user_response = supabase.auth.update_user(
-                attributes={"password": new_password}
-            )
-            
-            log_action(f"Contraseña actualizada exitosamente para: {user_response.user.email}", module="Auth")
-            
-            # Cerrar sesión para obligar al usuario a entrar con la nueva clave
+            user_response = supabase.auth.update_user(attributes={"password": new_password})
             supabase.auth.sign_out() 
             st.session_state.logged_in = False
             st.session_state.clear()
-            
             st.success("¡Contraseña actualizada con éxito!")
-            st.info("Ahora puedes iniciar sesión con tu nueva contraseña.")
             time.sleep(3)
-            
-            if hasattr(st, "query_params"):
-                 st.query_params.clear() 
-            else:
-                 st.experimental_set_query_params()
-
+            if hasattr(st, "query_params"): st.query_params.clear() 
+            else: st.experimental_set_query_params()
             st.session_state.page = "login"
             st.rerun()
-
         except Exception as e:
             st.error(f"Error al actualizar la contraseña: {e}")
-            log_error("Error crítico al actualizar contraseña", module="Auth", error=e)
 
     if st.button("Cancelar", type="secondary", width='stretch'):
         supabase.auth.sign_out()
-        if hasattr(st, "query_params"):
-             st.query_params.clear() 
-        else:
-             st.experimental_set_query_params()
+        if hasattr(st, "query_params"): st.query_params.clear() 
+        else: st.experimental_set_query_params()
         st.session_state.page = "login"
         st.rerun()
