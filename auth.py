@@ -24,7 +24,7 @@ def show_signup_page():
             st.error("Por favor, completa todos los campos.")
             return
         try:
-            client_response = supabase.table("clients").select("id").eq("invite_code", invite_code).single().execute()
+            client_response = supabase.table("clients").select("id").eq("invite_code", invite_code).maybe_single().execute()
             if not client_response.data:
                 st.error("El código de invitación no es válido.")
                 log_action(f"Intento de registro fallido: Código inválido '{invite_code}' para {email}", module="Auth")
