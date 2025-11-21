@@ -23,33 +23,37 @@ def show_signup_page():
             st.error("Por favor, completa todos los campos.")
             return
         try:
-            # --- CORRECCIÓN ROBUSTA: Consulta estándar (Lista) ---
-            # 1. Limpiamos espacios en blanco del código por si acaso
+            # 1. Limpieza del código (quitar espacios accidentales)
             code_limpio = invite_code.strip()
             
-            # 2. Consultamos como lista simple (evita el error 204 de single/maybe_single)
-            client_response = supabase.table("clients").select("id").eq("invite_code", code_limpio).execute()
+            # --- CORRECCIÓN BLINDADA PARA ERROR 204 ---
+            # Usamos consulta normal (lista) en vez de single().
+            # Esto evita que la librería falle si no encuentra el código.
+            response = supabase.table("clients").select("id").eq("invite_code", code_limpio).execute()
+            data_clientes = response.data
             
-            # 3. Verificamos manualmente si la lista está vacía
-            if not client_response.data or len(client_response.data) == 0:
+            # 2. Verificación manual
+            if not data_clientes or len(data_clientes) == 0:
                 st.error("El código de invitación no es válido. Verifica mayúsculas y espacios.")
                 log_action(f"Registro fallido: Código '{code_limpio}' no existe.", module="Auth")
                 return
             
-            # Tomamos el primer resultado (seguro porque invite_code es único)
-            selected_client_id = client_response.data[0]['id']
+            selected_client_id = data_clientes[0]['id']
             
-            # Registro en Supabase Auth
+            # 3. Registro en Auth
             auth_response = supabase.auth.sign_up({
                 "email": email, "password": password,
                 "options": { "data": { 'client_id': selected_client_id } }
             })
             
+            # Si llegamos aquí, todo salió bien
             st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
             st.info("Importante: No podrás iniciar sesión hasta hacer clic en el enlace que te enviamos.")
             log_action(f"Nuevo usuario registrado: {email}", module="Auth")
             
         except Exception as e:
+            # Si el error contiene "204", es un falso positivo de la librería, pero 
+            # con la corrección de arriba ya no debería pasar.
             st.error(f"Error técnico en el registro: {e}")
             log_error(f"Error crítico auth.sign_up usuario {email}", module="Auth", error=e)
             
@@ -72,16 +76,16 @@ def show_login_page():
                     pending_info = st.session_state.pending_login_info
                     user_id = pending_info['user_id']
                     
-                    # 1. Restaurar la sesión localmente con el token
+                    # 1. Restaurar la sesión localmente
                     st.session_state.access_token = pending_info['access_token']
                     st.session_state.refresh_token = pending_info['refresh_token']
                     supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
                     
-                    # 2. Generar nuevo ID de sesión y ACTUALIZAR DB PRIMERO
+                    # 2. Generar nuevo ID y actualizar DB
                     new_session_id = str(uuid.uuid4())
                     supabase.table("users").update({"active_session_id": new_session_id}).eq("id", user_id).execute()
                     
-                    # 3. Cargar perfil y establecer estado
+                    # 3. Cargar perfil
                     user_profile = supabase.table("users").select("*, rol, clients(client_name, plan)").eq("id", user_id).single().execute()
                     client_info = user_profile.data['clients']
                     
