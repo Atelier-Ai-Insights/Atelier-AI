@@ -7,7 +7,6 @@ from services.storage import load_database
 from services.logger import log_error, log_action
 from supabase.lib.client_options import ClientOptions 
 
-
 # ==============================
 # Autenticación con Supabase Auth
 # ==============================
@@ -22,38 +21,48 @@ def show_signup_page():
         if not email or not password or not invite_code:
             st.error("Por favor, completa todos los campos.")
             return
+        
+        # 1. Limpieza del código
+        code_limpio = invite_code.strip()
+        selected_client_id = None
+
+        # 2. Consulta Blindada contra Error 204
         try:
-            # 1. Limpieza del código (quitar espacios accidentales)
-            code_limpio = invite_code.strip()
-            
-            # --- CORRECCIÓN BLINDADA PARA ERROR 204 ---
-            # Usamos consulta normal (lista) en vez de single().
-            # Esto evita que la librería falle si no encuentra el código.
+            # Intentamos buscar el código
             response = supabase.table("clients").select("id").eq("invite_code", code_limpio).execute()
-            data_clientes = response.data
             
-            # 2. Verificación manual
-            if not data_clientes or len(data_clientes) == 0:
-                st.error("El código de invitación no es válido. Verifica mayúsculas y espacios.")
-                log_action(f"Registro fallido: Código '{code_limpio}' no existe.", module="Auth")
+            if response.data and len(response.data) > 0:
+                selected_client_id = response.data[0]['id']
+            
+        except Exception as query_error:
+            # Si ocurre el famoso error 204 ("Missing response"), es porque no encontró datos.
+            # Lo tratamos como una lista vacía y continuamos.
+            error_str = str(query_error)
+            if "204" in error_str or "Missing response" in error_str:
+                selected_client_id = None
+            else:
+                # Si es otro error real (ej. sin internet), lo mostramos.
+                st.error(f"Error de conexión: {query_error}")
                 return
-            
-            selected_client_id = data_clientes[0]['id']
-            
-            # 3. Registro en Auth
+
+        # 3. Validación final del código
+        if not selected_client_id:
+            st.error("El código de invitación no es válido. Verifica mayúsculas y espacios.")
+            log_action(f"Registro fallido: Código '{code_limpio}' no existe (o error 204 manejado).", module="Auth")
+            return
+
+        # 4. Registro en Auth (Si llegamos aquí, tenemos el ID del cliente)
+        try:
             auth_response = supabase.auth.sign_up({
                 "email": email, "password": password,
                 "options": { "data": { 'client_id': selected_client_id } }
             })
             
-            # Si llegamos aquí, todo salió bien
             st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
             st.info("Importante: No podrás iniciar sesión hasta hacer clic en el enlace que te enviamos.")
             log_action(f"Nuevo usuario registrado: {email}", module="Auth")
             
         except Exception as e:
-            # Si el error contiene "204", es un falso positivo de la librería, pero 
-            # con la corrección de arriba ya no debería pasar.
             st.error(f"Error técnico en el registro: {e}")
             log_error(f"Error crítico auth.sign_up usuario {email}", module="Auth", error=e)
             
