@@ -120,11 +120,12 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.header("Filtros de Búsqueda")
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT] 
     
-    # --- LÓGICA DEMO: RESTRICCIÓN DE MARCA ---
+    # --- LÓGICA DEMO: RESTRICCIÓN DE CLIENTE ---
     # Si el cliente es "atelier demo", forzamos que la base de datos disponible
-    # contenga SOLO proyectos donde la marca sea "Atelier" (o contenga la palabra).
+    # contenga SOLO proyectos donde el CLIENTE sea "Atelier" (o contenga la palabra).
     if st.session_state.get("cliente") == "atelier demo":
-        db_full = [doc for doc in db_full if doc.get("filtro") and "atelier" in str(doc.get("filtro")).lower()]
+        # CAMBIO AQUÍ: Ahora filtramos por el campo "cliente" en lugar de "filtro" (marca)
+        db_full = [doc for doc in db_full if doc.get("cliente") and "atelier" in str(doc.get("cliente")).lower()]
     # -----------------------------------------
     
     db_filtered = db_full[:]
