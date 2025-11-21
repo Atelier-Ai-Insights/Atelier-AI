@@ -4,7 +4,7 @@
 MODE_CHAT = "Chat de Consulta Directa"
 MODE_TEXT_ANALYSIS = "Análisis de Textos"
 MODE_DATA_ANALYSIS = "Análisis Numérico"
-MODE_ETNOCHAT = "Análisis de EtnoChat"
+MODE_ETNOCHAT = "Análisis Multimodal"
 MODE_TREND_ANALYSIS = "Análisis de Tendencias" 
 
 # --- Modos de Evaluación ---
