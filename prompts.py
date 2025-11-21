@@ -1,15 +1,12 @@
 import streamlit as st
 
-# --- BLOQUE DE INSTRUCCIONES DE CITAS (OPTIMIZADO) ---
+# --- BLOQUE DE INSTRUCCIONES DE CITAS ---
 INSTRUCCIONES_DE_CITAS = """
 **REGLAS DE CITAS (ESTRICTO):**
-1. **Base:** Solo usa la 'Información documentada'. No alucines información externa.
-2. **Formato:** Asigna un ID numérico único [x] a cada documento la primera vez que lo uses. Reutiliza el ID para futuras referencias al mismo documento.
+1. **Base:** Solo usa la 'Información documentada'. No alucines información externa sin sustentarla.
+2. **Formato Interno:** Asigna un ID numérico único [x] a cada documento del repositorio/PDF la primera vez que lo uses.
 3. **Sintaxis:** Frase del hallazgo [1]. Otra frase contrastada [2].
-4. **Sección Fuentes:** Al final, añade:
-   ---
-   ## Fuentes
-   * [1] Documento: (Nombre exacto del archivo)
+4. **Sección Fuentes:** Al final, DEBES generar una lista consolidada.
 5. **Vacío:** Si la respuesta no está en los documentos, di: "Información no disponible en los documentos."
 """
 
@@ -394,16 +391,16 @@ def get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups):
 # SECCIÓN: ANÁLISIS DE TENDENCIAS (LENTES + VALIDACIÓN DE MERCADO)
 # ==============================================================================
 
-# Definimos qué "datos" debe simular la IA para cada fuente
+# Definimos qué "datos" debe simular la IA para cada fuente Y AGREGAMOS LA URL
 SOURCE_LENSES = {
-    "DANE (Datos Demográficos/Económicos)": "Prioriza indicadores duros: IPC (Inflación), Tasa de Desempleo, PIB trimestral, Pulso Social y gasto de los hogares.",
-    "Banco de la República (Macroeconomía)": "Enfócate en tasas de interés de intervención, TRM (Dólar), balanza comercial y política monetaria.",
-    "Fenalco (Comercio y Retail)": "Usa la 'Bitácora Económica': comportamiento en punto de venta, fechas comerciales (Día de la Madre, etc.) y clima de negocios.",
-    "Camacol (Vivienda y Construcción)": "Analiza Coordenada Urbana: ventas de vivienda VIS/No VIS, iniciaciones y licenciamiento.",
-    "Euromonitor (Tendencias Globales)": "Conecta con Megatendencias (ej. Bienestar, Sostenibilidad), tamaño de mercado y benchmarks internacionales.",
-    "Google Trends (Intención Digital)": "Estima el interés de búsqueda online, estacionalidad de las consultas y palabras clave emergentes.",
-    "McKinsey/Deloitte (Consultoría Estratégica)": "Aplica marcos de 'Futuro del Consumidor', transformación digital y predicciones a 2030.",
-    "Superintendencia (SIC) (Regulación)": "Considera el marco legal, protección al consumidor, habeas data y libre competencia."
+    "DANE (Datos Demográficos/Económicos)": "Prioriza indicadores duros: IPC (Inflación), Tasa de Desempleo, PIB trimestral, Pulso Social y gasto de los hogares. (Web: https://www.dane.gov.co)",
+    "Banco de la República (Macroeconomía)": "Enfócate en tasas de interés de intervención, TRM (Dólar), balanza comercial y política monetaria. (Web: https://www.banrep.gov.co)",
+    "Fenalco (Comercio y Retail)": "Usa la 'Bitácora Económica': comportamiento en punto de venta, fechas comerciales (Día de la Madre, etc.) y clima de negocios. (Web: https://www.fenalco.com.co)",
+    "Camacol (Vivienda y Construcción)": "Analiza Coordenada Urbana: ventas de vivienda VIS/No VIS, iniciaciones y licenciamiento. (Web: https://camacol.co)",
+    "Euromonitor (Tendencias Globales)": "Conecta con Megatendencias (ej. Bienestar, Sostenibilidad), tamaño de mercado y benchmarks internacionales. (Web: https://www.euromonitor.com)",
+    "Google Trends (Intención Digital)": "Estima el interés de búsqueda online, estacionalidad de las consultas y palabras clave emergentes. (Web: https://trends.google.com)",
+    "McKinsey/Deloitte (Consultoría Estratégica)": "Aplica marcos de 'Futuro del Consumidor', transformación digital y predicciones a 2030. (Web: https://www.mckinsey.com / https://www2.deloitte.com)",
+    "Superintendencia (SIC) (Regulación)": "Considera el marco legal, protección al consumidor, habeas data y libre competencia. (Web: https://www.sic.gov.co)"
 }
 
 def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_list):
@@ -470,5 +467,15 @@ C. **Contexto de Mercado (Fuentes Públicas Seleccionadas):**
 ## 5. Recomendaciones Estratégicas
 (Acciones concretas a corto y mediano plazo).
 
-{INSTRUCCIONES_DE_CITAS}
+---
+## Bibliografía y Fuentes Consultadas
+
+### Fuentes Internas (Repositorio y PDFs)
+* [1] Documento: (Listar los nombres de archivos del repositorio usados)
+* [2] PDF Cargado: (Nombre del archivo PDF)
+
+### Fuentes Externas (Referencias Públicas)
+* Lista aquí las fuentes públicas seleccionadas para este análisis y sus enlaces de referencia:
+(Ejemplo: **DANE**: https://www.dane.gov.co)
+* ...
 """
