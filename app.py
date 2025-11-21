@@ -1,5 +1,6 @@
 import streamlit as st
 import time 
+from datetime import datetime, timezone # Importaciones para la lógica de tiempo del demo
 
 # ==============================
 # 1. IMPORTAR MÓDULOS
@@ -28,12 +29,11 @@ from modes.text_analysis_mode import text_analysis_mode
 from modes.onepager_mode import one_pager_ppt_mode
 from modes.data_analysis_mode import data_analysis_mode
 from modes.etnochat_mode import etnochat_mode
-# --- (A) NUEVA IMPORTACIÓN ---
 from modes.trend_analysis_mode import trend_analysis_mode 
 
 from utils import (
     extract_brand,
-    validate_session_integrity # Importamos la validación
+    validate_session_integrity 
 )
 import constants as c
 
@@ -47,8 +47,7 @@ def set_mode_and_reset(new_mode):
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
     
-    # NOTA: Ya no necesitamos llamar validate_session_integrity() aquí
-    # porque la llamaremos globalmente más abajo.
+    # Validación de sesión ya se hace en main(), no es necesario repetirla aquí
     
     st.sidebar.image("LogoDataStudio.png")
     st.sidebar.write(f"Usuario: {st.session_state.user}")
@@ -57,14 +56,13 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.session_state.current_mode
     
-    # --- (B) CONFIGURACIÓN DE CATEGORÍAS ---
     all_categories = {
         "Análisis": {
             c.MODE_CHAT: True,
             c.MODE_TEXT_ANALYSIS: user_features.get("transcript_file_limit", 0) > 0,
             c.MODE_DATA_ANALYSIS: True,
             c.MODE_ETNOCHAT: user_features.get("has_etnochat_analysis"),
-            c.MODE_TREND_ANALYSIS: True, # Nuevo Modo Habilitado
+            c.MODE_TREND_ANALYSIS: True, 
         },
         "Evaluación": {
             c.MODE_IDEA_EVAL: user_features.get("has_idea_evaluation"),
@@ -97,8 +95,6 @@ def run_user_mode(db_full, user_features, footer_html):
                 st.button(c.MODE_DATA_ANALYSIS, on_click=set_mode_and_reset, args=(c.MODE_DATA_ANALYSIS,), use_container_width=True, type="primary" if modo == c.MODE_DATA_ANALYSIS else "secondary")
             if all_categories["Análisis"][c.MODE_ETNOCHAT]:
                 st.button(c.MODE_ETNOCHAT, on_click=set_mode_and_reset, args=(c.MODE_ETNOCHAT,), use_container_width=True, type="primary" if modo == c.MODE_ETNOCHAT else "secondary")
-            
-            # --- (C) BOTÓN EN SIDEBAR ---
             if all_categories["Análisis"][c.MODE_TREND_ANALYSIS]:
                 st.button(c.MODE_TREND_ANALYSIS, on_click=set_mode_and_reset, args=(c.MODE_TREND_ANALYSIS,), use_container_width=True, type="primary" if modo == c.MODE_TREND_ANALYSIS else "secondary")
 
@@ -124,8 +120,6 @@ def run_user_mode(db_full, user_features, footer_html):
                 st.button(c.MODE_CONCEPT, on_click=set_mode_and_reset, args=(c.MODE_CONCEPT,), use_container_width=True, type="primary" if modo == c.MODE_CONCEPT else "secondary")
 
     st.sidebar.header("Filtros de Búsqueda")
-    # Agregamos TREND_ANALYSIS a los modos que NO usan los filtros estándar si fuera necesario,
-    # pero en este caso SÍ los usa, así que lo dejamos fuera de la lista de exclusión.
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT] 
     
     db_filtered = db_full[:]
@@ -166,7 +160,6 @@ def run_user_mode(db_full, user_features, footer_html):
     
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
     
-    # Ajustar advertencia de filtros vacíos para incluir el nuevo modo
     if run_filters and not selected_files and modo not in [c.MODE_REPORT, c.MODE_IMAGE_EVAL, c.MODE_VIDEO_EVAL, c.MODE_ONEPAGER, c.MODE_TREND_ANALYSIS]:
          st.warning("⚠️ No hay estudios que coincidan con los filtros seleccionados.")
          
@@ -182,7 +175,6 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == c.MODE_ONEPAGER: one_pager_ppt_mode(db_filtered, selected_files)
     elif modo == c.MODE_DATA_ANALYSIS: data_analysis_mode(db_filtered, selected_files)
     elif modo == c.MODE_ETNOCHAT: etnochat_mode()
-    # --- (D) NUEVA RUTA ---
     elif modo == c.MODE_TREND_ANALYSIS: trend_analysis_mode(db_filtered, selected_files)
     
 # =====================================================
@@ -205,7 +197,6 @@ def main():
     if 'current_mode' not in st.session_state:
         st.session_state.current_mode = c.MODE_CHAT
     
-    # --- LÓGICA DE RUTEO ROBUSTA ---
     params = st.query_params 
     
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
@@ -270,11 +261,36 @@ def main():
     # RUTA 2: El usuario ya está logueado (sesión normal)
     if st.session_state.get("logged_in"):
         
-        # --- ¡CAMBIO CLAVE AQUÍ! ---
-        # Validar la integridad de la sesión ANTES de cargar cualquier cosa.
+        # 1. Validar integridad de sesión
         validate_session_integrity()
-        # ---------------------------
 
+        # 2. VERIFICACIÓN DE DEMO (30 DÍAS)
+        if st.session_state.get("cliente") == "atelier demo":
+            try:
+                user_data = supabase.table("users").select("created_at").eq("id", st.session_state.user_id).single().execute()
+                
+                if user_data.data:
+                    created_at_str = user_data.data['created_at']
+                    created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                    now = datetime.now(timezone.utc)
+                    
+                    days_active = (now - created_at).days
+                    
+                    if days_active > 30:
+                        st.error("🚫 **Tu periodo de prueba de 30 días ha finalizado.**")
+                        st.info("Por favor, contacta al administrador para adquirir una licencia completa.")
+                        if st.button("Cerrar Sesión y Salir"):
+                            supabase.auth.sign_out()
+                            st.session_state.clear()
+                            st.rerun()
+                        st.stop() 
+                    else:
+                        remaining = 30 - days_active
+                        st.sidebar.success(f"✨ Modo Demo: Quedan {remaining} días.")
+            except Exception as e:
+                print(f"Error verificando demo: {e}")
+
+        # 3. Restaurar sesión técnica
         if st.session_state.get("access_token"):
             try:
                 supabase.auth.set_session(
