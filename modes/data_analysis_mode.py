@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-from utils import get_relevant_info, get_stopwords
+# Importación consolidada incluyendo clean_gemini_json
+from utils import get_relevant_info, get_stopwords, clean_gemini_json
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event, supabase
 from prompts import (
@@ -16,8 +17,6 @@ import re
 import json 
 import traceback 
 import seaborn as sns
-
-# --- Importaciones de Análisis ---
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 from pptx import Presentation
@@ -34,22 +33,7 @@ PROJECT_BUCKET = "project_files"
 
 # --- Funciones Helper ---
 
-def clean_gemini_json(text):
-    """
-    Limpia la respuesta de Gemini para asegurar que sea un JSON válido,
-    eliminando bloques de código Markdown (```json ... ```).
-    """
-    if not text: return ""
-    text = text.strip()
-    # Eliminar bloque de inicio
-    if text.startswith("```json"):
-        text = text[7:]
-    elif text.startswith("```"):
-        text = text[3:]
-    # Eliminar bloque de fin
-    if text.endswith("```"):
-        text = text[:-3]
-    return text.strip()
+# NOTA: Se eliminó la función local clean_gemini_json porque ya se importa desde utils.py
 
 @st.cache_data
 def to_excel(df):
