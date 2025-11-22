@@ -54,8 +54,12 @@ def show_signup_page():
         # 4. Registro en Auth (Si llegamos aquí, tenemos el ID del cliente)
         try:
             auth_response = supabase.auth.sign_up({
-                "email": email, "password": password,
-                "options": { "data": { 'client_id': selected_client_id } }
+                "email": email, 
+                "password": password,
+                "options": { 
+                    "data": { 'client_id': selected_client_id },
+                    "email_redirect_to": "https://atelier-ai.streamlit.app" 
+                }
             })
             
             st.success("¡Registro exitoso! Revisa tu correo para confirmar tu cuenta.")
