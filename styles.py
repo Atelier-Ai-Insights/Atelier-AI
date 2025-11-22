@@ -69,6 +69,17 @@ HIDE_ST_STYLE = """
      </style>
 """
 
+# --- NUEVO: Estilos de Login/Layout ---
+LOGIN_PAGE_CSS = """
+    <style>
+        [data.testid="stAppViewContainer"] > .main { padding-top: 2rem; }
+        div[data.testid="stBlock"] { padding-top: 0rem; }
+    </style>
+"""
+
 def apply_styles():
     st.markdown(TABS_CSS, unsafe_allow_html=True)
     st.markdown(HIDE_ST_STYLE, unsafe_allow_html=True)
+
+def apply_login_styles():
+    st.markdown(LOGIN_PAGE_CSS, unsafe_allow_html=True)
