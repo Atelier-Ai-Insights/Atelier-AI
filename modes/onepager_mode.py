@@ -4,7 +4,8 @@ from services.supabase_db import get_monthly_usage, log_query_event
 from config import safety_settings
 from services.gemini_api import call_gemini_api 
 from reporting.ppt_generator import crear_ppt_desde_json
-from utils import get_relevant_info, extract_text_from_pdfs
+# --- CAMBIO: Importamos clean_gemini_json ---
+from utils import get_relevant_info, extract_text_from_pdfs, clean_gemini_json
 from prompts import PROMPTS_ONEPAGER, get_onepager_final_prompt
 import constants as c
 
@@ -28,26 +29,24 @@ def one_pager_ppt_mode(db_filtered, selected_files):
         {limit_text}
     """)
 
-    # --- ¡MODIFICADO! ---
+    # --- PANTALLA DE RESULTADO (DESCARGA) ---
     if "generated_ppt_bytes" in st.session_state.mode_state:
-        # --- ¡MODIFICADO! ---
         st.success(f"¡Tu diapositiva '{st.session_state.mode_state.get('generated_ppt_template_name', 'Estratégica')}' está lista!")
         
         st.download_button(
             label=f"Descargar Diapositiva (.pptx)",
-            # --- ¡MODIFICADO! ---
             data=st.session_state.mode_state["generated_ppt_bytes"],
             file_name=f"diapositiva_{st.session_state.mode_state.get('generated_ppt_template_name', 'estrategica').lower().replace(' ','_')}.pptx",
             mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
             width='stretch'
         )
         if st.button("Generar nueva Diapositiva", width='stretch', type="secondary"):
-            # --- ¡MODIFICADO! ---
             del st.session_state.mode_state["generated_ppt_bytes"]
             st.session_state.mode_state.pop('generated_ppt_template_name', None)
             st.rerun()
         return
 
+    # --- PANTALLA DE CONFIGURACIÓN ---
     st.divider()
     st.markdown("#### 1. Selecciona la Plantilla")
     template_options = list(PROMPTS_ONEPAGER.keys()) 
@@ -103,9 +102,15 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                 if response_text is None:
                     raise Exception("La API de Gemini falló al generar el JSON.")
 
-                data_json = json.loads(response_text)
+                # --- CAMBIO CRÍTICO: Limpieza robusta del JSON ---
+                cleaned_text = clean_gemini_json(response_text)
+                data_json = json.loads(cleaned_text)
+                # -----------------------------------------------
 
-            except json.JSONDecodeError: st.error("Error: La IA no devolvió un JSON válido."); st.code(response_text); return
+            except json.JSONDecodeError: 
+                st.error("Error: La IA no devolvió un JSON válido.")
+                st.code(response_text) 
+                return
             except Exception as e: 
                 if "JSON" not in str(e):
                     st.error(f"Error API Gemini: {e}")
@@ -116,7 +121,6 @@ def one_pager_ppt_mode(db_filtered, selected_files):
             with st.spinner("Ensamblando diapositiva .pptx..."):
                 ppt_bytes = crear_ppt_desde_json(data_json)
             if ppt_bytes:
-                # --- ¡MODIFICADO! ---
                 st.session_state.mode_state["generated_ppt_bytes"] = ppt_bytes
                 st.session_state.mode_state["generated_ppt_template_name"] = selected_template_name
                 
