@@ -35,13 +35,10 @@ def show_signup_page():
                 selected_client_id = response.data[0]['id']
             
         except Exception as query_error:
-            # Si ocurre el famoso error 204 ("Missing response"), es porque no encontró datos.
-            # Lo tratamos como una lista vacía y continuamos.
             error_str = str(query_error)
             if "204" in error_str or "Missing response" in error_str:
                 selected_client_id = None
             else:
-                # Si es otro error real (ej. sin internet), lo mostramos.
                 st.error(f"Error de conexión: {query_error}")
                 return
 
@@ -51,7 +48,7 @@ def show_signup_page():
             log_action(f"Registro fallido: Código '{code_limpio}' no existe (o error 204 manejado).", module="Auth")
             return
 
-        # 4. Registro en Auth (Si llegamos aquí, tenemos el ID del cliente)
+        # 4. Registro en Auth
         try:
             auth_response = supabase.auth.sign_up({
                 "email": email, 
@@ -67,8 +64,15 @@ def show_signup_page():
             log_action(f"Nuevo usuario registrado: {email}", module="Auth")
             
         except Exception as e:
-            st.error(f"Error técnico en el registro: {e}")
-            log_error(f"Error crítico auth.sign_up usuario {email}", module="Auth", error=e)
+            # --- MEJORA: Mensajes específicos ---
+            err_msg = str(e).lower()
+            if "already registered" in err_msg or "user already exists" in err_msg:
+                st.warning("⚠️ Este correo ya está registrado. Intenta iniciar sesión.")
+            elif "password" in err_msg and "characters" in err_msg:
+                st.warning("⚠️ La contraseña es muy corta (mínimo 6 caracteres).")
+            else:
+                st.error(f"Error técnico en el registro: {e}")
+                log_error(f"Error crítico auth.sign_up usuario {email}", module="Auth", error=e)
             
     if st.button("¿Ya tienes cuenta? Inicia Sesión", type="secondary", width='stretch'):
          st.session_state.page = "login"
@@ -188,7 +192,14 @@ def show_login_page():
                         st.error("Perfil de usuario no encontrado. Contacta al administrador.")
                         
             except Exception as e:
-                st.error(f"Credenciales incorrectas o cuenta no confirmada.")
+                # --- MEJORA: Mensajes específicos para el usuario ---
+                error_msg = str(e).lower()
+                if "invalid login credentials" in error_msg:
+                    st.error("🚫 Contraseña incorrecta o usuario no encontrado.")
+                elif "email not confirmed" in error_msg:
+                    st.warning("📧 Tu email no ha sido confirmado. Revisa tu bandeja de entrada.")
+                else:
+                    st.error(f"Error de acceso: {e}")
                 
         if st.button("¿No tienes cuenta? Regístrate", type="secondary", width='stretch'):
             st.session_state.page = "signup"
