@@ -76,7 +76,7 @@ def _execute_gemini_call(prompt, stream=False, gen_config=None, safety=None):
 
         try:
             model = genai.GenerativeModel(
-                model_name="gemini-2.5-flash", # Asegúrate de que este modelo exista o usa "gemini-1.5-flash"
+                model_name="gemini-2.5-flash", 
                 generation_config=final_gen_config, 
                 safety_settings=final_safety_settings
             )
@@ -138,9 +138,14 @@ def _execute_gemini_call(prompt, stream=False, gen_config=None, safety=None):
             # Continuar loop para probar la siguiente clave
         
     if not stream:
-        critical_msg = f"Todas las claves fallaron. Último error: {last_error}"
-        st.error(f"Error API Gemini: {critical_msg}")
-        log_error(critical_msg, module="GeminiAPI", level="CRITICAL") 
+        # --- MEJORA: Mensaje de error amigable para el usuario ---
+        error_str = str(last_error).lower()
+        if "429" in error_str or "quota" in error_str:
+            st.error("⏳ El sistema de IA está recibiendo muchas solicitudes. Por favor, espera 1 minuto e inténtalo de nuevo.")
+        else:
+            st.error(f"Error de conexión con IA: {last_error}. Intenta de nuevo.")
+            
+        log_error(f"Fallo total API Gemini. Last error: {last_error}", module="GeminiAPI", level="CRITICAL") 
         return None
 
 def _stream_generator_wrapper(response_stream, key_index, num_keys):
@@ -187,10 +192,7 @@ def _stream_generator_wrapper(response_stream, key_index, num_keys):
         error_msg = str(e)
         log_error(f"Error crítico durante Streaming Key #{key_index + 1}", module="GeminiAPI", error=e)
         
-        # Si logramos generar algo de texto antes del error, no mostramos un error fatal,
-        # solo avisamos que se cortó.
         if full_text_accumulated:
-            yield f"\n\n[⚠️ Error de conexión: La respuesta se interrumpió. Detalle: {error_msg}]"
+            yield f"\n\n[⚠️ Interrupción: {error_msg}]"
         else:
-            # Si falló al inicio, devolvemos el error para que la UI lo maneje
             yield f"[Error de conexión con IA: {error_msg}]"
