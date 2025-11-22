@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 # 1. IMPORTAR MÓDULOS
 # ==============================
 
-from styles import apply_styles
+from styles import apply_styles, apply_login_styles # <-- Importación actualizada
 from config import PLAN_FEATURES, banner_file
 from services.storage import load_database 
 from services.supabase_db import supabase
@@ -121,12 +121,8 @@ def run_user_mode(db_full, user_features, footer_html):
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT] 
     
     # --- LÓGICA DEMO: RESTRICCIÓN DE CLIENTE ---
-    # Si el cliente es "atelier demo", forzamos que la base de datos disponible
-    # contenga SOLO proyectos donde el CLIENTE sea "Atelier" (o contenga la palabra).
     if st.session_state.get("cliente") == "atelier demo":
-        # CAMBIO AQUÍ: Ahora filtramos por el campo "cliente" en lugar de "filtro" (marca)
         db_full = [doc for doc in db_full if doc.get("cliente") and "atelier" in str(doc.get("cliente")).lower()]
-    # -----------------------------------------
     
     db_filtered = db_full[:]
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
@@ -208,13 +204,6 @@ def main():
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
-    login_page_style = """
-        <style>
-            [data.testid="stAppViewContainer"] > .main { padding-top: 2rem; }
-            div[data.testid="stBlock"] { padding-top: 0rem; }
-        </style>
-    """
-
     # RUTA 1: RECUPERACIÓN DE CONTRASEÑA
     if params.get("type") == "recovery":
         access_token = params.get("access_token")
@@ -226,7 +215,7 @@ def main():
         if access_token and refresh_token:
             try:
                 supabase.auth.set_session(access_token, refresh_token)
-                st.markdown(login_page_style, unsafe_allow_html=True)
+                apply_login_styles() # <--- APLICAR ESTILOS LOGIN
                 col1, col2, col3 = st.columns([1,2,1])
                 with col2:
                     st.image("LogoDataStudio.png")
@@ -244,14 +233,14 @@ def main():
         
         elif access_token and not refresh_token:
             if st.session_state.get("logged_in"):
-                 st.markdown(login_page_style, unsafe_allow_html=True)
+                 apply_login_styles() # <--- APLICAR ESTILOS LOGIN
                  col1, col2, col3 = st.columns([1,2,1])
                  with col2:
                      st.image("LogoDataStudio.png")
                      show_set_new_password_page(None) 
                  st.stop()
             
-            st.markdown(login_page_style, unsafe_allow_html=True)
+            apply_login_styles() # <--- APLICAR ESTILOS LOGIN
             col1, col2, col3 = st.columns([1,2,1])
             with col2:
                 st.image("LogoDataStudio.png")
@@ -338,7 +327,7 @@ def main():
 
     # RUTA 3: Usuario no logueado (Páginas de Login, Signup, Reset)
     if not st.session_state.get("logged_in"):
-        st.markdown(login_page_style, unsafe_allow_html=True)
+        apply_login_styles() # <--- APLICAR ESTILOS LOGIN
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
             st.image("LogoDataStudio.png")
