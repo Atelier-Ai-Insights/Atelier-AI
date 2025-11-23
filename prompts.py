@@ -406,6 +406,7 @@ SOURCE_LENSES = {
 
 def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_list):
     
+    # Obtener fecha actual para referencia temporal estricta
     current_date = datetime.now().strftime("%d de %B de %Y")
     
     sources_instruction = ""
@@ -422,7 +423,6 @@ def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_l
 
     return f"""
 **Fecha del Análisis:** {current_date}
-**Rol:** Director de Estrategia y Futuro (Head of Trends).
 **Misión:** Generar un 'Intelligence Brief' de alto nivel sobre: "{topic}".
 
 **Tus 3 Insumos de Información:**
@@ -459,20 +459,17 @@ C. **Contexto Externo:** {sources_instruction}
 * **LUEGO (Desarrollo):** Ajustes de producto/servicio (R&D) para los próximos 6 meses.
 * **DESPUÉS (Visión):** Hacia dónde evolucionará esto en 2-3 años.
 
-## 6. Radar de Noticias (Contexto Actual - {current_date})
-*Identifica 3 eventos o noticias recientes (últimos 7-30 días) que impacten esta tendencia. Es OBLIGATORIO incluir un Link (URL) para profundizar.*
+## 6. Radar de Noticias (Contexto: {current_date})
+*IMPORTANTE: Solo incluye noticias si estás 100% seguro de su veracidad y ocurrencia reciente (últimas semanas). NO INVENTES NOTICIAS.*
+*Si no tienes acceso a noticias específicas de los últimos 7 días, presenta tendencias macroeconómicas confirmadas recientes aclarando que es "Contexto General".*
 
 * **[Titular de la Noticia]**
-  * *Resumen:* Breve impacto.
-  * *Fuente:* [Nombre del Medio] - [Link Web funcional para ver la noticia]
+  * *Resumen:* Breve impacto en la tendencia.
+  * *Fuente:* [Nombre del Medio] - [Link Web funcional al Home del medio o a la noticia si la conoces]
 
-* **[Titular de la Noticia]**
-  * *Resumen:* Breve impacto.
-  * *Fuente:* [Nombre del Medio] - [Link Web funcional]
-
-* **[Titular de la Noticia]**
-  * *Resumen:* Breve impacto.
-  * *Fuente:* [Nombre del Medio] - [Link Web funcional]
+* **Titular de la Noticia]**
+  * *Resumen:* Breve impacto en la tendencia.
+  * *Fuente:* [Nombre del Medio] - [Link Web funcional al Home del medio o a la noticia si la conoces]
 
 ---
 ## Bibliografía y Fuentes Consultadas
