@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 # 1. IMPORTAR MÓDULOS
 # ==============================
 
-from styles import apply_styles, apply_login_styles # <-- Importación actualizada
+from styles import apply_styles, apply_login_styles 
 from config import PLAN_FEATURES, banner_file
 from services.storage import load_database 
 from services.supabase_db import supabase
@@ -18,6 +18,8 @@ from auth import (
     show_otp_verification_page 
 )
 from admin.dashboard import show_admin_dashboard
+
+# --- MODOS DE USO ---
 from modes.report_mode import report_mode
 from modes.chat_mode import grounded_chat_mode
 from modes.ideation_mode import ideacion_mode
@@ -30,6 +32,7 @@ from modes.onepager_mode import one_pager_ppt_mode
 from modes.data_analysis_mode import data_analysis_mode
 from modes.etnochat_mode import etnochat_mode
 from modes.trend_analysis_mode import trend_analysis_mode 
+from modes.synthetic_mode import synthetic_users_mode # <--- NUEVA IMPORTACIÓN
 
 from utils import (
     extract_brand,
@@ -73,7 +76,8 @@ def run_user_mode(db_full, user_features, footer_html):
         },
         "Creatividad": {
             c.MODE_IDEATION: user_features.get("has_creative_conversation"),
-            c.MODE_CONCEPT: user_features.get("has_concept_generation")
+            c.MODE_CONCEPT: user_features.get("has_concept_generation"),
+            c.MODE_SYNTHETIC: True, # <--- ACTIVADO AQUÍ
         }
     }
     
@@ -104,23 +108,27 @@ def run_user_mode(db_full, user_features, footer_html):
                 st.button(c.MODE_IMAGE_EVAL, on_click=set_mode_and_reset, args=(c.MODE_IMAGE_EVAL,), use_container_width=True, type="primary" if modo == c.MODE_IMAGE_EVAL else "secondary")
             if all_categories["Evaluación"][c.MODE_VIDEO_EVAL]:
                 st.button(c.MODE_VIDEO_EVAL, on_click=set_mode_and_reset, args=(c.MODE_VIDEO_EVAL,), use_container_width=True, type="primary" if modo == c.MODE_VIDEO_EVAL else "secondary")
+    
     if any(all_categories["Reportes"].values()):
         with st.sidebar.expander("Reportes", expanded=(default_expanded == "Reportes")):
             if all_categories["Reportes"][c.MODE_REPORT]:
                 st.button(c.MODE_REPORT, on_click=set_mode_and_reset, args=(c.MODE_REPORT,), use_container_width=True, type="primary" if modo == c.MODE_REPORT else "secondary")
             if all_categories["Reportes"][c.MODE_ONEPAGER]:
                 st.button(c.MODE_ONEPAGER, on_click=set_mode_and_reset, args=(c.MODE_ONEPAGER,), use_container_width=True, type="primary" if modo == c.MODE_ONEPAGER else "secondary")
+    
     if any(all_categories["Creatividad"].values()):
         with st.sidebar.expander("Creatividad", expanded=(default_expanded == "Creatividad")):
             if all_categories["Creatividad"][c.MODE_IDEATION]:
                 st.button(c.MODE_IDEATION, on_click=set_mode_and_reset, args=(c.MODE_IDEATION,), use_container_width=True, type="primary" if modo == c.MODE_IDEATION else "secondary")
             if all_categories["Creatividad"][c.MODE_CONCEPT]:
                 st.button(c.MODE_CONCEPT, on_click=set_mode_and_reset, args=(c.MODE_CONCEPT,), use_container_width=True, type="primary" if modo == c.MODE_CONCEPT else "secondary")
+            # --- BOTÓN NUEVO ---
+            if all_categories["Creatividad"][c.MODE_SYNTHETIC]:
+                st.button(c.MODE_SYNTHETIC, on_click=set_mode_and_reset, args=(c.MODE_SYNTHETIC,), use_container_width=True, type="primary" if modo == c.MODE_SYNTHETIC else "secondary")
 
     st.sidebar.header("Filtros de Búsqueda")
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT] 
     
-    # --- LÓGICA DEMO: RESTRICCIÓN DE CLIENTE ---
     if st.session_state.get("cliente") == "atelier demo":
         db_full = [doc for doc in db_full if doc.get("cliente") and "atelier" in str(doc.get("cliente")).lower()]
     
@@ -178,6 +186,7 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == c.MODE_DATA_ANALYSIS: data_analysis_mode(db_filtered, selected_files)
     elif modo == c.MODE_ETNOCHAT: etnochat_mode()
     elif modo == c.MODE_TREND_ANALYSIS: trend_analysis_mode(db_filtered, selected_files)
+    elif modo == c.MODE_SYNTHETIC: synthetic_users_mode(db_filtered, selected_files) # <--- RUTA NUEVA
     
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
@@ -215,7 +224,7 @@ def main():
         if access_token and refresh_token:
             try:
                 supabase.auth.set_session(access_token, refresh_token)
-                apply_login_styles() # <--- APLICAR ESTILOS LOGIN
+                apply_login_styles()
                 col1, col2, col3 = st.columns([1,2,1])
                 with col2:
                     st.image("LogoDataStudio.png")
@@ -233,14 +242,14 @@ def main():
         
         elif access_token and not refresh_token:
             if st.session_state.get("logged_in"):
-                 apply_login_styles() # <--- APLICAR ESTILOS LOGIN
+                 apply_login_styles()
                  col1, col2, col3 = st.columns([1,2,1])
                  with col2:
                      st.image("LogoDataStudio.png")
                      show_set_new_password_page(None) 
                  st.stop()
             
-            apply_login_styles() # <--- APLICAR ESTILOS LOGIN
+            apply_login_styles()
             col1, col2, col3 = st.columns([1,2,1])
             with col2:
                 st.image("LogoDataStudio.png")
@@ -256,10 +265,8 @@ def main():
     # RUTA 2: El usuario ya está logueado (sesión normal)
     if st.session_state.get("logged_in"):
         
-        # 1. Validar integridad de sesión
         validate_session_integrity()
 
-        # 2. VERIFICACIÓN DE DEMO (30 DÍAS)
         if st.session_state.get("cliente") == "atelier demo":
             try:
                 user_data = supabase.table("users").select("created_at").eq("id", st.session_state.user_id).single().execute()
@@ -285,7 +292,6 @@ def main():
             except Exception as e:
                 print(f"Error verificando demo: {e}")
 
-        # 3. Restaurar sesión técnica
         if st.session_state.get("access_token"):
             try:
                 supabase.auth.set_session(
@@ -327,7 +333,7 @@ def main():
 
     # RUTA 3: Usuario no logueado (Páginas de Login, Signup, Reset)
     if not st.session_state.get("logged_in"):
-        apply_login_styles() # <--- APLICAR ESTILOS LOGIN
+        apply_login_styles()
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
             st.image("LogoDataStudio.png")
