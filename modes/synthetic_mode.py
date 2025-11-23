@@ -4,6 +4,8 @@ from utils import get_relevant_info, clean_gemini_json
 from services.gemini_api import call_gemini_api, call_gemini_stream
 from prompts import get_persona_generation_prompt, get_persona_chat_instruction
 import constants as c
+from reporting.pdf_generator import generate_pdf_html
+from config import banner_file
 
 def synthetic_users_mode(db, selected_files):
     st.subheader("👥 Focus Group Sintético")
@@ -34,7 +36,7 @@ def synthetic_users_mode(db, selected_files):
                 except Exception as e:
                     st.error(f"Error creando perfil: {e}")
 
-    # 2. VISUALIZACIÓN DEL PERFIL
+    # 2. VISUALIZACIÓN DEL PERFIL Y CHAT
     if "synthetic_persona_data" in st.session_state.mode_state:
         p = st.session_state.mode_state["synthetic_persona_data"]
         
@@ -42,7 +44,6 @@ def synthetic_users_mode(db, selected_files):
         st.divider()
         col_img, col_info = st.columns([1, 3])
         with col_img:
-            # Podrías poner un avatar genérico o generado aquí
             st.markdown(f"<div style='font-size: 80px; text-align: center;'>👤</div>", unsafe_allow_html=True)
         with col_info:
             st.markdown(f"### {p.get('nombre')}")
@@ -84,12 +85,39 @@ def synthetic_users_mode(db, selected_files):
                 with st.spinner(f"{p.get('nombre')} está pensando..."):
                     acting_prompt = get_persona_chat_instruction(p, user_question)
                     
-                    # Aquí es clave: NO pasamos el historial completo al prompt de sistema para no diluir el personaje,
-                    # pero idealmente Gemini maneja el contexto. Por simplicidad en modo 'acting',
-                    # enviamos la instrucción fresca cada vez o construimos un chat structurado.
-                    
-                    # Opción simple: Streaming directo de la respuesta
                     stream = call_gemini_stream(acting_prompt)
                     if stream:
                         response = st.write_stream(stream)
                         st.session_state.mode_state["synthetic_chat_history"].append({"role": "assistant", "content": response})
+                        st.rerun() # Rerun para actualizar botones de descarga
+
+        # --- SECCIÓN DE DESCARGA Y REINICIO (NUEVO) ---
+        if st.session_state.mode_state["synthetic_chat_history"]:
+            st.divider()
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Preparar texto para PDF
+                chat_content = f"# Entrevista con Perfil Sintético: {p.get('nombre')}\n\n"
+                chat_content += f"**Perfil:** {p.get('edad')}, {p.get('ocupacion')}\n\n---\n\n"
+                
+                for m in st.session_state.mode_state["synthetic_chat_history"]:
+                    role_label = "Entrevistador" if m['role'] == 'user' else p.get('nombre')
+                    chat_content += f"**{role_label}:** {m['content']}\n\n"
+                
+                pdf_bytes = generate_pdf_html(chat_content, title=f"Entrevista - {p.get('nombre')}", banner_path=banner_file)
+                
+                if pdf_bytes:
+                    st.download_button(
+                        label="Descargar Conversación (PDF)",
+                        data=pdf_bytes,
+                        file_name=f"entrevista_{p.get('nombre').lower().replace(' ', '_')}.pdf",
+                        mime="application/pdf",
+                        width='stretch',
+                        type="primary"
+                    )
+            
+            with col2:
+                if st.button("Nueva Pregunta / Reiniciar Chat", width='stretch', type="secondary"):
+                    st.session_state.mode_state["synthetic_chat_history"] = []
+                    st.rerun()
