@@ -5,14 +5,15 @@ from datetime import datetime
 # INSTRUCCIONES GLOBALES
 # ==============================================================================
 
-# --- BLOQUE DE INSTRUCCIONES DE CITAS ---
+# --- BLOQUE DE INSTRUCCIONES DE CITAS (AJUSTADO) ---
 INSTRUCCIONES_DE_CITAS = """
 **REGLAS DE CITAS (ESTRICTO):**
-1. **Base:** Solo usa la 'Información documentada'. No alucines información externa sin sustentarla.
-2. **Formato Interno:** Asigna un ID numérico único [x] a cada documento del repositorio/PDF la primera vez que lo uses.
-3. **Sintaxis:** Frase del hallazgo [1]. Otra frase contrastada [2].
-4. **Sección Fuentes:** Al final, DEBES generar una lista consolidada.
-5. **Vacío:** Si la respuesta no está en los documentos, di: "Información no disponible en los documentos."
+1. **Base:** Solo usa la 'Información documentada'.
+2. **Formato Interno (Cuerpo del texto):** Usa IDs numéricos [1], [2] cada vez que cites un hallazgo del repositorio.
+3. **Sección Fuentes (Al final del reporte):** DEBES generar una lista consolidada así:
+   * **Internas:** Mapea el número [x] con el **Nombre Exacto del Archivo o Proyecto**.
+   * **Externas:** Incluye el nombre del medio y el **Link (URL)** para verificación.
+4. **Vacío:** Si la respuesta no está en los documentos, di: "Información no disponible en los documentos."
 """
 
 # ==============================================================================
@@ -405,7 +406,6 @@ SOURCE_LENSES = {
 
 def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_list):
     
-    # Obtener fecha actual para referencia temporal en la sección de noticias
     current_date = datetime.now().strftime("%d de %B de %Y")
     
     sources_instruction = ""
@@ -459,22 +459,29 @@ C. **Contexto Externo:** {sources_instruction}
 * **LUEGO (Desarrollo):** Ajustes de producto/servicio (R&D) para los próximos 6 meses.
 * **DESPUÉS (Visión):** Hacia dónde evolucionará esto en 2-3 años.
 
-## 6. Radar de Noticias (Últimos 7 días)
-*Identifica 3 eventos o noticias recientes (cercanas a {current_date}) que impacten esta tendencia. Debes incluir la Fuente y, si es posible, el enlace.*
+## 6. Radar de Noticias (Contexto Actual - {current_date})
+*Identifica 3 eventos o noticias recientes (últimos 7-30 días) que impacten esta tendencia. Es OBLIGATORIO incluir un Link (URL) para profundizar.*
 
-* **📰 [Titular de la Noticia]**
-  * *Resumen:* Breve impacto en la tendencia.
-  * *Fuente:* [Nombre del Medio / Entidad] (Link referencia si está disponible).
+* **[Titular de la Noticia]**
+  * *Resumen:* Breve impacto.
+  * *Fuente:* [Nombre del Medio] - [Link Web funcional para ver la noticia]
 
-* **📰 [Titular de la Noticia]**
-  * *Resumen:* Breve impacto en la tendencia.
-  * *Fuente:* [Nombre del Medio / Entidad].
+* **[Titular de la Noticia]**
+  * *Resumen:* Breve impacto.
+  * *Fuente:* [Nombre del Medio] - [Link Web funcional]
 
-* **📰 [Titular de la Noticia]**
-  * *Resumen:* Breve impacto en la tendencia.
-  * *Fuente:* [Nombre del Medio / Entidad].
+* **[Titular de la Noticia]**
+  * *Resumen:* Breve impacto.
+  * *Fuente:* [Nombre del Medio] - [Link Web funcional]
 
 ---
-**Fuentes Utilizadas:**
-* [1] Fuentes Internas: (Lista de archivos usados del repositorio/PDFs)
+## Bibliografía y Fuentes Consultadas
+
+### Fuentes Internas (Repositorio y PDFs)
+* [1] Documento: "Nombre Exacto del Archivo/Proyecto en la BD"
+* [2] Documento: "Nombre Exacto del Archivo/Proyecto en la BD"
+
+### Fuentes Externas (Referencias Públicas)
+* [3] Link: (URL de referencia de noticia o entidad pública utilizada)
+* [4] Link: (URL de referencia de noticia o entidad pública utilizada)
 """
