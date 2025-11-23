@@ -1,0 +1,95 @@
+import streamlit as st
+import json
+from utils import get_relevant_info, clean_gemini_json
+from services.gemini_api import call_gemini_api, call_gemini_stream
+from prompts import get_persona_generation_prompt, get_persona_chat_instruction
+import constants as c
+
+def synthetic_users_mode(db, selected_files):
+    st.subheader("👥 Focus Group Sintético")
+    st.markdown("Simula conversaciones con perfiles de consumidor generados a partir de tus datos reales.")
+    
+    # 1. CONFIGURACIÓN DEL PERFIL
+    with st.expander("⚙️ Configurar Perfil Sintético", expanded=("synthetic_persona_data" not in st.session_state.mode_state)):
+        segment_name = st.text_input("Nombre del Segmento a simular:", placeholder="Ej: Compradores sensibles al precio, Mamás primerizas...")
+        
+        if st.button("Generar ADN del Perfil", type="primary", width='stretch'):
+            if not segment_name: st.warning("Define un segmento."); return
+            
+            with st.spinner("Analizando datos y construyendo psique del usuario..."):
+                # Buscar datos que soporten este perfil
+                context = get_relevant_info(db, segment_name, selected_files)
+                if not context: st.error("No hay datos suficientes en los archivos seleccionados."); return
+                
+                # Generar ficha
+                prompt = get_persona_generation_prompt(segment_name, context)
+                resp = call_gemini_api(prompt, generation_config_override={"response_mime_type": "application/json"})
+                
+                try:
+                    clean_resp = clean_gemini_json(resp)
+                    persona_data = json.loads(clean_resp)
+                    st.session_state.mode_state["synthetic_persona_data"] = persona_data
+                    st.session_state.mode_state["synthetic_chat_history"] = [] # Reset chat
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error creando perfil: {e}")
+
+    # 2. VISUALIZACIÓN DEL PERFIL
+    if "synthetic_persona_data" in st.session_state.mode_state:
+        p = st.session_state.mode_state["synthetic_persona_data"]
+        
+        # Tarjeta de identidad
+        st.divider()
+        col_img, col_info = st.columns([1, 3])
+        with col_img:
+            # Podrías poner un avatar genérico o generado aquí
+            st.markdown(f"<div style='font-size: 80px; text-align: center;'>👤</div>", unsafe_allow_html=True)
+        with col_info:
+            st.markdown(f"### {p.get('nombre')}")
+            st.caption(f"{p.get('edad')} | {p.get('ocupacion')}")
+            st.info(f"**Bio:** {p.get('bio_breve')}")
+            
+        with st.expander("Ver detalles psicológicos"):
+            c1, c2 = st.columns(2)
+            c1.write("**Dolores:**"); c1.write(p.get('dolores_principales'))
+            c2.write("**Motivadores:**"); c2.write(p.get('motivadores_compra'))
+            st.write(f"**Estilo:** {p.get('estilo_comunicacion')}")
+
+        # 3. INTERFAZ DE CHAT (ENTREVISTA)
+        st.divider()
+        st.markdown(f"#### 💬 Entrevista a {p.get('nombre')}")
+        
+        # Historial
+        if "synthetic_chat_history" not in st.session_state.mode_state:
+            st.session_state.mode_state["synthetic_chat_history"] = []
+            
+        for msg in st.session_state.mode_state["synthetic_chat_history"]:
+            role = msg['role']
+            name = "Entrevistador" if role == "user" else p.get('nombre')
+            avatar = "🎤" if role == "user" else "👤"
+            with st.chat_message(name, avatar=avatar):
+                st.write(msg['content'])
+
+        # Input
+        user_question = st.chat_input(f"Hazle una pregunta a {p.get('nombre')}...")
+        
+        if user_question:
+            # Guardar pregunta
+            st.session_state.mode_state["synthetic_chat_history"].append({"role": "user", "content": user_question})
+            with st.chat_message("Entrevistador", avatar="🎤"):
+                st.write(user_question)
+            
+            # Generar respuesta "En Personaje"
+            with st.chat_message(p.get('nombre'), avatar="👤"):
+                with st.spinner(f"{p.get('nombre')} está pensando..."):
+                    acting_prompt = get_persona_chat_instruction(p, user_question)
+                    
+                    # Aquí es clave: NO pasamos el historial completo al prompt de sistema para no diluir el personaje,
+                    # pero idealmente Gemini maneja el contexto. Por simplicidad en modo 'acting',
+                    # enviamos la instrucción fresca cada vez o construimos un chat structurado.
+                    
+                    # Opción simple: Streaming directo de la respuesta
+                    stream = call_gemini_stream(acting_prompt)
+                    if stream:
+                        response = st.write_stream(stream)
+                        st.session_state.mode_state["synthetic_chat_history"].append({"role": "assistant", "content": response})
