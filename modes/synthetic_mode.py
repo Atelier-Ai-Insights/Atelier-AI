@@ -8,11 +8,14 @@ from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 
 def synthetic_users_mode(db, selected_files):
-    st.subheader("👥 Focus Group Sintético")
+    st.subheader("👥 Perfil Sintético")
     st.markdown("Simula conversaciones con perfiles de consumidor generados a partir de tus datos reales.")
     
     # 1. CONFIGURACIÓN DEL PERFIL
-    with st.expander("⚙️ Configurar Perfil Sintético", expanded=("synthetic_persona_data" not in st.session_state.mode_state)):
+    # Se expande automáticamente si NO hay un perfil generado
+    show_config = "synthetic_persona_data" not in st.session_state.mode_state
+    
+    with st.expander("⚙️ Configurar Perfil Sintético", expanded=show_config):
         segment_name = st.text_input("Nombre del Segmento a simular:", placeholder="Ej: Compradores sensibles al precio, Mamás primerizas...")
         
         if st.button("Generar ADN del Perfil", type="primary", width='stretch'):
@@ -91,33 +94,35 @@ def synthetic_users_mode(db, selected_files):
                         st.session_state.mode_state["synthetic_chat_history"].append({"role": "assistant", "content": response})
                         st.rerun() # Rerun para actualizar botones de descarga
 
-        # --- SECCIÓN DE DESCARGA Y REINICIO (NUEVO) ---
-        if st.session_state.mode_state["synthetic_chat_history"]:
-            st.divider()
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # Preparar texto para PDF
+        # --- SECCIÓN DE ACCIONES Y CONTROL ---
+        st.divider()
+        c1, c2, c3 = st.columns(3)
+        
+        # Botón 1: Descargar (Solo si hay chat)
+        with c1:
+            if st.session_state.mode_state["synthetic_chat_history"]:
                 chat_content = f"# Entrevista con Perfil Sintético: {p.get('nombre')}\n\n"
                 chat_content += f"**Perfil:** {p.get('edad')}, {p.get('ocupacion')}\n\n---\n\n"
-                
                 for m in st.session_state.mode_state["synthetic_chat_history"]:
                     role_label = "Entrevistador" if m['role'] == 'user' else p.get('nombre')
                     chat_content += f"**{role_label}:** {m['content']}\n\n"
                 
                 pdf_bytes = generate_pdf_html(chat_content, title=f"Entrevista - {p.get('nombre')}", banner_path=banner_file)
-                
                 if pdf_bytes:
-                    st.download_button(
-                        label="Descargar Conversación (PDF)",
-                        data=pdf_bytes,
-                        file_name=f"entrevista_{p.get('nombre').lower().replace(' ', '_')}.pdf",
-                        mime="application/pdf",
-                        width='stretch',
-                        type="primary"
-                    )
-            
-            with col2:
-                if st.button("Nueva Pregunta / Reiniciar Chat", width='stretch', type="secondary"):
+                    st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"entrevista_{p.get('nombre')}.pdf", width='stretch')
+            else:
+                st.write("") # Espacio vacío para mantener alineación
+
+        # Botón 2: Reiniciar Chat (Mantiene perfil, borra mensajes)
+        with c2:
+            if st.session_state.mode_state["synthetic_chat_history"]:
+                if st.button("🔄 Reiniciar Chat", width='stretch', help="Borra la conversación actual pero mantiene al personaje"):
                     st.session_state.mode_state["synthetic_chat_history"] = []
                     st.rerun()
+
+        # Botón 3: Nuevo Perfil (Borra todo y vuelve al inicio) - NUEVO
+        with c3:
+            if st.button("✨ Crear Nuevo Perfil", width='stretch', type="secondary", help="Borra el personaje actual para crear uno diferente"):
+                st.session_state.mode_state.pop("synthetic_persona_data", None)
+                st.session_state.mode_state.pop("synthetic_chat_history", None)
+                st.rerun()
