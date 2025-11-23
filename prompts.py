@@ -1,4 +1,9 @@
 import streamlit as st
+from datetime import datetime
+
+# ==============================================================================
+# INSTRUCCIONES GLOBALES
+# ==============================================================================
 
 # --- BLOQUE DE INSTRUCCIONES DE CITAS ---
 INSTRUCCIONES_DE_CITAS = """
@@ -10,7 +15,9 @@ INSTRUCCIONES_DE_CITAS = """
 5. **Vacío:** Si la respuesta no está en los documentos, di: "Información no disponible en los documentos."
 """
 
-# --- Prompts para "Generar un reporte de reportes" ---
+# ==============================================================================
+# PROMPTS DE REPORTES Y CHAT BÁSICO
+# ==============================================================================
 
 def get_report_prompt1(question, relevant_info):
     """Extracción de hallazgos (Directo al grano)."""
@@ -41,8 +48,6 @@ def get_report_prompt2(question, result1, relevant_info):
         f"{INSTRUCCIONES_DE_CITAS}\n"
     )
 
-# --- Prompt para "Chat de Consulta Directa" ---
-
 def get_grounded_chat_prompt(conversation_history, relevant_info):
     """Chat RAG estricto."""
     return (
@@ -54,7 +59,9 @@ def get_grounded_chat_prompt(conversation_history, relevant_info):
         "**Respuesta:**"
     )
 
-# --- Prompt para "Conversaciones creativas" ---
+# ==============================================================================
+# PROMPTS CREATIVOS Y EVALUACIÓN
+# ==============================================================================
 
 def get_ideation_prompt(conv_history, relevant):
     """Ideación (Permite más flexibilidad en tono, estricto en datos)."""
@@ -66,8 +73,6 @@ def get_ideation_prompt(conv_history, relevant):
         f"**Instrucción:** Responde de forma sintética e inspiradora. Basa tus premisas en los datos.\n"
         f"{INSTRUCCIONES_DE_CITAS}"
     )
-
-# --- Prompt para "Generación de conceptos" ---
 
 def get_concept_gen_prompt(product_idea, context_info):
     """Concepto estructurado (Markdown forzado)."""
@@ -83,8 +88,6 @@ def get_concept_gen_prompt(product_idea, context_info):
         f"* **Opción B:** (Variante alternativa).\n\n"
         f"{INSTRUCCIONES_DE_CITAS}"
     )
-
-# --- Prompt para "Evaluar una idea" ---
 
 def get_idea_eval_prompt(idea_input, context_info):
     """Evaluación crítica."""
@@ -106,8 +109,6 @@ def get_idea_eval_prompt(idea_input, context_info):
 
 {INSTRUCCIONES_DE_CITAS}
 """
-
-# --- Prompt para "Evaluación Visual" y "Video" ---
 
 def get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context):
     return [
@@ -139,7 +140,9 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
         INSTRUCCIONES_DE_CITAS
     ]
 
-# --- Prompt para "Análisis de Notas y Transcripciones" ---
+# ==============================================================================
+# PROMPTS DE ANÁLISIS DE TEXTO Y MULTIMEDIA (TRANSCRIPCIONES)
+# ==============================================================================
 
 def get_transcript_prompt(combined_context, user_prompt):
     return (
@@ -195,8 +198,6 @@ def get_autocode_prompt(context, main_topic):
 {INSTRUCCIONES_DE_CITAS}
 """
 
-# --- Prompt para "EtnoChat" y Transcripción Multimedia ---
-
 def get_etnochat_prompt(conversation_history, text_context):
     return (
         "**Rol:** Etnógrafo Digital.\n"
@@ -219,20 +220,9 @@ def get_media_transcription_prompt():
     **Salida:** SOLO el texto plano. Sin introducciones.
     """
 
-# --- Prompt para "Análisis de Datos (Excel)" ---
-
-def get_survey_articulation_prompt(survey_context, repository_context, conversation_history):
-    return (
-        f"**Rol:** Investigador de Mercados (Cuanti/Cuali).\n"
-        f"**Tarea:** Responde articulando datos duros (Excel) con hallazgos previos (Repositorio).\n\n"
-        f"**Excel (El QUÉ):**\n{survey_context}\n\n"
-        f"**Repositorio (El PORQUÉ):**\n{repository_context}\n\n"
-        f"**Historial:**\n{conversation_history}\n\n"
-        f"**Instrucción:** Conecta el dato numérico con la explicación cualitativa. Cita el repositorio [x].\n"
-        f"{INSTRUCCIONES_DE_CITAS}"
-    )
-
-# --- Prompts para "Generador de One-Pager PPT" ---
+# ==============================================================================
+# PROMPTS DE ONE-PAGER (PPT)
+# ==============================================================================
 
 PROMPTS_ONEPAGER = {
     "Definición de Oportunidades": """
@@ -322,7 +312,6 @@ def get_onepager_final_prompt(relevant_info, selected_template_name, tema_centra
 
 def get_excel_autocode_prompt(main_topic, responses_sample):
     sample_text = str(responses_sample) 
-    
     return f"""
 **Rol:** Codificador de Encuestas.
 **Tarea:** Define categorías (nodos) para analizar respuestas sobre '{main_topic}'.
@@ -338,11 +327,24 @@ Estructura:
 ]
 **Reglas CRÍTICAS de optimización:**
 1. Genera máximo **8-10 categorías** principales.
-2. Para cada categoría, incluye SOLO las **15 palabras clave o frases cortas más representativas** y repetidas (No listes todas las variaciones únicas).
-3. Las keywords deben ser literales (encontradas en el texto) para usarse en búsqueda exacta (Regex).
+2. Para cada categoría, incluye SOLO las **15 palabras clave o frases cortas más representativas** y repetidas.
+3. Las keywords deben ser literales.
 """
 
-# --- Prompts Análisis de Datos ---
+# ==============================================================================
+# PROMPTS DE ANÁLISIS DE DATOS
+# ==============================================================================
+
+def get_survey_articulation_prompt(survey_context, repository_context, conversation_history):
+    return (
+        f"**Rol:** Investigador de Mercados (Cuanti/Cuali).\n"
+        f"**Tarea:** Responde articulando datos duros (Excel) con hallazgos previos (Repositorio).\n\n"
+        f"**Excel (El QUÉ):**\n{survey_context}\n\n"
+        f"**Repositorio (El PORQUÉ):**\n{repository_context}\n\n"
+        f"**Historial:**\n{conversation_history}\n\n"
+        f"**Instrucción:** Conecta el dato numérico con la explicación cualitativa. Cita el repositorio [x].\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
+    )
 
 def get_data_summary_prompt(data_snapshot_str):
     return f"""
@@ -387,7 +389,7 @@ def get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups):
     return base
 
 # ==============================================================================
-# SECCIÓN: ANÁLISIS DE TENDENCIAS (LENTES + VALIDACIÓN DE MERCADO)
+# SECCIÓN: ANÁLISIS DE TENDENCIAS 2.0 (INTELLIGENCE BRIEF)
 # ==============================================================================
 
 SOURCE_LENSES = {
@@ -401,8 +403,10 @@ SOURCE_LENSES = {
     "Superintendencia (SIC) (Regulación)": "Considera el marco legal, protección al consumidor, habeas data y libre competencia. (Web: https://www.sic.gov.co)"
 }
 
-# --- MEJORA MAYOR: Estructura de "Intelligence Brief" ---
 def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_list):
+    
+    # Obtener fecha actual para referencia temporal en la sección de noticias
+    current_date = datetime.now().strftime("%d de %B de %Y")
     
     sources_instruction = ""
     if public_sources_list:
@@ -413,10 +417,11 @@ def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_l
         sources_text = "\n".join(lens_descriptions)
         sources_instruction = (
             f"3. **LENTES DE MERCADO (Fuentes Públicas):**\n"
-            f"Cruza OBLIGATORIAMENTE la data interna con la visión de estas entidades:\n{sources_text}\n"
+            f"Actúa como un analista experto. Cruza OBLIGATORIAMENTE la data interna con la visión de estas entidades:\n{sources_text}\n"
         )
 
     return f"""
+**Fecha del Análisis:** {current_date}
 **Rol:** Director de Estrategia y Futuro (Head of Trends).
 **Misión:** Generar un 'Intelligence Brief' de alto nivel sobre: "{topic}".
 
@@ -427,7 +432,7 @@ C. **Contexto Externo:** {sources_instruction}
 
 **ESTRUCTURA DEL REPORTE (Usa Markdown estricto):**
 
-# 🔭 Radar de Tendencia: {topic}
+# Radar de Tendencia: {topic}
 
 ## 1. The Big Idea (Resumen Ejecutivo)
 *Escribe un párrafo potente (máx 5 líneas) que defina la oportunidad central. Debe ser inspirador pero basado en datos.*
@@ -450,9 +455,24 @@ C. **Contexto Externo:** {sources_instruction}
 * 🛒 *Comportamiento observado (ej. cambio en punto de venta)* [Fuente: Documento Y]
 
 ## 5. Plan de Activación (Horizonte de Innovación)
-* **🚀 AHORA (Quick Wins):** Acciones de Marketing/Ventas para capturar valor este mes.
-* **🛠️ LUEGO (Desarrollo):** Ajustes de producto/servicio (R&D) para los próximos 6 meses.
-* **🔮 DESPUÉS (Visión):** Hacia dónde evolucionará esto en 2-3 años.
+* **AHORA (Quick Wins):** Acciones de Marketing/Ventas para capturar valor este mes.
+* **LUEGO (Desarrollo):** Ajustes de producto/servicio (R&D) para los próximos 6 meses.
+* **DESPUÉS (Visión):** Hacia dónde evolucionará esto en 2-3 años.
+
+## 6. Radar de Noticias (Últimos 7 días)
+*Identifica 3 eventos o noticias recientes (cercanas a {current_date}) que impacten esta tendencia. Debes incluir la Fuente y, si es posible, el enlace.*
+
+* **📰 [Titular de la Noticia]**
+  * *Resumen:* Breve impacto en la tendencia.
+  * *Fuente:* [Nombre del Medio / Entidad] (Link referencia si está disponible).
+
+* **📰 [Titular de la Noticia]**
+  * *Resumen:* Breve impacto en la tendencia.
+  * *Fuente:* [Nombre del Medio / Entidad].
+
+* **📰 [Titular de la Noticia]**
+  * *Resumen:* Breve impacto en la tendencia.
+  * *Fuente:* [Nombre del Medio / Entidad].
 
 ---
 **Fuentes Utilizadas:**
