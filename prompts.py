@@ -321,7 +321,6 @@ def get_onepager_final_prompt(relevant_info, selected_template_name, tema_centra
     """
 
 def get_excel_autocode_prompt(main_topic, responses_sample):
-    # Optimizamos la lista para que ocupe menos tokens visualmente
     sample_text = str(responses_sample) 
     
     return f"""
@@ -391,7 +390,6 @@ def get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups):
 # SECCIÓN: ANÁLISIS DE TENDENCIAS (LENTES + VALIDACIÓN DE MERCADO)
 # ==============================================================================
 
-# Definimos qué "datos" debe simular la IA para cada fuente Y AGREGAMOS LA URL
 SOURCE_LENSES = {
     "DANE (Datos Demográficos/Económicos)": "Prioriza indicadores duros: IPC (Inflación), Tasa de Desempleo, PIB trimestral, Pulso Social y gasto de los hogares. (Web: https://www.dane.gov.co)",
     "Banco de la República (Macroeconomía)": "Enfócate en tasas de interés de intervención, TRM (Dólar), balanza comercial y política monetaria. (Web: https://www.banrep.gov.co)",
@@ -403,79 +401,60 @@ SOURCE_LENSES = {
     "Superintendencia (SIC) (Regulación)": "Considera el marco legal, protección al consumidor, habeas data y libre competencia. (Web: https://www.sic.gov.co)"
 }
 
+# --- MEJORA MAYOR: Estructura de "Intelligence Brief" ---
 def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_list):
     
-    # Construcción dinámica de la instrucción de fuentes públicas
     sources_instruction = ""
     if public_sources_list:
         lens_descriptions = []
         for source in public_sources_list:
-            # Buscamos la instrucción específica para esa fuente
             lens = SOURCE_LENSES.get(source, "aporta contexto general de mercado")
             lens_descriptions.append(f"- **{source.split('(')[0].strip()}**: {lens}.")
-        
         sources_text = "\n".join(lens_descriptions)
-        
         sources_instruction = (
             f"3. **LENTES DE MERCADO (Fuentes Públicas):**\n"
-            f"Actúa como un analista experto que tiene acceso al conocimiento general de estas entidades. "
-            f"Para este análisis, OBLIGATORIAMENTE aplica estas perspectivas:\n"
-            f"{sources_text}\n"
-            f"**Nota:** Usa las tendencias macroeconómicas y sociales conocidas de estas entidades para validar o refutar los hallazgos internos."
+            f"Cruza OBLIGATORIAMENTE la data interna con la visión de estas entidades:\n{sources_text}\n"
         )
 
     return f"""
-**Rol:** Director de Estrategia y Tendencias de Mercado.
-**Misión:** Realizar una triangulación estratégica sobre: "{topic}".
+**Rol:** Director de Estrategia y Futuro (Head of Trends).
+**Misión:** Generar un 'Intelligence Brief' de alto nivel sobre: "{topic}".
 
 **Tus 3 Insumos de Información:**
 A. **ADN Interno (Repositorio):** {repo_context[:15000]}
+B. **Evidencia Nueva (PDFs):** {pdf_context[:15000]}
+C. **Contexto Externo:** {sources_instruction}
 
-B. **Evidencia Nueva (PDFs Cargados):** {pdf_context[:15000]}
+**ESTRUCTURA DEL REPORTE (Usa Markdown estricto):**
 
-C. **Contexto de Mercado (Fuentes Públicas Seleccionadas):**
-{sources_instruction}
+# 🔭 Radar de Tendencia: {topic}
 
-**Instrucción:** Debes cruzar estas tres fuentes. No las analices por separado. 
+## 1. The Big Idea (Resumen Ejecutivo)
+*Escribe un párrafo potente (máx 5 líneas) que defina la oportunidad central. Debe ser inspirador pero basado en datos.*
 
-**Formato de Salida (Markdown Estricto):**
+## 2. Drivers de Cambio (¿Por qué ahora?)
+*Identifica las fuerzas macro que impulsan esta tendencia (Ej: Inflación, Digitalización, Cambio Climático).*
+* **[Driver 1]:** Explicación conectada con el tema.
+* **[Driver 2]:** Explicación conectada con el tema.
 
-# Radar de Tendencias: {topic}
-
-## 1. Insight Estratégico
-(Una verdad reveladora y sintética que surge de cruzar lo interno con lo externo).
-
-## 2. Validación de Mercado (Tabla de Triangulación)
-*Este análisis contrasta la visión interna de la empresa (Repositorio/PDFs) con la realidad del mercado (Fuentes Públicas).*
-
-| Tendencia Interna (Lo que dicen nuestros estudios) | Validación Externa (Datos DANE/Fenalco/Etc) | Veredicto (¿Oportunidad o Riesgo?) |
+## 3. Triangulación de Evidencia (Interna vs. Externa)
+| Lo que dicen nuestros datos (Interno) | Validación de Mercado ({', '.join(public_sources_list) if public_sources_list else 'Mercado'}) | Veredicto |
 | :--- | :--- | :--- |
-| (Hallazgo clave del repo [Cita]) | (Dato o tendencia macro que lo confirma o contradice) | (Conclusión breve) |
-| (Hallazgo clave del repo [Cita]) | (Dato o tendencia macro que lo confirma o contradice) | (Conclusión breve) |
-| (Hallazgo clave del repo [Cita]) | (Dato o tendencia macro que lo confirma o contradice) | (Conclusión breve) |
+| (Hallazgo clave del repo [Cita]) | (Dato macro o tendencia de consumo que lo confirma/refuta) | (¿Oportunidad Real o Ruido?) |
+| (Hallazgo clave del repo [Cita]) | (Dato macro o tendencia de consumo que lo confirma/refuta) | (¿Oportunidad Real o Ruido?) |
+| (Hallazgo clave del repo [Cita]) | (Dato macro o tendencia de consumo que lo confirma/refuta) | (¿Oportunidad Real o Ruido?) |
 
-## 3. Hallazgos Principales (Deep Dive)
-* **[Patrón Detectado 1]:** Explicación profunda. ¿Por qué ocurre? ¿Qué fuentes lo sustentan?
-* **[Patrón Detectado 2]:** Explicación profunda.
-* **[Perspectiva Externa]:** Análisis exclusivo desde las fuentes públicas seleccionadas ({', '.join(public_sources_list) if public_sources_list else 'Mercado General'}).
+## 4. Señales del Consumidor (Evidencia Cualitativa)
+*Extrae 'Verbatims' o comportamientos específicos del Repositorio que demuestren la tendencia en acción.*
+* 💬 *"Cita textual o paráfrasis de un consumidor"* [Fuente: Documento X]
+* 🛒 *Comportamiento observado (ej. cambio en punto de venta)* [Fuente: Documento Y]
 
-## 4. Territorios de Oportunidad
-1. **[Oportunidad A]:** Descripción y potencial.
-2. **[Oportunidad B]:** Descripción y potencial.
-3. **[Oportunidad C]:** Descripción y potencial.
-
-## 5. Recomendaciones Estratégicas
-(Acciones concretas a corto y mediano plazo).
+## 5. Plan de Activación (Horizonte de Innovación)
+* **🚀 AHORA (Quick Wins):** Acciones de Marketing/Ventas para capturar valor este mes.
+* **🛠️ LUEGO (Desarrollo):** Ajustes de producto/servicio (R&D) para los próximos 6 meses.
+* **🔮 DESPUÉS (Visión):** Hacia dónde evolucionará esto en 2-3 años.
 
 ---
-## Bibliografía y Fuentes Consultadas
-
-### Fuentes Internas (Repositorio y PDFs)
-* [1] Documento: (Listar los nombres de archivos del repositorio usados)
-* [2] PDF Cargado: (Nombre del archivo PDF)
-
-### Fuentes Externas (Referencias Públicas)
-* Lista aquí las fuentes públicas seleccionadas para este análisis y sus enlaces de referencia:
-(Ejemplo: **DANE**: https://www.dane.gov.co)
-* ...
+**Fuentes Utilizadas:**
+* [1] Fuentes Internas: (Lista de archivos usados del repositorio/PDFs)
 """
