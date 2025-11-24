@@ -32,7 +32,7 @@ from modes.onepager_mode import one_pager_ppt_mode
 from modes.data_analysis_mode import data_analysis_mode
 from modes.etnochat_mode import etnochat_mode
 from modes.trend_analysis_mode import trend_analysis_mode 
-from modes.synthetic_mode import synthetic_users_mode # <--- NUEVA IMPORTACIÓN
+from modes.synthetic_mode import synthetic_users_mode 
 
 from utils import (
     extract_brand,
@@ -77,7 +77,7 @@ def run_user_mode(db_full, user_features, footer_html):
         "Creatividad": {
             c.MODE_IDEATION: user_features.get("has_creative_conversation"),
             c.MODE_CONCEPT: user_features.get("has_concept_generation"),
-            c.MODE_SYNTHETIC: True, # <--- ACTIVADO AQUÍ
+            c.MODE_SYNTHETIC: True, 
         }
     }
     
@@ -122,7 +122,6 @@ def run_user_mode(db_full, user_features, footer_html):
                 st.button(c.MODE_IDEATION, on_click=set_mode_and_reset, args=(c.MODE_IDEATION,), use_container_width=True, type="primary" if modo == c.MODE_IDEATION else "secondary")
             if all_categories["Creatividad"][c.MODE_CONCEPT]:
                 st.button(c.MODE_CONCEPT, on_click=set_mode_and_reset, args=(c.MODE_CONCEPT,), use_container_width=True, type="primary" if modo == c.MODE_CONCEPT else "secondary")
-            # --- BOTÓN NUEVO ---
             if all_categories["Creatividad"][c.MODE_SYNTHETIC]:
                 st.button(c.MODE_SYNTHETIC, on_click=set_mode_and_reset, args=(c.MODE_SYNTHETIC,), use_container_width=True, type="primary" if modo == c.MODE_SYNTHETIC else "secondary")
 
@@ -186,7 +185,7 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == c.MODE_DATA_ANALYSIS: data_analysis_mode(db_filtered, selected_files)
     elif modo == c.MODE_ETNOCHAT: etnochat_mode()
     elif modo == c.MODE_TREND_ANALYSIS: trend_analysis_mode(db_filtered, selected_files)
-    elif modo == c.MODE_SYNTHETIC: synthetic_users_mode(db_filtered, selected_files) # <--- RUTA NUEVA
+    elif modo == c.MODE_SYNTHETIC: synthetic_users_mode(db_filtered, selected_files)
     
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
@@ -213,14 +212,17 @@ def main():
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
-    # RUTA 1: RECUPERACIÓN DE CONTRASEÑA
-    if params.get("type") == "recovery":
+    # RUTA 1: RECUPERACIÓN DE CONTRASEÑA O INVITACIÓN
+    auth_type = params.get("type")
+    
+    if auth_type in ["recovery", "invite"]:
         access_token = params.get("access_token")
         refresh_token = params.get("refresh_token") 
 
         if isinstance(access_token, list): access_token = access_token[0]
         if isinstance(refresh_token, list): refresh_token = refresh_token[0]
 
+        # CASO A: Tenemos tokens (Enlace directo mágico)
         if access_token and refresh_token:
             try:
                 supabase.auth.set_session(access_token, refresh_token)
@@ -228,38 +230,35 @@ def main():
                 col1, col2, col3 = st.columns([1,2,1])
                 with col2:
                     st.image("LogoDataStudio.png")
-                    show_set_new_password_page(access_token) 
+                    show_set_new_password_page(access_token, context=auth_type) 
                 st.divider()
                 st.markdown(footer_html, unsafe_allow_html=True)
                 st.stop()
 
             except Exception as e:
-                st.error(f"El enlace de recuperación no es válido o ha expirado: {e}")
+                st.error(f"El enlace no es válido o ha expirado: {e}")
                 time.sleep(3)
                 st.query_params.clear()
                 st.session_state.page = "login"
                 st.rerun()
         
+        # CASO B: Solo Access Token (Flujo OTP/PKCE)
         elif access_token and not refresh_token:
-            if st.session_state.get("logged_in"):
-                 apply_login_styles()
-                 col1, col2, col3 = st.columns([1,2,1])
-                 with col2:
-                     st.image("LogoDataStudio.png")
-                     show_set_new_password_page(None) 
-                 st.stop()
-            
             apply_login_styles()
             col1, col2, col3 = st.columns([1,2,1])
             with col2:
                 st.image("LogoDataStudio.png")
-                show_otp_verification_page(access_token) 
+                if auth_type == "invite":
+                    st.info("Finalizando configuración de cuenta...")
+                    show_set_new_password_page(None, context="invite")
+                else:
+                    show_otp_verification_page(access_token) 
             st.divider()
             st.markdown(footer_html, unsafe_allow_html=True)
             st.stop()
 
         else:
-             st.warning("Enlace de recuperación incompleto. Intenta solicitar uno nuevo.")
+             st.warning("Enlace incompleto. Intenta solicitar uno nuevo.")
              st.stop()
 
     # RUTA 2: El usuario ya está logueado (sesión normal)
