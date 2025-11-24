@@ -12,7 +12,7 @@ from services.storage import load_database
 from services.supabase_db import supabase
 from auth import (
     show_login_page, 
-    show_signup_page, 
+    # show_signup_page, <--- Eliminado
     show_reset_password_page, 
     show_set_new_password_page,
     show_otp_verification_page 
@@ -222,7 +222,6 @@ def main():
         if isinstance(access_token, list): access_token = access_token[0]
         if isinstance(refresh_token, list): refresh_token = refresh_token[0]
 
-        # CASO A: Tenemos tokens (Enlace directo mágico)
         if access_token and refresh_token:
             try:
                 supabase.auth.set_session(access_token, refresh_token)
@@ -242,7 +241,6 @@ def main():
                 st.session_state.page = "login"
                 st.rerun()
         
-        # CASO B: Solo Access Token (Flujo OTP/PKCE)
         elif access_token and not refresh_token:
             apply_login_styles()
             col1, col2, col3 = st.columns([1,2,1])
@@ -340,7 +338,9 @@ def main():
             if st.session_state.page == "login": 
                 show_login_page()
             elif st.session_state.page == "signup": 
-                show_signup_page()
+                # Esta condición ya es inalcanzable, pero la dejo por seguridad
+                st.session_state.page = "login"
+                show_login_page()
             elif st.session_state.page == "reset_password": 
                 show_reset_password_page()
             else:
