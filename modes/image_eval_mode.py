@@ -2,16 +2,18 @@ import streamlit as st
 from PIL import Image
 from io import BytesIO
 from utils import get_relevant_info
-from services.gemini_api import call_gemini_stream # <-- Usar Stream
+from services.gemini_api import call_gemini_stream 
 from services.supabase_db import log_query_event
 from reporting.pdf_generator import generate_pdf_html
+# --- NUEVA IMPORTACIÓN ---
+from reporting.docx_generator import generate_docx
 from config import banner_file
 from prompts import get_image_eval_prompt_parts
 import constants as c
 
 def image_evaluation_mode(db, selected_files):
     st.subheader("Evaluación Visual")
-    st.markdown("...") 
+    st.markdown("Analiza el impacto de tus imágenes publicitarias.") 
     
     uploaded_file = st.file_uploader("Sube tu imagen aquí:", type=["jpg", "png", "jpeg"])
     target_audience = st.text_area("Describe el público objetivo (Target):", height=100, placeholder="Ej: Mujeres jóvenes...")
@@ -29,13 +31,21 @@ def image_evaluation_mode(db, selected_files):
         st.markdown("### Resultados Evaluación:")
         st.markdown(st.session_state.mode_state["image_evaluation_result"])
         
-        col1, col2 = st.columns(2)
+        st.divider()
+        col1, col2, col3 = st.columns(3)
+        
         with col1:
-            pdf_bytes = generate_pdf_html(st.session_state.mode_state["image_evaluation_result"], title=f"Evaluacion Visual - {uploaded_file.name if uploaded_file else 'Imagen'}", banner_path=banner_file)
+            pdf_bytes = generate_pdf_html(st.session_state.mode_state["image_evaluation_result"], title=f"Evaluacion Visual", banner_path=banner_file)
             if pdf_bytes: 
-                st.download_button(label="Descargar Evaluación PDF", data=pdf_bytes, file_name=f"evaluacion.pdf", mime="application/pdf", width='stretch')
+                st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"eval_visual.pdf", mime="application/pdf", width='stretch')
+        
         with col2:
-            if st.button("Evaluar Otra Imagen", width='stretch'): 
+            docx_bytes = generate_docx(st.session_state.mode_state["image_evaluation_result"], title="Evaluación Visual")
+            if docx_bytes:
+                st.download_button("📝 Descargar Word", data=docx_bytes, file_name="eval_visual.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
+
+        with col3:
+            if st.button("🔄 Evaluar Otra", width='stretch'): 
                 st.session_state.mode_state.pop("image_evaluation_result", None)
                 st.rerun()
     
@@ -46,7 +56,6 @@ def image_evaluation_mode(db, selected_files):
             
         with st.spinner("Analizando imagen..."):
             relevant_text_context = get_relevant_info(db, f"Contexto: {target_audience}", selected_files)
-            # Truncado preventivo
             if len(relevant_text_context) > 800000: relevant_text_context = relevant_text_context[:800000]
                 
             prompt_parts = get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context)
@@ -54,15 +63,13 @@ def image_evaluation_mode(db, selected_files):
             prompt_parts.append("\n\n**Imagen para evaluar:**")
             prompt_parts.append(image_data)
             
-            # --- STREAMING ---
             stream = call_gemini_stream(prompt_parts)
             
             if stream: 
                 st.markdown("### Resultados Evaluación:")
                 response = st.write_stream(stream)
-                
                 st.session_state.mode_state["image_evaluation_result"] = response
                 log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode=c.MODE_IMAGE_EVAL)
-                st.rerun() # Rerun para mostrar botones de descarga
+                st.rerun() 
             else: 
                 st.error("No se pudo generar evaluación.")
