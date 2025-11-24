@@ -69,11 +69,30 @@ HIDE_ST_STYLE = """
      </style>
 """
 
-# --- NUEVO: Estilos de Login/Layout ---
+# --- NUEVO: Estilos de Login/Layout Compactos ---
 LOGIN_PAGE_CSS = """
     <style>
         [data.testid="stAppViewContainer"] > .main { padding-top: 2rem; }
         div[data.testid="stBlock"] { padding-top: 0rem; }
+        
+        /* Reducir el espacio vertical entre los elementos del formulario */
+        div[data-testid="stVerticalBlock"] > div {
+            gap: 0.5rem !important;
+        }
+        
+        /* Hacer los botones más compactos (menos altura) */
+        div[data-testid="stButton"] button {
+            padding-top: 0.4rem !important;
+            padding-bottom: 0.4rem !important;
+            min-height: 0px !important;
+            height: auto !important;
+        }
+        
+        /* Ajustar inputs para que hagan juego */
+        div[data-baseweb="input"] {
+            padding-top: 0.2rem !important;
+            padding-bottom: 0.2rem !important;
+        }
     </style>
 """
 
