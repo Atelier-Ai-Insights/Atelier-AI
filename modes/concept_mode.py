@@ -4,8 +4,9 @@ from services.gemini_api import call_gemini_stream
 from services.supabase_db import log_query_event
 from prompts import get_concept_gen_prompt
 import constants as c 
-# --- ¡NUEVAS IMPORTACIONES! ---
 from reporting.pdf_generator import generate_pdf_html
+# --- NUEVA IMPORTACIÓN ---
+from reporting.docx_generator import generate_docx
 from config import banner_file
 
 # =====================================================
@@ -25,7 +26,7 @@ def concept_generation_mode(db, selected_files):
         st.divider() # Línea separadora visual
 
         # --- BOTONES DE ACCIÓN ---
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             # Generar PDF
@@ -34,21 +35,27 @@ def concept_generation_mode(db, selected_files):
                 title="Concepto de Innovación", 
                 banner_path=banner_file
             )
-            
             if pdf_bytes:
-                st.download_button(
-                    label="Descargar Concepto PDF", 
-                    data=pdf_bytes, 
-                    file_name="concepto_generado.pdf", 
-                    mime="application/pdf", 
-                    width='stretch'
-                )
-            else:
-                st.error("No se pudo generar el PDF.")
+                st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name="concepto.pdf", mime="application/pdf", width='stretch')
 
         with col2:
-            if st.button("Generar nuevo concepto", width='stretch'): 
-                # Limpiar estado
+            # Generar Word
+            docx_bytes = generate_docx(
+                st.session_state.mode_state["generated_concept"], 
+                title="Concepto de Innovación"
+            )
+            if docx_bytes:
+                st.download_button(
+                    "📝 Descargar Word", 
+                    data=docx_bytes, 
+                    file_name="concepto.docx", 
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                    width='stretch',
+                    type="primary"
+                )
+
+        with col3:
+            if st.button("🔄 Nuevo Concepto", width='stretch'): 
                 st.session_state.mode_state.pop("generated_concept")
                 st.rerun()
 
@@ -70,14 +77,10 @@ def concept_generation_mode(db, selected_files):
                 if stream:
                     st.markdown("---")
                     st.markdown("### Concepto Generado")
-                    # Efecto de escritura
                     response = st.write_stream(stream)
                     
-                    # Guardar en estado
                     st.session_state.mode_state["generated_concept"] = response
                     log_query_event(product_idea, mode=c.MODE_CONCEPT)
-                    
-                    # Rerun para mostrar los botones inmediatamente
                     st.rerun()
                 else: 
                     st.error("No se pudo generar concepto.")
