@@ -71,6 +71,9 @@ def show_login_page():
         email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
         password = st.text_input("Contraseña", type="password", placeholder="password")
         
+        # Espaciador visual pequeño (opcional, pero ayuda a separar input de botón)
+        st.write("") 
+        
         if st.button("Ingresar", width='stretch', type="primary"):
             try:
                 response = supabase.auth.sign_in_with_password({"email": email, "password": password})
@@ -132,8 +135,9 @@ def show_login_page():
                     st.warning("📧 Tu email no ha sido confirmado. Revisa tu bandeja de entrada.")
                 else:
                     st.error(f"Error de acceso: {e}")
-                
-        st.divider()
+        
+        # --- CAMBIO AQUÍ: Eliminado el st.divider() ---
+        
         if st.button("¿Olvidaste tu contraseña?", type="secondary", width='stretch'):
             st.session_state.page = "reset_password"
             st.rerun()
@@ -184,10 +188,6 @@ def show_otp_verification_page(otp_code):
             st.error(f"Error de verificación: {e}")
 
 def show_set_new_password_page(access_token=None, context="recovery"):
-    """
-    Muestra el formulario para establecer password.
-    context: "recovery" (Olvidé contraseña) o "invite" (Nuevo usuario).
-    """
     if context == "invite":
         st.header("¡Bienvenido a Atelier!")
         st.info("Para activar tu cuenta, crea una contraseña segura.")
@@ -209,9 +209,7 @@ def show_set_new_password_page(access_token=None, context="recovery"):
             st.error("La contraseña debe tener al menos 6 caracteres."); return
 
         try:
-            # Actualizamos el usuario
             user_response = supabase.auth.update_user(attributes={"password": new_password})
-            
             supabase.auth.sign_out() 
             st.session_state.logged_in = False
             st.session_state.clear()
