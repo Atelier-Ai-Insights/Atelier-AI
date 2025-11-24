@@ -3,6 +3,8 @@ from utils import get_relevant_info, reset_report_workflow
 from services.gemini_api import call_gemini_api, call_gemini_stream
 from services.supabase_db import get_monthly_usage, log_query_event
 from reporting.pdf_generator import generate_pdf_html
+# --- NUEVA IMPORTACIÓN ---
+from reporting.docx_generator import generate_docx 
 from config import banner_file
 from prompts import get_report_prompt1, get_report_prompt2
 import constants as c 
@@ -39,15 +41,36 @@ def report_mode(db, selected_files):
         st.markdown("---"); st.markdown("### Informe Generado"); 
         st.markdown(st.session_state.mode_state["report"], unsafe_allow_html=True); st.markdown("---")
         
+        # Generar archivos en memoria
         pdf_bytes = generate_pdf_html(st.session_state.mode_state["report"], title="Informe Final", banner_path=banner_file)
         
-        # --- MEJORA UX: Botones organizados ---
+        # --- GENERAR WORD ---
+        docx_bytes = generate_docx(
+            st.session_state.mode_state["report"], 
+            title="Informe de Investigación Atelier"
+        )
+        
+        # --- BOTONES DE ACCIÓN ---
         st.divider()
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
+        
         with col1:
             if pdf_bytes: 
-                st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name="Informe_Atelier.pdf", mime="application/pdf", width='stretch', type="primary")
-        with col2: 
+                st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name="Informe_Atelier.pdf", mime="application/pdf", width='stretch', type="secondary")
+        
+        with col2:
+            if docx_bytes:
+                st.download_button(
+                    "📝 Descargar Word", 
+                    data=docx_bytes, 
+                    file_name="Informe_Atelier.docx", 
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                    width='stretch', 
+                    type="primary",
+                    help="Descarga editable para trabajar en Word"
+                )
+
+        with col3: 
             st.button("🔄 Nueva consulta", on_click=reset_report_workflow, key="new_rep_btn", width='stretch')
     
     # --- PANTALLA DE CONSULTA ---
@@ -64,7 +87,6 @@ def report_mode(db, selected_files):
             with st.status("🚀 Iniciando motor de investigación...", expanded=True) as status:
                 status.write("📂 Accediendo al repositorio de documentos...")
                 
-                # Llamamos a la función pasando el 'status' para que actualice los mensajes
                 stream = generate_final_report_stream(question, db, selected_files, status_container=status)
                 
                 if stream:
