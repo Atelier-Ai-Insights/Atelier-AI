@@ -14,7 +14,7 @@ from supabase.lib.client_options import ClientOptions
 def show_login_page():
     st.header("Iniciar Sesión")
     
-    # --- LÓGICA DE SESIÓN DUPLICADA (Login Forzado) ---
+    # --- LÓGICA DE SESIÓN DUPLICADA ---
     if 'pending_login_info' in st.session_state:
         st.warning("**Este usuario ya tiene una sesión activa en otro dispositivo.**")
         st.write("¿Qué deseas hacer?")
@@ -26,16 +26,13 @@ def show_login_page():
                     pending_info = st.session_state.pending_login_info
                     user_id = pending_info['user_id']
                     
-                    # 1. Restaurar la sesión localmente
                     st.session_state.access_token = pending_info['access_token']
                     st.session_state.refresh_token = pending_info['refresh_token']
                     supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
                     
-                    # 2. Generar nuevo ID y actualizar DB
                     new_session_id = str(uuid.uuid4())
                     supabase.table("users").update({"active_session_id": new_session_id}).eq("id", user_id).execute()
                     
-                    # 3. Cargar perfil
                     user_profile = supabase.table("users").select("*, rol, clients(client_name, plan)").eq("id", user_id).single().execute()
                     client_info = user_profile.data['clients']
                     
@@ -71,7 +68,6 @@ def show_login_page():
         email = st.text_input("Correo Electrónico", placeholder="usuario@empresa.com")
         password = st.text_input("Contraseña", type="password", placeholder="password")
         
-        # Espaciador visual pequeño (opcional, pero ayuda a separar input de botón)
         st.write("") 
         
         if st.button("Ingresar", width='stretch', type="primary"):
@@ -81,10 +77,8 @@ def show_login_page():
                 access_token = response.session.access_token
                 refresh_token = response.session.refresh_token
                 
-                # Establecer sesión temporalmente
                 supabase.auth.set_session(access_token, refresh_token)
                 
-                # Verificar sesión activa
                 user_profile_check = supabase.table("users").select("active_session_id").eq("id", user_id).single().execute()
                 
                 if user_profile_check.data and user_profile_check.data.get('active_session_id'):
@@ -95,10 +89,7 @@ def show_login_page():
                     }
                     st.rerun()
                 else:
-                    # Sesión nueva
                     new_session_id = str(uuid.uuid4())
-                    
-                    # Cargar perfil completo
                     user_profile = supabase.table("users").select("*, rol, clients(client_name, plan)").eq("id", user_id).single().execute()
                     
                     if user_profile.data and user_profile.data.get('clients'):
@@ -136,8 +127,6 @@ def show_login_page():
                 else:
                     st.error(f"Error de acceso: {e}")
         
-        # --- CAMBIO AQUÍ: Eliminado el st.divider() ---
-        
         if st.button("¿Olvidaste tu contraseña?", type="secondary", width='stretch'):
             st.session_state.page = "reset_password"
             st.rerun()
@@ -161,6 +150,7 @@ def show_reset_password_page():
          st.rerun()
 
 def show_otp_verification_page(otp_code):
+    # (Misma lógica anterior, se mantiene por compatibilidad)
     st.header("Verificación de Seguridad")
     st.write("Hemos detectado un código de recuperación. Para continuar, confirma tu correo electrónico.")
     email_verify = st.text_input("Confirma tu Correo Electrónico")
@@ -183,55 +173,82 @@ def show_otp_verification_page(otp_code):
                 time.sleep(1)
                 st.rerun()
             else:
-                st.error("El código es válido pero no se pudo iniciar la sesión.")
+                st.error("El código no es válido.")
         except Exception as e:
             st.error(f"Error de verificación: {e}")
 
-def show_set_new_password_page(access_token=None, context="recovery"):
-    if context == "invite":
-        st.header("¡Bienvenido a Atelier!")
-        st.info("Para activar tu cuenta, crea una contraseña segura.")
-        btn_label = "Activar Cuenta"
-    else:
-        st.header("Restablecer Contraseña")
-        st.write("Por favor, crea una nueva contraseña para recuperar tu acceso.")
-        btn_label = "Actualizar Contraseña"
-
-    new_password = st.text_input("Nueva Contraseña", type="password")
-    confirm_password = st.text_input("Confirmar Nueva Contraseña", type="password")
-
-    if st.button(btn_label, width='stretch', type="primary"):
-        if not new_password or not confirm_password:
-            st.error("Completa ambos campos."); return
-        if new_password != confirm_password:
-            st.error("Las contraseñas no coinciden."); return
-        if len(new_password) < 6:
-            st.error("La contraseña debe tener al menos 6 caracteres."); return
-
+def show_activation_flow(access_token, refresh_token, context="invite"):
+    """
+    Flujo de 2 pasos:
+    1. Validar Identidad (Pedir Email).
+    2. Establecer Contraseña.
+    """
+    # Inicializar el estado del flujo si no existe
+    if "auth_flow_step" not in st.session_state:
+        st.session_state.auth_flow_step = 1
+        # Establecer sesión temporalmente para validar el token
         try:
-            user_response = supabase.auth.update_user(attributes={"password": new_password})
-            supabase.auth.sign_out() 
-            st.session_state.logged_in = False
-            st.session_state.clear()
-            
-            if context == "invite":
-                st.success("¡Cuenta activada correctamente! Ya puedes iniciar sesión.")
-            else:
-                st.success("¡Contraseña actualizada con éxito!")
-            
-            time.sleep(3)
-            if hasattr(st, "query_params"): st.query_params.clear() 
-            else: st.experimental_set_query_params()
-            
-            st.session_state.page = "login"
-            st.rerun()
-            
+            supabase.auth.set_session(access_token, refresh_token)
         except Exception as e:
-            st.error(f"Error al procesar la solicitud: {e}")
+            st.error(f"El enlace ha expirado. Solicita uno nuevo. ({e})")
+            return
 
-    if st.button("Cancelar", type="secondary", width='stretch'):
-        supabase.auth.sign_out()
-        if hasattr(st, "query_params"): st.query_params.clear() 
-        else: st.experimental_set_query_params()
-        st.session_state.page = "login"
-        st.rerun()
+    # PASO 1: VALIDACIÓN DE IDENTIDAD
+    if st.session_state.auth_flow_step == 1:
+        st.header("🔒 Validación de Seguridad")
+        st.info("Por seguridad, confirma tu correo electrónico para continuar.")
+        
+        email_check = st.text_input("Ingresa tu correo electrónico")
+        
+        if st.button("Validar Identidad", width='stretch', type="primary"):
+            # Obtener el email real del usuario logueado por el token
+            try:
+                user = supabase.auth.get_user().user
+                if user and user.email.lower().strip() == email_check.lower().strip():
+                    st.session_state.auth_flow_step = 2
+                    st.rerun()
+                else:
+                    st.error("El correo no coincide con la invitación. Intenta de nuevo.")
+            except Exception as e:
+                st.error("Error de validación. El enlace puede haber expirado.")
+
+    # PASO 2: ACTIVACIÓN / CAMBIO DE CONTRASEÑA
+    elif st.session_state.auth_flow_step == 2:
+        if context == "invite":
+            st.header("¡Bienvenido a Atelier!")
+            st.info("Establece tu contraseña personal para activar la cuenta.")
+            btn_label = "Activar Cuenta"
+        else:
+            st.header("Nueva Contraseña")
+            st.write("Crea una nueva contraseña para recuperar el acceso.")
+            btn_label = "Actualizar Contraseña"
+
+        new_password = st.text_input("Nueva Contraseña", type="password")
+        confirm_password = st.text_input("Confirmar Nueva Contraseña", type="password")
+
+        if st.button(btn_label, width='stretch', type="primary"):
+            if not new_password or not confirm_password:
+                st.error("Completa ambos campos."); return
+            if new_password != confirm_password:
+                st.error("Las contraseñas no coinciden."); return
+            if len(new_password) < 6:
+                st.error("Mínimo 6 caracteres."); return
+
+            try:
+                supabase.auth.update_user(attributes={"password": new_password})
+                supabase.auth.sign_out() 
+                
+                # Limpieza
+                st.session_state.clear()
+                
+                if context == "invite":
+                    st.success("¡Cuenta activada! Inicia sesión.")
+                else:
+                    st.success("¡Contraseña actualizada! Inicia sesión.")
+                
+                time.sleep(2)
+                st.session_state.page = "login"
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Error: {e}")
