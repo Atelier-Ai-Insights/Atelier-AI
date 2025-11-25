@@ -25,8 +25,6 @@ def show_repository_dashboard(db_full):
         return
             
     st.markdown("#### Distribución de Estudios")
-    
-    st.markdown("**Estudios por Año**")
     year_counts = df['marca'].value_counts().sort_index()
     st.bar_chart(year_counts)
 
@@ -64,12 +62,16 @@ def show_repository_dashboard(db_full):
 
 
 # =====================================================
-# PANEL DE ADMINISTRACIÓN (OPTIMIZADO)
+# PANEL DE ADMINISTRACIÓN (CORREGIDO)
 # =====================================================
 def show_admin_dashboard(db_full): 
     if not supabase_admin_client:
-        st.error("⚠️ Error de Configuración: No se encontró 'SUPABASE_SERVICE_KEY'. No puedes gestionar usuarios sin ella.")
+        st.error("⚠️ Error de Configuración: No se encontró 'SUPABASE_SERVICE_KEY'.")
         return
+
+    # --- Inicializar contador para limpiar formulario ---
+    if "invite_counter" not in st.session_state:
+        st.session_state.invite_counter = 0
 
     tab_stats, tab_users, tab_repo = st.tabs(["Estadísticas", "Gestión Usuarios", "Repositorio"])
 
@@ -118,12 +120,12 @@ def show_admin_dashboard(db_full):
     with tab_users:
         
         st.subheader("📩 Invitar Usuario Nuevo", divider="blue")
-        st.info("Usa esto para enviar un correo de invitación oficial. El usuario quedará vinculado automáticamente a la empresa seleccionada.")
+        st.info("Usa esto para enviar un correo de invitación oficial.")
         
-        # 1. MENSAJE DE ÉXITO PERSISTENTE (Mejora de UX)
+        # 1. MENSAJE DE ÉXITO (Se muestra aquí arriba tras el recargo)
         if "admin_invite_success" in st.session_state:
             st.success(st.session_state.admin_invite_success)
-            del st.session_state.admin_invite_success # Borrar para que no salga siempre
+            del st.session_state.admin_invite_success
 
         # 2. Cargar clientes
         try:
@@ -134,8 +136,13 @@ def show_admin_dashboard(db_full):
         with st.form("invite_user_form"):
             col_inv_1, col_inv_2 = st.columns(2)
             
-            # Usamos key para poder borrar el contenido después
-            new_email = col_inv_1.text_input("Correo electrónico del usuario", key="admin_invite_email_input")
+            # --- CORRECCIÓN: Usamos una Key dinámica ---
+            # Cada vez que 'invite_counter' cambia, este input se vuelve a crear vacío.
+            new_email = col_inv_1.text_input(
+                "Correo electrónico del usuario", 
+                key=f"admin_email_input_{st.session_state.invite_counter}"
+            )
+            
             target_client_name = col_inv_2.selectbox("Asignar a Empresa (Cliente)", list(client_options.keys()))
             
             btn_invite = st.form_submit_button("Enviar Invitación", type="primary")
@@ -153,10 +160,10 @@ def show_admin_dashboard(db_full):
                             }
                         )
                         
-                        # --- MEJORA: Guardar éxito, limpiar input y recargar ---
+                        # --- ÉXITO: Guardamos mensaje y aumentamos el contador ---
                         st.session_state["admin_invite_success"] = f"✅ Invitación enviada a **{new_email}** para **{target_client_name}**."
-                        st.session_state["admin_invite_email_input"] = "" # Limpiar campo
-                        st.rerun() # Recargar para mostrar cambios
+                        st.session_state.invite_counter += 1 # Esto limpiará el campo
+                        st.rerun()
                         
                     except Exception as e:
                         if "already created" in str(e):
@@ -166,7 +173,7 @@ def show_admin_dashboard(db_full):
                 else:
                     st.warning("Faltan datos.")
 
-        # SECCIÓN B: GESTIÓN DE CLIENTES (CÓDIGOS)
+        # SECCIÓN B: GESTIÓN DE CLIENTES
         st.divider()
         with st.expander("🏢 Gestión de Empresas y Códigos", expanded=False):
             try:
@@ -184,7 +191,7 @@ def show_admin_dashboard(db_full):
                     st.rerun()
             except Exception as e: st.error(f"Error clientes: {e}")
 
-        # SECCIÓN C: TABLA DE USUARIOS (EDICIÓN)
+        # SECCIÓN C: TABLA DE USUARIOS
         st.divider()
         st.subheader("👥 Usuarios Registrados")
         try:
