@@ -139,7 +139,6 @@ def show_activation_flow(otp_token, auth_type):
             
             try:
                 # Intentamos verificar el OTP con la API
-                # Nota: 'invite' es para usuarios nuevos, 'recovery' para pass olvidados
                 type_api = "invite" if auth_type == "invite" else "recovery"
                 
                 res = supabase.auth.verify_otp({
@@ -152,13 +151,13 @@ def show_activation_flow(otp_token, auth_type):
                     # ¡Éxito! Guardamos sesión temporal y pasamos al paso 2
                     st.session_state.temp_access_token = res.session.access_token
                     st.session_state.temp_refresh_token = res.session.refresh_token
-                    st.session_state.flow_email_verified = True # Pasamos al paso 2
+                    st.session_state.flow_email_verified = True 
                     st.rerun()
                 else:
                     st.error("Código inválido o expirado.")
             
             except Exception as e:
-                # Fallback: A veces las invitaciones se comportan como 'signup' o 'magiclink'
+                # Fallback: A veces las invitaciones se comportan como 'signup'
                 if auth_type == "invite":
                     try:
                         res = supabase.auth.verify_otp({"email": email_input, "token": otp_token, "type": "signup"})
@@ -179,7 +178,7 @@ def show_activation_flow(otp_token, auth_type):
             st.header("Nueva Contraseña")
             st.info("Paso 2: Define tu nueva contraseña.")
 
-        # Restauramos la sesión temporalmente para poder hacer el update
+        # Restauramos la sesión temporalmente
         try:
             supabase.auth.set_session(st.session_state.temp_access_token, st.session_state.temp_refresh_token)
         except:
@@ -195,12 +194,15 @@ def show_activation_flow(otp_token, auth_type):
             try:
                 supabase.auth.update_user(attributes={"password": p1})
                 
-                # Limpieza final
                 supabase.auth.sign_out()
                 st.session_state.clear()
                 
-                st.success("¡Listo! Tu cuenta está activa. Redirigiendo al login...")
-                time.sleep(3)
+                if context == "invite":
+                    st.success("¡Cuenta activada! Inicia sesión.")
+                else:
+                    st.success("¡Contraseña actualizada! Inicia sesión.")
+                
+                time.sleep(2)
                 st.session_state.page = "login"
                 st.rerun()
                 
