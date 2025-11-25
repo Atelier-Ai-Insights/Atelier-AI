@@ -116,6 +116,9 @@ def show_reset_password_page():
 def show_activation_flow(otp_token, auth_type):
     """
     Maneja el flujo completo de activación/recuperación en 2 pasos.
+    Argumentos:
+      otp_token: El código numérico (o hash) que viene en la URL.
+      auth_type: "invite" o "recovery".
     """
     # 1. Determinar título según el tipo
     if auth_type == "invite":
@@ -178,7 +181,7 @@ def show_activation_flow(otp_token, auth_type):
             st.header("Nueva Contraseña")
             st.info("Paso 2: Define tu nueva contraseña.")
 
-        # Restauramos la sesión temporalmente
+        # Restauramos la sesión temporalmente para poder hacer el update
         try:
             supabase.auth.set_session(st.session_state.temp_access_token, st.session_state.temp_refresh_token)
         except:
@@ -194,10 +197,12 @@ def show_activation_flow(otp_token, auth_type):
             try:
                 supabase.auth.update_user(attributes={"password": p1})
                 
+                # Limpieza final
                 supabase.auth.sign_out()
                 st.session_state.clear()
                 
-                if context == "invite":
+                # --- CORRECCIÓN AQUÍ: Usamos auth_type en lugar de context ---
+                if auth_type == "invite":
                     st.success("¡Cuenta activada! Inicia sesión.")
                 else:
                     st.success("¡Contraseña actualizada! Inicia sesión.")
