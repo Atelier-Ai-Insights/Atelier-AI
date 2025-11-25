@@ -116,9 +116,6 @@ def show_reset_password_page():
 def show_activation_flow(otp_token, auth_type):
     """
     Maneja el flujo completo de activación/recuperación en 2 pasos.
-    Argumentos:
-      otp_token: El código numérico (o hash) que viene en la URL.
-      auth_type: "invite" o "recovery".
     """
     # 1. Determinar título según el tipo
     if auth_type == "invite":
@@ -151,7 +148,6 @@ def show_activation_flow(otp_token, auth_type):
                 })
                 
                 if res.session:
-                    # ¡Éxito! Guardamos sesión temporal y pasamos al paso 2
                     st.session_state.temp_access_token = res.session.access_token
                     st.session_state.temp_refresh_token = res.session.refresh_token
                     st.session_state.flow_email_verified = True 
@@ -160,7 +156,6 @@ def show_activation_flow(otp_token, auth_type):
                     st.error("Código inválido o expirado.")
             
             except Exception as e:
-                # Fallback: A veces las invitaciones se comportan como 'signup'
                 if auth_type == "invite":
                     try:
                         res = supabase.auth.verify_otp({"email": email_input, "token": otp_token, "type": "signup"})
@@ -181,7 +176,6 @@ def show_activation_flow(otp_token, auth_type):
             st.header("Nueva Contraseña")
             st.info("Paso 2: Define tu nueva contraseña.")
 
-        # Restauramos la sesión temporalmente para poder hacer el update
         try:
             supabase.auth.set_session(st.session_state.temp_access_token, st.session_state.temp_refresh_token)
         except:
@@ -201,13 +195,17 @@ def show_activation_flow(otp_token, auth_type):
                 supabase.auth.sign_out()
                 st.session_state.clear()
                 
-                # --- CORRECCIÓN AQUÍ: Usamos auth_type en lugar de context ---
                 if auth_type == "invite":
                     st.success("¡Cuenta activada! Inicia sesión.")
                 else:
                     st.success("¡Contraseña actualizada! Inicia sesión.")
                 
                 time.sleep(2)
+                
+                # --- CORRECCIÓN CLAVE AQUÍ ---
+                # Limpiamos la URL para que al recargar no vuelva a entrar al flujo
+                st.query_params.clear() 
+                
                 st.session_state.page = "login"
                 st.rerun()
                 
