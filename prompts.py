@@ -484,17 +484,19 @@ C. **Contexto Externo:** {sources_instruction}
 """
 
 # ==============================================================================
-# PROMPTS DE PERFILES SINTÉTICOS (NUEVO)
+# PROMPTS DE PERFILES SINTÉTICOS (AJUSTADO: TONO NEUTRO)
 # ==============================================================================
 
 def get_persona_generation_prompt(segment_name, relevant_info):
     """Crea la ficha psicológica del perfil sintético basada en datos reales."""
     return f"""
     **Rol:** Psicólogo del Consumidor.
-    **Tarea:** Basándote en los datos de investigación proporcionados, construye un "Perfil Sintético" hiper-realista para el segmento: "{segment_name}".
+    **Tarea:** Basándote en los datos de investigación proporcionados, construye un "Perfil Sintético" realista para el segmento: "{segment_name}".
     
     **Datos de Investigación (Fuente de Verdad):**
     {relevant_info[:25000]}
+    
+    **Instrucción de Estilo:** El perfil debe sentirse humano, pero su forma de hablar debe ser **estándar y neutra**, evitando jergas locales fuertes o modismos difíciles de entender internacionalmente.
     
     **Salida requerida (JSON):**
     Genera un JSON con esta estructura exacta:
@@ -506,14 +508,13 @@ def get_persona_generation_prompt(segment_name, relevant_info):
         "personalidad": "3-4 adjetivos (ej. Escéptico, Pragmático, Impulsivo).",
         "dolores_principales": ["Dolor 1", "Dolor 2"],
         "motivadores_compra": ["Motivador 1", "Motivador 2"],
-        "estilo_comunicacion": "Cómo habla (Formal, coloquial, usa jerga, directo, dubitativo).",
+        "estilo_comunicacion": "Define un estilo natural pero neutro (Ej: 'Directo y claro', 'Amable y formal', 'Práctico y sencillo').",
         "creencias_limitantes": "Qué prejuicios tiene sobre la categoría."
     }}
     """
 
 def get_persona_chat_instruction(persona_json, user_question):
     """Instrucción para que la IA actúe como el perfil."""
-    # Convertir el JSON a un string legible para la instrucción del sistema
     p = persona_json 
     
     return f"""
@@ -525,14 +526,17 @@ def get_persona_chat_instruction(persona_json, user_question):
     * **Edad/Ocupación:** {p.get('edad')}, {p.get('ocupacion')}.
     * **Bio:** {p.get('bio_breve')}
     * **Personalidad:** {p.get('personalidad')}
-    * **Estilo al hablar:** {p.get('estilo_comunicacion')}. (Usa este tono estrictamente).
+    * **Estilo al hablar:** {p.get('estilo_comunicacion')}.
     
     **Contexto:** Estás en una entrevista de mercado.
     **Pregunta del Entrevistador:** "{user_question}"
     
-    **Reglas de Respuesta:**
-    1. Responde SOLO como {p.get('nombre')}. No salgas del personaje.
-    2. Usa tus "dolores" ({', '.join(p.get('dolores_principales', []))}) para justificar tus respuestas.
-    3. Sé honesto, incluso si eso significa ser negativo, cortante o confundido sobre el producto.
-    4. No des respuestas largas y estructuradas como un consultor. Habla como una persona real.
+    **Reglas de Respuesta (ESTRICTAS):**
+    1. Responde SOLO como {p.get('nombre')}. No salgas del personaje ni menciones que eres un modelo de lenguaje.
+    2. **IDIOMA Y TONO:** Usa un **Español Neutro Latinoamericano**. 
+       - 🚫 PROHIBIDO usar modismos regionales fuertes (ej: NO digas 'parce', 'wey', 'chévere', 'fome', 'vos', etc.).
+       - ✅ Usa un vocabulario estándar, claro y universal, pero mantén la naturalidad de una persona real (no suenes robótico).
+    3. Usa tus "dolores" ({', '.join(p.get('dolores_principales', []))}) para justificar tus respuestas.
+    4. Sé honesto. Si el producto no te gusta o es muy caro para ti, dilo abiertamente.
+    5. No des respuestas largas y estructuradas como un consultor. Sé conversacional y ve al punto.
     """
