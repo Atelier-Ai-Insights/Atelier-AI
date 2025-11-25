@@ -12,9 +12,8 @@ from services.storage import load_database
 from services.supabase_db import supabase
 from auth import (
     show_login_page, 
-    # show_signup_page, <--- Eliminado
     show_reset_password_page, 
-    show_set_new_password_page,
+    show_activation_flow, # <--- Nueva función importada
     show_otp_verification_page 
 )
 from admin.dashboard import show_admin_dashboard
@@ -222,35 +221,33 @@ def main():
         if isinstance(access_token, list): access_token = access_token[0]
         if isinstance(refresh_token, list): refresh_token = refresh_token[0]
 
+        # CASO A: Tenemos tokens
         if access_token and refresh_token:
             try:
-                supabase.auth.set_session(access_token, refresh_token)
                 apply_login_styles()
                 col1, col2, col3 = st.columns([1,2,1])
                 with col2:
                     st.image("LogoDataStudio.png")
-                    show_set_new_password_page(access_token, context=auth_type) 
+                    # Llamamos al nuevo flujo de activación
+                    show_activation_flow(access_token, refresh_token, context=auth_type)
                 st.divider()
                 st.markdown(footer_html, unsafe_allow_html=True)
                 st.stop()
 
             except Exception as e:
-                st.error(f"El enlace no es válido o ha expirado: {e}")
+                st.error(f"Enlace inválido: {e}")
                 time.sleep(3)
                 st.query_params.clear()
                 st.session_state.page = "login"
                 st.rerun()
         
+        # CASO B: Solo Access Token
         elif access_token and not refresh_token:
             apply_login_styles()
             col1, col2, col3 = st.columns([1,2,1])
             with col2:
                 st.image("LogoDataStudio.png")
-                if auth_type == "invite":
-                    st.info("Finalizando configuración de cuenta...")
-                    show_set_new_password_page(None, context="invite")
-                else:
-                    show_otp_verification_page(access_token) 
+                show_otp_verification_page(access_token) 
             st.divider()
             st.markdown(footer_html, unsafe_allow_html=True)
             st.stop()
@@ -336,10 +333,6 @@ def main():
             st.image("LogoDataStudio.png")
             
             if st.session_state.page == "login": 
-                show_login_page()
-            elif st.session_state.page == "signup": 
-                # Esta condición ya es inalcanzable, pero la dejo por seguridad
-                st.session_state.page = "login"
                 show_login_page()
             elif st.session_state.page == "reset_password": 
                 show_reset_password_page()
