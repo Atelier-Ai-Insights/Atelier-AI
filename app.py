@@ -13,7 +13,7 @@ from services.supabase_db import supabase
 from auth import (
     show_login_page, 
     show_reset_password_page, 
-    show_activation_flow, # <--- Nueva función importada
+    show_set_new_password_page,
     show_otp_verification_page 
 )
 from admin.dashboard import show_admin_dashboard
@@ -211,52 +211,44 @@ def main():
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
-    # RUTA 1: RECUPERACIÓN DE CONTRASEÑA O INVITACIÓN
-    auth_type = params.get("type")
+    # ======================================================
+    # RUTA DE ACTIVACIÓN (INVITACIÓN / RECUPERACIÓN)
+    # ======================================================
+    auth_type = params.get("type") # 'invite' o 'recovery'
     
+    # 1. Si ya validamos el OTP en el paso anterior, mostramos la pantalla de password
+    if st.session_state.get('temp_auth_verified'):
+        apply_login_styles()
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            st.image("LogoDataStudio.png")
+            show_set_new_password_page(None, context=st.session_state.get('temp_auth_type'))
+        st.divider()
+        st.markdown(footer_html, unsafe_allow_html=True)
+        st.stop()
+
+    # 2. Si hay parámetros en la URL, mostramos la validación OTP
     if auth_type in ["recovery", "invite"]:
         access_token = params.get("access_token")
-        refresh_token = params.get("refresh_token") 
-
-        if isinstance(access_token, list): access_token = access_token[0]
-        if isinstance(refresh_token, list): refresh_token = refresh_token[0]
-
-        # CASO A: Tenemos tokens
-        if access_token and refresh_token:
-            try:
-                apply_login_styles()
-                col1, col2, col3 = st.columns([1,2,1])
-                with col2:
-                    st.image("LogoDataStudio.png")
-                    # Llamamos al nuevo flujo de activación
-                    show_activation_flow(access_token, refresh_token, context=auth_type)
-                st.divider()
-                st.markdown(footer_html, unsafe_allow_html=True)
-                st.stop()
-
-            except Exception as e:
-                st.error(f"Enlace inválido: {e}")
-                time.sleep(3)
-                st.query_params.clear()
-                st.session_state.page = "login"
-                st.rerun()
         
-        # CASO B: Solo Access Token
-        elif access_token and not refresh_token:
+        if access_token:
+            if isinstance(access_token, list): access_token = access_token[0]
+            
             apply_login_styles()
             col1, col2, col3 = st.columns([1,2,1])
             with col2:
                 st.image("LogoDataStudio.png")
-                show_otp_verification_page(access_token) 
+                show_otp_verification_page(access_token, context=auth_type)
             st.divider()
             st.markdown(footer_html, unsafe_allow_html=True)
             st.stop()
-
         else:
              st.warning("Enlace incompleto. Intenta solicitar uno nuevo.")
              st.stop()
 
-    # RUTA 2: El usuario ya está logueado (sesión normal)
+    # ======================================================
+    # RUTA DE SESIÓN ACTIVA
+    # ======================================================
     if st.session_state.get("logged_in"):
         
         validate_session_integrity()
@@ -264,12 +256,10 @@ def main():
         if st.session_state.get("cliente") == "atelier demo":
             try:
                 user_data = supabase.table("users").select("created_at").eq("id", st.session_state.user_id).single().execute()
-                
                 if user_data.data:
                     created_at_str = user_data.data['created_at']
                     created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
                     now = datetime.now(timezone.utc)
-                    
                     days_active = (now - created_at).days
                     
                     if days_active > 30:
@@ -286,19 +276,17 @@ def main():
             except Exception as e:
                 print(f"Error verificando demo: {e}")
 
+        # Restaurar sesión si es necesario
         if st.session_state.get("access_token"):
             try:
-                supabase.auth.set_session(
-                    st.session_state.access_token, 
-                    st.session_state.refresh_token
-                )
+                supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
             except Exception as e:
-                st.error(f"Tu sesión ha expirado: {e}. Por favor, inicia sesión de nuevo.")
+                st.error(f"Tu sesión ha expirado. Inicia sesión de nuevo.")
                 supabase.auth.sign_out()
                 st.session_state.clear()
                 st.rerun()
         else:
-            st.warning("Detectamos una sesión inválida. Por favor, inicia sesión de nuevo.")
+            st.warning("Sesión inválida.")
             supabase.auth.sign_out()
             st.session_state.clear()
             st.rerun()
@@ -306,7 +294,7 @@ def main():
         try:
             db_full = st.session_state.db_full
         except AttributeError:
-            st.error("Error de sesión al cargar la base de datos. Por favor, inicia sesión de nuevo.")
+            st.error("Error al cargar la base de datos. Por favor, recarga la página.")
             st.session_state.clear()
             st.rerun()
         
@@ -325,13 +313,14 @@ def main():
             
         st.stop() 
 
-    # RUTA 3: Usuario no logueado (Páginas de Login, Signup, Reset)
+    # ======================================================
+    # RUTA DE LOGIN (DEFAULT)
+    # ======================================================
     if not st.session_state.get("logged_in"):
         apply_login_styles()
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
             st.image("LogoDataStudio.png")
-            
             if st.session_state.page == "login": 
                 show_login_page()
             elif st.session_state.page == "reset_password": 
