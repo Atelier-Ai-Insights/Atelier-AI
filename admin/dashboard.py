@@ -14,7 +14,6 @@ def show_repository_dashboard(db_full):
         st.warning("No hay datos en el repositorio para analizar.")
         return
 
-    # --- 1. Preparar Datos ---
     try:
         df = pd.DataFrame(db_full)
         df['marca'] = df['marca'].fillna('Sin Año').astype(str)
@@ -25,7 +24,6 @@ def show_repository_dashboard(db_full):
         st.error(f"Error al procesar los datos del repositorio: {e}")
         return
             
-    # --- 2. Mostrar Gráficos ---
     st.markdown("#### Distribución de Estudios")
     
     st.markdown("**Estudios por Año**")
@@ -66,7 +64,7 @@ def show_repository_dashboard(db_full):
 
 
 # =====================================================
-# PANEL DE ADMINISTRACIÓN (CON INVITADOR AUTOMÁTICO)
+# PANEL DE ADMINISTRACIÓN (OPTIMIZADO)
 # =====================================================
 def show_admin_dashboard(db_full): 
     if not supabase_admin_client:
@@ -116,14 +114,18 @@ def show_admin_dashboard(db_full):
                 else: st.info("Sin datos de uso.")
             except Exception as e: st.error(f"Error stats: {e}")
 
-    # --- PESTAÑA 2: GESTIÓN DE USUARIOS E INVITACIONES (MEJORADO) ---
+    # --- PESTAÑA 2: GESTIÓN DE USUARIOS E INVITACIONES ---
     with tab_users:
         
-        # SECCIÓN A: INVITAR USUARIO (NUEVO - SOLUCIÓN AL PROBLEMA DE NULL)
         st.subheader("📩 Invitar Usuario Nuevo", divider="blue")
         st.info("Usa esto para enviar un correo de invitación oficial. El usuario quedará vinculado automáticamente a la empresa seleccionada.")
         
-        # 1. Cargar lista de clientes para el dropdown
+        # 1. MENSAJE DE ÉXITO PERSISTENTE (Mejora de UX)
+        if "admin_invite_success" in st.session_state:
+            st.success(st.session_state.admin_invite_success)
+            del st.session_state.admin_invite_success # Borrar para que no salga siempre
+
+        # 2. Cargar clientes
         try:
             clients_data = supabase_admin_client.table("clients").select("id, client_name").execute().data
             client_options = {c['client_name']: c['id'] for c in clients_data} if clients_data else {}
@@ -131,7 +133,9 @@ def show_admin_dashboard(db_full):
 
         with st.form("invite_user_form"):
             col_inv_1, col_inv_2 = st.columns(2)
-            new_email = col_inv_1.text_input("Correo electrónico del usuario")
+            
+            # Usamos key para poder borrar el contenido después
+            new_email = col_inv_1.text_input("Correo electrónico del usuario", key="admin_invite_email_input")
             target_client_name = col_inv_2.selectbox("Asignar a Empresa (Cliente)", list(client_options.keys()))
             
             btn_invite = st.form_submit_button("Enviar Invitación", type="primary")
@@ -140,16 +144,20 @@ def show_admin_dashboard(db_full):
                 if new_email and target_client_name:
                     target_client_id = client_options[target_client_name]
                     try:
-                        # AQUÍ ESTÁ LA MAGIA: Enviamos el client_id dentro de la metadata
+                        # Enviar invitación
                         invite_res = supabase_admin_client.auth.admin.invite_user_by_email(
                             new_email,
                             options={
-                                "data": { "client_id": target_client_id }, # Esto arregla el NULL
+                                "data": { "client_id": target_client_id },
                                 "redirect_to": "https://atelier-ai.streamlit.app"
                             }
                         )
-                        st.success(f"✅ Invitación enviada a **{new_email}** para la empresa **{target_client_name}**.")
-                        st.caption("El usuario aparecerá en la tabla de abajo una vez acepte el correo.")
+                        
+                        # --- MEJORA: Guardar éxito, limpiar input y recargar ---
+                        st.session_state["admin_invite_success"] = f"✅ Invitación enviada a **{new_email}** para **{target_client_name}**."
+                        st.session_state["admin_invite_email_input"] = "" # Limpiar campo
+                        st.rerun() # Recargar para mostrar cambios
+                        
                     except Exception as e:
                         if "already created" in str(e):
                             st.warning("El usuario ya existe. Intenta editar su rol abajo.")
@@ -193,30 +201,26 @@ def show_admin_dashboard(db_full):
                         'email': user.get('email'), 
                         'rol': user.get('rol', 'user'), 
                         'empresa': client_name,
-                        'client_id': user.get('client_id'), # Oculto para lógica
+                        'client_id': user.get('client_id'), 
                         'creado': pd.to_datetime(user.get('created_at')).strftime('%Y-%m-%d')
                     })
                     
                 df_users = pd.DataFrame(user_list)
                 
-                # Editor de datos
                 edited_df = st.data_editor(
                     df_users,
                     column_config={
                         "id": None, "client_id": None,
                         "rol": st.column_config.SelectboxColumn("Rol", options=["user", "admin"], required=True),
                         "email": st.column_config.TextColumn("Email", disabled=True),
-                        "empresa": st.column_config.TextColumn("Empresa (Solo lectura)", disabled=True)
+                        "empresa": st.column_config.TextColumn("Empresa", disabled=True)
                     },
                     hide_index=True,
                     key="user_editor",
                     width='stretch'
                 )
                 
-                # Guardar cambios de Rol
                 if st.button("Guardar Cambios de Rol"):
-                    # Lógica simplificada de actualización (comparar con original no incluido por brevedad, actualiza todo)
-                    # En producción idealmente comparamos cambios.
                     for index, row in edited_df.iterrows():
                         try:
                             supabase_admin_client.table("users").update({"rol": row['rol']}).eq("id", row['id']).execute()
@@ -228,6 +232,5 @@ def show_admin_dashboard(db_full):
         except Exception as e:
             st.error(f"Error cargando usuarios: {e}")
 
-    # --- PESTAÑA 3: REPOSITORIO ---
     with tab_repo:
         show_repository_dashboard(db_full)
