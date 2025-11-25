@@ -5,14 +5,14 @@ from services.gemini_api import call_gemini_api, call_gemini_stream
 from prompts import get_persona_generation_prompt, get_persona_chat_instruction
 import constants as c
 from reporting.pdf_generator import generate_pdf_html
+from reporting.docx_generator import generate_docx
 from config import banner_file
 
 def synthetic_users_mode(db, selected_files):
-    st.subheader("👥 Perfil Sintético")
+    st.subheader("👥 Focus Group Sintético")
     st.markdown("Simula conversaciones con perfiles de consumidor generados a partir de tus datos reales.")
     
     # 1. CONFIGURACIÓN DEL PERFIL
-    # Se expande automáticamente si NO hay un perfil generado
     show_config = "synthetic_persona_data" not in st.session_state.mode_state
     
     with st.expander("⚙️ Configurar Perfil Sintético", expanded=show_config):
@@ -28,8 +28,15 @@ def synthetic_users_mode(db, selected_files):
                 
                 # Generar ficha
                 prompt = get_persona_generation_prompt(segment_name, context)
+                
+                # --- CORRECCIÓN AQUÍ: Manejo de error de API ---
                 resp = call_gemini_api(prompt, generation_config_override={"response_mime_type": "application/json"})
                 
+                if not resp:
+                    # Si resp es None (falló la API), paramos aquí. 
+                    # El error ya lo mostró call_gemini_api en pantalla.
+                    return 
+
                 try:
                     clean_resp = clean_gemini_json(resp)
                     persona_data = json.loads(clean_resp)
@@ -37,7 +44,7 @@ def synthetic_users_mode(db, selected_files):
                     st.session_state.mode_state["synthetic_chat_history"] = [] # Reset chat
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Error creando perfil: {e}")
+                    st.error(f"Error procesando la respuesta de la IA: {e}")
 
     # 2. VISUALIZACIÓN DEL PERFIL Y CHAT
     if "synthetic_persona_data" in st.session_state.mode_state:
@@ -111,16 +118,16 @@ def synthetic_users_mode(db, selected_files):
                 if pdf_bytes:
                     st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"entrevista_{p.get('nombre')}.pdf", width='stretch')
             else:
-                st.write("") # Espacio vacío para mantener alineación
+                st.write("") # Espacio vacío
 
-        # Botón 2: Reiniciar Chat (Mantiene perfil, borra mensajes)
+        # Botón 2: Reiniciar Chat
         with c2:
             if st.session_state.mode_state["synthetic_chat_history"]:
                 if st.button("🔄 Reiniciar Chat", width='stretch', help="Borra la conversación actual pero mantiene al personaje"):
                     st.session_state.mode_state["synthetic_chat_history"] = []
                     st.rerun()
 
-        # Botón 3: Nuevo Perfil (Borra todo y vuelve al inicio) - NUEVO
+        # Botón 3: Nuevo Perfil
         with c3:
             if st.button("✨ Crear Nuevo Perfil", width='stretch', type="secondary", help="Borra el personaje actual para crear uno diferente"):
                 st.session_state.mode_state.pop("synthetic_persona_data", None)
