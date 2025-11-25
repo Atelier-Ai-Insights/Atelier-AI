@@ -5,15 +5,16 @@ from datetime import datetime
 # INSTRUCCIONES GLOBALES
 # ==============================================================================
 
-# --- BLOQUE DE INSTRUCCIONES DE CITAS (AJUSTADO) ---
+# --- BLOQUE DE INSTRUCCIONES DE CITAS (ESTRICTO) ---
 INSTRUCCIONES_DE_CITAS = """
 **REGLAS DE CITAS (ESTRICTO):**
-1. **Base:** Solo usa la 'Información documentada'.
-2. **Formato Interno (Cuerpo del texto):** Usa IDs numéricos [1], [2] cada vez que cites un hallazgo del repositorio.
-3. **Sección Fuentes (Al final del reporte):** DEBES generar una lista consolidada así:
+1. **Base:** Solo usa la 'Información documentada'. No alucines información externa sin sustentarla.
+2. **Formato Interno:** Asigna un ID numérico único [x] a cada documento del repositorio/PDF la primera vez que lo uses.
+3. **Sintaxis:** Frase del hallazgo [1]. Otra frase contrastada [2].
+4. **Sección Fuentes:** Al final, DEBES generar una lista consolidada así:
    * **Internas:** Mapea el número [x] con el **Nombre Exacto del Archivo o Proyecto**.
    * **Externas:** Incluye el nombre del medio y el **Link (URL)** para verificación.
-4. **Vacío:** Si la respuesta no está en los documentos, di: "Información no disponible en los documentos."
+5. **Vacío:** Si la respuesta no está en los documentos, di: "Información no disponible en los documentos."
 """
 
 # ==============================================================================
@@ -142,7 +143,7 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
     ]
 
 # ==============================================================================
-# PROMPTS DE ANÁLISIS DE TEXTO Y MULTIMEDIA (TRANSCRIPCIONES)
+# PROMPTS DE ANÁLISIS DE TEXTO Y MULTIMEDIA
 # ==============================================================================
 
 def get_transcript_prompt(combined_context, user_prompt):
@@ -406,7 +407,6 @@ SOURCE_LENSES = {
 
 def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_list):
     
-    # Obtener fecha actual para referencia temporal estricta
     current_date = datetime.now().strftime("%d de %B de %Y")
     
     sources_instruction = ""
