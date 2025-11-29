@@ -76,7 +76,7 @@ def _execute_gemini_call(prompt, stream=False, gen_config=None, safety=None):
 
         try:
             model = genai.GenerativeModel(
-                model_name="gemini-2.5-flash", 
+                model_name="gemini-1.5-flash", 
                 generation_config=final_gen_config, 
                 safety_settings=final_safety_settings
             )
