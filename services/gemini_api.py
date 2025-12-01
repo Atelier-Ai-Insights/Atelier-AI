@@ -3,12 +3,22 @@ import google.generativeai as genai
 from google.generativeai.types import generation_types
 import html
 import time
+import random
 from config import api_keys, generation_config, safety_settings
 from services.logger import log_error, log_action 
+
+# ==========================================
+# CONFIGURACIÓN DE MODELO
+# ==========================================
+# Modelo solicitado: Flash 2.5 (Alta velocidad y eficiencia)
+MODEL_NAME = "gemini-2.0-flash" 
 
 def _configure_gemini(key_index):
     """Función interna para configurar la API con una clave específica."""
     try:
+        # Rotación segura
+        if key_index >= len(api_keys):
+            key_index = 0
         api_key = api_keys[key_index]
         genai.configure(api_key=api_key)
         return True
@@ -17,13 +27,7 @@ def _configure_gemini(key_index):
         return False
 
 def _save_token_usage(response_obj):
-    """
-    Extrae los metadatos de uso de tokens del objeto de respuesta (Stream o Normal)
-    y los guarda en la sesión.
-    """
     try:
-        # En versiones recientes de la librería, usage_metadata está disponible
-        # tanto en respuesta normal como en el objeto stream después de iterarlo.
         if hasattr(response_obj, 'usage_metadata'):
             usage = response_obj.usage_metadata
             st.session_state.last_token_usage = {
@@ -32,167 +36,109 @@ def _save_token_usage(response_obj):
                 "total_tokens": usage.total_token_count
             }
         else:
-            # Si no hay metadatos, mantenemos en 0 para evitar errores
             st.session_state.last_token_usage = {"prompt_tokens": 0, "candidates_tokens": 0, "total_tokens": 0}
     except Exception:
-        # Si falla la lectura de metadatos, no bloqueamos la app
         st.session_state.last_token_usage = {"prompt_tokens": 0, "candidates_tokens": 0, "total_tokens": 0}
 
 def call_gemini_api(prompt, generation_config_override=None, safety_settings_override=None):
-    """Llama a la API de Gemini y espera la respuesta completa (NO Streaming)."""
     return _execute_gemini_call(prompt, stream=False, gen_config=generation_config_override, safety=safety_settings_override)
 
 def call_gemini_stream(prompt, generation_config_override=None, safety_settings_override=None):
-    """Llama a la API de Gemini y devuelve un generador para Streaming."""
     return _execute_gemini_call(prompt, stream=True, gen_config=generation_config_override, safety=safety_settings_override)
 
 def _execute_gemini_call(prompt, stream=False, gen_config=None, safety=None):
-    """Lógica central unificada."""
     start_index = st.session_state.get("api_key_index", 0)
     num_keys = len(api_keys)
-    
-    # Reset de tokens antes de empezar la nueva llamada
     st.session_state.last_token_usage = {"prompt_tokens": 0, "candidates_tokens": 0, "total_tokens": 0}
     
     final_gen_config = generation_config.copy() 
-    if 'max_output_tokens' not in final_gen_config:
-        final_gen_config['max_output_tokens'] = 8192 
-
-    if gen_config:
-        final_gen_config.update(gen_config) 
-
-    final_safety_settings = safety_settings 
-    if safety is not None:
-        final_safety_settings = safety 
-
+    if 'max_output_tokens' not in final_gen_config: final_gen_config['max_output_tokens'] = 8192 
+    if gen_config: final_gen_config.update(gen_config) 
+    
+    final_safety = safety if safety is not None else safety_settings 
     last_error = None
 
-    for i in range(num_keys):
-        current_key_index = (start_index + i) % num_keys
+    # --- BUCLE DE INTENTOS (Retries Inteligentes) ---
+    # Intentamos hasta 3 veces si hay errores de saturación
+    max_retries = 3 
+    
+    for attempt in range(max_retries + 1):
         
-        if not _configure_gemini(current_key_index):
-            last_error = f"Fallo configuración Key #{current_key_index + 1}"
-            continue 
-
-        try:
-            model = genai.GenerativeModel(
-                model_name="gemini-2.5-flash", 
-                generation_config=final_gen_config, 
-                safety_settings=final_safety_settings
-            )
-
-            if isinstance(prompt, list):
-                response = model.generate_content(prompt, stream=stream)
-            else:
-                response = model.generate_content([prompt], stream=stream)
+        # Iterar sobre las llaves disponibles (Load Balancing)
+        for i in range(num_keys):
+            current_key_index = (start_index + i) % num_keys
             
-            # --- CASO STREAMING ---
-            if stream:
-                # Pasamos el objeto 'response' completo al wrapper
-                return _stream_generator_wrapper(response, current_key_index, num_keys)
-            
-            # --- CASO NORMAL (NO STREAMING) ---
-            if not response.candidates:
-                # Manejo específico si fue bloqueado por seguridad
-                if response.prompt_feedback and response.prompt_feedback.block_reason:
-                    error_msg = f"Bloqueado por seguridad: {response.prompt_feedback.block_reason}"
+            if not _configure_gemini(current_key_index): continue 
+
+            try:
+                model = genai.GenerativeModel(
+                    model_name=MODEL_NAME, 
+                    generation_config=final_gen_config, 
+                    safety_settings=final_safety
+                )
+
+                if isinstance(prompt, list):
+                    response = model.generate_content(prompt, stream=stream)
                 else:
-                    error_msg = "La respuesta de la API no tuvo candidatos válidos (vacía)."
+                    response = model.generate_content([prompt], stream=stream)
                 
-                log_error(f"Key #{current_key_index + 1}: {error_msg}", module="GeminiAPI", level="WARNING")
-                last_error = error_msg
-                continue 
+                if stream:
+                    return _stream_generator_wrapper(response, current_key_index, num_keys)
+                
+                if not response.candidates:
+                    last_error = "Respuesta bloqueada o vacía."
+                    continue 
 
-            candidate = response.candidates[0]
-            finish_reason_name = candidate.finish_reason.name
-
-            if finish_reason_name == "STOP":
-                _save_token_usage(response)
-                st.session_state.api_key_index = (current_key_index + 1) % num_keys
-                return html.unescape(response.text) 
-
-            elif finish_reason_name == "MAX_TOKENS":
-                st.warning("Advertencia: La respuesta fue cortada por límite de tokens.")
+                # Si llegamos aquí, ¡éxito!
                 _save_token_usage(response)
                 st.session_state.api_key_index = (current_key_index + 1) % num_keys
                 
-                if candidate.content.parts:
-                    return html.unescape(candidate.content.parts[0].text) + "\n\n...(cortado por longitud)"
-                else:
-                    continue
-            
-            elif finish_reason_name == "SAFETY":
-                error_msg = "La respuesta fue bloqueada por filtros de seguridad."
-                log_error(f"Key #{current_key_index + 1}: {error_msg}", module="GeminiAPI", level="WARNING")
-                last_error = error_msg
-                continue
-                
-            else:
-                last_error = f"Detenido por razón desconocida: {finish_reason_name}"
-                log_error(f"Key #{current_key_index + 1}: {last_error}", module="GeminiAPI", level="WARNING")
-                continue 
+                if response.candidates[0].content.parts:
+                    return html.unescape(response.text)
+                return ""
 
-        except Exception as e:
-            last_error = e
-            log_error(f"Excepción Key #{current_key_index + 1}", module="GeminiAPI", error=e, level="WARNING")
-            # Continuar loop para probar la siguiente clave
+            except Exception as e:
+                last_error = e
+                error_str = str(e).lower()
+                
+                # Si es error de cuota (429) o sobrecarga, pasamos a la siguiente llave
+                if "429" in error_str or "quota" in error_str or "resource exhausted" in error_str:
+                    log_error(f"Key #{current_key_index} saturada (429).", module="GeminiAPI", level="WARNING")
+                    continue 
+                else:
+                    log_error(f"Error Key #{current_key_index}: {e}", module="GeminiAPI")
+
+        # Si fallaron todas las llaves, esperamos un poco antes del siguiente intento general
+        if attempt < max_retries:
+            wait_time = (2 ** attempt) + random.uniform(0, 1) # Espera: 2s, 4s, 8s...
+            time.sleep(wait_time)
         
+    # Si después de todos los intentos sigue fallando:
     if not stream:
-        # --- MEJORA: Mensaje de error amigable para el usuario ---
-        error_str = str(last_error).lower()
-        if "429" in error_str or "quota" in error_str:
-            st.error("⏳ El sistema de IA está recibiendo muchas solicitudes. Por favor, espera 1 minuto e inténtalo de nuevo.")
+        # Mensaje amigable al usuario en lugar de error técnico
+        if "429" in str(last_error) or "quota" in str(last_error):
+             st.error("⚠️ El sistema está recibiendo muchas solicitudes. Por favor, espera 1 minuto e inténtalo de nuevo.")
         else:
-            st.error(f"Error de conexión con IA: {last_error}. Intenta de nuevo.")
-            
-        log_error(f"Fallo total API Gemini. Last error: {last_error}", module="GeminiAPI", level="CRITICAL") 
+             st.error(f"Error de conexión con IA: {last_error}")
         return None
 
 def _stream_generator_wrapper(response_stream, key_index, num_keys):
-    """
-    Envuelve el stream para manejar errores chunk a chunk, capturar bloqueos
-    de seguridad y guardar tokens al finalizar.
-    """
-    full_text_accumulated = ""
-    
+    full_text = ""
     try:
         for chunk in response_stream:
             try:
-                # Verificar si el chunk fue bloqueado por seguridad
                 if chunk.candidates and chunk.candidates[0].finish_reason.name == "SAFETY":
-                    yield "\n\n[⚠️ Contenido bloqueado por filtros de seguridad de IA]"
+                    yield "\n\n[Bloqueado por seguridad]"
                     break
-                
-                text_chunk = chunk.text
-                if text_chunk:
-                    full_text_accumulated += text_chunk
-                    yield text_chunk
-                    
-            except ValueError:
-                # A veces chunk.text falla si el chunk es solo metadatos o safety
-                continue
-            except Exception as inner_e:
-                # Error en un chunk específico, intentamos seguir
-                continue
-        
-        # AL FINALIZAR EL BUCLE CON ÉXITO:
-        # Intentamos guardar los tokens.
-        try:
-            _save_token_usage(response_stream)
-        except Exception:
-            pass # No es crítico si falla el conteo exacto
-            
-        # Rotamos la clave para balanceo
+                if chunk.text:
+                    full_text += chunk.text
+                    yield chunk.text
+            except: continue
+        try: _save_token_usage(response_stream)
+        except: pass
         st.session_state.api_key_index = (key_index + 1) % num_keys
-        
-    except generation_types.StopCandidateException:
-        yield "\n\n[⚠️ La IA detuvo la generación inesperadamente (StopCandidate).]"
-        
     except Exception as e:
-        error_msg = str(e)
-        log_error(f"Error crítico durante Streaming Key #{key_index + 1}", module="GeminiAPI", error=e)
-        
-        if full_text_accumulated:
-            yield f"\n\n[⚠️ Interrupción: {error_msg}]"
+        if "429" in str(e) or "quota" in str(e):
+            yield "\n\n[⚠️ Límite de velocidad momentáneo. Reintentando...]"
         else:
-            yield f"[Error de conexión con IA: {error_msg}]"
+            yield f"\n\n[Error: {str(e)}]"
