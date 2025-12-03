@@ -35,7 +35,7 @@ def get_relevant_info(db, query, selected_files, max_chars=150000):
             
             # --- FRENO DE EMERGENCIA DE COSTOS ---
             if len(context_text) > max_chars:
-                context_text += f"\n\n[...Texto truncado automátiamente para optimizar costos (Límite: {max_chars} caracteres)...]"
+                context_text += f"\n\n[...Texto truncado automáticamente para optimizar costos (Límite: {max_chars} caracteres)...]"
                 return context_text
 
     return context_text
@@ -99,11 +99,10 @@ def clean_gemini_json(raw_text):
 def normalize_text(text):
     """
     Normaliza texto: minúsculas, sin acentos, sin espacios extra.
-    Esta es la función que faltaba y causaba el ImportError.
+    Requerido por services/storage.py
     """
     if not text: return ""
     text = str(text).lower().strip()
-    # Eliminar acentos (Normalize NFD y filtrar caracteres 'Mn' - Mark non-spacing)
     text = ''.join(c for c in unicodedata.normalize('NFD', text) if unicodedata.category(c) != 'Mn')
     return text
 
@@ -123,3 +122,13 @@ def validate_session_integrity():
 
 def get_current_time_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def reset_report_workflow():
+    """
+    Limpia el estado del generador de reportes.
+    Requerido por modes/report_mode.py
+    """
+    keys_to_remove = ["report_result", "report_query"]
+    if "mode_state" in st.session_state:
+        for k in keys_to_remove:
+            st.session_state.mode_state.pop(k, None)
