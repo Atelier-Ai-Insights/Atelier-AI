@@ -137,3 +137,4 @@ def reset_transcript_chat_workflow():
     if "mode_state" in st.session_state:
         st.session_state.mode_state.pop("transcript_chat_history", None)
         st.session_state.mode_state.pop("transcript_analysis_done", None)
+        
