@@ -3,7 +3,7 @@ import re
 import json
 import unicodedata
 from datetime import datetime
-import fitz  # PyMuPDF: Requerido para leer PDFs en OnePager y Tendencias
+import fitz  # PyMuPDF: Requerido para leer PDFs
 
 # ==============================================================================
 # 1. FUNCIÓN DE RAG OPTIMIZADA (CACHEADA + TOPE DE TOKENS)
@@ -11,14 +11,12 @@ import fitz  # PyMuPDF: Requerido para leer PDFs en OnePager y Tendencias
 @st.cache_data(show_spinner=False, ttl=3600)
 def get_relevant_info(db, query, selected_files, max_chars=150000):
     """
-    Busca y concatena la información de los archivos seleccionados.
-    Optimizado con caché y límite de caracteres para reducir costos.
+    Busca y concatena información. Optimizado para reducir costos.
     """
     if not db or not selected_files:
         return ""
 
     context_text = ""
-    # Filtrar documentos
     relevant_docs = [doc for doc in db if doc.get("nombre_archivo") in selected_files]
     
     for doc in relevant_docs:
@@ -53,27 +51,23 @@ def build_rag_context(user_query, docs_list, max_chars=30000):
 
 def extract_text_from_pdfs(uploaded_files):
     """
-    Extrae texto de PDFs subidos en memoria.
-    Requerido por: modes/onepager_mode.py y modes/trend_analysis_mode.py
+    Extrae texto de PDFs. Requerido por OnePager y Tendencias.
     """
     text_content = ""
-    if not uploaded_files:
-        return text_content
+    if not uploaded_files: return text_content
         
     for uploaded_file in uploaded_files:
         try:
-            # Leer el archivo desde la memoria (BytesIO)
             with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
                 for page in doc:
                     text_content += page.get_text() + "\n"
-            # Resetear el puntero del archivo por si se necesita leer de nuevo
             uploaded_file.seek(0)
         except Exception as e:
             print(f"Error leyendo PDF {uploaded_file.name}: {e}")
     return text_content
 
 # ==============================================================================
-# 3. LIMPIEZA Y NORMALIZACIÓN DE TEXTO
+# 3. UTILIDADES DE TEXTO Y LIMPIEZA
 # ==============================================================================
 def clean_gemini_json(raw_text):
     """Limpia el formato Markdown (```json ... ```) de Gemini."""
@@ -100,7 +94,7 @@ def clean_gemini_json(raw_text):
 
 def normalize_text(text):
     """
-    Normaliza texto: minúsculas, sin acentos.
+    Normaliza texto (quita acentos, minúsculas). 
     Requerido por: services/storage.py
     """
     if not text: return ""
@@ -114,6 +108,15 @@ def extract_brand(filename):
     parts = filename.split('_')
     return parts[0].strip() if len(parts) > 1 else "General"
 
+def get_stopwords():
+    """
+    Devuelve un set de palabras vacías (stopwords) en español.
+    Requerido por: services/plotting.py y modes/data_analysis_mode.py
+    """
+    return {
+        "de", "la", "que", "el", "en", "y", "a", "los", "del", "se", "las", "por", "un", "para", "con", "no", "una", "su", "al", "lo", "como", "más", "pero", "sus", "le", "ya", "o", "este", "sí", "porque", "esta", "entre", "cuando", "muy", "sin", "sobre", "también", "me", "hasta", "hay", "donde", "quien", "desde", "todo", "nos", "durante", "todos", "uno", "les", "ni", "contra", "otros", "ese", "eso", "ante", "ellos", "e", "esto", "mí", "antes", "algunos", "qué", "unos", "yo", "otro", "otras", "otra", "él", "tanto", "esa", "estos", "mucho", "quienes", "nada", "muchos", "cual", "poco", "ella", "estar", "estas", "algunas", "algo", "nosotros", "mi", "mis", "tú", "te", "ti", "tu"
+    }
+
 # ==============================================================================
 # 4. GESTIÓN DE SESIÓN Y TIEMPO
 # ==============================================================================
@@ -126,7 +129,7 @@ def get_current_time_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 # ==============================================================================
-# 5. WORKFLOWS DE LIMPIEZA (RESETS) - SOLUCIONA LOS ERRORES DE IMPORTACIÓN
+# 5. WORKFLOWS DE LIMPIEZA (RESETS) - SOLUCIONA LOS IMPORT ERRORS
 # ==============================================================================
 
 def reset_report_workflow():
