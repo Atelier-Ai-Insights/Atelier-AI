@@ -1,152 +1,224 @@
 import streamlit as st
-import re
-import json
 import unicodedata
-from datetime import datetime
-import fitz  # PyMuPDF: Requerido para leer PDFs
+import json
+import io
+import fitz  # PyMuPDF
+import nltk 
+import time
+from services.supabase_db import supabase
 
-# ==============================================================================
-# 1. FUNCIÓN DE RAG OPTIMIZADA (CACHEADA + TOPE DE TOKENS)
-# ==============================================================================
-@st.cache_data(show_spinner=False, ttl=3600)
-def get_relevant_info(db, query, selected_files, max_chars=150000):
-    """
-    Busca y concatena información. Optimizado para reducir costos.
-    """
-    if not db or not selected_files:
-        return ""
-
-    context_text = ""
-    relevant_docs = [doc for doc in db if doc.get("nombre_archivo") in selected_files]
-    
-    for doc in relevant_docs:
-        meta = f"\n\n--- INICIO DOCUMENTO: {doc.get('nombre_archivo')} ---\n"
-        context_text += meta
-        
-        for grupo in doc.get("grupos", []):
-            texto = str(grupo.get('contenido_texto', ''))
-            context_text += texto + "\n"
-            
-            # Freno de emergencia de costos
-            if len(context_text) > max_chars:
-                context_text += f"\n\n[...Texto truncado automáticamente (Límite: {max_chars})...]"
-                return context_text
-
-    return context_text
-
-# ==============================================================================
-# 2. PROCESAMIENTO DE ARCHIVOS (PDFs Y CONTEXTO)
-# ==============================================================================
-def build_rag_context(user_query, docs_list, max_chars=30000):
-    """Auxiliar para Tendencias con límite estricto."""
-    context = ""
-    for item in docs_list:
-        source = item.get('source', 'Fuente Desconocida')
-        content = item.get('content', '')
-        chunk = f"\n--- FUENTE: {source} ---\n{content}\n"
-        context += chunk
-        if len(context) > max_chars:
-            return context[:max_chars] + "\n...(truncado)..."
-    return context
-
-def extract_text_from_pdfs(uploaded_files):
-    """
-    Extrae texto de PDFs. Requerido por OnePager y Tendencias.
-    """
-    text_content = ""
-    if not uploaded_files: return text_content
-        
-    for uploaded_file in uploaded_files:
-        try:
-            with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
-                for page in doc:
-                    text_content += page.get_text() + "\n"
-            uploaded_file.seek(0)
-        except Exception as e:
-            print(f"Error leyendo PDF {uploaded_file.name}: {e}")
-    return text_content
-
-# ==============================================================================
-# 3. UTILIDADES DE TEXTO Y LIMPIEZA
-# ==============================================================================
-def clean_gemini_json(raw_text):
-    """Limpia el formato Markdown (```json ... ```) de Gemini."""
-    if not raw_text: return "{}"
-    cleaned = raw_text.strip()
-    
-    if "```" in cleaned:
-        cleaned = re.sub(r"```json", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"```", "", cleaned)
-    cleaned = cleaned.strip()
-    
-    start_obj, start_arr = cleaned.find("{"), cleaned.find("[")
-    if start_obj == -1 and start_arr == -1: return "{}"
-    
-    if start_obj != -1 and (start_arr == -1 or start_obj < start_arr):
-        start, end_char = start_obj, "}"
-    else:
-        start, end_char = start_arr, "]"
-        
-    end = cleaned.rfind(end_char)
-    if start != -1 and end != -1:
-        cleaned = cleaned[start : end + 1]
-    return cleaned
-
-def normalize_text(text):
-    """
-    Normaliza texto (quita acentos, minúsculas). 
-    Requerido por: services/storage.py
-    """
-    if not text: return ""
-    text = str(text).lower().strip()
-    text = ''.join(c for c in unicodedata.normalize('NFD', text) if unicodedata.category(c) != 'Mn')
-    return text
-
-def extract_brand(filename):
-    """Extrae la marca del nombre del archivo."""
-    if not filename: return "General"
-    parts = filename.split('_')
-    return parts[0].strip() if len(parts) > 1 else "General"
-
-def get_stopwords():
-    """
-    Devuelve un set de palabras vacías (stopwords) en español.
-    Requerido por: services/plotting.py y modes/data_analysis_mode.py
-    """
-    return {
-        "de", "la", "que", "el", "en", "y", "a", "los", "del", "se", "las", "por", "un", "para", "con", "no", "una", "su", "al", "lo", "como", "más", "pero", "sus", "le", "ya", "o", "este", "sí", "porque", "esta", "entre", "cuando", "muy", "sin", "sobre", "también", "me", "hasta", "hay", "donde", "quien", "desde", "todo", "nos", "durante", "todos", "uno", "les", "ni", "contra", "otros", "ese", "eso", "ante", "ellos", "e", "esto", "mí", "antes", "algunos", "qué", "unos", "yo", "otro", "otras", "otra", "él", "tanto", "esa", "estos", "mucho", "quienes", "nada", "muchos", "cual", "poco", "ella", "estar", "estas", "algunas", "algo", "nosotros", "mi", "mis", "tú", "te", "ti", "tu"
-    }
-
-# ==============================================================================
-# 4. GESTIÓN DE SESIÓN Y TIEMPO
-# ==============================================================================
-def validate_session_integrity():
-    if 'user' not in st.session_state or not st.session_state.user:
-        st.session_state.clear()
-        st.rerun()
-
-def get_current_time_str():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-# ==============================================================================
-# 5. WORKFLOWS DE LIMPIEZA (RESETS) - SOLUCIONA LOS IMPORT ERRORS
-# ==============================================================================
+# ==============================
+# Funciones de Reset
+# ==============================
 
 def reset_report_workflow():
-    """Requerido por: modes/report_mode.py"""
-    keys = ["report_result", "report_query"]
-    if "mode_state" in st.session_state:
-        for k in keys: st.session_state.mode_state.pop(k, None)
+    for k in ["report", "last_question"]:
+        st.session_state.mode_state.pop(k, None) 
 
 def reset_chat_workflow():
-    """Requerido por: modes/chat_mode.py"""
-    if "chat_history" in st.session_state:
-        st.session_state.chat_history = []
-    if "mode_state" in st.session_state and "chat_history" in st.session_state.mode_state:
-        st.session_state.mode_state["chat_history"] = []
+    st.session_state.mode_state.pop("chat_history", None) 
 
 def reset_transcript_chat_workflow():
-    """Requerido por: modes/text_analysis_mode.py"""
-    if "mode_state" in st.session_state:
-        st.session_state.mode_state.pop("transcript_chat_history", None)
-        st.session_state.mode_state.pop("transcript_analysis_done", None)
+    st.session_state.mode_state.pop("transcript_chat_history", None)
+
+def reset_etnochat_chat_workflow():
+    st.session_state.mode_state.pop("etno_chat_history", None)
+
+# ==============================
+# FUNCIONES AUXILIARES
+# ==============================
+def normalize_text(text):
+    if not text: return ""
+    try: 
+        normalized = unicodedata.normalize("NFD", str(text))
+        return "".join(c for c in normalized if unicodedata.category(c) != "Mn").lower()
+    except Exception as e: 
+        print(f"Error normalizing: {e}"); return str(text).lower()
+
+def extract_brand(filename):
+    if not filename or not isinstance(filename, str) or "In-ATL_" not in filename: return ""
+    try: 
+        base_filename = filename.replace("\\", "/").split("/")[-1]
+        return base_filename.split("In-ATL_")[1].rsplit(".", 1)[0] if "In-ATL_" in base_filename else ""
+    except Exception as e: 
+        print(f"Error extract brand: {e}"); return ""
+
+def clean_text(text):
+    if not isinstance(text, str): text = str(text)
+    return text
+
+@st.cache_resource
+def get_stopwords():
+    try:
+        nltk.download('stopwords')
+    except Exception as e:
+        print(f"Error descargando stopwords de NLTK: {e}")
+    
+    try: spanish_stopwords = nltk.corpus.stopwords.words('spanish')
+    except: spanish_stopwords = ['de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'las', 'un', 'para', 'con', 'no', 'una', 'su', 'que', 'se', 'por', 'es', 'más', 'lo', 'pero', 'me', 'mi', 'al', 'le', 'si', 'este', 'esta']
+    
+    try: english_stopwords = nltk.corpus.stopwords.words('english')
+    except: english_stopwords = ['the', 'and', 'to', 'of', 'a', 'in', 'is', 'that', 'for', 'it', 'as', 'was', 'with', 'on', 'at', 'by', 'be', 'this', 'which', 'have', 'from', 'or', 'one', 'had', 'by', 'word', 'but', 'not', 'what', 'all', 'were', 'we', 'when', 'your', 'can', 'said', 'there', 'use', 'an', 'each', 'which', 'she', 'do', 'how', 'their', 'if', 'will', 'up', 'other', 'about', 'out', 'many', 'then', 'them', 'these', 'so', 'some', 'her', 'would', 'make', 'like', 'him', 'into', 'time', 'has', 'look', 'two', 'more', 'write', 'go', 'see', 'number', 'no', 'way', 'could', 'people', 'my', 'than', 'first', 'water', 'been', 'call', 'who', 'oil', 'its', 'now', 'find']
+
+    custom_list = [
+        '...', 'p', 'r', 'rta', 'respuesta', 'respuestas', 'si', 'no', 'na', 'ninguno', 'ninguna', 'nan',
+        'document', 'presentation', 'python', 'warning', 'created', 'page',
+        'objetivo', 'tecnica', 'investigacion', 'investigación', 'participante', 'participantes',
+        'sesiones', 'sesión', 'proyecto', 'análisis', 'analisis', 'ficha', 'tecnica', 'slide',
+        'bogotá', 'colombia', 'atelier', 'insights', 'cliente', 'consumidor', 'consumidores',
+        'evaluación', 'evaluacion', 'entrevistado', 'entrevistados', 'pregunta', 'focus', 'group',
+        'hola', 'buenos', 'dias', 'noches', 'tarde', 'nombre', 'llamo', 'presentación', 'presentacion'
+    ]
+    
+    final_stopwords = set(spanish_stopwords) | set(english_stopwords) | set(custom_list)
+    return final_stopwords
+
+# ==============================
+# RAG (Recuperación de Información S3)
+# ==============================
+def get_relevant_info(db, question, selected_files):
+    all_text = ""
+    selected_files_set = set(selected_files) if isinstance(selected_files, (list, set)) else set()
+    
+    for pres in db:
+        doc_name = pres.get('nombre_archivo')
+        if doc_name and doc_name in selected_files_set:
+            try:
+                titulo = pres.get('titulo_estudio', doc_name)
+                ano = pres.get('marca')
+                citation_header = f"{titulo} - {ano}" if ano else titulo
+
+                all_text += f"Documento: {citation_header}\n"
+                
+                for grupo in pres.get("grupos", []):
+                    contenido = str(grupo.get('contenido_texto', ''))
+                    metadatos = json.dumps(grupo.get('metadatos', {}), ensure_ascii=False) if grupo.get('metadatos') else ""
+                    hechos = json.dumps(grupo.get('hechos', []), ensure_ascii=False) if grupo.get('hechos') else ""
+                    
+                    if contenido: all_text += f"  - {contenido}\n";
+                    if metadatos: all_text += f"  (Contexto adicional: {metadatos})\n"
+                    if hechos: all_text += f"  (Datos clave: {hechos})\n"
+                        
+                all_text += "\n---\n\n"
+            except Exception as e: 
+                print(f"Error proc doc '{doc_name}': {e}")
+    return all_text
+
+def extract_text_from_pdfs(uploaded_files):
+    combined_text = ""
+    if not uploaded_files: return combined_text
+    for file in uploaded_files:
+        try:
+            file_bytes = file.getvalue()
+            pdf_document = fitz.open(stream=file_bytes, filetype="pdf")
+            combined_text += f"\n\n--- INICIO DOCUMENTO: {file.name} ---\n\n"
+            for page in pdf_document: combined_text += page.get_text() + "\n"
+            pdf_document.close()
+            combined_text += f"\n--- FIN DOCUMENTO: {file.name} ---\n"
+        except Exception as e:
+            print(f"Error al procesar PDF '{file.name}': {e}")
+            combined_text += f"\n\n--- ERROR AL PROCESAR: {file.name} ---\n"
+    return combined_text
+
+# ==============================
+# GESTIÓN DE SESIÓN
+# ==============================
+
+def validate_session_integrity():
+    if not st.session_state.get("logged_in"): return
+    if 'user_id' not in st.session_state or 'session_id' not in st.session_state:
+        st.warning("Datos de sesión corruptos. Reiniciando..."); st.session_state.clear(); st.rerun()
+
+    try:
+        response = supabase.table("users").select("active_session_id").eq("id", st.session_state.user_id).single().execute()
+        if response.data:
+            db_session_id = response.data.get('active_session_id')
+            if db_session_id != st.session_state.session_id:
+                st.error("⚠️ Tu sesión ha sido cerrada porque se detectó un inicio de sesión en otro dispositivo.")
+                time.sleep(2)
+                supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
+        else:
+            st.session_state.clear(); st.rerun()
+    except Exception as e:
+        print(f"Error validando sesión (Heartbeat): {e}")
+
+# ==============================
+# RAG LIGERO (Búsqueda Inteligente)
+# ==============================
+
+def build_rag_context(query, documents, max_chars=100000):
+    """
+    Filtra y construye un contexto relevante basado en la pregunta del usuario.
+    """
+    if not query or not documents: return ""
+
+    query_terms = set(normalize_text(query).split())
+    stopwords = get_stopwords()
+    keywords = [w for w in query_terms if w not in stopwords and len(w) > 3]
+    
+    if not keywords: keywords = query_terms 
+
+    scored_chunks = []
+
+    # Fragmentar y Puntuar
+    for doc in documents:
+        source = doc.get('source', 'Desconocido')
+        content = doc.get('content', '')
+        paragraphs = content.split('\n\n') # Dividir por párrafos
+        
+        for i, para in enumerate(paragraphs):
+            if len(para) < 50: continue 
+            
+            para_norm = normalize_text(para)
+            score = sum(1 for kw in keywords if kw in para_norm)
+            if i == 0: score += 0.5 # Bonus al intro (pero el RAG prefiere keywords)
+            
+            if score > 0:
+                scored_chunks.append({'score': score, 'source': source, 'text': para})
+
+    scored_chunks.sort(key=lambda x: x['score'], reverse=True)
+
+    final_context = ""
+    current_chars = 0
+    
+    # CAMBIO IMPORTANTE: Si no hay coincidencias, devolvemos vacío para que el sistema
+    # use el Resumen Global (definido en text_analysis_mode.py)
+    if not scored_chunks:
+        print("RAG: No se encontraron coincidencias exactas. Usando fallback (vacío).")
+        return "" 
+
+    docs_included = set()
+    for chunk in scored_chunks:
+        if current_chars + len(chunk['text']) > max_chars: break
+        final_context += f"\n[Fuente: {chunk['source']}]\n{chunk['text']}\n..."
+        current_chars += len(chunk['text'])
+        docs_included.add(chunk['source'])
+
+    print(f"RAG: Contexto construido con {current_chars} chars de {len(docs_included)} documentos.")
+    return final_context
+
+# ... (código existente) ...
+
+# ==============================
+# UTILIDADES DE LIMPIEZA DE IA
+# ==============================
+
+def clean_gemini_json(text):
+    """
+    Limpia la respuesta de Gemini para asegurar que sea un JSON válido.
+    Elimina bloques de código Markdown (```json ... ```) y espacios extra.
+    """
+    if not text: return ""
+    text = str(text).strip()
+    
+    # Eliminar bloque de inicio tipo Markdown
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+        
+    # Eliminar bloque de fin tipo Markdown
+    if text.endswith("```"):
+        text = text[:-3]
+        
+    return text.strip()
