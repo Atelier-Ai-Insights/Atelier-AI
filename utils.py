@@ -12,7 +12,7 @@ def get_relevant_info(db, query, selected_files, max_chars=150000):
     """
     Busca y concatena la información de los archivos seleccionados.
     
-    OPTIMIZACIONES CRÍTICAS:
+    OPTIMIZACIONES:
     1. @st.cache_data: Memoriza el resultado por 1 hora.
     2. max_chars: Límite duro de caracteres para proteger la facturación.
     """
@@ -123,6 +123,10 @@ def validate_session_integrity():
 def get_current_time_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+# ==============================================================================
+# 5. WORKFLOWS DE LIMPIEZA (RESET)
+# ==============================================================================
+
 def reset_report_workflow():
     """
     Limpia el estado del generador de reportes.
@@ -132,3 +136,15 @@ def reset_report_workflow():
     if "mode_state" in st.session_state:
         for k in keys_to_remove:
             st.session_state.mode_state.pop(k, None)
+
+def reset_chat_workflow():
+    """
+    Limpia el historial del chat.
+    Requerido por modes/chat_mode.py (EL QUE FALTABA)
+    """
+    if "chat_history" in st.session_state:
+        st.session_state.chat_history = []
+    
+    # También limpiar si está dentro de mode_state
+    if "mode_state" in st.session_state and "chat_history" in st.session_state.mode_state:
+        st.session_state.mode_state["chat_history"] = []
