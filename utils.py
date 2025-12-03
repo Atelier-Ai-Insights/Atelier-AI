@@ -41,7 +41,7 @@ def get_relevant_info(db, query, selected_files, max_chars=150000):
     return context_text
 
 # ==============================================================================
-# 2. CONSTRUCCIÓN DE CONTEXTO PARA TENDENCIAS (WRAPPER)
+# 2. CONSTRUCCIÓN DE CONTEXTO (WRAPPERS)
 # ==============================================================================
 def build_rag_context(user_query, docs_list, max_chars=30000):
     """Auxiliar para Tendencias con límite estricto (30k chars)."""
@@ -124,27 +124,29 @@ def get_current_time_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 # ==============================================================================
-# 5. WORKFLOWS DE LIMPIEZA (RESET)
+# 5. WORKFLOWS DE LIMPIEZA (RESETS) - SECCIÓN CRÍTICA
 # ==============================================================================
 
 def reset_report_workflow():
-    """
-    Limpia el estado del generador de reportes.
-    Requerido por modes/report_mode.py
-    """
+    """Limpia el estado del generador de reportes."""
     keys_to_remove = ["report_result", "report_query"]
     if "mode_state" in st.session_state:
         for k in keys_to_remove:
             st.session_state.mode_state.pop(k, None)
 
 def reset_chat_workflow():
-    """
-    Limpia el historial del chat.
-    Requerido por modes/chat_mode.py (EL QUE FALTABA)
-    """
+    """Limpia el historial del chat general."""
     if "chat_history" in st.session_state:
         st.session_state.chat_history = []
-    
-    # También limpiar si está dentro de mode_state
     if "mode_state" in st.session_state and "chat_history" in st.session_state.mode_state:
         st.session_state.mode_state["chat_history"] = []
+
+def reset_transcript_chat_workflow():
+    """
+    Limpia el chat específico del modo Análisis de Texto / Transcripciones.
+    Requerido por modes/text_analysis_mode.py
+    """
+    if "mode_state" in st.session_state:
+        st.session_state.mode_state.pop("transcript_chat_history", None)
+        # También limpiamos el análisis previo si se requiere reset total
+        st.session_state.mode_state.pop("transcript_analysis_done", None)
