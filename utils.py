@@ -3,7 +3,7 @@ import re
 import json
 import unicodedata
 from datetime import datetime
-import fitz  # PyMuPDF (Requerido para extract_text_from_pdfs)
+import fitz  # PyMuPDF: Requerido para leer PDFs en OnePager y Tendencias
 
 # ==============================================================================
 # 1. FUNCIÓN DE RAG OPTIMIZADA (CACHEADA + TOPE DE TOKENS)
@@ -12,11 +12,13 @@ import fitz  # PyMuPDF (Requerido para extract_text_from_pdfs)
 def get_relevant_info(db, query, selected_files, max_chars=150000):
     """
     Busca y concatena la información de los archivos seleccionados.
+    Optimizado con caché y límite de caracteres para reducir costos.
     """
     if not db or not selected_files:
         return ""
 
     context_text = ""
+    # Filtrar documentos
     relevant_docs = [doc for doc in db if doc.get("nombre_archivo") in selected_files]
     
     for doc in relevant_docs:
@@ -27,6 +29,7 @@ def get_relevant_info(db, query, selected_files, max_chars=150000):
             texto = str(grupo.get('contenido_texto', ''))
             context_text += texto + "\n"
             
+            # Freno de emergencia de costos
             if len(context_text) > max_chars:
                 context_text += f"\n\n[...Texto truncado automáticamente (Límite: {max_chars})...]"
                 return context_text
@@ -34,7 +37,7 @@ def get_relevant_info(db, query, selected_files, max_chars=150000):
     return context_text
 
 # ==============================================================================
-# 2. PROCESAMIENTO DE ARCHIVOS Y CONTEXTO
+# 2. PROCESAMIENTO DE ARCHIVOS (PDFs Y CONTEXTO)
 # ==============================================================================
 def build_rag_context(user_query, docs_list, max_chars=30000):
     """Auxiliar para Tendencias con límite estricto."""
@@ -51,25 +54,32 @@ def build_rag_context(user_query, docs_list, max_chars=30000):
 def extract_text_from_pdfs(uploaded_files):
     """
     Extrae texto de PDFs subidos en memoria.
-    Requerido por: modes/onepager_mode.py
+    Requerido por: modes/onepager_mode.py y modes/trend_analysis_mode.py
     """
     text_content = ""
+    if not uploaded_files:
+        return text_content
+        
     for uploaded_file in uploaded_files:
         try:
+            # Leer el archivo desde la memoria (BytesIO)
             with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
                 for page in doc:
                     text_content += page.get_text() + "\n"
+            # Resetear el puntero del archivo por si se necesita leer de nuevo
+            uploaded_file.seek(0)
         except Exception as e:
             print(f"Error leyendo PDF {uploaded_file.name}: {e}")
     return text_content
 
 # ==============================================================================
-# 3. LIMPIEZA Y UTILIDADES DE TEXTO
+# 3. LIMPIEZA Y NORMALIZACIÓN DE TEXTO
 # ==============================================================================
 def clean_gemini_json(raw_text):
     """Limpia el formato Markdown (```json ... ```) de Gemini."""
     if not raw_text: return "{}"
     cleaned = raw_text.strip()
+    
     if "```" in cleaned:
         cleaned = re.sub(r"```json", "", cleaned, flags=re.IGNORECASE)
         cleaned = re.sub(r"```", "", cleaned)
@@ -116,7 +126,7 @@ def get_current_time_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 # ==============================================================================
-# 5. WORKFLOWS DE LIMPIEZA (RESETS) - TODAS LAS VARIANTES
+# 5. WORKFLOWS DE LIMPIEZA (RESETS) - SOLUCIONA LOS ERRORES DE IMPORTACIÓN
 # ==============================================================================
 
 def reset_report_workflow():
@@ -137,4 +147,3 @@ def reset_transcript_chat_workflow():
     if "mode_state" in st.session_state:
         st.session_state.mode_state.pop("transcript_chat_history", None)
         st.session_state.mode_state.pop("transcript_analysis_done", None)
-        
