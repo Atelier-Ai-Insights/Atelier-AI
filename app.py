@@ -31,7 +31,7 @@ from modes.text_analysis_mode import text_analysis_mode
 from modes.onepager_mode import one_pager_ppt_mode
 from modes.data_analysis_mode import data_analysis_mode
 from modes.etnochat_mode import etnochat_mode
-from modes.trend_analysis_mode import trend_analysis_mode 
+# [ELIMINADO] from modes.trend_analysis_mode import trend_analysis_mode 
 from modes.synthetic_mode import synthetic_users_mode 
 
 def set_mode_and_reset(new_mode):
@@ -87,7 +87,7 @@ def run_user_mode(db_full, user_features, footer_html):
             c.MODE_TEXT_ANALYSIS: user_features.get("transcript_file_limit", 0) > 0,
             c.MODE_DATA_ANALYSIS: True,
             c.MODE_ETNOCHAT: user_features.get("has_etnochat_analysis"),
-            c.MODE_TREND_ANALYSIS: True, 
+            # [ELIMINADO] c.MODE_TREND_ANALYSIS: True, 
         },
         "Evaluación": {
             c.MODE_IDEA_EVAL: user_features.get("has_idea_evaluation"),
@@ -182,7 +182,7 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == c.MODE_ONEPAGER: one_pager_ppt_mode(db_filtered, selected_files)
     elif modo == c.MODE_DATA_ANALYSIS: data_analysis_mode(db_filtered, selected_files)
     elif modo == c.MODE_ETNOCHAT: etnochat_mode()
-    elif modo == c.MODE_TREND_ANALYSIS: trend_analysis_mode(db_filtered, selected_files)
+    # [ELIMINADO] elif modo == c.MODE_TREND_ANALYSIS: trend_analysis_mode(db_filtered, selected_files)
     elif modo == c.MODE_SYNTHETIC: synthetic_users_mode(db_filtered, selected_files)
     
 # =====================================================
