@@ -106,3 +106,4 @@ websockets==15.0.1
 wordcloud==1.9.4
 xlsxwriter==3.2.9
 yarl==1.22.0
+pytrends
