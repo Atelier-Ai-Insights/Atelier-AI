@@ -3,8 +3,9 @@ import time
 from datetime import datetime, timezone
 
 # ==============================
-# 1. IMPORTAR MÓDULOS
+# 1. IMPORTAR MÓDULOS GLOBALES
 # ==============================
+# Nota: No importamos los "modes" aquí para evitar errores de carga circular.
 
 from styles import apply_styles, apply_login_styles 
 from config import PLAN_FEATURES, banner_file
@@ -18,21 +19,6 @@ from auth import (
 from admin.dashboard import show_admin_dashboard
 from utils import extract_brand, validate_session_integrity 
 import constants as c
-
-# --- MODOS DE USO ---
-from modes.report_mode import report_mode
-from modes.chat_mode import grounded_chat_mode
-from modes.ideation_mode import ideacion_mode
-from modes.concept_mode import concept_generation_mode
-from modes.idea_eval_mode import idea_evaluator_mode
-from modes.image_eval_mode import image_evaluation_mode
-from modes.video_eval_mode import video_evaluation_mode
-from modes.text_analysis_mode import text_analysis_mode
-from modes.onepager_mode import one_pager_ppt_mode
-from modes.data_analysis_mode import data_analysis_mode
-from modes.etnochat_mode import etnochat_mode
-# [ELIMINADO] from modes.trend_analysis_mode import trend_analysis_mode 
-from modes.synthetic_mode import synthetic_users_mode 
 
 def set_mode_and_reset(new_mode):
     """Cambia el modo y limpia el estado para evitar 'contaminación' entre herramientas."""
@@ -87,7 +73,7 @@ def run_user_mode(db_full, user_features, footer_html):
             c.MODE_TEXT_ANALYSIS: user_features.get("transcript_file_limit", 0) > 0,
             c.MODE_DATA_ANALYSIS: True,
             c.MODE_ETNOCHAT: user_features.get("has_etnochat_analysis"),
-            # [ELIMINADO] c.MODE_TREND_ANALYSIS: True, 
+            # c.MODE_TREND_ANALYSIS: True, # Descomentar si tienes trend_analysis_mode.py
         },
         "Evaluación": {
             c.MODE_IDEA_EVAL: user_features.get("has_idea_evaluation"),
@@ -105,7 +91,7 @@ def run_user_mode(db_full, user_features, footer_html):
         }
     }
     
-    # Lógica de visualización de botones (sin cambios funcionales, solo UI)
+    # Lógica de visualización de botones (UI)
     default_expanded = ""
     for category, modes in all_categories.items():
         if modo in modes:
@@ -132,7 +118,6 @@ def run_user_mode(db_full, user_features, footer_html):
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT] 
     
     # Obtener opciones únicas para los multiselects
-    # Usamos db_full para las opciones iniciales
     marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
     years_options = sorted({doc.get("marca", "") for doc in db_full if doc.get("marca")})
     brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_full if extract_brand(d.get("nombre_archivo", ""))})
@@ -143,7 +128,6 @@ def run_user_mode(db_full, user_features, footer_html):
     selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects", disabled=not run_filters)
 
     # Aplicar Filtros usando la función Cacheada
-    # Esto evita recalcular la lista en cada frame si los inputs no cambian
     if run_filters:
         db_filtered = filter_database(
             db_full, 
@@ -153,7 +137,7 @@ def run_user_mode(db_full, user_features, footer_html):
             st.session_state.get("cliente")
         )
     else:
-        db_filtered = db_full # Si no hay filtros activos, pasamos todo (o vacío, según lógica del modo)
+        db_filtered = db_full 
 
     # --- LOGOUT ---
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
@@ -166,24 +150,62 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.divider()
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
     
-    # --- EJECUCIÓN DEL MODO SELECCIONADO ---
+    # --- EJECUCIÓN DEL MODO SELECCIONADO (CON LAZY IMPORT) ---
     # Pasamos solo los datos filtrados y la lista de archivos relevantes
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
     
-    # Enrutador de Modos
-    if modo == c.MODE_REPORT: report_mode(db_filtered, selected_files)
-    elif modo == c.MODE_IDEATION: ideacion_mode(db_filtered, selected_files)
-    elif modo == c.MODE_CONCEPT: concept_generation_mode(db_filtered, selected_files)
-    elif modo == c.MODE_CHAT: grounded_chat_mode(db_filtered, selected_files)
-    elif modo == c.MODE_IDEA_EVAL: idea_evaluator_mode(db_filtered, selected_files)
-    elif modo == c.MODE_IMAGE_EVAL: image_evaluation_mode(db_filtered, selected_files)
-    elif modo == c.MODE_VIDEO_EVAL: video_evaluation_mode(db_filtered, selected_files)
-    elif modo == c.MODE_TEXT_ANALYSIS: text_analysis_mode()
-    elif modo == c.MODE_ONEPAGER: one_pager_ppt_mode(db_filtered, selected_files)
-    elif modo == c.MODE_DATA_ANALYSIS: data_analysis_mode(db_filtered, selected_files)
-    elif modo == c.MODE_ETNOCHAT: etnochat_mode()
-    # [ELIMINADO] elif modo == c.MODE_TREND_ANALYSIS: trend_analysis_mode(db_filtered, selected_files)
-    elif modo == c.MODE_SYNTHETIC: synthetic_users_mode(db_filtered, selected_files)
+    # Enrutador de Modos con Importación Diferida
+    if modo == c.MODE_REPORT: 
+        from modes.report_mode import report_mode
+        report_mode(db_filtered, selected_files)
+
+    elif modo == c.MODE_IDEATION: 
+        from modes.ideation_mode import ideacion_mode
+        ideacion_mode(db_filtered, selected_files)
+
+    elif modo == c.MODE_CONCEPT: 
+        from modes.concept_mode import concept_generation_mode
+        concept_generation_mode(db_filtered, selected_files)
+
+    elif modo == c.MODE_CHAT: 
+        from modes.chat_mode import grounded_chat_mode
+        grounded_chat_mode(db_filtered, selected_files)
+
+    elif modo == c.MODE_IDEA_EVAL: 
+        from modes.idea_eval_mode import idea_evaluator_mode
+        idea_evaluator_mode(db_filtered, selected_files)
+
+    elif modo == c.MODE_IMAGE_EVAL: 
+        from modes.image_eval_mode import image_evaluation_mode
+        image_evaluation_mode(db_filtered, selected_files)
+
+    elif modo == c.MODE_VIDEO_EVAL: 
+        from modes.video_eval_mode import video_evaluation_mode
+        video_evaluation_mode(db_filtered, selected_files)
+
+    elif modo == c.MODE_TEXT_ANALYSIS: 
+        from modes.text_analysis_mode import text_analysis_mode
+        text_analysis_mode()
+
+    elif modo == c.MODE_ONEPAGER: 
+        from modes.onepager_mode import one_pager_ppt_mode
+        one_pager_ppt_mode(db_filtered, selected_files)
+
+    elif modo == c.MODE_DATA_ANALYSIS: 
+        from modes.data_analysis_mode import data_analysis_mode
+        data_analysis_mode(db_filtered, selected_files)
+
+    elif modo == c.MODE_ETNOCHAT: 
+        from modes.etnochat_mode import etnochat_mode
+        etnochat_mode()
+        
+    # elif modo == c.MODE_TREND_ANALYSIS: 
+    #     from modes.trend_analysis_mode import google_trends_mode
+    #     google_trends_mode()
+
+    elif modo == c.MODE_SYNTHETIC: 
+        from modes.synthetic_mode import synthetic_users_mode
+        synthetic_users_mode(db_filtered, selected_files)
     
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
@@ -200,7 +222,7 @@ def main():
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
-    # 1. RUTA DE ACTIVACIÓN
+    # 1. RUTA DE ACTIVACIÓN (INVITACIÓN O RECUPERACIÓN)
     if st.session_state.get('flow_email_verified'):
         apply_login_styles()
         col1, col2, col3 = st.columns([1,2,1])
