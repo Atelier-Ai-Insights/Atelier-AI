@@ -57,51 +57,55 @@ def clean_gemini_json(text):
 # ==============================
 # RAG (Recuperación de Información)
 # ==============================
-def get_relevant_info(db, question, selected_files):
-    if not db or not question: return ""
+def get_relevant_info(db, question, selected_files, max_chars=150000):
+    """
+    Recupera info, pero con un LÍMITE DE SEGURIDAD (max_chars).
+    150k caracteres son aprox 30k-40k tokens (Seguro para Gemini Flash/Pro).
+    """
+    all_text = ""
+    selected_files_set = set(selected_files) if isinstance(selected_files, (list, set)) else set()
     
-    selected_set = set(selected_files) if selected_files else set()
-    question_norm = normalize_text(question)
-    keywords = [w for w in question_norm.split() if w not in get_stopwords() and len(w) > 3]
-    
-    relevant_chunks = []
+    # Prioridad: ¿Podemos ordenar por relevancia? 
+    # Por ahora, simplemente cortamos para no quebrar la banca.
     
     for pres in db:
+        # Si ya nos pasamos del límite, paramos de leer archivos.
+        if len(all_text) > max_chars:
+            all_text += f"\n\n[ALERTA: Contexto truncado por límite de seguridad ({max_chars} chars)...]"
+            break 
+
         doc_name = pres.get('nombre_archivo')
-        if doc_name and (not selected_set or doc_name in selected_set):
-            score = 0
-            matches = []
-            
-            # Búsqueda simple por palabras clave
-            for grupo in pres.get("grupos", []):
-                txt = str(grupo.get('contenido_texto', ''))
-                txt_norm = normalize_text(txt)
-                if any(kw in txt_norm for kw in keywords):
-                    matches.append(f"- {txt}")
-                    score += 1
-            
-            if score > 0:
-                header = f"Documento: {pres.get('titulo_estudio', doc_name)} ({pres.get('marca', '')})"
-                full_block = f"{header}\n" + "\n".join(matches)
-                relevant_chunks.append((score, full_block))
+        if doc_name and doc_name in selected_files_set:
+            try:
+                # Construcción del texto (igual que antes)
+                titulo = pres.get('titulo_estudio', doc_name)
+                ano = pres.get('marca')
+                citation_header = f"{titulo} - {ano}" if ano else titulo
 
-    # Ordenar por relevancia y limitar contexto (Top 15 fragmentos)
-    relevant_chunks.sort(key=lambda x: x[0], reverse=True)
-    final_text = "\n\n".join([chunk[1] for chunk in relevant_chunks[:15]])
-    
-    return final_text if final_text else "No se encontró información específica en los documentos seleccionados."
+                doc_content = f"Documento: {citation_header}\n"
+                
+                for grupo in pres.get("grupos", []):
+                    contenido = str(grupo.get('contenido_texto', ''))
+                    # Solo agregamos metadatos si son breves
+                    metadatos = json.dumps(grupo.get('metadatos', {}), ensure_ascii=False) if grupo.get('metadatos') else ""
+                    
+                    if contenido: doc_content += f"  - {contenido}\n";
+                    if metadatos: doc_content += f"  (Contexto: {metadatos})\n"
+                        
+                doc_content += "\n---\n\n"
+                
+                # Chequeo antes de agregar para no cortar a mitad de palabra si es posible
+                if len(all_text) + len(doc_content) > max_chars:
+                    remaining = max_chars - len(all_text)
+                    all_text += doc_content[:remaining]
+                    break
+                else:
+                    all_text += doc_content
 
-def extract_text_from_pdfs(uploaded_files):
-    text = ""
-    if not uploaded_files: return text
-    for file in uploaded_files:
-        try:
-            with fitz.open(stream=file.getvalue(), filetype="pdf") as doc:
-                text += f"\n--- INICIO PDF: {file.name} ---\n"
-                for page in doc: text += page.get_text()
-                text += f"\n--- FIN PDF: {file.name} ---\n"
-        except Exception as e: print(f"Error PDF {file.name}: {e}")
-    return text
+            except Exception as e: 
+                print(f"Error proc doc '{doc_name}': {e}")
+                
+    return all_text
 
 # ==============================
 # GESTIÓN DE ESTADO (RESET)
