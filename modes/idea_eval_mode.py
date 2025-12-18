@@ -4,9 +4,8 @@ from services.gemini_api import call_gemini_stream
 from services.supabase_db import log_query_event
 from prompts import get_idea_eval_prompt 
 import constants as c
+# --- ¡NUEVAS IMPORTACIONES NECESARIAS! ---
 from reporting.pdf_generator import generate_pdf_html
-# --- NUEVA IMPORTACIÓN ---
-from reporting.docx_generator import generate_docx
 from config import banner_file
 
 # =====================================================
@@ -23,41 +22,37 @@ def idea_evaluator_mode(db, selected_files):
         st.markdown("### Evaluación")
         st.markdown(st.session_state.mode_state["evaluation_result"])
 
-        st.divider() 
+        st.divider() # Línea separadora visual
         
         # --- BOTONES DE ACCIÓN ---
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
+            # Generar el PDF usando el contenido del resultado
             pdf_bytes = generate_pdf_html(
                 st.session_state.mode_state["evaluation_result"], 
                 title="Evaluación de Idea", 
                 banner_path=banner_file
             )
+            
             if pdf_bytes:
-                st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name="evaluacion.pdf", mime="application/pdf", width='stretch')
+                st.download_button(
+                    label="Descargar Evaluación PDF", 
+                    data=pdf_bytes, 
+                    file_name="evaluacion_idea.pdf", 
+                    mime="application/pdf", 
+                    width='stretch'
+                )
+            else:
+                st.error("No se pudo generar el PDF.")
 
         with col2:
-            docx_bytes = generate_docx(
-                st.session_state.mode_state["evaluation_result"], 
-                title="Evaluación de Idea"
-            )
-            if docx_bytes:
-                st.download_button(
-                    "📝 Descargar Word", 
-                    data=docx_bytes, 
-                    file_name="evaluacion.docx", 
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
-                    width='stretch',
-                    type="primary"
-                )
-
-        with col3:
-            if st.button("🔄 Evaluar otra", width='stretch'): 
+            if st.button("Evaluar otra idea", width='stretch'): 
+                # Limpiar el estado para volver al formulario
                 st.session_state.mode_state.pop("evaluation_result", None)
                 st.rerun()
 
-    # --- PANTALLA DE FORMULARIO ---
+    # --- PANTALLA DE FORMULARIO (Si no hay resultados aún) ---
     else:
         idea_input = st.text_area("Describe la idea a evaluar:", height=150, placeholder="Ej: Yogures con probióticos...")
         
@@ -69,15 +64,20 @@ def idea_evaluator_mode(db, selected_files):
                 context_info = get_relevant_info(db, idea_input, selected_files)
                 prompt = get_idea_eval_prompt(idea_input, context_info)
                 
+                # --- STREAMING ---
                 stream = call_gemini_stream(prompt)
                 
                 if stream:
                     st.markdown("---")
                     st.markdown("### Evaluación")
+                    # Usamos write_stream para el efecto visual
                     response = st.write_stream(stream)
                     
+                    # Guardamos el resultado final en el estado
                     st.session_state.mode_state["evaluation_result"] = response
                     log_query_event(idea_input, mode=c.MODE_IDEA_EVAL)
+                    
+                    # Rerun para mostrar los botones de descarga inmediatamente
                     st.rerun()
                 else: 
                     st.error("No se pudo generar evaluación.")
