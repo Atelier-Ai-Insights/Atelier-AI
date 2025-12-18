@@ -9,8 +9,8 @@ from services.logger import log_error, log_action
 # ==========================================
 # CONFIGURACIÓN DE MODELO
 # ==========================================
-# Usar Flash es correcto por precio, pero el código debe ser estricto.
-MODEL_NAME = "gemini-2.5-flash" 
+
+MODEL_NAME = "gemini-1.5-flash" 
 
 def _configure_gemini(key_index):
     try:
