@@ -196,29 +196,3 @@ def build_rag_context(query, documents, max_chars=100000):
 
     print(f"RAG: Contexto construido con {current_chars} chars de {len(docs_included)} documentos.")
     return final_context
-
-# ... (código existente) ...
-
-# ==============================
-# UTILIDADES DE LIMPIEZA DE IA
-# ==============================
-
-def clean_gemini_json(text):
-    """
-    Limpia la respuesta de Gemini para asegurar que sea un JSON válido.
-    Elimina bloques de código Markdown (```json ... ```) y espacios extra.
-    """
-    if not text: return ""
-    text = str(text).strip()
-    
-    # Eliminar bloque de inicio tipo Markdown
-    if text.startswith("```json"):
-        text = text[7:]
-    elif text.startswith("```"):
-        text = text[3:]
-        
-    # Eliminar bloque de fin tipo Markdown
-    if text.endswith("```"):
-        text = text[:-3]
-        
-    return text.strip()
