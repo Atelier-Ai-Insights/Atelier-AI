@@ -53,7 +53,7 @@ def video_evaluation_mode(db, selected_files):
             
         with st.spinner("Analizando video (esto puede tomar un momento)..."):
             relevant_text_context = get_relevant_info(db, f"Contexto: {target_audience}", selected_files)
-            if len(relevant_text_context) > 800000: relevant_text_context = relevant_text_context[:800000]
+            if len(relevant_text_context) > 200000: relevant_text_context = relevant_text_context[:200000]
                 
             video_file_data = {'mime_type': uploaded_file.type, 'data': video_bytes}
             prompt_parts = get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context)
