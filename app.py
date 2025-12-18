@@ -58,7 +58,6 @@ def filter_database(db_full, selected_marcas, selected_years, selected_projects,
 def run_user_mode(db_full, user_features, footer_html):
     
     # --- LOGO SIDEBAR ---
-    # Se ajusta el width para que sea más angosto en la barra lateral
     st.sidebar.image("LogoDataStudio.png", width=220)
     
     st.sidebar.write(f"Usuario: {st.session_state.user}")
@@ -76,7 +75,7 @@ def run_user_mode(db_full, user_features, footer_html):
             c.MODE_TEXT_ANALYSIS: user_features.get("transcript_file_limit", 0) > 0,
             c.MODE_DATA_ANALYSIS: True,
             c.MODE_ETNOCHAT: user_features.get("has_etnochat_analysis"),
-            # c.MODE_TREND_ANALYSIS: True, # Descomentar si tienes trend_analysis_mode.py
+            # c.MODE_TREND_ANALYSIS: True, 
         },
         "Evaluación": {
             c.MODE_IDEA_EVAL: user_features.get("has_idea_evaluation"),
@@ -228,10 +227,11 @@ def main():
     # 1. RUTA DE ACTIVACIÓN (INVITACIÓN O RECUPERACIÓN)
     if st.session_state.get('flow_email_verified'):
         apply_login_styles()
-        col1, col2, col3 = st.columns([1,2,1])
+        # [MODIFICADO] Ajuste de columnas para centrar y angostar la vista
+        col1, col2, col3 = st.columns([3, 2, 3])
         with col2:
-            # --- LOGO LOGIN ---
-            st.image("LogoDataStudio.png", width=350)
+            # [MODIFICADO] Logo responsivo para coincidir con inputs
+            st.image("LogoDataStudio.png", use_container_width=True)
             ctx = st.session_state.get('temp_auth_type', 'recovery')
             show_activation_flow(None, ctx) 
         st.divider(); st.markdown(footer_html, unsafe_allow_html=True); st.stop()
@@ -242,10 +242,11 @@ def main():
     if auth_type in ["recovery", "invite"] and access_token:
         if isinstance(access_token, list): access_token = access_token[0]
         apply_login_styles()
-        col1, col2, col3 = st.columns([1,2,1])
+        # [MODIFICADO] Ajuste de columnas para centrar y angostar la vista
+        col1, col2, col3 = st.columns([3, 2, 3])
         with col2:
-            # --- LOGO LOGIN ---
-            st.image("LogoDataStudio.png", width=350)
+            # [MODIFICADO] Logo responsivo para coincidir con inputs
+            st.image("LogoDataStudio.png", use_container_width=True)
             show_activation_flow(access_token, auth_type)
         st.divider(); st.markdown(footer_html, unsafe_allow_html=True); st.stop()
 
@@ -276,10 +277,11 @@ def main():
 
     # 3. PANTALLA DE LOGIN
     apply_login_styles()
-    col1, col2, col3 = st.columns([1,2,1])
+    # [MODIFICADO] Ajuste de columnas [3, 2, 3] para que el formulario sea el 25% de la pantalla
+    col1, col2, col3 = st.columns([3, 2, 3])
     with col2:
-        # --- LOGO LOGIN PRINCIPAL ---
-        st.image("LogoDataStudio.png", width=350)
+        # [MODIFICADO] Logo se adapta al ancho de la columna (que es igual a los inputs)
+        st.image("LogoDataStudio.png", use_container_width=True)
         if st.session_state.page == "reset_password": 
             show_reset_password_page()
         else: 
