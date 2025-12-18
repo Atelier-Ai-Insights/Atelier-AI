@@ -19,4 +19,3 @@ MODE_ONEPAGER = "Generador de One-Pager PPT"
 # --- Modos de Creatividad ---
 MODE_IDEATION = "Conversaciones creativas"
 MODE_CONCEPT = "Generación de conceptos"
-MODE_SYNTHETIC = "Perfiles Sintéticos"
