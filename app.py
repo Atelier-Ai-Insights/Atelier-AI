@@ -57,7 +57,10 @@ def filter_database(db_full, selected_marcas, selected_years, selected_projects,
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
     
-    st.sidebar.image("LogoDataStudio.png")
+    # --- LOGO SIDEBAR ---
+    # Se ajusta el width para que sea más angosto en la barra lateral
+    st.sidebar.image("LogoDataStudio.png", width=220)
+    
     st.sidebar.write(f"Usuario: {st.session_state.user}")
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
     st.sidebar.divider()
@@ -227,7 +230,8 @@ def main():
         apply_login_styles()
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
-            st.image("LogoDataStudio.png")
+            # --- LOGO LOGIN ---
+            st.image("LogoDataStudio.png", width=350)
             ctx = st.session_state.get('temp_auth_type', 'recovery')
             show_activation_flow(None, ctx) 
         st.divider(); st.markdown(footer_html, unsafe_allow_html=True); st.stop()
@@ -240,7 +244,8 @@ def main():
         apply_login_styles()
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
-            st.image("LogoDataStudio.png")
+            # --- LOGO LOGIN ---
+            st.image("LogoDataStudio.png", width=350)
             show_activation_flow(access_token, auth_type)
         st.divider(); st.markdown(footer_html, unsafe_allow_html=True); st.stop()
 
@@ -273,7 +278,8 @@ def main():
     apply_login_styles()
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
-        st.image("LogoDataStudio.png")
+        # --- LOGO LOGIN PRINCIPAL ---
+        st.image("LogoDataStudio.png", width=350)
         if st.session_state.page == "reset_password": 
             show_reset_password_page()
         else: 
