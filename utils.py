@@ -104,6 +104,10 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
 
             except Exception as e: 
                 print(f"Error proc doc '{doc_name}': {e}")
+
+    # --- AGREGA ESTO ---
+    print(f"🔥 DEBUG TAMAÑO: Enviando contexto de {len(all_text)} caracteres a la IA.")
+    # -------------------
                 
     return all_text
 
