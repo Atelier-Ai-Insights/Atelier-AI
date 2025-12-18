@@ -1,25 +1,16 @@
 import streamlit as st
-from datetime import datetime
 
-# ==============================================================================
-# INSTRUCCIONES GLOBALES
-# ==============================================================================
-
-# --- BLOQUE DE INSTRUCCIONES DE CITAS (ESTRICTO) ---
+# --- BLOQUE DE INSTRUCCIONES DE CITAS ---
 INSTRUCCIONES_DE_CITAS = """
 **REGLAS DE CITAS (ESTRICTO):**
 1. **Base:** Solo usa la 'Información documentada'. No alucines información externa sin sustentarla.
 2. **Formato Interno:** Asigna un ID numérico único [x] a cada documento del repositorio/PDF la primera vez que lo uses.
 3. **Sintaxis:** Frase del hallazgo [1]. Otra frase contrastada [2].
-4. **Sección Fuentes:** Al final, DEBES generar una lista consolidada así:
-   * **Internas:** Mapea el número [x] con el **Nombre Exacto del Archivo o Proyecto**.
-   * **Externas:** Incluye el nombre del medio y el **Link (URL)** para verificación.
+4. **Sección Fuentes:** Al final, DEBES generar una lista consolidada.
 5. **Vacío:** Si la respuesta no está en los documentos, di: "Información no disponible en los documentos."
 """
 
-# ==============================================================================
-# PROMPTS DE REPORTES Y CHAT BÁSICO
-# ==============================================================================
+# --- Prompts para "Generar un reporte de reportes" ---
 
 def get_report_prompt1(question, relevant_info):
     """Extracción de hallazgos (Directo al grano)."""
@@ -50,6 +41,8 @@ def get_report_prompt2(question, result1, relevant_info):
         f"{INSTRUCCIONES_DE_CITAS}\n"
     )
 
+# --- Prompt para "Chat de Consulta Directa" ---
+
 def get_grounded_chat_prompt(conversation_history, relevant_info):
     """Chat RAG estricto."""
     return (
@@ -61,9 +54,7 @@ def get_grounded_chat_prompt(conversation_history, relevant_info):
         "**Respuesta:**"
     )
 
-# ==============================================================================
-# PROMPTS CREATIVOS Y EVALUACIÓN
-# ==============================================================================
+# --- Prompt para "Conversaciones creativas" ---
 
 def get_ideation_prompt(conv_history, relevant):
     """Ideación (Permite más flexibilidad en tono, estricto en datos)."""
@@ -75,6 +66,8 @@ def get_ideation_prompt(conv_history, relevant):
         f"**Instrucción:** Responde de forma sintética e inspiradora. Basa tus premisas en los datos.\n"
         f"{INSTRUCCIONES_DE_CITAS}"
     )
+
+# --- Prompt para "Generación de conceptos" ---
 
 def get_concept_gen_prompt(product_idea, context_info):
     """Concepto estructurado (Markdown forzado)."""
@@ -90,6 +83,8 @@ def get_concept_gen_prompt(product_idea, context_info):
         f"* **Opción B:** (Variante alternativa).\n\n"
         f"{INSTRUCCIONES_DE_CITAS}"
     )
+
+# --- Prompt para "Evaluar una idea" ---
 
 def get_idea_eval_prompt(idea_input, context_info):
     """Evaluación crítica."""
@@ -111,6 +106,8 @@ def get_idea_eval_prompt(idea_input, context_info):
 
 {INSTRUCCIONES_DE_CITAS}
 """
+
+# --- Prompt para "Evaluación Visual" y "Video" ---
 
 def get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context):
     return [
@@ -142,9 +139,7 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
         INSTRUCCIONES_DE_CITAS
     ]
 
-# ==============================================================================
-# PROMPTS DE ANÁLISIS DE TEXTO Y MULTIMEDIA
-# ==============================================================================
+# --- Prompt para "Análisis de Notas y Transcripciones" ---
 
 def get_transcript_prompt(combined_context, user_prompt):
     return (
@@ -200,6 +195,8 @@ def get_autocode_prompt(context, main_topic):
 {INSTRUCCIONES_DE_CITAS}
 """
 
+# --- Prompt para "EtnoChat" y Transcripción Multimedia ---
+
 def get_etnochat_prompt(conversation_history, text_context):
     return (
         "**Rol:** Etnógrafo Digital.\n"
@@ -222,9 +219,20 @@ def get_media_transcription_prompt():
     **Salida:** SOLO el texto plano. Sin introducciones.
     """
 
-# ==============================================================================
-# PROMPTS DE ONE-PAGER (PPT)
-# ==============================================================================
+# --- Prompt para "Análisis de Datos (Excel)" ---
+
+def get_survey_articulation_prompt(survey_context, repository_context, conversation_history):
+    return (
+        f"**Rol:** Investigador de Mercados (Cuanti/Cuali).\n"
+        f"**Tarea:** Responde articulando datos duros (Excel) con hallazgos previos (Repositorio).\n\n"
+        f"**Excel (El QUÉ):**\n{survey_context}\n\n"
+        f"**Repositorio (El PORQUÉ):**\n{repository_context}\n\n"
+        f"**Historial:**\n{conversation_history}\n\n"
+        f"**Instrucción:** Conecta el dato numérico con la explicación cualitativa. Cita el repositorio [x].\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
+    )
+
+# --- Prompts para "Generador de One-Pager PPT" ---
 
 PROMPTS_ONEPAGER = {
     "Definición de Oportunidades": """
@@ -313,7 +321,9 @@ def get_onepager_final_prompt(relevant_info, selected_template_name, tema_centra
     """
 
 def get_excel_autocode_prompt(main_topic, responses_sample):
+    # Optimizamos la lista para que ocupe menos tokens visualmente
     sample_text = str(responses_sample) 
+    
     return f"""
 **Rol:** Codificador de Encuestas.
 **Tarea:** Define categorías (nodos) para analizar respuestas sobre '{main_topic}'.
@@ -329,24 +339,11 @@ Estructura:
 ]
 **Reglas CRÍTICAS de optimización:**
 1. Genera máximo **8-10 categorías** principales.
-2. Para cada categoría, incluye SOLO las **15 palabras clave o frases cortas más representativas** y repetidas.
-3. Las keywords deben ser literales.
+2. Para cada categoría, incluye SOLO las **15 palabras clave o frases cortas más representativas** y repetidas (No listes todas las variaciones únicas).
+3. Las keywords deben ser literales (encontradas en el texto) para usarse en búsqueda exacta (Regex).
 """
 
-# ==============================================================================
-# PROMPTS DE ANÁLISIS DE DATOS
-# ==============================================================================
-
-def get_survey_articulation_prompt(survey_context, repository_context, conversation_history):
-    return (
-        f"**Rol:** Investigador de Mercados (Cuanti/Cuali).\n"
-        f"**Tarea:** Responde articulando datos duros (Excel) con hallazgos previos (Repositorio).\n\n"
-        f"**Excel (El QUÉ):**\n{survey_context}\n\n"
-        f"**Repositorio (El PORQUÉ):**\n{repository_context}\n\n"
-        f"**Historial:**\n{conversation_history}\n\n"
-        f"**Instrucción:** Conecta el dato numérico con la explicación cualitativa. Cita el repositorio [x].\n"
-        f"{INSTRUCCIONES_DE_CITAS}"
-    )
+# --- Prompts Análisis de Datos ---
 
 def get_data_summary_prompt(data_snapshot_str):
     return f"""
@@ -391,9 +388,10 @@ def get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups):
     return base
 
 # ==============================================================================
-# SECCIÓN: ANÁLISIS DE TENDENCIAS 2.0 (INTELLIGENCE BRIEF)
+# SECCIÓN: ANÁLISIS DE TENDENCIAS (LENTES + VALIDACIÓN DE MERCADO)
 # ==============================================================================
 
+# Definimos qué "datos" debe simular la IA para cada fuente Y AGREGAMOS LA URL
 SOURCE_LENSES = {
     "DANE (Datos Demográficos/Económicos)": "Prioriza indicadores duros: IPC (Inflación), Tasa de Desempleo, PIB trimestral, Pulso Social y gasto de los hogares. (Web: https://www.dane.gov.co)",
     "Banco de la República (Macroeconomía)": "Enfócate en tasas de interés de intervención, TRM (Dólar), balanza comercial y política monetaria. (Web: https://www.banrep.gov.co)",
@@ -407,136 +405,77 @@ SOURCE_LENSES = {
 
 def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_list):
     
-    current_date = datetime.now().strftime("%d de %B de %Y")
-    
+    # Construcción dinámica de la instrucción de fuentes públicas
     sources_instruction = ""
     if public_sources_list:
         lens_descriptions = []
         for source in public_sources_list:
+            # Buscamos la instrucción específica para esa fuente
             lens = SOURCE_LENSES.get(source, "aporta contexto general de mercado")
             lens_descriptions.append(f"- **{source.split('(')[0].strip()}**: {lens}.")
+        
         sources_text = "\n".join(lens_descriptions)
+        
         sources_instruction = (
             f"3. **LENTES DE MERCADO (Fuentes Públicas):**\n"
-            f"Actúa como un analista experto. Cruza OBLIGATORIAMENTE la data interna con la visión de estas entidades:\n{sources_text}\n"
+            f"Actúa como un analista experto que tiene acceso al conocimiento general de estas entidades. "
+            f"Para este análisis, OBLIGATORIAMENTE aplica estas perspectivas:\n"
+            f"{sources_text}\n"
+            f"**Nota:** Usa las tendencias macroeconómicas y sociales conocidas de estas entidades para validar o refutar los hallazgos internos."
         )
 
     return f"""
-**Fecha del Análisis:** {current_date}
-**Misión:** Generar un 'Intelligence Brief' de alto nivel sobre: "{topic}".
+**Rol:** Director de Estrategia y Tendencias de Mercado.
+**Misión:** Realizar una triangulación estratégica sobre: "{topic}".
 
 **Tus 3 Insumos de Información:**
 A. **ADN Interno (Repositorio):** {repo_context[:15000]}
-B. **Evidencia Nueva (PDFs):** {pdf_context[:15000]}
-C. **Contexto Externo:** {sources_instruction}
 
-**ESTRUCTURA DEL REPORTE (Usa Markdown estricto):**
+B. **Evidencia Nueva (PDFs Cargados):** {pdf_context[:15000]}
 
-# Radar de Tendencia: {topic}
+C. **Contexto de Mercado (Fuentes Públicas Seleccionadas):**
+{sources_instruction}
 
-## 1. The Big Idea (Resumen Ejecutivo)
-*Escribe un párrafo potente (máx 5 líneas) que defina la oportunidad central. Debe ser inspirador pero basado en datos.*
+**Instrucción:** Debes cruzar estas tres fuentes. No las analices por separado. 
 
-## 2. Drivers de Cambio (¿Por qué ahora?)
-*Identifica las fuerzas macro que impulsan esta tendencia (Ej: Inflación, Digitalización, Cambio Climático).*
-* **[Driver 1]:** Explicación conectada con el tema.
-* **[Driver 2]:** Explicación conectada con el tema.
+**Formato de Salida (Markdown Estricto):**
 
-## 3. Triangulación de Evidencia (Interna vs. Externa)
-| Lo que dicen nuestros datos (Interno) | Validación de Mercado ({', '.join(public_sources_list) if public_sources_list else 'Mercado'}) | Veredicto |
+# Radar de Tendencias: {topic}
+
+## 1. Insight Estratégico
+(Una verdad reveladora y sintética que surge de cruzar lo interno con lo externo).
+
+## 2. Validación de Mercado (Tabla de Triangulación)
+*Este análisis contrasta la visión interna de la empresa (Repositorio/PDFs) con la realidad del mercado (Fuentes Públicas).*
+
+| Tendencia Interna (Lo que dicen nuestros estudios) | Validación Externa (Datos DANE/Fenalco/Etc) | Veredicto (¿Oportunidad o Riesgo?) |
 | :--- | :--- | :--- |
-| (Hallazgo clave del repo [Cita]) | (Dato macro o tendencia de consumo que lo confirma/refuta) | (¿Oportunidad Real o Ruido?) |
-| (Hallazgo clave del repo [Cita]) | (Dato macro o tendencia de consumo que lo confirma/refuta) | (¿Oportunidad Real o Ruido?) |
-| (Hallazgo clave del repo [Cita]) | (Dato macro o tendencia de consumo que lo confirma/refuta) | (¿Oportunidad Real o Ruido?) |
+| (Hallazgo clave del repo [Cita]) | (Dato o tendencia macro que lo confirma o contradice) | (Conclusión breve) |
+| (Hallazgo clave del repo [Cita]) | (Dato o tendencia macro que lo confirma o contradice) | (Conclusión breve) |
+| (Hallazgo clave del repo [Cita]) | (Dato o tendencia macro que lo confirma o contradice) | (Conclusión breve) |
 
-## 4. Señales del Consumidor (Evidencia Cualitativa)
-*Extrae 'Verbatims' o comportamientos específicos del Repositorio que demuestren la tendencia en acción.*
-* 💬 *"Cita textual o paráfrasis de un consumidor"* [Fuente: Documento X]
-* 🛒 *Comportamiento observado (ej. cambio en punto de venta)* [Fuente: Documento Y]
+## 3. Hallazgos Principales (Deep Dive)
+* **[Patrón Detectado 1]:** Explicación profunda. ¿Por qué ocurre? ¿Qué fuentes lo sustentan?
+* **[Patrón Detectado 2]:** Explicación profunda.
+* **[Perspectiva Externa]:** Análisis exclusivo desde las fuentes públicas seleccionadas ({', '.join(public_sources_list) if public_sources_list else 'Mercado General'}).
 
-## 5. Plan de Activación (Horizonte de Innovación)
-* **AHORA (Quick Wins):** Acciones de Marketing/Ventas para capturar valor este mes.
-* **LUEGO (Desarrollo):** Ajustes de producto/servicio (R&D) para los próximos 6 meses.
-* **DESPUÉS (Visión):** Hacia dónde evolucionará esto en 2-3 años.
+## 4. Territorios de Oportunidad
+1. **[Oportunidad A]:** Descripción y potencial.
+2. **[Oportunidad B]:** Descripción y potencial.
+3. **[Oportunidad C]:** Descripción y potencial.
 
-## 6. Radar de Noticias (Contexto: {current_date})
-*IMPORTANTE: Solo incluye noticias si estás 100% seguro de su veracidad y ocurrencia reciente (últimas semanas). NO INVENTES NOTICIAS.*
-*Si no tienes acceso a noticias específicas de los últimos 7 días, presenta tendencias macroeconómicas confirmadas recientes aclarando que es "Contexto General".*
-
-* **[Titular de la Noticia]**
-  * *Resumen:* Breve impacto en la tendencia.
-  * *Fuente:* [Nombre del Medio] - [Link Web funcional al Home del medio o a la noticia si la conoces]
-
-* **Titular de la Noticia]**
-  * *Resumen:* Breve impacto en la tendencia.
-  * *Fuente:* [Nombre del Medio] - [Link Web funcional al Home del medio o a la noticia si la conoces]
+## 5. Recomendaciones Estratégicas
+(Acciones concretas a corto y mediano plazo).
 
 ---
 ## Bibliografía y Fuentes Consultadas
 
 ### Fuentes Internas (Repositorio y PDFs)
-* [1] Documento: "Nombre Exacto del Archivo/Proyecto en la BD"
-* [2] Documento: "Nombre Exacto del Archivo/Proyecto en la BD"
+* [1] Documento: (Listar los nombres de archivos del repositorio usados)
+* [2] PDF Cargado: (Nombre del archivo PDF)
 
 ### Fuentes Externas (Referencias Públicas)
-* [3] Link: (URL de referencia de noticia o entidad pública utilizada)
-* [4] Link: (URL de referencia de noticia o entidad pública utilizada)
+* Lista aquí las fuentes públicas seleccionadas para este análisis y sus enlaces de referencia:
+(Ejemplo: **DANE**: https://www.dane.gov.co)
+* ...
 """
-
-# ==============================================================================
-# PROMPTS DE PERFILES SINTÉTICOS (AJUSTADO: TONO NEUTRO)
-# ==============================================================================
-
-def get_persona_generation_prompt(segment_name, relevant_info):
-    """Crea la ficha psicológica del perfil sintético basada en datos reales."""
-    return f"""
-    **Rol:** Psicólogo del Consumidor.
-    **Tarea:** Basándote en los datos de investigación proporcionados, construye un "Perfil Sintético" realista para el segmento: "{segment_name}".
-    
-    **Datos de Investigación (Fuente de Verdad):**
-    {relevant_info[:25000]}
-    
-    **Instrucción de Estilo:** El perfil debe sentirse humano, pero su forma de hablar debe ser **estándar y neutra**, evitando jergas locales fuertes o modismos difíciles de entender internacionalmente.
-    
-    **Salida requerida (JSON):**
-    Genera un JSON con esta estructura exacta:
-    {{
-        "nombre": "Nombre ficticio",
-        "edad": "Rango de edad",
-        "ocupacion": "Ocupación típica",
-        "bio_breve": "Resumen de su vida, contexto familiar y situación económica.",
-        "personalidad": "3-4 adjetivos (ej. Escéptico, Pragmático, Impulsivo).",
-        "dolores_principales": ["Dolor 1", "Dolor 2"],
-        "motivadores_compra": ["Motivador 1", "Motivador 2"],
-        "estilo_comunicacion": "Define un estilo natural pero neutro (Ej: 'Directo y claro', 'Amable y formal', 'Práctico y sencillo').",
-        "creencias_limitantes": "Qué prejuicios tiene sobre la categoría."
-    }}
-    """
-
-def get_persona_chat_instruction(persona_json, user_question):
-    """Instrucción para que la IA actúe como el perfil."""
-    p = persona_json 
-    
-    return f"""
-    **INSTRUCCIÓN DE JUEGO DE ROL (ACTING):**
-    
-    A partir de ahora NO eres una IA. ERES **{p.get('nombre')}**.
-    
-    **Tu Perfil:**
-    * **Edad/Ocupación:** {p.get('edad')}, {p.get('ocupacion')}.
-    * **Bio:** {p.get('bio_breve')}
-    * **Personalidad:** {p.get('personalidad')}
-    * **Estilo al hablar:** {p.get('estilo_comunicacion')}.
-    
-    **Contexto:** Estás en una entrevista de mercado.
-    **Pregunta del Entrevistador:** "{user_question}"
-    
-    **Reglas de Respuesta (ESTRICTAS):**
-    1. Responde SOLO como {p.get('nombre')}. No salgas del personaje ni menciones que eres un modelo de lenguaje.
-    2. **IDIOMA Y TONO:** Usa un **Español Neutro Latinoamericano**. 
-       - 🚫 PROHIBIDO usar modismos regionales fuertes (ej: NO digas 'parce', 'wey', 'chévere', 'fome', 'vos', etc.).
-       - ✅ Usa un vocabulario estándar, claro y universal, pero mantén la naturalidad de una persona real (no suenes robótico).
-    3. Usa tus "dolores" ({', '.join(p.get('dolores_principales', []))}) para justificar tus respuestas.
-    4. Sé honesto. Si el producto no te gusta o es muy caro para ti, dilo abiertamente.
-    5. No des respuestas largas y estructuradas como un consultor. Sé conversacional y ve al punto.
-    """
