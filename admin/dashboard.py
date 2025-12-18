@@ -1,10 +1,12 @@
 import streamlit as st
 import pandas as pd
 from services.supabase_db import supabase, supabase_admin_client
+from config import PLAN_FEATURES
+from supabase import create_client 
 import altair as alt 
 
 # =====================================================
-# FUNCIÓN DEL DASHBOARD DEL REPOSITORIO
+# FUNCIÓN DEL DASHBOARD DEL REPOSITORIO (MODIFICADA)
 # =====================================================
 def show_repository_dashboard(db_full):
     st.subheader("Dashboard de Tendencias del Repositorio")
@@ -14,8 +16,10 @@ def show_repository_dashboard(db_full):
         st.warning("No hay datos en el repositorio para analizar.")
         return
 
+    # --- 1. Preparar Datos ---
     try:
         df = pd.DataFrame(db_full)
+        # Limpiar datos para los gráficos
         df['marca'] = df['marca'].fillna('Sin Año').astype(str)
         df['filtro'] = df['filtro'].fillna('Sin Marca').astype(str)
         df['cliente'] = df['cliente'].fillna('Sin Cliente').astype(str)
@@ -24,250 +28,250 @@ def show_repository_dashboard(db_full):
         st.error(f"Error al procesar los datos del repositorio: {e}")
         return
             
+    # --- 2. Mostrar Gráficos ---
     st.markdown("#### Distribución de Estudios")
+    
+    # Gráfico de Año (Vertical)
+    st.markdown("**Estudios por Año**")
     year_counts = df['marca'].value_counts().sort_index()
     st.bar_chart(year_counts)
 
     st.divider()
     
+    # --- ¡INICIO DE MODIFICACIÓN! Se eliminaron las columnas ---
+    
+    # Gráfico de Cliente (Pie Chart)
     st.markdown("**Estudios por Cliente**")
+    
     try:
         cliente_counts_series = df['cliente'].value_counts()
         cliente_counts_df = cliente_counts_series.reset_index()
         cliente_counts_df.columns = ['Cliente', 'Conteo']
         
         if not cliente_counts_df.empty:
-            base = alt.Chart(cliente_counts_df).encode(theta=alt.Theta("Conteo:Q", stack=True))
+            base = alt.Chart(cliente_counts_df).encode(
+               theta=alt.Theta("Conteo:Q", stack=True)
+            )
+
             pie = base.mark_arc(outerRadius=120).encode(
                 color=alt.Color("Cliente:N"),
                 order=alt.Order("Conteo:Q", sort="descending"),
                 tooltip=["Cliente", "Conteo"]
             )
+
             text = base.mark_text(radius=140).encode(
                 text=alt.Text("Conteo:Q", format=".1%"),
                 order=alt.Order("Conteo:Q", sort="descending"),
                 color=alt.value("black") 
             )
-            st.altair_chart(pie + text, width='stretch')
+
+            chart = pie + text
+            st.altair_chart(chart, width='stretch')
         else:
-            st.info("No hay datos de clientes.")
-    except Exception as e: st.error(f"Error gráfico pastel: {e}")
+            st.info("No hay datos de clientes para mostrar en el gráfico.")
+    
+    except Exception as e:
+        st.error(f"Se produjo un error al generar el gráfico de pastel: {e}")
 
-    st.divider()
+    st.divider() # Separador añadido
 
+    # Gráfico de Marca (Tabla)
     st.markdown("**Estudios por Marca**")
     filtro_counts = df['filtro'].value_counts().reset_index()
     filtro_counts.columns = ['Marca', 'Conteo']
     st.dataframe(filtro_counts.set_index('Marca'), width='stretch')
+    
+    # --- ¡FIN DE MODIFICACIÓN! ---
 
 
 # =====================================================
-# PANEL DE ADMINISTRACIÓN (ACTUALIZADO: TABLAS VERTICALES + HISTORIAL)
+# PANEL DE ADMINISTRACIÓN (MODIFICADO)
 # =====================================================
 def show_admin_dashboard(db_full): 
     if not supabase_admin_client:
-        st.error("⚠️ Error de Configuración: No se encontró 'SUPABASE_SERVICE_KEY'.")
+        st.error("Error: La 'SUPABASE_SERVICE_KEY' no está configurada...")
         return
 
-    if "invite_counter" not in st.session_state:
-        st.session_state.invite_counter = 0
+    tab_stats, tab_repo = st.tabs(["Estadísticas y Costos", "Dashboard del Repositorio"])
 
-    tab_stats, tab_users, tab_repo = st.tabs(["Estadísticas & Costos", "Gestión Usuarios", "Repositorio"])
-
-    # --- PESTAÑA 1: ESTADÍSTICAS FINANCIERAS ---
     with tab_stats:
-        st.subheader("Estadísticas de Uso y Rentabilidad", divider="grey")
-        
-        with st.spinner("Procesando datos de consumo..."):
+        st.subheader("Estadísticas de Uso y Consumo (Tokens)", divider="grey")
+        with st.spinner("Cargando estadísticas..."):
             try:
-                # 1. Cargar Datos
-                stats_response = supabase.table("queries").select("user_name, mode, query, timestamp, total_tokens").execute()
-                users_resp = supabase_admin_client.table("users").select("email, client_id").execute()
-                clients_resp = supabase_admin_client.table("clients").select("id, client_name").execute()
-
+                stats_response = supabase.table("queries").select("user_name, mode, timestamp, query, total_tokens").execute()
+                
                 if stats_response.data:
-                    # Dataframes base
-                    df_queries = pd.DataFrame(stats_response.data)
-                    df_users = pd.DataFrame(users_resp.data) if users_resp.data else pd.DataFrame(columns=['email', 'client_id'])
-                    df_clients = pd.DataFrame(clients_resp.data) if clients_resp.data else pd.DataFrame(columns=['id', 'client_name'])
+                    df_stats = pd.DataFrame(stats_response.data)
+                    df_stats['timestamp'] = pd.to_datetime(df_stats['timestamp']).dt.tz_localize(None)
+                    df_stats['date'] = df_stats['timestamp'].dt.date
+                    
+                    if 'total_tokens' in df_stats.columns:
+                        df_stats['total_tokens'] = df_stats['total_tokens'].fillna(0).astype(int)
+                    else:
+                        df_stats['total_tokens'] = 0 
 
-                    # Limpieza y Conversión
-                    df_queries['timestamp'] = pd.to_datetime(df_queries['timestamp']).dt.tz_localize(None)
-                    df_queries['total_tokens'] = df_queries['total_tokens'].fillna(0).astype(int)
-
-                    # Cruce de Datos (Joins)
-                    df_merged = pd.merge(df_queries, df_users, left_on='user_name', right_on='email', how='left')
-                    df_final = pd.merge(df_merged, df_clients, left_on='client_id', right_on='id', how='left')
-                    df_final['client_name'] = df_final['client_name'].fillna('Sin Empresa / Admin')
-
-                    # Constante de Costo
-                    COST_PER_1M = 0.30 
-
-                    # --- KPI GLOBALES ---
-                    total_queries = len(df_queries)
-                    total_tokens = df_queries['total_tokens'].sum()
-                    est_cost_global = (total_tokens / 1_000_000) * COST_PER_1M 
+                    # --- Métricas Generales (Esto se mantiene en 3 columnas) ---
+                    total_queries = len(df_stats)
+                    total_tokens_consumed = df_stats['total_tokens'].sum()
+                    
+                    ESTIMATED_COST_PER_MILLION_TOKENS = 0.30 
+                    estimated_cost = (total_tokens_consumed / 1_000_000) * ESTIMATED_COST_PER_MILLION_TOKENS 
 
                     m1, m2, m3 = st.columns(3)
-                    m1.metric("Total Consultas", total_queries)
-                    m2.metric("Tokens Totales", f"{total_tokens:,.0f}")
-                    m3.metric("Costo Global ($USD)", f"${est_cost_global:.4f}")
-                    
+                    m1.metric("Total Consultas (Global)", total_queries)
+                    m2.metric("Total Tokens Procesados", f"{total_tokens_consumed:,.0f}")
+                    m3.metric("Costo Estimado (aprox.)", f"${estimated_cost:.4f} USD")
                     st.divider()
+                    
+                    # --- ¡INICIO DE MODIFICACIÓN! Se eliminaron las columnas ---
 
-                    # --- 1. ANÁLISIS POR EMPRESA (VERTICAL) ---
-                    st.markdown("### 🏢 Consumo por Empresa")
-                    
-                    client_stats = df_final.groupby('client_name').agg(
-                        Consultas=('id', 'count'),
-                        Tokens=('total_tokens', 'sum')
-                    ).reset_index()
-                    
-                    client_stats['Costo ($)'] = (client_stats['Tokens'] / 1_000_000) * COST_PER_1M
-                    client_stats = client_stats.sort_values('Tokens', ascending=False)
+                    st.write("**Top Usuarios por Consumo (Tokens)**")
+                    user_tokens = df_stats.groupby('user_name')['total_tokens'].sum().reset_index(name='Tokens Totales').sort_values(by="Tokens Totales", ascending=False)
+                    st.dataframe(user_tokens, width='stretch', hide_index=True)
+                    st.bar_chart(user_tokens.set_index('user_name'))
 
-                    # Gráfico (Ancho completo)
-                    st.bar_chart(client_stats.set_index('client_name')['Tokens'], color="#0068c9")
+                    st.divider() # Separador añadido
+
+                    st.write("**Consumo por Modo de Uso (Tokens)**")
+                    mode_tokens = df_stats.groupby('mode')['total_tokens'].sum().reset_index(name='Tokens Totales').sort_values(by="Tokens Totales", ascending=False)
+                    st.dataframe(mode_tokens, width='stretch', hide_index=True)
                     
-                    # Tabla (Ancho completo, debajo)
-                    st.dataframe(
-                        client_stats.style.format({"Costo ($)": "${:.4f}"}),
-                        column_config={
-                            "client_name": "Empresa",
-                            "Tokens": st.column_config.NumberColumn("Tokens Totales"),
-                        },
-                        hide_index=True, 
-                        use_container_width=True
+                    base = alt.Chart(mode_tokens).encode(
+                        theta=alt.Theta("Tokens Totales:Q", stack=True)
+                    ).properties(title="Distribución de Tokens por Modo")
+                    
+                    pie = base.mark_arc(outerRadius=120).encode(
+                        color=alt.Color("mode:N", title="Modo"),
+                        order=alt.Order("Tokens Totales", sort="descending"),
+                        tooltip=["mode", "Tokens Totales"]
                     )
-
-                    st.divider()
-
-                    # --- 2. ANÁLISIS POR USUARIO (VERTICAL) ---
-                    st.markdown("### 👤 Consumo por Usuario")
+                    st.altair_chart(pie, width='stretch')
+                        
+                    st.divider() # Separador añadido
                     
-                    user_stats = df_final.groupby(['user_name', 'client_name']).agg(
-                        Consultas=('id', 'count'),
-                        Tokens=('total_tokens', 'sum')
-                    ).reset_index()
+                    st.write("**Actividad Reciente (Últimas 50 consultas)**")
+                    df_recent = df_stats[['timestamp', 'user_name', 'mode', 'total_tokens', 'query']].sort_values(by="timestamp", ascending=False).head(50)
+                    df_recent['timestamp'] = df_recent['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
+                    st.dataframe(df_recent, width='stretch', hide_index=True)
                     
-                    user_stats['Costo ($)'] = (user_stats['Tokens'] / 1_000_000) * COST_PER_1M
-                    user_stats = user_stats.sort_values('Tokens', ascending=False)
+                    # --- ¡FIN DE MODIFICACIÓN! ---
+                else: 
+                    st.info("Aún no hay datos de uso.")
+            except Exception as e: 
+                st.error(f"Error cargando estadísticas: {e}")
 
-                    st.dataframe(
-                        user_stats.style.format({"Costo ($)": "${:.4f}"}),
-                        column_config={
-                            "user_name": "Usuario",
-                            "client_name": "Empresa",
-                            "Tokens": st.column_config.NumberColumn("Tokens"),
-                        },
-                        hide_index=True,
-                        use_container_width=True
-                    )
+        # --- (Gestión de Clientes y Usuarios no cambia) ---
+        st.subheader("Gestión de Clientes (Invitaciones)", divider="grey")
+        try:
+            clients_response = supabase_admin_client.table("clients").select("client_name, plan, invite_code, created_at").order("created_at", desc=True).execute()
+            if clients_response.data: 
+                st.write("**Clientes Actuales**")
+                df_clients = pd.DataFrame(clients_response.data)
+                df_clients['created_at'] = pd.to_datetime(df_clients['created_at']).dt.strftime('%Y-%m-%d')
+                st.dataframe(df_clients, width='stretch', hide_index=True)
+            else: 
+                st.info("No hay clientes.")
+        except Exception as e: 
+            st.error(f"Error cargando clientes: {e}")
 
-                    st.divider()
+        with st.expander("➕ Crear Nuevo Cliente y Código"):
+            with st.form("new_client_form"):
+                new_client_name = st.text_input("Nombre")
+                new_plan = st.selectbox("Plan", options=list(PLAN_FEATURES.keys()), index=0)
+                new_invite_code = st.text_input("Código Invitación")
+                submitted = st.form_submit_button("Crear Cliente")
+                
+                if submitted:
+                    if not new_client_name or not new_plan or not new_invite_code: 
+                        st.warning("Completa campos.")
+                    else:
+                        try: 
+                            supabase_admin_client.table("clients").insert({"client_name": new_client_name, "plan": new_plan, "invite_code": new_invite_code}).execute()
+                            st.success(f"Cliente '{new_client_name}' creado. Código: {new_invite_code}")
+                        except Exception as e: 
+                            st.error(f"Error al crear: {e}")
 
-                    # --- 3. HISTORIAL DE BÚSQUEDAS (NUEVA TABLA) ---
-                    st.markdown("### 🔎 Historial de Búsquedas Detallado")
-                    st.caption("Registro auditor de cada consulta realizada, incluyendo el prompt del usuario y el costo individual.")
-
-                    # Preparamos la tabla de auditoría
-                    audit_df = df_final[['timestamp', 'user_name', 'client_name', 'mode', 'query', 'total_tokens']].copy()
-                    audit_df['Costo ($)'] = (audit_df['total_tokens'] / 1_000_000) * COST_PER_1M
-                    audit_df = audit_df.sort_values('timestamp', ascending=False)
-
-                    st.dataframe(
-                        audit_df.style.format({"Costo ($)": "${:.5f}"}),
-                        column_config={
-                            "timestamp": st.column_config.DatetimeColumn("Fecha y Hora", format="D MMM YYYY, HH:mm"),
-                            "user_name": "Usuario",
-                            "client_name": "Empresa",
-                            "mode": "Herramienta Usada",
-                            "query": st.column_config.TextColumn("Consulta (Prompt)", width="large"),
-                            "total_tokens": st.column_config.NumberColumn("Tokens"),
-                        },
-                        hide_index=True,
-                        use_container_width=True,
-                        height=500 # Altura fija para scrollear si son muchas
-                    )
-
-                else: st.info("Aún no hay datos de uso registrados.")
-            except Exception as e: st.error(f"Error calculando estadísticas: {e}")
-
-    # --- PESTAÑA 2: GESTIÓN DE USUARIOS ---
-    with tab_users:
-        st.subheader("📩 Invitar Usuario Nuevo", divider="blue")
-        st.info("Usa esto para enviar un correo de invitación oficial.")
+        st.subheader("Gestión de Usuarios", divider="grey")
         
-        if "admin_invite_success" in st.session_state:
-            st.success(st.session_state.admin_invite_success)
-            del st.session_state.admin_invite_success
-
         try:
-            clients_data = supabase_admin_client.table("clients").select("id, client_name").execute().data
-            client_options = {c['client_name']: c['id'] for c in clients_data} if clients_data else {}
-        except: client_options = {}
+            users_response = supabase_admin_client.table("users").select("id, email, created_at, rol, client_id, clients(client_name, plan)").order("created_at", desc=True).execute()
 
-        with st.form("invite_user_form"):
-            col_inv_1, col_inv_2 = st.columns(2)
-            new_email = col_inv_1.text_input("Correo electrónico", key=f"admin_email_input_{st.session_state.invite_counter}")
-            target_client_name = col_inv_2.selectbox("Asignar a Empresa", list(client_options.keys()))
-            
-            if st.form_submit_button("Enviar Invitación", type="primary"):
-                if new_email and target_client_name:
-                    try:
-                        invite_res = supabase_admin_client.auth.admin.invite_user_by_email(
-                            new_email,
-                            options={
-                                "data": { "client_id": client_options[target_client_name] },
-                                "redirect_to": "https://atelier-ai.streamlit.app"
-                            }
-                        )
-                        st.session_state["admin_invite_success"] = f"✅ Invitación enviada a **{new_email}**."
-                        st.session_state.invite_counter += 1 
-                        st.rerun()
-                    except Exception as e:
-                        if "already created" in str(e): st.warning("El usuario ya existe.")
-                        else: st.error(f"Error: {e}")
-                else: st.warning("Faltan datos.")
-
-        st.divider()
-        with st.expander("🏢 Gestión de Empresas y Códigos"):
-            try:
-                clients_resp = supabase_admin_client.table("clients").select("*").order("created_at", desc=True).execute()
-                if clients_resp.data: st.dataframe(pd.DataFrame(clients_resp.data)[['client_name', 'invite_code', 'plan']], width='stretch')
-                
-                st.write("**Crear Empresa**")
-                c1, c2, c3, c4 = st.columns([2,2,2,1])
-                n_name = c1.text_input("Nombre")
-                n_plan = c2.selectbox("Plan", ["Explorer", "Strategist", "Enterprise"])
-                n_code = c3.text_input("Código")
-                if c4.button("Crear"):
-                    supabase_admin_client.table("clients").insert({"client_name": n_name, "plan": n_plan, "invite_code": n_code}).execute(); st.rerun()
-            except: pass
-
-        st.divider()
-        st.subheader("👥 Usuarios Registrados")
-        try:
-            users_resp = supabase_admin_client.table("users").select("id, email, created_at, rol, client_id, clients(client_name)").order("created_at", desc=True).execute()
-            if users_resp.data:
+            if users_response.data:
+                st.write("**Usuarios Registrados** (Puedes editar Rol)")
                 user_list = []
-                for user in users_resp.data:
-                    c_info = user.get('clients')
+                for user in users_response.data:
+                    client_info = user.get('clients')
+                    client_name = "N/A"; client_plan = "N/A"
+                    if isinstance(client_info, dict):
+                        client_name = client_info.get('client_name', "N/A")
+                        client_plan = client_info.get('plan', "N/A")
                     user_list.append({
-                        'id': user.get('id'), 'email': user.get('email'), 'rol': user.get('rol', 'user'),
-                        'empresa': c_info.get('client_name', "⛔ SIN ASIGNAR") if c_info else "⛔ SIN ASIGNAR",
-                        'client_id': user.get('client_id'), 
-                        'creado': pd.to_datetime(user.get('created_at')).strftime('%Y-%m-%d')
+                        'id': user.get('id'), 'email': user.get('email'), 'creado_el': user.get('created_at'),
+                        'rol': user.get('rol', 'user'), 'cliente': client_name, 'plan': client_plan
                     })
+                    
+                original_df = pd.DataFrame(user_list)
+                if 'original_users_df' not in st.session_state: 
+                    st.session_state.original_users_df = original_df.copy()
+                    
+                display_df = original_df.copy()
+                display_df['creado_el'] = pd.to_datetime(display_df['creado_el']).dt.strftime('%Y-%m-%d %H:%M')
                 
-                edited_df = st.data_editor(pd.DataFrame(user_list), column_config={"id":None,"client_id":None,"email":st.column_config.TextColumn(disabled=True),"empresa":st.column_config.TextColumn(disabled=True),"rol":st.column_config.SelectboxColumn(options=["user","admin"],required=True)}, hide_index=True, width='stretch')
+                edited_df = st.data_editor( 
+                    display_df, 
+                    key="user_editor", 
+                    column_config={
+                        "id": None, 
+                        "rol": st.column_config.SelectboxColumn("Rol", options=["user", "admin"], required=True), 
+                        "email": st.column_config.TextColumn("Email", disabled=True), 
+                        "creado_el": st.column_config.TextColumn("Creado", disabled=True), 
+                        "cliente": st.column_config.TextColumn("Cliente", disabled=True), 
+                        "plan": st.column_config.TextColumn("Plan", disabled=True)
+                    }, 
+                    width='stretch', 
+                    hide_index=True, 
+                    num_rows="fixed"
+                )
                 
-                if st.button("Guardar Cambios de Rol"):
-                    for i, row in edited_df.iterrows():
-                        try: supabase_admin_client.table("users").update({"rol": row['rol']}).eq("id", row['id']).execute()
-                        except: pass
-                    st.success("Roles actualizados."); st.rerun()
-        except Exception as e: st.error(f"Error usuarios: {e}")
+                if st.button("Guardar Cambios Usuarios", width='stretch'):
+                    updates_to_make = []
+                    original_users = st.session_state.original_users_df
+                    edited_df_indexed = edited_df.set_index(original_df.index)
+                    edited_df_with_ids = original_df[['id']].join(edited_df_indexed)
+                    
+                    for index, original_row in original_users.iterrows():
+                        edited_rows_match = edited_df_with_ids[edited_df_with_ids['id'] == original_row['id']]
+                        if not edited_rows_match.empty:
+                            edited_row = edited_rows_match.iloc[0]
+                            if original_row['rol'] != edited_row['rol']: 
+                                updates_to_make.append({"id": original_row['id'], "email": original_row['email'], "new_rol": edited_row['rol']})
+                        else: 
+                            print(f"Warn: Row ID {original_row['id']} not in edited df.")
+                            
+                    if updates_to_make:
+                        success_count, error_count, errors = 0, 0, []
+                        with st.spinner(f"Guardando {len(updates_to_make)} cambio(s)..."):
+                            for update in updates_to_make:
+                                try: 
+                                    supabase_admin_client.table("users").update({"rol": update["new_rol"]}).eq("id", update["id"]).execute()
+                                    success_count += 1
+                                except Exception as e: 
+                                    errors.append(f"Error {update['email']} (ID: {update['id']}): {e}")
+                                    error_count += 1
+                                    
+                        if success_count > 0: st.success(f"{success_count} actualizado(s).")
+                        if error_count > 0: 
+                            st.error(f"{error_count} error(es):"); [st.error(f"- {err}") for err in errors]
+                            
+                        del st.session_state.original_users_df
+                        st.rerun()
+                    else:
+                        st.info("No se detectaron cambios.")
+            else:
+                st.info("No hay usuarios registrados.")
+        except Exception as e:
+            st.error(f"Error en la gestión de usuarios: {e}")
 
+    # --- PESTAÑA 2: Dashboard del Repositorio ---
     with tab_repo:
         show_repository_dashboard(db_full)
