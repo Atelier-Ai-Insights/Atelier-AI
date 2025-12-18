@@ -1,13 +1,5 @@
 import streamlit as st
 import pandas as pd
-from utils import get_relevant_info, get_stopwords
-from services.gemini_api import call_gemini_api
-from services.supabase_db import log_query_event, supabase
-from prompts import (
-    get_survey_articulation_prompt, get_excel_autocode_prompt,
-    get_data_summary_prompt, get_correlation_prompt, get_stat_test_prompt 
-)
-import constants as c
 import io 
 import os 
 import uuid 
@@ -15,16 +7,27 @@ from datetime import datetime
 import re 
 import json 
 import traceback 
-import seaborn as sns
 
-# --- Importaciones de Análisis ---
-from wordcloud import WordCloud
-import matplotlib.pyplot as plt
+# --- Importaciones de Utils y Servicios Core ---
+from utils import clean_gemini_json # Limpieza de JSON robusta
+from services.gemini_api import call_gemini_api
+from services.supabase_db import log_query_event, supabase
+import constants as c
+
+# --- Importaciones de Nuevos Servicios de Refactorización ---
+# (Asegúrate de haber creado estos archivos en la carpeta services/)
+from services.statistics import get_dataframe_snapshot, calculate_chi_squared, calculate_group_comparison
+from services.plotting import generate_wordcloud_img, generate_correlation_heatmap
+
+# --- Prompts ---
+from prompts import (
+    get_excel_autocode_prompt, get_data_summary_prompt, 
+    get_correlation_prompt, get_stat_test_prompt 
+)
+
+# --- Librería PPTX ---
 from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.enum.text import PP_ALIGN
-import scipy.stats as stats
-import numpy as np
+from pptx.util import Inches
 
 # =====================================================
 # MODO: ANÁLISIS NUMÉRICO (EXCEL) - VERSIÓN PROYECTOS
@@ -32,95 +35,73 @@ import numpy as np
 
 PROJECT_BUCKET = "project_files"
 
-# --- Funciones Helper ---
-
-def clean_gemini_json(text):
-    """
-    Limpia la respuesta de Gemini para asegurar que sea un JSON válido,
-    eliminando bloques de código Markdown (```json ... ```).
-    """
-    if not text: return ""
-    text = text.strip()
-    # Eliminar bloque de inicio
-    if text.startswith("```json"):
-        text = text[7:]
-    elif text.startswith("```"):
-        text = text[3:]
-    # Eliminar bloque de fin
-    if text.endswith("```"):
-        text = text[:-3]
-    return text.strip()
+# --- Funciones Helper UI (Locales) ---
 
 @st.cache_data
 def to_excel(df):
+    """Convierte un DataFrame a bytes de Excel para descarga."""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, sheet_name='Pivot', index=True)
+        df.to_excel(writer, sheet_name='Data', index=True)
     return output.getvalue()
 
 def style_residuals(val):
-    if val > 1.96:
-        return 'background-color: #d4edda; color: #155724' 
-    elif val < -1.96:
-        return 'background-color: #f8d7da; color: #721c24' 
-    else:
-        return 'color: #333'
+    """Estiliza celdas de pandas para resaltar residuos estandarizados significativos."""
+    if val > 1.96: return 'background-color: #d4edda; color: #155724' # Verde (Más de lo esperado)
+    elif val < -1.96: return 'background-color: #f8d7da; color: #721c24' # Rojo (Menos de lo esperado)
+    else: return 'color: #333'
 
-def add_title_slide(prs, title_text):
+def add_slide_helpers(prs, type, title, content):
+    """Helper unificado para añadir slides al PPT dependiendo del tipo de contenido."""
     try:
-        slide_layout = prs.slide_layouts[0] 
-        slide = prs.slides.add_slide(slide_layout)
-        title = slide.shapes.title
-        title.text = title_text
-    except Exception as e:
-        print(f"Error al añadir slide de título: {e}")
-
-def add_image_slide(prs, title_text, image_stream):
-    try:
-        slide_layout = prs.slide_layouts[5] 
-        slide = prs.slides.add_slide(slide_layout)
-        title = slide.shapes.title
-        title.text = title_text
-        image_stream.seek(0)
-        slide.shapes.add_picture(image_stream, Inches(0.5), Inches(1.5), width=Inches(9))
-    except Exception as e:
-        print(f"Error al añadir slide de imagen: {e}")
-
-def add_table_slide(prs, title_text, df):
-    try:
-        slide_layout = prs.slide_layouts[5] 
-        slide = prs.slides.add_slide(slide_layout)
-        title = slide.shapes.title
-        title.text = title_text
-
-        if df.index.name or isinstance(df.index, pd.MultiIndex):
-            df_to_add = df.reset_index()
-        else:
-            df_to_add = df
+        if type == "title":
+            slide = prs.slides.add_slide(prs.slide_layouts[0])
+            slide.shapes.title.text = title
+        
+        elif type == "image":
+            if content is None: return
+            slide = prs.slides.add_slide(prs.slide_layouts[5])
+            slide.shapes.title.text = title
+            # Resetear puntero del buffer de imagen
+            content.seek(0)
+            slide.shapes.add_picture(content, Inches(0.5), Inches(1.5), width=Inches(9))
+        
+        elif type == "table":
+            if content is None or content.empty: return
+            slide = prs.slides.add_slide(prs.slide_layouts[5])
+            slide.shapes.title.text = title
             
-        rows, cols = df_to_add.shape
-        left = Inches(0.5); top = Inches(1.5); width = Inches(9.0); height = Inches(5.5)
-        graphic_frame = slide.shapes.add_table(rows + 1, cols, left, top, width, height)
-        table = graphic_frame.table
-
-        for c in range(cols):
-            table.cell(0, c).text = str(df_to_add.columns[c])
-            table.cell(0, c).text_frame.paragraphs[0].font.bold = True
-
-        for r in range(rows):
+            # Aplanar índice si es MultiIndex para que se vea bien en PPT
+            df = content.reset_index() if (content.index.name or isinstance(content.index, pd.MultiIndex)) else content
+            
+            rows, cols = df.shape
+            # Limite de seguridad para PPT (evitar tablas gigantes que rompen el slide)
+            if rows > 15: df = df.head(15); rows = 15
+            
+            graphic_frame = slide.shapes.add_table(rows+1, cols, Inches(0.5), Inches(1.5), Inches(9), Inches(5.5))
+            table = graphic_frame.table
+            
+            # Headers
             for c in range(cols):
-                table.cell(r + 1, c).text = str(df_to_add.iloc[r, c])
-                
+                table.cell(0, c).text = str(df.columns[c])
+            # Body
+            for r in range(rows):
+                for c in range(cols):
+                    val = df.iloc[r, c]
+                    # Formato simple para números
+                    table.cell(r+1, c).text = f"{val:.2f}" if isinstance(val, (float, int)) else str(val)
+                    
     except Exception as e:
-        print(f"Error al añadir slide de tabla: {e}")
+        print(f"Error generando slide tipo {type}: {e}")
 
-# --- Funciones de Gestión de Proyectos ---
+# --- Funciones de Gestión de Proyectos (Carga/Creación) ---
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_project_data(storage_path):
     try:
         response = supabase.storage.from_(PROJECT_BUCKET).create_signed_url(storage_path, 60)
         signed_url = response['signedURL']
+        # Soporte básico para Excel
         df = pd.read_excel(signed_url)
         return df
     except Exception as e:
@@ -130,370 +111,261 @@ def load_project_data(storage_path):
 def show_project_creator(user_id, plan_limit):
     st.subheader("Crear Nuevo Proyecto")
     
+    # Validar límites
     try:
         response = supabase.table("projects").select("id", count='exact').eq("user_id", user_id).execute()
-        project_count = response.count
-    except Exception as e:
-        st.error(f"Error al verificar el conteo de proyectos: {e}")
-        return
-
-    if project_count >= plan_limit and plan_limit != float('inf'):
-        st.warning(f"Has alcanzado el límite de {int(plan_limit)} proyectos para tu plan actual.")
-        return
+        if response.count >= plan_limit and plan_limit != float('inf'):
+            st.warning(f"Límite de proyectos alcanzado ({int(plan_limit)}).")
+            return
+    except Exception as e: st.error(f"Error verificando límites: {e}"); return
 
     with st.form("new_project_form"):
-        project_name = st.text_input("Nombre del Proyecto*", placeholder="Ej: Tracking de Ventas Q1 2024")
-        project_brand = st.text_input("Marca*", placeholder="Ej: Marca X")
-        project_year = st.number_input("Año*", min_value=2020, max_value=2030, value=datetime.now().year)
+        project_name = st.text_input("Nombre del Proyecto*", placeholder="Ej: Q1 Sales Tracking")
+        project_brand = st.text_input("Marca*", placeholder="Ej: Brand X")
+        project_year = st.number_input("Año*", min_value=2020, value=datetime.now().year)
         uploaded_file = st.file_uploader("Archivo Excel (.xlsx)*", type=["xlsx"])
         
-        submitted = st.form_submit_button("Crear Proyecto")
-
-    if submitted:
-        if not all([project_name, project_brand, project_year, uploaded_file]):
-            st.warning("Por favor, completa todos los campos.")
-            return
-
-        with st.spinner("Creando proyecto y subiendo archivo..."):
-            try:
-                file_bytes = uploaded_file.getvalue()
-                file_ext = os.path.splitext(uploaded_file.name)[1]
-                storage_path = f"{user_id}/{uuid.uuid4()}{file_ext}" 
-                
-                supabase.storage.from_(PROJECT_BUCKET).upload(
-                    path=storage_path,
-                    file=file_bytes,
-                    file_options={"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
-                )
-                
-                project_data = {
-                    "project_name": project_name,
-                    "project_brand": project_brand,
-                    "project_year": int(project_year),
-                    "storage_path": storage_path,
-                    "user_id": user_id
-                }
-                
-                supabase.table("projects").insert(project_data).execute()
-                st.success(f"¡Proyecto '{project_name}' creado exitosamente!")
-                st.rerun()
-
-            except Exception as e:
-                st.error(f"Error al crear el proyecto: {e}")
+        if st.form_submit_button("Crear Proyecto"):
+            if not all([project_name, project_brand, uploaded_file]):
+                st.warning("Completa los campos obligatorios.")
+            else:
+                with st.spinner("Subiendo archivo..."):
+                    try:
+                        file_ext = os.path.splitext(uploaded_file.name)[1]
+                        path = f"{user_id}/{uuid.uuid4()}{file_ext}"
+                        
+                        supabase.storage.from_(PROJECT_BUCKET).upload(
+                            path, 
+                            uploaded_file.getvalue(), 
+                            {"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+                        )
+                        
+                        supabase.table("projects").insert({
+                            "project_name": project_name, 
+                            "project_brand": project_brand, 
+                            "project_year": int(project_year), 
+                            "storage_path": path, 
+                            "user_id": user_id
+                        }).execute()
+                        
+                        st.success("¡Proyecto creado!"); st.rerun()
+                    except Exception as e: st.error(f"Error: {e}")
 
 def show_project_list(user_id):
     st.subheader("Mis Proyectos")
     try:
-        response = supabase.table("projects").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
-        projects = response.data
-    except Exception as e: st.error(f"Error al cargar lista: {e}"); return
+        projs = supabase.table("projects").select("*").eq("user_id", user_id).order("created_at", desc=True).execute().data
+        if not projs: st.info("No hay proyectos creados."); return
 
-    if not projects: st.info("Aún no has creado ningún proyecto."); return
-
-    for proj in projects:
-        with st.container(border=True):
-            col1, col2, col3 = st.columns([4, 1, 1])
-            with col1:
-                st.markdown(f"**{proj['project_name']}**")
-                st.caption(f"Marca: {proj.get('project_brand')} | Año: {proj.get('project_year')}")
-            with col2:
-                if st.button("Analizar", key=f"analizar_{proj['id']}", width='stretch', type="primary"):
-                    st.session_state.mode_state["da_selected_project_id"] = proj['id']
-                    st.session_state.mode_state["da_selected_project_name"] = proj['project_name']
-                    st.session_state.mode_state["da_storage_path"] = proj['storage_path']
-                    st.session_state.mode_state["da_current_sub_mode"] = "Resumen Ejecutivo IA"
+        for p in projs:
+            with st.container(border=True):
+                c1, c2, c3 = st.columns([4, 1, 1])
+                c1.markdown(f"**{p['project_name']}**"); c1.caption(f"{p.get('project_brand')} | {p.get('project_year')}")
+                
+                if c2.button("Analizar", key=f"an_{p['id']}", width='stretch', type="primary"):
+                    st.session_state.mode_state.update({
+                        "da_selected_project_id": p['id'], 
+                        "da_selected_project_name": p['project_name'], 
+                        "da_storage_path": p['storage_path'],
+                        "da_current_sub_mode": "Resumen Ejecutivo IA" # Reset submode
+                    })
                     st.rerun()
-            with col3:
-                if st.button("Eliminar", key=f"eliminar_{proj['id']}", width='stretch'):
+                    
+                if c3.button("Eliminar", key=f"del_{p['id']}", width='stretch'):
                     try:
-                        supabase.storage.from_(PROJECT_BUCKET).remove([proj['storage_path']])
-                        supabase.table("projects").delete().eq("id", proj['id']).execute()
-                        st.success("Proyecto eliminado."); st.rerun()
-                    except Exception as e: st.error(f"Error al eliminar: {e}")
+                        supabase.storage.from_(PROJECT_BUCKET).remove([p['storage_path']])
+                        supabase.table("projects").delete().eq("id", p['id']).execute()
+                        st.success("Eliminado."); st.rerun()
+                    except Exception as e: st.error(f"Error: {e}")
+    except Exception as e: st.error(f"Error listando proyectos: {e}")
 
-# --- FUNCIÓN show_project_analyzer (OPTIMIZADA) ---
+# --- FUNCIÓN PRINCIPAL DE ANÁLISIS (REFACTORIZADA) ---
+
 def show_project_analyzer(df, db_filtered, selected_files):
     
-    plan_features = st.session_state.plan_features
+    plan = st.session_state.plan_features
+    sub_modo = st.session_state.mode_state.get("da_current_sub_mode", "Resumen Ejecutivo IA")
     
-    def set_da_sub_mode(new_mode):
-        st.session_state.mode_state["da_current_sub_mode"] = new_mode
-
-    if "da_current_sub_mode" not in st.session_state.mode_state:
-        st.session_state.mode_state["da_current_sub_mode"] = "Resumen Ejecutivo IA"
-    
-    # Lógica de permisos de plan (simplificada para legibilidad)
-    current_default = st.session_state.mode_state["da_current_sub_mode"]
-    feature_map = {
-        "Resumen Ejecutivo IA": "da_has_summary", "Auto-Codificación": "da_has_autocode",
-        "Nube de Palabras": "da_has_wordcloud", "Exportar a PPT": "da_has_ppt_export",
-        "Análisis Rápido": "da_has_quick_analysis", "Tabla Dinámica": "da_has_pivot_table",
-        "Análisis de Correlación": "da_has_correlation", "Comparación de Grupos": "da_has_group_comparison"
-    }
-    
-    if not plan_features.get(feature_map.get(current_default, ""), False):
-        # Fallback si no tiene permiso
-        if plan_features.get("da_has_summary"): st.session_state.mode_state["da_current_sub_mode"] = "Resumen Ejecutivo IA"
-        elif plan_features.get("da_has_quick_analysis"): st.session_state.mode_state["da_current_sub_mode"] = "Análisis Rápido"
-
-    sub_modo = st.session_state.mode_state["da_current_sub_mode"]
     st.markdown(f"### Analizando: **{st.session_state.mode_state['da_selected_project_name']}**")
+    if st.button("← Volver a proyectos"): st.session_state.mode_state = {}; st.rerun()
     
-    if st.button("← Volver a la lista de proyectos"):
-        st.session_state.mode_state = {}; st.rerun()
+    # --- MENÚ DE NAVEGACIÓN ---
+    st.markdown("---")
+    # Fila 1: IA y Estadísticas Básicas
+    c1 = st.columns(4)
+    if plan.get("da_has_summary") and c1[0].button("📝 Resumen IA", type="primary" if sub_modo=="Resumen Ejecutivo IA" else "secondary", use_container_width=True): 
+        st.session_state.mode_state["da_current_sub_mode"] = "Resumen Ejecutivo IA"; st.rerun()
         
-    st.markdown("##### Selecciona una función de análisis:")
-    col_ia, col_stats = st.columns(2)
-
-    with col_ia:
-        with st.expander("📊 Funciones de IA Generativa", expanded=True):
-            if plan_features.get("da_has_summary"):
-                st.button("Resumen Ejecutivo", on_click=set_da_sub_mode, args=("Resumen Ejecutivo IA",), width='stretch', type="primary" if sub_modo == "Resumen Ejecutivo IA" else "secondary")
-            if plan_features.get("da_has_autocode"):
-                st.button("Auto-Codificación", on_click=set_da_sub_mode, args=("Auto-Codificación",), width='stretch', type="primary" if sub_modo == "Auto-Codificación" else "secondary")
-            if plan_features.get("da_has_wordcloud"):
-                st.button("Nube de Palabras", on_click=set_da_sub_mode, args=("Nube de Palabras",), width='stretch', type="primary" if sub_modo == "Nube de Palabras" else "secondary")
-            if plan_features.get("da_has_ppt_export"):
-                st.button("Exportar a PPT", on_click=set_da_sub_mode, args=("Exportar a PPT",), width='stretch', type="primary" if sub_modo == "Exportar a PPT" else "secondary")
-
-    with col_stats:
-        with st.expander("📈 Análisis Estadístico y Cruces", expanded=True):
-            if plan_features.get("da_has_quick_analysis"):
-                st.button("Análisis Rápido", on_click=set_da_sub_mode, args=("Análisis Rápido",), width='stretch', type="primary" if sub_modo == "Análisis Rápido" else "secondary")
-            if plan_features.get("da_has_pivot_table"):
-                st.button("Tabla Dinámica", on_click=set_da_sub_mode, args=("Tabla Dinámica",), width='stretch', type="primary" if sub_modo == "Tabla Dinámica" else "secondary")
-            if plan_features.get("da_has_correlation"):
-                st.button("Análisis de Correlación", on_click=set_da_sub_mode, args=("Análisis de Correlación",), width='stretch', type="primary" if sub_modo == "Análisis de Correlación" else "secondary")
-            if plan_features.get("da_has_group_comparison"):
-                st.button("Comparación de Grupos", on_click=set_da_sub_mode, args=("Comparación de Grupos",), width='stretch', type="primary" if sub_modo == "Comparación de Grupos" else "secondary")
+    if plan.get("da_has_quick_analysis") and c1[1].button("⚡ Stats Rápidas", type="primary" if sub_modo=="Análisis Rápido" else "secondary", use_container_width=True): 
+        st.session_state.mode_state["da_current_sub_mode"] = "Análisis Rápido"; st.rerun()
+        
+    if plan.get("da_has_pivot_table") and c1[2].button("🧮 Tablas Dinámicas", type="primary" if sub_modo=="Tabla Dinámica" else "secondary", use_container_width=True): 
+        st.session_state.mode_state["da_current_sub_mode"] = "Tabla Dinámica"; st.rerun()
+        
+    if plan.get("da_has_autocode") and c1[3].button("🏷️ Auto-Code", type="primary" if sub_modo=="Auto-Codificación" else "secondary", use_container_width=True): 
+        st.session_state.mode_state["da_current_sub_mode"] = "Auto-Codificación"; st.rerun()
+    
+    # Fila 2: Gráficos y Exportación
+    c2 = st.columns(4)
+    if plan.get("da_has_wordcloud") and c2[0].button("☁️ Nube Palabras", type="primary" if sub_modo=="Nube de Palabras" else "secondary", use_container_width=True): 
+        st.session_state.mode_state["da_current_sub_mode"] = "Nube de Palabras"; st.rerun()
+        
+    if plan.get("da_has_correlation") and c2[1].button("🔥 Correlación", type="primary" if sub_modo=="Análisis de Correlación" else "secondary", use_container_width=True): 
+        st.session_state.mode_state["da_current_sub_mode"] = "Análisis de Correlación"; st.rerun()
+        
+    if plan.get("da_has_group_comparison") and c2[2].button("🆚 Comparar Grupos", type="primary" if sub_modo=="Comparación de Grupos" else "secondary", use_container_width=True): 
+        st.session_state.mode_state["da_current_sub_mode"] = "Comparación de Grupos"; st.rerun()
+        
+    if plan.get("da_has_ppt_export") and c2[3].button("💾 Exportar PPT", type="primary" if sub_modo=="Exportar a PPT" else "secondary", use_container_width=True): 
+        st.session_state.mode_state["da_current_sub_mode"] = "Exportar a PPT"; st.rerun()
 
     st.divider()
-    
-    if "data_analysis_stats_context" not in st.session_state.mode_state:
-        st.session_state.mode_state["data_analysis_stats_context"] = ""
-    
-    # --- SUB-MODO: RESUMEN EJECUTIVO ---
+
+    # --- SUB-MODO: RESUMEN EJECUTIVO IA ---
     if sub_modo == "Resumen Ejecutivo IA":
-        st.header("Resumen Ejecutivo")
+        st.header("Resumen Ejecutivo (IA)")
         if "da_summary_result" in st.session_state.mode_state:
             st.markdown(st.session_state.mode_state["da_summary_result"])
-            if st.button("Generar nuevo resumen", width='stretch', type="secondary"):
+            if st.button("Regenerar Resumen", type="secondary", use_container_width=True): 
                 st.session_state.mode_state.pop("da_summary_result"); st.rerun()
         else:
-            if st.button("Generar Resumen Ejecutivo", width='stretch', type="primary"):
-                with st.spinner("Analizando la estructura de los datos..."):
-                    try:
-                        snapshot_buffer = io.StringIO()
-                        snapshot_buffer.write(f"Total Filas: {len(df)}\n\n")
-                        df.info(buf=snapshot_buffer, verbose=False)
-                        numeric_cols = df.select_dtypes(include=['number']).columns
-                        if not numeric_cols.empty:
-                            snapshot_buffer.write("\nMétricas Numéricas:\n")
-                            snapshot_buffer.write(df[numeric_cols].describe().to_string(float_format="%.2f"))
-                        cat_cols = df.select_dtypes(include=['object', 'category']).columns
-                        if not cat_cols.empty:
-                            snapshot_buffer.write("\nDistribución Categórica (Top 5):\n")
-                            for col in cat_cols:
-                                if df[col].nunique() < 50: 
-                                    snapshot_buffer.write(f"\n{col}:\n")
-                                    snapshot_buffer.write(df[col].value_counts(normalize=True).head(5).to_string(float_format="%.1f%%"))
-                        
-                        prompt = get_data_summary_prompt(snapshot_buffer.getvalue())
-                        response = call_gemini_api(prompt)
-                        if response:
-                            st.session_state.mode_state["da_summary_result"] = response
-                            log_query_event("Generar Resumen Ejecutivo IA", mode=c.MODE_DATA_ANALYSIS)
-                            st.rerun()
-                    except Exception as e: st.error(f"Error: {e}")
+            if st.button("Generar Análisis", type="primary", use_container_width=True):
+                with st.spinner("Analizando estructura de datos..."):
+                    # REFACTOR: Uso de services/statistics
+                    snapshot = get_dataframe_snapshot(df)
+                    prompt = get_data_summary_prompt(snapshot)
+                    response = call_gemini_api(prompt)
+                    if response:
+                        st.session_state.mode_state["da_summary_result"] = response
+                        log_query_event("Resumen Ejecutivo IA", mode=c.MODE_DATA_ANALYSIS)
+                        st.rerun()
 
     # --- SUB-MODO: ANÁLISIS RÁPIDO ---
     if sub_modo == "Análisis Rápido":
-        st.header("Análisis Rápido")
-        context_buffer = io.StringIO() 
-        st.subheader("Columnas Numéricas")
-        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-        col_to_num = st.selectbox("Selecciona columna numérica:", numeric_cols, key="num_select")
-        if col_to_num:
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Media", f"{df[col_to_num].mean():.2f}")
-            c2.metric("Mediana", f"{df[col_to_num].median():.2f}")
-            c3.metric("Moda", str(df[col_to_num].mode().tolist()))
-            context_buffer.write(f"Columna '{col_to_num}': Media={df[col_to_num].mean():.2f}\n")
-
-        st.subheader("Columnas Categóricas")
-        cat_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
-        col_to_cat = st.selectbox("Selecciona columna categórica:", cat_cols, key="cat_select")
-        if col_to_cat:
-            counts = df[col_to_cat].value_counts()
-            percentages = df[col_to_cat].value_counts(normalize=True)
-            df_freq = pd.DataFrame({'Conteo': counts, 'Porcentaje (%)': percentages.apply(lambda x: f"{x*100:.1f}%")})
-            st.dataframe(df_freq, width='stretch')
-            st.bar_chart(counts)
-            st.session_state.mode_state["da_freq_table"] = df_freq 
-            context_buffer.write(f"Distribución '{col_to_cat}':\n{df_freq.to_string()}\n")
-
-        st.session_state.mode_state["data_analysis_stats_context"] = context_buffer.getvalue()
+        st.header("Estadísticas Rápidas")
+        c1, c2 = st.columns(2)
+        col_num = c1.selectbox("Columna Numérica:", df.select_dtypes(include='number').columns)
+        col_cat = c2.selectbox("Columna Categórica:", df.select_dtypes(include=['object', 'category']).columns)
+        
+        if col_num:
+            metrics = df[col_num].describe()
+            cols = st.columns(4)
+            cols[0].metric("Media", f"{metrics['mean']:.2f}")
+            cols[1].metric("Min", f"{metrics['min']:.2f}")
+            cols[2].metric("Max", f"{metrics['max']:.2f}")
+            cols[3].metric("Std", f"{metrics['std']:.2f}")
+            
+        if col_cat:
+            counts = df[col_cat].value_counts().reset_index()
+            counts.columns = ['Categoria', 'Conteo']
+            st.bar_chart(counts.set_index('Categoria'))
+            st.session_state.mode_state["da_freq_table"] = counts # Guardar para PPT
 
     # --- SUB-MODO: TABLA DINÁMICA ---
     if sub_modo == "Tabla Dinámica":
-        st.header("Generador de Tabla Dinámica")
+        st.header("Tablas Dinámicas & Chi-Cuadrado")
         all_cols = ["(Ninguno)"] + df.columns.tolist()
-        numeric_cols_pivot = df.select_dtypes(include=['number']).columns.tolist()
+        idx = st.selectbox("Filas (Index):", all_cols)
+        col = st.selectbox("Columnas:", all_cols)
+        val = st.selectbox("Valores:", df.select_dtypes(include='number').columns)
         
-        c1, c2 = st.columns(2)
-        index_col = c1.selectbox("Filas (Index)", all_cols, key="pivot_index")
-        col_col = c2.selectbox("Columnas", all_cols, key="pivot_cols")
-        val_col = c1.selectbox("Valores", numeric_cols_pivot, key="pivot_val")
-        agg_func = c2.selectbox("Operación", ["count", "sum", "mean", "median"], key="pivot_agg")
-        show_sig = st.checkbox("Calcular significancia (Chi-Squared)", key="pivot_sig", disabled=(agg_func != "count"))
-        
-        if index_col != "(Ninguno)" and val_col:
-            try:
-                pivot_raw = pd.pivot_table(df, values=val_col, index=index_col, 
-                                          columns=col_col if col_col != "(Ninguno)" else None, 
-                                          aggfunc=agg_func).fillna(0)
-                st.session_state.mode_state["da_pivot_table"] = pivot_raw
-                st.dataframe(pivot_raw.style.format("{:.1f}"), width='stretch')
-                
-                if show_sig and agg_func == 'count':
-                    st.markdown("---")
-                    if pivot_raw.size > 1:
-                        chi2, p, dof, ex = stats.chi2_contingency(pivot_raw + 1) # +1 para evitar ceros
-                        st.metric("P-Value (Chi-Squared)", f"{p:.4f}")
-                        if p < 0.05:
-                            st.success("✅ Significativo. Hay diferencias reales.")
-                            residuals = (pivot_raw - ex) / np.sqrt(ex)
-                            st.dataframe(residuals.style.applymap(style_residuals).format("{:.2f}"), width='stretch')
-                        else: st.info("ℹ️ No significativo (Azar).")
-                
-                st.download_button("📥 Descargar Excel", data=to_excel(pivot_raw), file_name="pivot.xlsx")
-            except Exception as e: st.error(f"Error: {e}")
+        if idx != "(Ninguno)" and val:
+            pivot = pd.pivot_table(df, values=val, index=idx, columns=col if col != "(Ninguno)" else None, aggfunc='count', fill_value=0)
+            st.dataframe(pivot, use_container_width=True)
+            st.session_state.mode_state["da_pivot_table"] = pivot # Guardar para PPT
+            
+            # REFACTOR: Uso de services/statistics
+            p, residuals = calculate_chi_squared(pivot)
+            if p is not None:
+                st.markdown("#### Test de Significancia (Chi²)")
+                st.metric("P-Value", f"{p:.4f}", delta="Significativo" if p < 0.05 else "No significativo", delta_color="inverse")
+                if p < 0.05:
+                    st.caption("Los colores indican dónde hay más (verde) o menos (rojo) casos de lo esperado estadísticamente.")
+                    st.dataframe(residuals.style.applymap(style_residuals), use_container_width=True)
 
     # --- SUB-MODO: NUBE DE PALABRAS ---
     if sub_modo == "Nube de Palabras":
-        st.header("Nube de Palabras")
-        text_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
-        col_to_cloud = st.selectbox("Selecciona columna texto:", text_cols, key="cloud_select")
-        
-        if col_to_cloud:
-            with st.spinner("Generando..."):
-                text = " ".join(str(x) for x in df[col_to_cloud].dropna())
-                if text:
-                    wc = WordCloud(width=800, height=400, background_color='white', stopwords=get_stopwords()).generate(text)
-                    fig, ax = plt.subplots(figsize=(10, 5))
-                    ax.imshow(wc, interpolation='bilinear'); ax.axis('off')
-                    st.pyplot(fig)
-                    
-                    img_stream = io.BytesIO()
-                    fig.savefig(img_stream, format='png', bbox_inches='tight')
-                    st.session_state.mode_state["da_wordcloud_fig"] = img_stream
-                    
-                    freqs = pd.DataFrame(list(wc.words_.items()), columns=['Palabra', 'Freq']).sort_values('Freq', ascending=False)
-                    st.dataframe(freqs.head(20), width='stretch')
+        st.header("Análisis Visual de Texto")
+        col_text = st.selectbox("Columna de Texto:", df.select_dtypes(include=['object']).columns)
+        if st.button("Generar Nube", type="primary"):
+            with st.spinner("Procesando texto..."):
+                text = " ".join(df[col_text].dropna().astype(str).tolist())
+                # REFACTOR: Uso de services/plotting
+                img_buffer, freqs = generate_wordcloud_img(text)
+                
+                if img_buffer:
+                    st.image(img_buffer, use_column_width=True)
+                    st.session_state.mode_state["da_wordcloud_fig"] = img_buffer # Guardar para PPT
+                    with st.expander("Ver tabla de frecuencias"):
+                        st.dataframe(freqs.head(20), use_container_width=True)
 
-    # --- SUB-MODO: ANÁLISIS DE CORRELACIÓN ---
+    # --- SUB-MODO: CORRELACIÓN ---
     if sub_modo == "Análisis de Correlación":
         st.header("Mapa de Calor de Correlación")
-        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-        selected = st.multiselect("Selecciona columnas (min 2):", numeric_cols, default=numeric_cols[:5])
-        
-        if len(selected) >= 2:
-            corr = df[selected].corr()
-            fig, ax = plt.subplots()
-            sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", ax=ax)
-            st.pyplot(fig)
-            
-            if st.button("Interpretar con IA"):
-                with st.spinner("Interpretando..."):
-                    resp = call_gemini_api(get_correlation_prompt(corr.to_string()))
-                    st.session_state.mode_state["da_corr_interpretation"] = resp
-            
-            if "da_corr_interpretation" in st.session_state.mode_state:
-                st.markdown(st.session_state.mode_state["da_corr_interpretation"])
+        cols = st.multiselect("Selecciona columnas numéricas (min 2):", df.select_dtypes(include='number').columns)
+        if len(cols) >= 2:
+            # REFACTOR: Uso de services/plotting
+            fig, corr = generate_correlation_heatmap(df, cols)
+            if fig:
+                st.pyplot(fig)
+                if st.button("Interpretar con IA"):
+                    with st.spinner("Interpretando..."):
+                        resp = call_gemini_api(get_correlation_prompt(corr.to_string()))
+                        st.markdown(resp)
 
-    # --- SUB-MODO: COMPARACIÓN DE GRUPOS ---
+    # --- SUB-MODO: COMPARACIÓN ---
     if sub_modo == "Comparación de Grupos":
-        st.header("Comparación (T-Test / ANOVA)")
-        num_cols = df.select_dtypes(include=['number']).columns.tolist()
-        cat_cols = [c for c in df.columns if 2 <= df[c].nunique() <= 50]
+        st.header("Pruebas de Hipótesis (T-Test / ANOVA)")
+        num = st.selectbox("Variable Numérica (Métrica):", df.select_dtypes(include='number').columns)
+        cat = st.selectbox("Variable Categórica (Grupos):", df.select_dtypes(include=['object', 'category']).columns)
         
-        cat = st.selectbox("Grupos (Cat):", cat_cols)
-        num = st.selectbox("Métrica (Num):", num_cols)
-        
-        if cat and num:
-            groups = [df[num][df[cat] == g].dropna() for g in df[cat].unique()]
-            if len(groups) >= 2:
-                stat, p = stats.f_oneway(*groups) if len(groups) > 2 else stats.ttest_ind(groups[0], groups[1])
-                st.metric("P-Value", f"{p:.4f}")
+        if st.button("Calcular Diferencias"):
+            # REFACTOR: Uso de services/statistics
+            test_type, p, n_groups = calculate_group_comparison(df, num, cat)
+            if test_type:
+                st.info(f"Prueba realizada: **{test_type}** ({n_groups} grupos detectados)")
+                st.metric("P-Value", f"{p:.4f}", delta="Diferencias Reales" if p < 0.05 else "Diferencias por Azar", delta_color="inverse")
                 
-                if st.button("Interpretar"):
-                    with st.spinner("Analizando..."):
-                        resp = call_gemini_api(get_stat_test_prompt("ANOVA/T-Test", p, num, cat, len(groups)))
-                        st.session_state.mode_state["da_stat_test_interpretation"] = resp
-                
-                if "da_stat_test_interpretation" in st.session_state.mode_state:
-                    st.markdown(st.session_state.mode_state["da_stat_test_interpretation"])
+                if st.button("Interpretar hallazgo con IA"):
+                     resp = call_gemini_api(get_stat_test_prompt(test_type, p, num, cat, n_groups))
+                     st.markdown(resp)
 
-    # --- SUB-MODO: EXPORTAR PPT ---
-    if sub_modo == "Exportar a PPT":
-        st.header("Exportar a PPT")
-        if st.button("Generar .pptx", type="primary"):
-            prs = Presentation("Plantilla_PPT_ATL.pptx") # Asegúrate de tener este archivo
-            add_title_slide(prs, f"Análisis: {st.session_state.mode_state['da_selected_project_name']}")
-            
-            if "da_freq_table" in st.session_state.mode_state:
-                add_table_slide(prs, "Frecuencias", st.session_state.mode_state["da_freq_table"])
-            if "da_pivot_table" in st.session_state.mode_state:
-                add_table_slide(prs, "Tabla Dinámica", st.session_state.mode_state["da_pivot_table"])
-            if "da_wordcloud_fig" in st.session_state.mode_state:
-                add_image_slide(prs, "Nube de Palabras", st.session_state.mode_state["da_wordcloud_fig"])
-            
-            out = io.BytesIO()
-            prs.save(out)
-            st.download_button("Descargar PPT", data=out.getvalue(), file_name="analisis.pptx")
-
-    # --- SUB-MODO: AUTO-CODIFICACIÓN (SOLUCIÓN AL PROBLEMA JSON) ---
+    # --- SUB-MODO: AUTO-CODIFICACIÓN (ROBUSTA) ---
     if sub_modo == "Auto-Codificación":
-        st.header("Auto-Codificación (Preguntas Abiertas)")
+        st.header("Auto-Codificación de Texto Abierto")
         text_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
         
         if "da_autocode_results_df" in st.session_state.mode_state:
-            st.dataframe(st.session_state.mode_state["da_autocode_results_df"], width='stretch')
-            st.download_button("Descargar Excel", data=to_excel(st.session_state.mode_state["da_autocode_results_df"]), file_name="autocode.xlsx")
+            st.success("✅ Codificación completada")
+            st.dataframe(st.session_state.mode_state["da_autocode_results_df"], use_container_width=True)
+            st.download_button("📥 Descargar Excel", data=to_excel(st.session_state.mode_state["da_autocode_results_df"]), file_name="autocode.xlsx")
             if st.button("Analizar otra columna"):
                 st.session_state.mode_state.pop("da_autocode_results_df", None); st.rerun()
         else:
-            col_to_autocode = st.selectbox("Columna de texto:", text_cols)
-            main_topic = st.text_input("Tema principal:", placeholder="Ej: Razones de compra")
+            col_to_autocode = st.selectbox("Columna a codificar:", text_cols)
+            main_topic = st.text_input("Contexto / Tema Principal:", placeholder="Ej: Razones de insatisfacción")
             
-            if st.button("Generar Categorías", type="primary"):
+            if st.button("Iniciar Auto-Codificación", type="primary"):
                 if col_to_autocode and main_topic:
-                    with st.spinner("Analizando con IA (esto toma unos segundos)..."):
+                    with st.spinner("1. Muestreando y generando categorías con IA..."):
                         try:
-                            
-                            # 1. Obtener muestra
-                            sample = list(df[col_to_autocode].dropna().unique()[:100])
+                            sample = list(df[col_to_autocode].dropna().unique()[:80]) # Muestra representativa
                             prompt = get_excel_autocode_prompt(main_topic, sample)
                             
-                            # 2. Llamar a la API (AUMENTAMOS EL LÍMITE AQUÍ)
-                            raw_response = call_gemini_api(
-                                prompt,
-                                generation_config_override={
-                                    "response_mime_type": "application/json",
-                                    "max_output_tokens": 8192 # <--- AUMENTADO (Antes era default o bajo)
-                                }
-                            )
+                            # Llamada con parámetros ampliados
+                            raw_response = call_gemini_api(prompt, generation_config_override={"response_mime_type": "application/json", "max_output_tokens": 8192})
                             
-                            if not raw_response:
-                                st.error("La IA no devolvió respuesta."); st.stop()
-
-                            # 3. LIMPIEZA ROBUSTA DEL JSON (Aquí estaba el error antes)
-                            cleaned_json_str = clean_gemini_json(raw_response)
-                            categories = json.loads(cleaned_json_str) # Ahora es seguro
-
-                            # 4. Contar menciones (Lógica Regex)
+                            if not raw_response: raise Exception("IA no respondió")
+                            
+                            # LIMPIEZA ROBUSTA (Fix Priority 1.1)
+                            cleaned_json = clean_gemini_json(raw_response)
+                            categories = json.loads(cleaned_json)
+                            
+                            # Conteo Regex
                             results = []
                             full_text = df[col_to_autocode].astype(str)
+                            total_rows = len(df)
+                            
                             for cat in categories:
                                 kw = [re.escape(k.strip()) for k in cat.get('keywords', []) if k.strip()]
                                 if not kw: continue
@@ -502,34 +374,73 @@ def show_project_analyzer(df, db_filtered, selected_files):
                                 results.append({
                                     "Categoría": cat['categoria'],
                                     "Menciones": int(count),
-                                    "Porcentaje (%)": (count / len(df)) * 100
+                                    "%": round((count / total_rows) * 100, 1)
                                 })
                             
                             st.session_state.mode_state["da_autocode_results_df"] = pd.DataFrame(results).sort_values("Menciones", ascending=False)
                             st.rerun()
-
-                        except json.JSONDecodeError:
-                            st.error("Error: La IA devolvió un formato inválido incluso después de limpieza.")
-                            st.code(raw_response)
+                            
                         except Exception as e:
-                            st.error(f"Error: {e}")
+                            st.error(f"Error en auto-codificación: {e}")
                             st.code(traceback.format_exc())
+
+    # --- SUB-MODO: EXPORTAR A PPT ---
+    if sub_modo == "Exportar a PPT":
+        st.header("Generar Reporte PowerPoint")
+        st.info("Se generará una presentación con los análisis que hayas realizado en esta sesión (Tablas, Nubes, etc).")
+        
+        if st.button("Generar .pptx", type="primary"):
+            try:
+                # Intentar cargar plantilla, sino crear en blanco
+                try:
+                    prs = Presentation("Plantilla_PPT_ATL.pptx")
+                except:
+                    prs = Presentation() # Fallback
+                
+                # Portada
+                add_slide_helpers(prs, "title", f"Reporte: {st.session_state.mode_state['da_selected_project_name']}", None)
+                
+                # Slides condicionales (Solo si existen en session_state)
+                if "da_freq_table" in st.session_state.mode_state:
+                    add_slide_helpers(prs, "table", "Frecuencias", st.session_state.mode_state["da_freq_table"])
+                    
+                if "da_pivot_table" in st.session_state.mode_state:
+                    add_slide_helpers(prs, "table", "Cruce de Variables", st.session_state.mode_state["da_pivot_table"])
+                    
+                if "da_wordcloud_fig" in st.session_state.mode_state:
+                    add_slide_helpers(prs, "image", "Análisis de Texto", st.session_state.mode_state["da_wordcloud_fig"])
+                
+                # Guardar en buffer
+                out = io.BytesIO()
+                prs.save(out)
+                st.download_button("📥 Descargar Archivo", data=out.getvalue(), file_name=f"analisis_{st.session_state.mode_state['da_selected_project_name']}.pptx")
+                
+            except Exception as e:
+                st.error(f"Error generando PPT: {e}")
 
 def data_analysis_mode(db, selected_files):
     st.subheader(c.MODE_DATA_ANALYSIS)
     st.divider()
-    user_id = st.session_state.user_id
-    plan_limit = st.session_state.plan_features.get('project_upload_limit', 0)
-
+    
+    # 1. Cargar datos si hay proyecto seleccionado
     if "da_selected_project_id" in st.session_state.mode_state and "data_analysis_df" not in st.session_state.mode_state:
-        with st.spinner("Cargando..."):
+        with st.spinner("Cargando dataset del proyecto..."):
             df = load_project_data(st.session_state.mode_state["da_storage_path"])
-            if df is not None: st.session_state.mode_state["data_analysis_df"] = df
-            else: st.session_state.mode_state.pop("da_selected_project_id")
+            if df is not None: 
+                st.session_state.mode_state["data_analysis_df"] = df
+            else: 
+                st.error("No se pudo cargar el archivo.")
+                st.session_state.mode_state.pop("da_selected_project_id", None)
 
+    # 2. Router de Vistas
     if "data_analysis_df" in st.session_state.mode_state:
         show_project_analyzer(st.session_state.mode_state["data_analysis_df"], db, selected_files)
     else:
-        with st.expander("➕ Crear Proyecto", expanded=True):
-            show_project_creator(user_id, plan_limit)
+        # Vista Inicial: Lista y Creador
+        user_id = st.session_state.user_id
+        limit = st.session_state.plan_features.get('project_upload_limit', 0)
+        
+        with st.expander("➕ Crear Nuevo Proyecto de Análisis", expanded=False):
+            show_project_creator(user_id, limit)
+        
         show_project_list(user_id)
