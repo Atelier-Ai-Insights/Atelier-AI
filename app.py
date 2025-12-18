@@ -5,8 +5,6 @@ from datetime import datetime, timezone
 # ==============================
 # 1. IMPORTAR MÓDULOS GLOBALES
 # ==============================
-# Nota: No importamos los "modes" aquí para evitar errores de carga circular.
-
 from styles import apply_styles, apply_login_styles 
 from config import PLAN_FEATURES, banner_file
 from services.storage import load_database 
@@ -25,32 +23,6 @@ def set_mode_and_reset(new_mode):
     if 'current_mode' not in st.session_state or st.session_state.current_mode != new_mode:
         st.session_state.mode_state = {} 
         st.session_state.current_mode = new_mode
-
-# =====================================================
-# FUNCIÓN DE FILTRADO OPTIMIZADO (CACHEADA)
-# =====================================================
-@st.cache_data(show_spinner=False)
-def filter_database(db_full, selected_marcas, selected_years, selected_projects, user_client_name):
-    """
-    Filtra la base de datos sin recalcular en cada rerun.
-    Esto ahorra CPU y evita parpadeos en la interfaz.
-    """
-    # 1. Filtro de seguridad por cliente (si aplica)
-    filtered = db_full
-    if user_client_name == "atelier demo":
-        filtered = [doc for doc in db_full if doc.get("cliente") and "atelier" in str(doc.get("cliente")).lower()]
-    
-    # 2. Filtros de Sidebar
-    if selected_marcas:
-        filtered = [d for d in filtered if d.get("filtro") in selected_marcas]
-    
-    if selected_years:
-        filtered = [d for d in filtered if d.get("marca") in selected_years]
-        
-    if selected_projects:
-        filtered = [d for d in filtered if extract_brand(d.get("nombre_archivo", "")) in selected_projects]
-        
-    return filtered
 
 # =====================================================
 # FUNCIÓN PARA EL MODO USUARIO 
@@ -75,7 +47,6 @@ def run_user_mode(db_full, user_features, footer_html):
             c.MODE_TEXT_ANALYSIS: user_features.get("transcript_file_limit", 0) > 0,
             c.MODE_DATA_ANALYSIS: True,
             c.MODE_ETNOCHAT: user_features.get("has_etnochat_analysis"),
-            # c.MODE_TREND_ANALYSIS: True, 
         },
         "Evaluación": {
             c.MODE_IDEA_EVAL: user_features.get("has_idea_evaluation"),
@@ -113,33 +84,61 @@ def run_user_mode(db_full, user_features, footer_html):
                             type="primary" if modo == mode_key else "secondary"
                         )
 
-    # --- FILTROS DE BÚSQUEDA (OPTIMIZADOS) ---
+    # --- FILTROS DE BÚSQUEDA ANIDADOS (CASCADA) ---
     st.sidebar.header("Filtros de Búsqueda")
     
     # Algunos modos no requieren filtros de BD
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT] 
     
-    # Obtener opciones únicas para los multiselects
-    marcas_options = sorted({doc.get("filtro", "") for doc in db_full if doc.get("filtro")})
-    years_options = sorted({doc.get("marca", "") for doc in db_full if doc.get("marca")})
-    brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_full if extract_brand(d.get("nombre_archivo", ""))})
+    # 0. PREPARACIÓN INICIAL DE DATOS
+    # Aplicamos el filtro de seguridad de cliente primero (si es demo)
+    user_client_name = st.session_state.get("cliente", "")
+    db_base = db_full
+    if user_client_name == "atelier demo":
+        db_base = [doc for doc in db_full if doc.get("cliente") and "atelier" in str(doc.get("cliente")).lower()]
 
-    # Widgets de Filtros
-    selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas", disabled=not run_filters)
-    selected_years = st.sidebar.multiselect("Año(s):", years_options, key="filter_years", disabled=not run_filters)
-    selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects", disabled=not run_filters)
-
-    # Aplicar Filtros usando la función Cacheada
     if run_filters:
-        db_filtered = filter_database(
-            db_full, 
-            selected_marcas, 
-            selected_years, 
-            selected_brands, 
-            st.session_state.get("cliente")
-        )
+        # --- NIVEL 1: MARCA (Campo: 'filtro') ---
+        # Las opciones salen de la base completa (ya filtrada por cliente)
+        marcas_options = sorted({doc.get("filtro", "") for doc in db_base if doc.get("filtro")})
+        selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas")
+        
+        # Filtramos DB para el siguiente paso
+        if selected_marcas:
+            db_step_1 = [d for d in db_base if d.get("filtro") in selected_marcas]
+        else:
+            db_step_1 = db_base
+
+        # --- NIVEL 2: AÑO (Campo: 'marca' según tu esquema original) ---
+        # Las opciones salen de db_step_1
+        years_options = sorted({doc.get("marca", "") for doc in db_step_1 if doc.get("marca")})
+        selected_years = st.sidebar.multiselect("Año(s):", years_options, key="filter_years")
+        
+        # Filtramos DB para el siguiente paso
+        if selected_years:
+            db_step_2 = [d for d in db_step_1 if d.get("marca") in selected_years]
+        else:
+            db_step_2 = db_step_1
+
+        # --- NIVEL 3: PROYECTO (Campo: extract_brand de 'nombre_archivo') ---
+        # Las opciones salen de db_step_2
+        brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_step_2 if extract_brand(d.get("nombre_archivo", ""))})
+        selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects")
+        
+        # Filtro Final
+        if selected_brands:
+            db_filtered = [d for d in db_step_2 if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
+        else:
+            db_filtered = db_step_2
+            
     else:
-        db_filtered = db_full 
+        # Si estamos en un modo que no usa filtros, pasamos la base limpia
+        db_filtered = db_full
+        # Creamos variables vacías para evitar errores de renderizado si st.sidebar las reusa
+        selected_marcas, selected_years, selected_brands = [], [], []
+        if run_filters is False:
+             # Deshabilitamos visualmente si es necesario, o simplemente no mostramos nada
+             st.sidebar.caption("Filtros no disponibles en este modo.")
 
     # --- LOGOUT ---
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
@@ -201,10 +200,6 @@ def run_user_mode(db_full, user_features, footer_html):
         from modes.etnochat_mode import etnochat_mode
         etnochat_mode()
         
-    # elif modo == c.MODE_TREND_ANALYSIS: 
-    #     from modes.trend_analysis_mode import google_trends_mode
-    #     google_trends_mode()
-
     elif modo == c.MODE_SYNTHETIC: 
         from modes.synthetic_mode import synthetic_users_mode
         synthetic_users_mode(db_filtered, selected_files)
@@ -227,10 +222,8 @@ def main():
     # 1. RUTA DE ACTIVACIÓN (INVITACIÓN O RECUPERACIÓN)
     if st.session_state.get('flow_email_verified'):
         apply_login_styles()
-        # [MODIFICADO] Ajuste de columnas para centrar y angostar la vista
         col1, col2, col3 = st.columns([3, 2, 3])
         with col2:
-            # [MODIFICADO] Logo responsivo para coincidir con inputs
             st.image("LogoDataStudio.png", use_container_width=True)
             ctx = st.session_state.get('temp_auth_type', 'recovery')
             show_activation_flow(None, ctx) 
@@ -242,10 +235,8 @@ def main():
     if auth_type in ["recovery", "invite"] and access_token:
         if isinstance(access_token, list): access_token = access_token[0]
         apply_login_styles()
-        # [MODIFICADO] Ajuste de columnas para centrar y angostar la vista
         col1, col2, col3 = st.columns([3, 2, 3])
         with col2:
-            # [MODIFICADO] Logo responsivo para coincidir con inputs
             st.image("LogoDataStudio.png", use_container_width=True)
             show_activation_flow(access_token, auth_type)
         st.divider(); st.markdown(footer_html, unsafe_allow_html=True); st.stop()
@@ -277,10 +268,8 @@ def main():
 
     # 3. PANTALLA DE LOGIN
     apply_login_styles()
-    # [MODIFICADO] Ajuste de columnas [3, 2, 3] para que el formulario sea el 25% de la pantalla
     col1, col2, col3 = st.columns([3, 2, 3])
     with col2:
-        # [MODIFICADO] Logo se adapta al ancho de la columna (que es igual a los inputs)
         st.image("LogoDataStudio.png", use_container_width=True)
         if st.session_state.page == "reset_password": 
             show_reset_password_page()
