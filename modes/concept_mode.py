@@ -1,75 +1,90 @@
 import streamlit as st
-from utils import get_relevant_info, reset_chat_workflow
-from services.gemini_api import call_gemini_api
-from services.supabase_db import get_daily_usage, log_query_event
-from reporting.pdf_generator import generate_pdf_html
-from config import banner_file
-from prompts import get_grounded_chat_prompt
+from utils import get_relevant_info
+from services.gemini_api import call_gemini_stream 
+from services.supabase_db import log_query_event
+from prompts import get_concept_gen_prompt
 import constants as c 
+from reporting.pdf_generator import generate_pdf_html
+# NOTA: Quitamos docx_generator de aquí para evitar el error circular
+from config import banner_file
 
 # =====================================================
-# MODO: CHAT DE CONSULTA DIRECTA (GROUNDED)
+# MODO: GENERACIÓN DE CONCEPTOS
 # =====================================================
 
-def grounded_chat_mode(db, selected_files):
-    st.subheader("Chat de Consulta Directa")
-    st.markdown("Preguntas específicas, respuestas basadas solo en hallazgos seleccionados.")
+def concept_generation_mode(db, selected_files):
+    # --- FIX IMPORTACIÓN CIRCULAR ---
+    # Importamos esto AQUÍ dentro, solo cuando se necesita.
+    from reporting.docx_generator import generate_docx
+    # --------------------------------
     
-    # --- ¡MODIFICADO! ---
-    if "chat_history" not in st.session_state.mode_state: 
-        st.session_state.mode_state["chat_history"] = []
-        
-    # --- ¡MODIFICADO! ---
-    for msg in st.session_state.mode_state["chat_history"]:
-        with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
-            st.markdown(msg['message'])
-            
-    user_input = st.chat_input("Escribe tu pregunta...")
+    st.subheader("Generación de Conceptos")
+    st.markdown("Genera concepto de producto/servicio a partir de idea y hallazgos.")
     
-    if user_input:
-        # --- ¡MODIFICADO! ---
-        st.session_state.mode_state["chat_history"].append({"role": "Usuario", "message": user_input})
-        with st.chat_message("Usuario", avatar="👤"): 
-            st.markdown(user_input)
-            
-        query_limit = st.session_state.plan_features.get('chat_queries_per_day', 0)
-        current_queries = get_daily_usage(st.session_state.user, c.MODE_CHAT)
+    # --- PANTALLA DE RESULTADOS ---
+    if "generated_concept" in st.session_state.mode_state:
+        st.markdown("---")
+        st.markdown("### Concepto Generado")
+        st.markdown(st.session_state.mode_state["generated_concept"])
         
-        if current_queries >= query_limit and query_limit != float('inf'): 
-            st.error(f"Límite de {int(query_limit)} consultas diarias alcanzado."); return
-            
-        with st.chat_message("Asistente", avatar="✨"):
-            message_placeholder = st.empty()
-            message_placeholder.markdown("Pensando...")
-            
-            relevant_info = get_relevant_info(db, user_input, selected_files)
-            # --- ¡MODIFICADO! ---
-            conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.mode_state["chat_history"][-10:])
-            grounded_prompt = get_grounded_chat_prompt(conversation_history, relevant_info)
-            response = call_gemini_api(grounded_prompt)
-            
-            if response: 
-                message_placeholder.markdown(response)
-                log_query_event(user_input, mode=c.MODE_CHAT)
-                # --- ¡MODIFICADO! ---
-                st.session_state.mode_state["chat_history"].append({
-                    "role": "Asistente", 
-                    "message": response
-                })
-                st.rerun()
-            else: 
-                message_placeholder.error("Error al generar respuesta.")
-                
-    # --- ¡MODIFICADO! ---
-    if st.session_state.mode_state["chat_history"]:
-        col1, col2 = st.columns([1,1])
+        st.divider() # Línea separadora visual
+
+        # --- BOTONES DE ACCIÓN ---
+        col1, col2, col3 = st.columns(3)
+        
         with col1:
-            # --- ¡MODIFICADO! ---
-            chat_content_raw = "\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.mode_state["chat_history"])
-            chat_content_for_pdf = chat_content_raw.replace("](#)", "]")
-            pdf_bytes = generate_pdf_html(chat_content_for_pdf, title="Historial Consulta", banner_path=banner_file)
-            if pdf_bytes: 
-                st.download_button("Descargar Chat PDF", data=pdf_bytes, file_name="chat_consulta.pdf", mime="application/pdf", width='stretch')
-        with col2: 
-            # Esta función ya fue actualizada en utils.py
-            st.button("Nueva Conversación", on_click=reset_chat_workflow, key="new_grounded_chat_btn", width='stretch')
+            # Generar PDF
+            pdf_bytes = generate_pdf_html(
+                st.session_state.mode_state["generated_concept"], 
+                title="Concepto de Innovación", 
+                banner_path=banner_file
+            )
+            if pdf_bytes:
+                st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name="concepto.pdf", mime="application/pdf", width='stretch')
+
+        with col2:
+            # Generar Word
+            docx_bytes = generate_docx(
+                st.session_state.mode_state["generated_concept"], 
+                title="Concepto de Innovación"
+            )
+            if docx_bytes:
+                st.download_button(
+                    "📝 Descargar Word", 
+                    data=docx_bytes, 
+                    file_name="concepto.docx", 
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                    width='stretch',
+                    type="primary"
+                )
+
+        with col3:
+            if st.button("🔄 Nuevo Concepto", width='stretch'): 
+                st.session_state.mode_state.pop("generated_concept")
+                st.rerun()
+
+    # --- PANTALLA DE FORMULARIO ---
+    else:
+        product_idea = st.text_area("Describe tu idea:", height=150, placeholder="Ej: Snack saludable...")
+        
+        if st.button("Generar Concepto", width='stretch'):
+            if not product_idea.strip(): 
+                st.warning("Describe tu idea."); return
+                
+            with st.spinner("Iniciando generación creativa..."):
+                context_info = get_relevant_info(db, product_idea, selected_files)
+                prompt = get_concept_gen_prompt(product_idea, context_info)
+                
+                # --- STREAMING ---
+                stream = call_gemini_stream(prompt)
+                
+                if stream:
+                    st.markdown("---")
+                    st.markdown("### Concepto Generado")
+                    response = st.write_stream(stream)
+                    
+                    st.session_state.mode_state["generated_concept"] = response
+                    log_query_event(product_idea, mode=c.MODE_CONCEPT)
+                    st.rerun()
+                else: 
+                    st.error("No se pudo generar concepto.")
