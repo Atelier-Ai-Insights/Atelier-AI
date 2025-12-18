@@ -1,13 +1,13 @@
 import streamlit as st
 import unicodedata
 import json
-import fitz  # PyMuPDF
 import re
+# NOTA: Ya NO importamos supabase aquí arriba para evitar el error circular
+import time
 
 # ==============================
-# GESTIÓN DE STOPWORDS (OPTIMIZADA)
+# GESTIÓN DE STOPWORDS
 # ==============================
-# Eliminamos la dependencia de NLTK download para mayor velocidad y estabilidad
 @st.cache_resource
 def get_stopwords():
     base_stopwords = {
@@ -46,7 +46,6 @@ def clean_text(text):
     return str(text) if text is not None else ""
 
 def clean_gemini_json(text):
-    """Limpia respuestas JSON de Gemini eliminando bloques Markdown."""
     if not text: return ""
     text = str(text).strip()
     text = re.sub(r'^```json\s*', '', text, flags=re.MULTILINE)
@@ -55,21 +54,13 @@ def clean_gemini_json(text):
     return text.strip()
 
 # ==============================
-# RAG (Recuperación de Información)
+# RAG (CON LÍMITE DE SEGURIDAD)
 # ==============================
 def get_relevant_info(db, question, selected_files, max_chars=150000):
-    """
-    Recupera info, pero con un LÍMITE DE SEGURIDAD (max_chars).
-    150k caracteres son aprox 30k-40k tokens (Seguro para Gemini Flash/Pro).
-    """
     all_text = ""
     selected_files_set = set(selected_files) if isinstance(selected_files, (list, set)) else set()
     
-    # Prioridad: ¿Podemos ordenar por relevancia? 
-    # Por ahora, simplemente cortamos para no quebrar la banca.
-    
     for pres in db:
-        # Si ya nos pasamos del límite, paramos de leer archivos.
         if len(all_text) > max_chars:
             all_text += f"\n\n[ALERTA: Contexto truncado por límite de seguridad ({max_chars} chars)...]"
             break 
@@ -77,7 +68,6 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
         doc_name = pres.get('nombre_archivo')
         if doc_name and doc_name in selected_files_set:
             try:
-                # Construcción del texto (igual que antes)
                 titulo = pres.get('titulo_estudio', doc_name)
                 ano = pres.get('marca')
                 citation_header = f"{titulo} - {ano}" if ano else titulo
@@ -86,7 +76,6 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
                 
                 for grupo in pres.get("grupos", []):
                     contenido = str(grupo.get('contenido_texto', ''))
-                    # Solo agregamos metadatos si son breves
                     metadatos = json.dumps(grupo.get('metadatos', {}), ensure_ascii=False) if grupo.get('metadatos') else ""
                     
                     if contenido: doc_content += f"  - {contenido}\n";
@@ -94,7 +83,6 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
                         
                 doc_content += "\n---\n\n"
                 
-                # Chequeo antes de agregar para no cortar a mitad de palabra si es posible
                 if len(all_text) + len(doc_content) > max_chars:
                     remaining = max_chars - len(all_text)
                     all_text += doc_content[:remaining]
@@ -105,14 +93,12 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
             except Exception as e: 
                 print(f"Error proc doc '{doc_name}': {e}")
 
-    # --- AGREGA ESTO ---
+    # DEBUG TEMPORAL (Puedes quitarlo después)
     print(f"🔥 DEBUG TAMAÑO: Enviando contexto de {len(all_text)} caracteres a la IA.")
-    # -------------------
-                
     return all_text
 
 # ==============================
-# GESTIÓN DE ESTADO (RESET)
+# RESET WORKFLOWS
 # ==============================
 def reset_report_workflow():
     for k in ["report", "last_question"]: st.session_state.mode_state.pop(k, None)
@@ -127,21 +113,31 @@ def reset_etnochat_chat_workflow():
     st.session_state.mode_state.pop("etno_chat_history", None)
 
 # ==============================
-# VALIDACIÓN DE SESIÓN
+# VALIDACIÓN DE SESIÓN (CORREGIDA)
 # ==============================
-from services.supabase_db import supabase
-import time
-
 def validate_session_integrity():
     if not st.session_state.get("logged_in"): return
-    # Validación optimizada: Solo verificar cada 5 minutos, no en cada click
+    
     current_time = time.time()
+    
+    # Check cada 5 minutos
     if 'last_session_check' not in st.session_state or (current_time - st.session_state.last_session_check > 300):
         try:
+            # --- CORRECCIÓN AQUÍ: Importamos DENTRO de la función ---
+            # Esto evita el error de "ImportError" circular que ves en la pantalla roja.
+            from services.supabase_db import supabase 
+            
             uid = st.session_state.user_id
             res = supabase.table("users").select("active_session_id").eq("id", uid).single().execute()
+            
             if res.data and res.data.get('active_session_id') != st.session_state.session_id:
                 st.error("⚠️ Tu sesión ha sido cerrada desde otro dispositivo.")
-                time.sleep(2); st.session_state.clear(); st.rerun()
+                time.sleep(2)
+                st.session_state.clear()
+                st.rerun()
+            
             st.session_state.last_session_check = current_time
-        except: pass
+        except Exception as e:
+            # Si falla la conexión a la BD, no bloqueamos la app, solo imprimimos en consola
+            print(f"Warning session check: {e}")
+            pass
