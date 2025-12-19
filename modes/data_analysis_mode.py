@@ -15,13 +15,12 @@ from services.supabase_db import log_query_event, supabase
 import constants as c
 
 # --- Importaciones de Nuevos Servicios de Refactorización ---
-# (Asegúrate de haber creado estos archivos en la carpeta services/)
-from services.statistics import get_dataframe_snapshot, calculate_chi_squared, calculate_group_comparison
+from services.statistics import calculate_chi_squared, calculate_group_comparison
 from services.plotting import generate_wordcloud_img, generate_correlation_heatmap
 
 # --- Prompts ---
 from prompts import (
-    get_excel_autocode_prompt, get_data_summary_prompt, 
+    get_excel_autocode_prompt, 
     get_correlation_prompt, get_stat_test_prompt 
 )
 
@@ -167,7 +166,7 @@ def show_project_list(user_id):
                         "da_selected_project_id": p['id'], 
                         "da_selected_project_name": p['project_name'], 
                         "da_storage_path": p['storage_path'],
-                        "da_current_sub_mode": "Resumen Ejecutivo IA" # Reset submode
+                        "da_current_sub_mode": "Tabla Dinámica" # UPDATED DEFAULT
                     })
                     st.rerun()
                     
@@ -184,82 +183,38 @@ def show_project_list(user_id):
 def show_project_analyzer(df, db_filtered, selected_files):
     
     plan = st.session_state.plan_features
-    sub_modo = st.session_state.mode_state.get("da_current_sub_mode", "Resumen Ejecutivo IA")
+    # Cambiamos el default a Tabla Dinámica ya que borramos Resumen IA
+    sub_modo = st.session_state.mode_state.get("da_current_sub_mode", "Tabla Dinámica")
     
     st.markdown(f"### Analizando: **{st.session_state.mode_state['da_selected_project_name']}**")
     if st.button("← Volver a proyectos"): st.session_state.mode_state = {}; st.rerun()
     
-    # --- MENÚ DE NAVEGACIÓN ---
+    # --- MENÚ DE NAVEGACIÓN (REDISEÑADO) ---
     st.markdown("---")
-    # Fila 1: IA y Estadísticas Básicas
-    c1 = st.columns(4)
-    if plan.get("da_has_summary") and c1[0].button("📝 Resumen IA", type="primary" if sub_modo=="Resumen Ejecutivo IA" else "secondary", use_container_width=True): 
-        st.session_state.mode_state["da_current_sub_mode"] = "Resumen Ejecutivo IA"; st.rerun()
-        
-    if plan.get("da_has_quick_analysis") and c1[1].button("⚡ Stats Rápidas", type="primary" if sub_modo=="Análisis Rápido" else "secondary", use_container_width=True): 
-        st.session_state.mode_state["da_current_sub_mode"] = "Análisis Rápido"; st.rerun()
-        
-    if plan.get("da_has_pivot_table") and c1[2].button("🧮 Tablas Dinámicas", type="primary" if sub_modo=="Tabla Dinámica" else "secondary", use_container_width=True): 
+    
+    # Fila 1: Herramientas Principales
+    c1 = st.columns(3)
+    if plan.get("da_has_pivot_table") and c1[0].button("🧮 Tablas Dinámicas", type="primary" if sub_modo=="Tabla Dinámica" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Tabla Dinámica"; st.rerun()
         
-    if plan.get("da_has_autocode") and c1[3].button("🏷️ Auto-Code", type="primary" if sub_modo=="Auto-Codificación" else "secondary", use_container_width=True): 
+    if plan.get("da_has_autocode") and c1[1].button("🏷️ Auto-Code", type="primary" if sub_modo=="Auto-Codificación" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Auto-Codificación"; st.rerun()
-    
-    # Fila 2: Gráficos y Exportación
-    c2 = st.columns(4)
-    if plan.get("da_has_wordcloud") and c2[0].button("☁️ Nube Palabras", type="primary" if sub_modo=="Nube de Palabras" else "secondary", use_container_width=True): 
+
+    if plan.get("da_has_wordcloud") and c1[2].button("☁️ Nube Palabras", type="primary" if sub_modo=="Nube de Palabras" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Nube de Palabras"; st.rerun()
-        
-    if plan.get("da_has_correlation") and c2[1].button("🔥 Correlación", type="primary" if sub_modo=="Análisis de Correlación" else "secondary", use_container_width=True): 
+    
+    # Fila 2: Análisis Avanzado y Exportación
+    c2 = st.columns(3)
+    if plan.get("da_has_correlation") and c2[0].button("🔥 Correlación", type="primary" if sub_modo=="Análisis de Correlación" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Análisis de Correlación"; st.rerun()
         
-    if plan.get("da_has_group_comparison") and c2[2].button("🆚 Comparar Grupos", type="primary" if sub_modo=="Comparación de Grupos" else "secondary", use_container_width=True): 
+    if plan.get("da_has_group_comparison") and c2[1].button("🆚 Comparar Grupos", type="primary" if sub_modo=="Comparación de Grupos" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Comparación de Grupos"; st.rerun()
         
-    if plan.get("da_has_ppt_export") and c2[3].button("💾 Exportar PPT", type="primary" if sub_modo=="Exportar a PPT" else "secondary", use_container_width=True): 
+    if plan.get("da_has_ppt_export") and c2[2].button("💾 Exportar PPT", type="primary" if sub_modo=="Exportar a PPT" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Exportar a PPT"; st.rerun()
 
     st.divider()
-
-    # --- SUB-MODO: RESUMEN EJECUTIVO IA ---
-    if sub_modo == "Resumen Ejecutivo IA":
-        st.header("Resumen Ejecutivo (IA)")
-        if "da_summary_result" in st.session_state.mode_state:
-            st.markdown(st.session_state.mode_state["da_summary_result"])
-            if st.button("Regenerar Resumen", type="secondary", use_container_width=True): 
-                st.session_state.mode_state.pop("da_summary_result"); st.rerun()
-        else:
-            if st.button("Generar Análisis", type="primary", use_container_width=True):
-                with st.spinner("Analizando estructura de datos..."):
-                    # REFACTOR: Uso de services/statistics
-                    snapshot = get_dataframe_snapshot(df)
-                    prompt = get_data_summary_prompt(snapshot)
-                    response = call_gemini_api(prompt)
-                    if response:
-                        st.session_state.mode_state["da_summary_result"] = response
-                        log_query_event("Resumen Ejecutivo IA", mode=c.MODE_DATA_ANALYSIS)
-                        st.rerun()
-
-    # --- SUB-MODO: ANÁLISIS RÁPIDO ---
-    if sub_modo == "Análisis Rápido":
-        st.header("Estadísticas Rápidas")
-        c1, c2 = st.columns(2)
-        col_num = c1.selectbox("Columna Numérica:", df.select_dtypes(include='number').columns)
-        col_cat = c2.selectbox("Columna Categórica:", df.select_dtypes(include=['object', 'category']).columns)
-        
-        if col_num:
-            metrics = df[col_num].describe()
-            cols = st.columns(4)
-            cols[0].metric("Media", f"{metrics['mean']:.2f}")
-            cols[1].metric("Min", f"{metrics['min']:.2f}")
-            cols[2].metric("Max", f"{metrics['max']:.2f}")
-            cols[3].metric("Std", f"{metrics['std']:.2f}")
-            
-        if col_cat:
-            counts = df[col_cat].value_counts().reset_index()
-            counts.columns = ['Categoria', 'Conteo']
-            st.bar_chart(counts.set_index('Categoria'))
-            st.session_state.mode_state["da_freq_table"] = counts # Guardar para PPT
 
     # --- SUB-MODO: TABLA DINÁMICA ---
     if sub_modo == "Tabla Dinámica":
@@ -274,7 +229,6 @@ def show_project_analyzer(df, db_filtered, selected_files):
             st.dataframe(pivot, use_container_width=True)
             st.session_state.mode_state["da_pivot_table"] = pivot # Guardar para PPT
             
-            # REFACTOR: Uso de services/statistics
             p, residuals = calculate_chi_squared(pivot)
             if p is not None:
                 st.markdown("#### Test de Significancia (Chi²)")
@@ -357,7 +311,7 @@ def show_project_analyzer(df, db_filtered, selected_files):
                             
                             if not raw_response: raise Exception("IA no respondió")
                             
-                            # LIMPIEZA ROBUSTA (Fix Priority 1.1)
+                            # LIMPIEZA ROBUSTA
                             cleaned_json = clean_gemini_json(raw_response)
                             categories = json.loads(cleaned_json)
                             
