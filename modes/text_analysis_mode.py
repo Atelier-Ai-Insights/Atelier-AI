@@ -10,13 +10,12 @@ from services.supabase_db import log_query_event, supabase, get_daily_usage
 from prompts import get_transcript_prompt, get_autocode_prompt, get_text_analysis_summary_prompt
 import constants as c
 from reporting.pdf_generator import generate_pdf_html
-# --- NUEVA IMPORTACIÓN ---
 from reporting.docx_generator import generate_docx
 from config import banner_file
 from utils import reset_transcript_chat_workflow, build_rag_context
 
 # =====================================================
-# MODO: ANÁLISIS DE TEXTOS (OPTIMIZADO CON RAG + DOCX)
+# MODO: ANÁLISIS DE TEXTOS (OPTIMIZADO PARA SÍNTESIS Y PATRONES)
 # =====================================================
 
 TEXT_PROJECT_BUCKET = "text_project_files"
@@ -94,15 +93,23 @@ def show_text_project_list(user_id):
                     except Exception as e: st.error(f"Error: {e}")
     except Exception as e: st.error(f"Error: {e}")
 
-# --- Función de Análisis (ACTUALIZADA) ---
+# --- Función de Análisis (MODIFICADA PARA SÍNTESIS PROFUNDA) ---
 
 def show_text_project_analyzer(summary_context, project_name, documents_list):
     st.markdown(f"### Analizando: **{project_name}**")
     if st.button("← Volver"): st.session_state.mode_state = {}; st.rerun()
     st.divider()
     
+    # 1. PREPARACIÓN DE CONTEXTO COMPLETO (EVIDENCIA REAL)
+    # Concatenamos el texto real de los documentos para alimentar a la IA con datos crudos, no resumen.
+    # Límite de seguridad de 500k caracteres (Gemini Flash soporta ~1M tokens, esto es seguro).
+    all_docs_text = "\n".join([f"--- DOC: {d['source']} ---\n{d['content']}" for d in documents_list])
+    if len(all_docs_text) > 500000: 
+        all_docs_text = all_docs_text[:500000] + "\n...(texto truncado por límite de seguridad)"
+    
     tab_chat, tab_autocode = st.tabs(["Análisis de Notas y Transcripciones", "Auto-Codificación"])
 
+    # --- PESTAÑA 1: CHAT DE SÍNTESIS Y PATRONES ---
     with tab_chat:
         st.header("Análisis de Notas y Transcripciones")
         if "transcript_chat_history" not in st.session_state.mode_state: 
@@ -112,7 +119,7 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
             with st.chat_message(msg["role"], avatar="✨" if msg['role'] == "assistant" else "👤"):
                 st.markdown(msg["content"])
 
-        user_prompt = st.chat_input("Ej: ¿Qué opinan los usuarios sobre el precio?")
+        user_prompt = st.chat_input("Ej: ¿Cuáles son los patrones de queja más comunes?")
 
         if user_prompt:
             st.session_state.mode_state["transcript_chat_history"].append({"role": "user", "content": user_prompt})
@@ -126,11 +133,11 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
             else:
                 with st.chat_message("assistant", avatar="✨"):
                     status_ph = st.empty()
-                    status_ph.markdown("🕵️ **Explorando documentos...**")
-                    rag_chunks = build_rag_context(user_prompt, documents_list, max_chars=30000)
+                    status_ph.markdown("🕵️ **Buscando patrones en la evidencia...**")
                     
-                    status_ph.markdown("✨ **Generando respuesta...**")
-                    final_context = f"--- RESUMEN ---\n{summary_context}\n--- EVIDENCIA ---\n{rag_chunks}"
+                    # RAG Híbrido: Priorizamos 'all_docs_text' (la evidencia) sobre el resumen.
+                    final_context = f"{all_docs_text}\n\n--- CONTEXTO GENERAL (Resumen) ---\n{summary_context}"
+                    
                     chat_prompt = get_transcript_prompt(final_context, user_prompt)
                     
                     stream = call_gemini_stream(chat_prompt) 
@@ -142,52 +149,52 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                         st.session_state.mode_state["transcript_chat_history"].append({"role": "assistant", "content": response_text})
                     else: st.error("Error al obtener respuesta.")
 
+        # Botones de exportación (Chat)
         if st.session_state.mode_state["transcript_chat_history"]:
             st.divider() 
             c1, c2, c3 = st.columns(3)
             
-            # Construir texto para exportar
             raw_text = f"# Chat Transcripciones: {project_name}\n\n"
             raw_text += "\n\n".join(f"**{m['role'].upper()}:** {m['content']}" for m in st.session_state.mode_state["transcript_chat_history"])
             
-            # PDF
             pdf = generate_pdf_html(raw_text.replace("](#)", "]"), title=f"Chat - {project_name}", banner_path=banner_file)
             if pdf: c1.download_button("📄 Descargar PDF", data=pdf, file_name="chat.pdf", mime="application/pdf", width='stretch')
             
-            # WORD (Nuevo)
             docx = generate_docx(raw_text, title=f"Chat - {project_name}")
             if docx: c2.download_button("📝 Descargar Word", data=docx, file_name="chat.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
             
-            # Reiniciar
             c3.button("🔄 Reiniciar", on_click=reset_transcript_chat_workflow, key="rst_chat", width='stretch')
 
+    # --- PESTAÑA 2: AUTO-CODIFICACIÓN ---
     with tab_autocode:
         st.header("Auto-Codificación")
+        st.markdown("Identifica categorías y frecuencias de temas basados en la lectura completa de los documentos.")
+        
         if "autocode_result" in st.session_state.mode_state:
             st.markdown(st.session_state.mode_state["autocode_result"])
             
             st.divider()
             c1, c2, c3 = st.columns(3)
             
-            # PDF
             pdf = generate_pdf_html(st.session_state.mode_state["autocode_result"], title="Temas", banner_path=banner_file)
             if pdf: c1.download_button("📄 Descargar PDF", data=pdf, file_name="temas.pdf", width='stretch')
             
-            # WORD (Nuevo)
             docx = generate_docx(st.session_state.mode_state["autocode_result"], title="Auto-Codificación")
             if docx: c2.download_button("📝 Descargar Word", data=docx, file_name="temas.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
             
-            # Reiniciar
             if c3.button("🔄 Nuevo análisis", width='stretch'): 
                 st.session_state.mode_state.pop("autocode_result", None); st.rerun()
         else:
-            topic = st.text_input("Tema principal:", placeholder="Ej: Percepción de marca")
-            if st.button("Analizar", type="primary", width='stretch'):
-                if not topic.strip(): st.warning("Describe el tema.")
+            topic = st.text_input("Tema principal a codificar:", placeholder="Ej: Barreras de compra, Motivadores, Percepción de precio")
+            if st.button("Generar Códigos y Patrones", type="primary", width='stretch'):
+                if not topic.strip(): st.warning("Describe el tema para orientar a la IA.")
                 else:
                     status_ph = st.empty()
-                    status_ph.markdown("🔍 **Analizando patrones...**")
-                    prompt = get_autocode_prompt(summary_context, topic)
+                    status_ph.markdown("🔍 **Leyendo documentos y detectando frecuencias...**")
+                    
+                    # USAMOS EL TEXTO COMPLETO (all_docs_text) EN LUGAR DEL RESUMEN
+                    prompt = get_autocode_prompt(all_docs_text, topic)
+                    
                     stream = call_gemini_stream(prompt)
                     status_ph.empty()
                     
@@ -210,7 +217,7 @@ def text_analysis_mode():
         if docs: st.session_state.mode_state["ta_documents_list"] = docs
         else: st.session_state.mode_state.pop("ta_selected_project_id")
 
-    # 2. Generar Resumen
+    # 2. Generar Resumen (Se mantiene como contexto auxiliar, pero ya no es la única fuente)
     if "ta_documents_list" in st.session_state.mode_state and "ta_summary_context" not in st.session_state.mode_state:
         ph = st.empty(); ph.info("🧠 Generando resumen inicial...")
         docs = st.session_state.mode_state["ta_documents_list"]
