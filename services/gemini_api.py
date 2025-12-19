@@ -1,10 +1,11 @@
 import streamlit as st
 import google.generativeai as genai
-from google.generativeai.types import generation_types
 import html
 import time
 from config import api_keys, generation_config, safety_settings
-from services.logger import log_error, log_action 
+from services.logger import log_error
+# --- NUEVA IMPORTACIÓN: Servicios de Caché ---
+from services.semantic_cache import check_semantic_cache, save_to_cache
 
 # ==========================================
 # CONFIGURACIÓN DE MODELO
@@ -24,7 +25,7 @@ def _configure_gemini(key_index):
         return False
 
 def _save_token_usage(response_obj):
-    # Guardamos tokens solo para estadística, no afecta facturación
+    # Guardamos tokens solo para estadística
     try:
         if hasattr(response_obj, 'usage_metadata'):
             usage = response_obj.usage_metadata
@@ -42,7 +43,22 @@ def call_gemini_stream(prompt, generation_config_override=None, safety_settings_
     return _execute_gemini_call(prompt, stream=True, gen_config=generation_config_override, safety=safety_settings_override)
 
 def _execute_gemini_call(prompt, stream=False, gen_config=None, safety=None):
-    # 1. PREPARACIÓN
+    
+    # ---------------------------------------------------------
+    # 1. VERIFICACIÓN DE CACHÉ (OPTIMIZACIÓN DE COSTOS)
+    # ---------------------------------------------------------
+    # Solo buscamos en caché si es texto plano y no es streaming.
+    # (Las listas multimodales con imágenes son complejas de vectorizar por ahora)
+    if isinstance(prompt, str) and not stream:
+        cached_response = check_semantic_cache(prompt)
+        if cached_response:
+            # Si encontramos respuesta, la devolvemos inmediatamente (Costo $0)
+            st.toast("⚡ Respuesta recuperada de memoria (Cache Hit)", icon="💾")
+            return cached_response
+
+    # ---------------------------------------------------------
+    # 2. LLAMADA A LA API (SI NO HUBO CACHÉ)
+    # ---------------------------------------------------------
     start_index = st.session_state.get("api_key_index", 0)
     num_keys = len(api_keys)
     
@@ -51,16 +67,13 @@ def _execute_gemini_call(prompt, stream=False, gen_config=None, safety=None):
     
     final_safety = safety if safety is not None else safety_settings 
     
-    # 2. LÓGICA CONSERVADORA (Solo 1 vuelta por las llaves)
-    # Eliminamos el bucle "for attempt in range(3)" que multiplicaba el consumo.
-    
     last_error = None
     
-    # Solo intentamos cada llave UNA vez. Si tienes 3 llaves, máximo 3 intentos totales.
+    # Intentamos rotar llaves si hay error de cuota
     for i in range(num_keys):
         current_key_index = (start_index + i) % num_keys
         
-        # Configurar
+        # Configurar llave actual
         if not _configure_gemini(current_key_index): continue 
 
         try:
@@ -70,57 +83,65 @@ def _execute_gemini_call(prompt, stream=False, gen_config=None, safety=None):
                 safety_settings=final_safety
             )
 
-            # Pausa de seguridad (Rate Limiting propio)
-            # Esperamos 0.5 segundos antes de llamar para no saturar
+            # Pausa técnica para evitar saturación (Rate Limiting propio)
             time.sleep(0.5) 
 
+            # Ejecución
             if isinstance(prompt, list):
                 response = model.generate_content(prompt, stream=stream)
             else:
                 response = model.generate_content([prompt], stream=stream)
             
-            # --- STREAMING ---
+            # --- CASO STREAMING ---
             if stream:
-                # Si conecta, retornamos el generador y actualizamos el índice para rotar carga
+                # Si conecta, actualizamos índice y retornamos generador
                 st.session_state.api_key_index = (current_key_index + 1) % num_keys
                 return _stream_generator_wrapper(response)
             
-            # --- NO STREAMING ---
+            # --- CASO NO STREAMING ---
             if not response.candidates:
-                last_error = "Respuesta vacía o bloqueada."
-                continue # Prueba siguiente llave
+                last_error = "Respuesta vacía o bloqueada por filtros de seguridad."
+                continue 
 
             # ÉXITO
             _save_token_usage(response)
             st.session_state.api_key_index = (current_key_index + 1) % num_keys
             
             if response.text:
-                return html.unescape(response.text)
+                final_text = html.unescape(response.text)
+                
+                # 3. GUARDAR EN CACHÉ PARA EL FUTURO
+                # Si la respuesta fue buena, la guardamos para ahorrar en la próxima vez
+                if isinstance(prompt, str):
+                    save_to_cache(prompt, final_text)
+                
+                return final_text
+            
             return ""
 
         except Exception as e:
             error_str = str(e).lower()
             last_error = e
             
-            # Si es error 429 (Cuota), probamos la siguiente llave inmediatamente
-            if "429" in error_str or "quota" in error_str:
-                log_error(f"Key #{current_key_index} llena. Rotando...", module="GeminiAPI", level="WARNING")
+            # Si es error 429 (Cuota/Quota), rotamos llave inmediatamente
+            if "429" in error_str or "quota" in error_str or "resource exhausted" in error_str:
+                log_error(f"Key #{current_key_index} agotada. Rotando a la siguiente...", module="GeminiAPI", level="WARNING")
                 continue
             
-            # Si es otro error (ej. Prompt inválido), NO reintentamos para no quemar recursos en bucle
+            # Si es otro error (ej. Prompt inválido), no insistimos
             log_error(f"Error técnico Key #{current_key_index}: {e}", module="GeminiAPI")
-            break # ROMPEMOS EL BUCLE. Si el prompt está mal, está mal en todas las llaves.
+            break 
 
     # Si salimos del bucle sin éxito:
     if not stream:
-        st.error(f"No se pudo completar la solicitud. Error: {str(last_error)[:100]}...")
+        st.error(f"No se pudo completar la solicitud. Error: {str(last_error)[:150]}...")
         return None
 
 def _stream_generator_wrapper(response_stream):
-    """Generador simple sin reintentos internos."""
+    """Generador simple para manejar el streaming de texto."""
     try:
         for chunk in response_stream:
             if chunk.text:
                 yield chunk.text
     except Exception as e:
-        yield f"\n[Corte de conexión: {str(e)}]"
+        yield f"\n[Interrupción de conexión: {str(e)}]"
