@@ -10,7 +10,7 @@ from services.logger import log_error, log_action
 # CONFIGURACIÓN DE MODELO
 # ==========================================
 
-MODEL_NAME = "gemini-1.5-flash"
+MODEL_NAME = "gemini-2.5-flash-lite"
 
 def _configure_gemini(key_index):
     try:
