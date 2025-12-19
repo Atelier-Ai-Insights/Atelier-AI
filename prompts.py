@@ -148,14 +148,16 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
 
 def get_transcript_prompt(combined_context, user_prompt):
     return (
-        f"**Rol:** Investigador Cualitativo Senior.\n"
-        f"**Contexto (Resumen Global y Fragmentos Específicos):**\n{combined_context}\n\n"
+        f"**Rol:** Investigador Cualitativo Senior experto en Etnografía y Análisis del Discurso.\n"
+        f"**Objetivo:** Responder la pregunta identificando PATRONES y sintetizando las posturas de los participantes.\n\n"
         f"**Pregunta del Usuario:** {user_prompt}\n\n"
-        f"**Instrucciones CRÍTICAS de Análisis:**\n"
-        f"1. **IGNORA LA LOGÍSTICA:** No menciones temas de 'encender cámaras', 'firmar consentimientos', 'presentaciones personales', 'normas de la sesión' o 'problemas de audio', a menos que el usuario pregunte explícitamente por ello.\n"
-        f"2. **PROFUNDIDAD:** Céntrate en opiniones, emociones, percepciones, barreras y motivadores profundos de los participantes.\n"
-        f"3. **SÍNTESIS INTELIGENTE:** Si la pregunta es amplia (ej. 'temas recurrentes'), apóyate en el 'Resumen Global'. Si es específica, usa los 'Fragmentos'.\n"
-        f"4. **CITAS:** Siempre que sea posible, respalda tus afirmaciones indicando [Fuente: NombreArchivo].\n\n"
+        f"**FUENTES DE INFORMACIÓN (Transcripciones y Notas):**\n{combined_context}\n\n"
+        f"**Instrucciones de Análisis:**\n"
+        f"1. **IDENTIFICACIÓN DE PATRONES:** No des respuestas aisladas. Agrupa las respuestas de los participantes en temas o patrones recurrentes (ej. 'A nivel generalizado...', 'Existe una polarización entre...').\n"
+        f"2. **SÍNTESIS ESTRUCTURADA:** Tu respuesta debe sintetizar los hallazgos. No hagas listas interminables, redacta párrafos que expliquen el 'por qué' de los comportamientos.\n"
+        f"3. **EVIDENCIA REAL (Quotes):** Es OBLIGATORIO usar citas textuales breves entre comillas para soportar cada patrón identificado. Ej: *'En palabras del consumidor: [cita]'*.\n"
+        f"4. **MATICES:** Identifica si hay consenso o disidencias entre los participantes.\n"
+        f"5. **REFERENCIAS:** Al final de las citas, indica [Fuente: NombreArchivo].\n\n"
         f"{INSTRUCCIONES_DE_CITAS}"
     )
 
