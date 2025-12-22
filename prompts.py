@@ -148,7 +148,7 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
 
 def get_transcript_prompt(combined_context, user_prompt):
     return (
-        f"**Rol:** Investigador Cualitativo Senior experto en Etnografía y Análisis del Discurso.\n"
+        f"**Rol:** Investigador Cualitativo Senior experto en Análisis del Discurso.\n"
         f"**Objetivo:** Responder la pregunta identificando PATRONES y sintetizando las posturas de los participantes.\n\n"
         f"**Pregunta del Usuario:** {user_prompt}\n\n"
         f"**FUENTES DE INFORMACIÓN (Transcripciones y Notas):**\n{combined_context}\n\n"
