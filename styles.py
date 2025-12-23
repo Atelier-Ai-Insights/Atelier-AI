@@ -4,26 +4,26 @@ TABS_CSS = """
 <style>
      /* Contenedor principal de las pestañas */
      div[data-testid="stTabs"] > div[role="tablist"] {
-         border-bottom: 1px solid #e0e0e0; /* Línea base */
-         gap: 5px; /* Espacio entre pestañas */
-         padding-bottom: 0px; /* Eliminar padding inferior si existe */
+         border-bottom: 1px solid #e0e0e0;
+         gap: 5px;
+         padding-bottom: 0px;
      }
 
      /* Botones individuales de las pestañas (inactivas) */
      button[data-baseweb="tab"] {
          border: 1px solid #e0e0e0;
-         border-bottom: none; /* Sin borde inferior para conectar */
-         border-radius: 8px 8px 0 0; /* Bordes redondeados arriba */
+         border-bottom: none;
+         border-radius: 8px 8px 0 0;
          padding: 10px 18px !important;
-         margin: 0px; /* Resetear margen */
-         background-color: #f0f0f0; /* Fondo gris claro inactivo */
-         color: #555; /* Texto gris oscuro */
+         margin: 0px;
+         background-color: #f0f0f0;
+         color: #555;
          transition: background-color 0.2s ease, color 0.2s ease;
-         position: relative; /* Para el posicionamiento del :after */
-         bottom: -1px; /* Bajar 1px para alinearse con la línea base */
+         position: relative;
+         bottom: -1px;
      }
 
-      /* Efecto hover en pestañas inactivas */
+     /* Efecto hover en pestañas inactivas */
      button[data-baseweb="tab"]:not([aria-selected="true"]):hover {
          background-color: #e5e5e5;
          color: #333;
@@ -31,13 +31,12 @@ TABS_CSS = """
 
      /* Pestaña activa */
      button[data-baseweb="tab"][aria-selected="true"] {
-         background-color: white; /* Fondo blanco (color del contenido) */
-         border-color: #e0e0e0; /* Mismo color de borde */
-         color: #0068c9; /* Color de texto principal */
-         font-weight: 600; /* Un poco más grueso */
-         /* La clave: el borde inferior es blanco para 'ocultar' la línea base */
+         background-color: white;
+         border-color: #e0e0e0;
+         color: #0068c9;
+         font-weight: 600;
          border-bottom-color: white !important;
-         z-index: 1; /* Ponerla por encima de la línea base */
+         z-index: 1;
      }
 
      /* Ocultar la línea azul indicadora por defecto */
@@ -45,50 +44,56 @@ TABS_CSS = """
          display: none;
      }
 
-     /* Contenido debajo de las pestañas (asegurar que no haya doble borde) */
+     /* Contenido debajo de las pestañas */
      div[data-testid="stTabContent"] {
-         padding-top: 20px; /* Ajustar según sea necesario */
-         border-top: none; /* Asegurar que no haya doble borde */
+         padding-top: 20px;
+         border-top: none;
      }
 </style>
 """
 
+# --- CSS PARA EL MENÚ ESTILO GEMINI ---
 HIDE_ST_STYLE = """
      <style>
-     /* Oculta el menú de hamburguesa */
+     /* 1. Ocultar el menú de hamburguesa de la DERECHA (los 3 puntos de configuración) */
      #MainMenu {visibility: hidden;}
 
-     /* Oculta el encabezado de la app */
-     header {visibility: hidden;}
-
-     /* Oculta el "Made with Streamlit" footer */
+     /* 2. Ocultar el "Made with Streamlit" del pie de página */
      footer {visibility: hidden;}
 
-     /* Oculta la barra de estado inferior (iconos) */
+     /* 3. Ocultar la barra de estado inferior */
      [data-testid="stStatusWidget"] {visibility: hidden;}
+     
+     /* 4. AJUSTE DEL HEADER (BARRA SUPERIOR) */
+     /* No lo ocultamos (hidden), sino que lo hacemos transparente para ver el botón de la izquierda */
+     header {
+        background: transparent !important;
+     }
+     
+     /* Opcional: Si quieres que la barra de colores de arriba desaparezca visualmente */
+     [data-testid="stHeader"] {
+        background-color: rgba(0,0,0,0);
+     }
+     
+     /* 5. Asegurar que el botón de colapsar (la flecha/hamburguesa de la izquierda) sea visible y accesible */
+     [data-testid="collapsedControl"] {
+        display: block;
+        color: #333; /* Color del icono */
+     }
      </style>
 """
 
-# --- NUEVO: Estilos de Login/Layout Compactos ---
 LOGIN_PAGE_CSS = """
     <style>
-        [data.testid="stAppViewContainer"] > .main { padding-top: 2rem; }
-        div[data.testid="stBlock"] { padding-top: 0rem; }
-        
-        /* Reducir el espacio vertical entre los elementos del formulario */
-        div[data-testid="stVerticalBlock"] > div {
-            gap: 0.5rem !important;
-        }
-        
-        /* Hacer los botones más compactos (menos altura) */
+        [data-testid="stAppViewContainer"] > .main { padding-top: 2rem; }
+        div[data-testid="stBlock"] { padding-top: 0rem; }
+        div[data-testid="stVerticalBlock"] > div { gap: 0.5rem !important; }
         div[data-testid="stButton"] button {
             padding-top: 0.4rem !important;
             padding-bottom: 0.4rem !important;
             min-height: 0px !important;
             height: auto !important;
         }
-        
-        /* Ajustar inputs para que hagan juego */
         div[data-baseweb="input"] {
             padding-top: 0.2rem !important;
             padding-bottom: 0.2rem !important;
