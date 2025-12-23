@@ -208,7 +208,12 @@ def run_user_mode(db_full, user_features, footer_html):
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
 def main():
-    st.set_page_config(page_title="Atelier Data Studio", page_icon="Logo_Casa.png", layout="wide")
+    st.set_page_config(
+    page_title="Atelier Data Studio", 
+    page_icon="Logo_Casa.png", 
+    layout="wide",
+    initial_sidebar_state="expanded"  # O "collapsed" si quieres que inicie cerrado
+)
     apply_styles()
 
     if 'page' not in st.session_state: st.session_state.page = "login"
