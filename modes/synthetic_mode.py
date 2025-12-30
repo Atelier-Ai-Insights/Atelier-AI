@@ -9,7 +9,7 @@ from reporting.docx_generator import generate_docx
 from config import banner_file
 
 def synthetic_users_mode(db, selected_files):
-    st.subheader("👥 Focus Group Sintético")
+    st.subheader("👥 Perfil Sintético")
     st.markdown("Simula conversaciones con perfiles de consumidor generados a partir de tus datos reales.")
     
     # 1. CONFIGURACIÓN DEL PERFIL
