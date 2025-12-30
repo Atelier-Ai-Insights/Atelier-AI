@@ -11,10 +11,7 @@ INSTRUCCIONES_DE_CITAS = """
 1. **Base:** Solo usa la 'Información documentada'. No alucines información externa sin sustentarla.
 2. **Formato Interno:** Asigna un ID numérico único [x] a cada documento del repositorio/PDF la primera vez que lo uses.
 3. **Sintaxis:** Frase del hallazgo [1]. Otra frase contrastada [2].
-4. **Sección Fuentes:** Al final, DEBES generar una lista consolidada así:
-   * **Internas:** Mapea el número [x] con el **Nombre Exacto del Archivo o Proyecto**.
-   * **Externas:** Incluye el nombre del medio y el **Link (URL)** para verificación.
-5. **Vacío:** Si la respuesta no está en los documentos, di: "Información no disponible en los documentos."
+4. **Sección Fuentes:** Al final, DEBES generar una lista consolidada donde se mapea el número [x] con el **Nombre Exacto del Archivo o Proyecto**.
 """
 
 # ==============================================================================
