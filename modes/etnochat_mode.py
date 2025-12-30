@@ -162,7 +162,7 @@ def load_etnochat_project_data(storage_folder_path: str):
 # --- Funciones de UI ---
 
 def show_etnochat_project_creator(user_id, project_limit, files_per_project_limit):
-    st.subheader("Crear Nuevo Proyecto EtnoChat")
+    st.subheader("Crear Nuevo Proyecto")
     
     try:
         response = supabase.table("etnochat_projects").select("id", count='exact').eq("user_id", user_id).execute()
