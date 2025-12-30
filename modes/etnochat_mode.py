@@ -372,7 +372,7 @@ def etnochat_mode():
     elif "etno_selected_project_id" in st.session_state.mode_state:
         st.info("Iniciando carga...")
     else:
-        with st.expander("➕ Crear Nuevo Proyecto EtnoChat", expanded=True):
+        with st.expander("➕ Crear Nuevo Proyecto", expanded=True):
             show_etnochat_project_creator(user_id, project_limit, files_per_project_limit)
         st.divider()
         show_etnochat_project_list(user_id)
