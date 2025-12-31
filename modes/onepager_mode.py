@@ -38,12 +38,12 @@ def one_pager_ppt_mode(db_filtered, selected_files):
         template_name = st.session_state.mode_state.get('generated_ppt_template_name', 'Estratégica')
         
         st.success(f"✅ ¡Tu diapositiva '{template_name}' está lista y es editable!")
-        st.info("ℹ️ Al ser un formato editable nativo, descárgalo para ver el diseño final en PowerPoint.")
+        st.info("ℹ️ Al ser un formato editable, descárgalo para ver el diseño final en PowerPoint.")
 
         col1, col2 = st.columns(2)
         with col1:
             st.download_button(
-                label="📥 Descargar .pptx",
+                label="Descargar .pptx",
                 data=st.session_state.mode_state["generated_ppt_bytes"],
                 file_name=f"diapositiva_{template_name.lower().replace(' ','_')}.pptx",
                 mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -51,7 +51,7 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                 type="primary"
             )
         with col2:
-            if st.button("✨ Generar otra", width='stretch', type="secondary"):
+            if st.button("Generar otra", width='stretch', type="secondary"):
                 # Limpiamos el estado
                 st.session_state.mode_state.pop("generated_ppt_bytes", None)
                 st.session_state.mode_state.pop("generated_ppt_template_name", None)
