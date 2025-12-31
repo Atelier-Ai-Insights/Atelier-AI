@@ -2,24 +2,21 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
-# IMPORTANTE: Añadimos MSO_AUTO_SIZE para el ajuste automático
 from pptx.enum.text import PP_ALIGN, MSO_AUTO_SIZE 
 import io
 
 def crear_ppt_desde_json(data_json, image_stream=None):
     """
-    Genera un PowerPoint con formas NATIVAS y EDITABLES basado en el JSON.
-    Se aplica auto-ajuste de texto para que el contenido no se desborde.
+    Genera un PowerPoint con formas NATIVAS y EDITABLES.
+    Corregido para detectar DOFA/SWOT/FODA robustamente.
     """
     
-    # 1. Cargar Plantilla Base
+    # 1. Cargar Plantilla
     try:
-        # Asegúrate de que el nombre del archivo coincida con tu plantilla real
         prs = Presentation("Plantilla_PPT_ATL.pptx")
     except:
         prs = Presentation()
 
-    # Usamos un layout vacío o adecuado
     slide_layout = prs.slide_layouts[6] if len(prs.slide_layouts) > 6 else prs.slide_layouts[-1]
     slide = prs.slides.add_slide(slide_layout)
 
@@ -34,19 +31,21 @@ def crear_ppt_desde_json(data_json, image_stream=None):
         tf.paragraphs[0].font.bold = True
         tf.paragraphs[0].alignment = PP_ALIGN.CENTER
 
-    # 3. Detectar Tipo y Dibujar
+    # 3. Detectar Tipo y Dibujar (LÓGICA MEJORADA)
     template_type = data_json.get('template_type', '').lower()
     
+    # Normalizamos el string para búsqueda
     if "matriz" in template_type or "2x2" in template_type:
         _dibujar_matriz_nativa(slide, data_json)
-    elif "foda" in template_type or "swot" in template_type:
+    # AQUI AGREGAMOS "dofa" PARA QUE LO RECONOZCA
+    elif "foda" in template_type or "swot" in template_type or "dofa" in template_type:
         _dibujar_foda_nativo(slide, data_json)
     elif "embudo" in template_type or "funnel" in template_type:
         _dibujar_embudo_nativo(slide, data_json)
     else:
         _dibujar_lista_generica(slide, data_json)
 
-    # 4. Agregar Conclusión (Común a todos)
+    # 4. Agregar Conclusión
     if 'conclusion_clave' in data_json:
         bg = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(6.6), Inches(9), Inches(0.8))
         bg.fill.solid()
@@ -55,25 +54,70 @@ def crear_ppt_desde_json(data_json, image_stream=None):
         
         tf = bg.text_frame
         tf.word_wrap = True
-        # Activamos auto-ajuste también para la conclusión
         tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE 
         
         tf.text = "💡 " + data_json['conclusion_clave']
         p = tf.paragraphs[0]
-        # Eliminamos tamaño fijo para dejar que el auto-ajuste trabaje
-        # p.font.size = Pt(11) 
         p.font.color.rgb = RGBColor(50, 50, 50)
         p.alignment = PP_ALIGN.LEFT
 
-    # 5. Guardar y Retornar
+    # 5. Guardar
     output = io.BytesIO()
     prs.save(output)
     output.seek(0)
     return output
 
 # ==============================================================================
-# FUNCIONES DE DIBUJO (CON AUTO-AJUSTE DE TEXTO)
+# FUNCIONES DE DIBUJO
 # ==============================================================================
+
+def _get_case_insensitive(data, key):
+    """Helper para encontrar claves (ej: 'Fortalezas') aunque estén en mayúsculas."""
+    key = key.lower()
+    for k, v in data.items():
+        if k.lower() == key:
+            return v
+    return []
+
+def _dibujar_foda_nativo(slide, data):
+    """Dibuja matriz DOFA/FODA en 4 cuadrantes con colores."""
+    center_x, center_y = 5.0, 3.5
+    width, height = 4.0, 2.2
+    margin = 0.1
+
+    # Usamos el helper _get_case_insensitive para ser robustos
+    fortalezas = _get_case_insensitive(data, 'fortalezas')
+    debilidades = _get_case_insensitive(data, 'debilidades')
+    oportunidades = _get_case_insensitive(data, 'oportunidades')
+    amenazas = _get_case_insensitive(data, 'amenazas')
+
+    configs = [
+        (center_x - width - margin, center_y - height - margin, (200, 230, 201), 'FORTALEZAS', fortalezas),    # Verde
+        (center_x + margin,         center_y - height - margin, (255, 205, 210), 'DEBILIDADES', debilidades),   # Rojo
+        (center_x - width - margin, center_y + margin,          (187, 222, 251), 'OPORTUNIDADES', oportunidades), # Azul
+        (center_x + margin,         center_y + margin,          (255, 224, 178), 'AMENAZAS', amenazas)      # Naranja
+    ]
+
+    for left, top, color, title, items in configs:
+        shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(height))
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = RGBColor(*color)
+        shape.line.color.rgb = RGBColor(180, 180, 180)
+        
+        tf = shape.text_frame
+        tf.word_wrap = True
+        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+
+        p = tf.paragraphs[0]
+        p.text = title
+        p.font.bold = True
+        p.font.color.rgb = RGBColor(50, 50, 50)
+        
+        for item in items:
+            p = tf.add_paragraph()
+            p.text = f"• {item}"
+            p.level = 0
+            p.font.color.rgb = RGBColor(50, 50, 50)
 
 def _dibujar_matriz_nativa(slide, data):
     center_x, center_y = 5.0, 3.5
@@ -93,55 +137,17 @@ def _dibujar_matriz_nativa(slide, data):
         shape.fill.fore_color.rgb = RGBColor(*color)
         shape.line.color.rgb = RGBColor(210, 210, 210)
         
-        # --- APLICAR AUTO-AJUSTE ---
         tf = shape.text_frame
         tf.word_wrap = True
-        # Esta es la clave: ajusta el texto a la forma
         tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
         
         items = data.get(key, [])
         _llenar_text_frame_flexible(tf, items)
 
-    # Etiquetas de Ejes
     _crear_etiqueta(slide, center_x, center_y - height - 0.3, data.get('eje_y_positivo', 'Alto'), bold=True)
     _crear_etiqueta(slide, center_x, center_y + height + 0.3, data.get('eje_y_negativo', 'Bajo'), bold=True)
     _crear_etiqueta(slide, center_x - width - 0.3, center_y, data.get('eje_x_negativo', 'Bajo'), bold=True, vertical=True)
     _crear_etiqueta(slide, center_x + width + 0.3, center_y, data.get('eje_x_positivo', 'Alto'), bold=True, vertical=True)
-
-
-def _dibujar_foda_nativo(slide, data):
-    center_x, center_y = 5.0, 3.5
-    width, height = 4.0, 2.2
-    margin = 0.1
-
-    configs = [
-        (center_x - width - margin, center_y - height - margin, (200, 230, 201), 'FORTALEZAS', data.get('fortalezas', [])),
-        (center_x + margin,         center_y - height - margin, (255, 205, 210), 'DEBILIDADES', data.get('debilidades', [])),
-        (center_x - width - margin, center_y + margin,          (187, 222, 251), 'OPORTUNIDADES', data.get('oportunidades', [])),
-        (center_x + margin,         center_y + margin,          (255, 224, 178), 'AMENAZAS', data.get('amenazas', []))
-    ]
-
-    for left, top, color, title, items in configs:
-        shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(height))
-        shape.fill.solid()
-        shape.fill.fore_color.rgb = RGBColor(*color)
-        shape.line.color.rgb = RGBColor(180, 180, 180)
-        
-        tf = shape.text_frame
-        tf.word_wrap = True
-        # --- APLICAR AUTO-AJUSTE ---
-        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
-
-        p = tf.paragraphs[0]
-        p.text = title
-        p.font.bold = True
-        # Eliminamos tamaño fijo para que el auto-ajuste funcione mejor
-        # p.font.size = Pt(11) 
-        
-        for item in items:
-            p = tf.add_paragraph()
-            p.text = f"• {item}"
-            p.level = 0
 
 
 def _dibujar_embudo_nativo(slide, data):
@@ -159,7 +165,6 @@ def _dibujar_embudo_nativo(slide, data):
     for i, paso in enumerate(pasos):
         top_w = max_w - (i * (max_w - min_w) / num)
         
-        # Usamos rectángulos visualmente decrecientes para mejor manejo de texto que los trapecios
         shape = slide.shapes.add_shape(
             MSO_SHAPE.ROUNDED_RECTANGLE, 
             Inches(center_x - top_w/2), Inches(start_y + (i * step_h) + (i*0.05)), 
@@ -167,14 +172,12 @@ def _dibujar_embudo_nativo(slide, data):
         )
         
         shape.fill.solid()
-        # Gradiente azul simple basado en la etapa
         blue_val = max(100, 220 - (i * 30))
         shape.fill.fore_color.rgb = RGBColor(30, 130, blue_val)
-        shape.line.fill.background() # Sin linea
+        shape.line.fill.background() 
 
         tf = shape.text_frame
         tf.word_wrap = True
-        # --- APLICAR AUTO-AJUSTE ---
         tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
 
         tf.text = paso
@@ -191,7 +194,6 @@ def _dibujar_lista_generica(slide, data):
     textbox = slide.shapes.add_textbox(left, top, width, height)
     tf = textbox.text_frame
     tf.word_wrap = True
-    # --- APLICAR AUTO-AJUSTE ---
     tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
     
     excluded_keys = ['titulo_diapositiva', 'template_type', 'conclusion_clave']
@@ -200,7 +202,7 @@ def _dibujar_lista_generica(slide, data):
     for k, v in data.items():
         if k in excluded_keys: continue
         
-        if not first: tf.add_paragraph() # Espacio entre secciones
+        if not first: tf.add_paragraph() 
         
         p = tf.add_paragraph() if not first else tf.paragraphs[0]
         p.text = k.replace('_', ' ').upper()
@@ -218,17 +220,11 @@ def _dibujar_lista_generica(slide, data):
             p.text = str(v)
             p.level = 1
 
-# --- HELPERS ---
-
 def _llenar_text_frame_flexible(text_frame, lista_items):
-    """Llena bullets sin imponer tamaño de fuente, dejando que el auto-ajuste trabaje."""
     if not lista_items: return
-    
     p = text_frame.paragraphs[0]
     p.text = f"• {lista_items[0]}"
-    # NO definimos font.size aquí para permitir el auto-ajuste
     p.font.color.rgb = RGBColor(40, 40, 40)
-    
     for item in lista_items[1:]:
         p = text_frame.add_paragraph()
         p.text = f"• {item}"
@@ -236,14 +232,12 @@ def _llenar_text_frame_flexible(text_frame, lista_items):
 
 def _crear_etiqueta(slide, x, y, texto, bold=False, vertical=False):
     w, h = (Inches(2), Inches(0.5)) if not vertical else (Inches(0.5), Inches(2))
-    # Ajuste fino de posición para centrar
     x_pos = Inches(x) - w/2
     y_pos = Inches(y) - h/2
     
     tb = slide.shapes.add_textbox(x_pos, y_pos, w, h)
     tf = tb.text_frame
     tf.word_wrap = True
-    # Auto-ajuste también para etiquetas
     tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
     
     p = tf.paragraphs[0]
