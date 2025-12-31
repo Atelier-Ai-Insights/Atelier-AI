@@ -9,11 +9,12 @@ from utils import get_relevant_info, extract_text_from_pdfs, clean_gemini_json
 from prompts import PROMPTS_ONEPAGER, get_onepager_final_prompt
 import constants as c
 
-# --- IMPORTAMOS LA NUEVA FUNCIÓN (Asegúrate de definirla arriba o en un archivo utils) ---
-# from utils import generar_imagen_matriz_2x2 
+# IMPORTANTE: Asegúrate de importar la función de visualización creada en el Paso 1
+# Si guardaste el código anterior en 'viz_utils.py', descomenta la siguiente línea:
+# from viz_utils import generar_visualizacion_onepager
 
 # =====================================================
-# MODO: GENERADOR DE ONE-PAGER PPT (CON GRÁFICOS)
+# MODO: GENERADOR DE ONE-PAGER PPT (FACTORY PATTERN)
 # =====================================================
 
 def one_pager_ppt_mode(db_filtered, selected_files):
@@ -31,19 +32,24 @@ def one_pager_ppt_mode(db_filtered, selected_files):
         limit_text = "**Tu plan actual no incluye la generación de One-Pagers.**"
 
     st.markdown(f"""
-        Sintetiza los hallazgos clave en una diapositiva visual.
+        Sintetiza los hallazgos clave en una diapositiva visual y profesional.
         {limit_text}
     """)
 
-    # 2. Pantalla de Resultado (Descarga)
+    # 2. Pantalla de Resultado (Descarga y Previsualización)
     if "generated_ppt_bytes" in st.session_state.mode_state:
         st.divider()
         template_name = st.session_state.mode_state.get('generated_ppt_template_name', 'Estratégica')
         st.success(f"✅ ¡Tu diapositiva '{template_name}' está lista!")
         
-        # --- NUEVO: Mostrar la "Imagen Dibujada" si existe ---
+        # --- VISTA PREVIA DEL GRÁFICO (Si se generó alguno) ---
         if "generated_matrix_image" in st.session_state.mode_state:
-            st.image(st.session_state.mode_state["generated_matrix_image"], caption="Vista previa del gráfico generado", use_container_width=True)
+            st.markdown("### 👁️ Vista Previa del Gráfico Generado")
+            st.image(
+                st.session_state.mode_state["generated_matrix_image"], 
+                caption=f"Visualización automática para {template_name}", 
+                use_container_width=True
+            )
 
         col1, col2 = st.columns(2)
         with col1:
@@ -57,13 +63,14 @@ def one_pager_ppt_mode(db_filtered, selected_files):
             )
         with col2:
             if st.button("✨ Generar otra", width='stretch', type="secondary"):
+                # Limpiamos todo el estado visual y de archivo
                 st.session_state.mode_state.pop("generated_ppt_bytes", None)
                 st.session_state.mode_state.pop("generated_ppt_template_name", None)
-                st.session_state.mode_state.pop("generated_matrix_image", None) # Limpiar imagen
+                st.session_state.mode_state.pop("generated_matrix_image", None)
                 st.rerun()
         return
 
-    # 3. Configuración
+    # 3. Configuración (Formulario)
     st.divider()
     st.markdown("#### 1. Selecciona la Plantilla")
     template_options = list(PROMPTS_ONEPAGER.keys()) 
@@ -84,10 +91,10 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     
     st.divider()
 
-    # 4. Generar
+    # 4. Acción de Generar
     if st.button(f"Generar Diapositiva '{selected_template_name}'", width='stretch', type="primary"):
         
-        # Validaciones (Guard Clauses)
+        # --- Validaciones (Guard Clauses) ---
         current_ppt_usage = get_monthly_usage(st.session_state.user, c.MODE_ONEPAGER)
         if not is_unlimited and current_ppt_usage >= ppt_limit:
             st.error(f"⚠️ Has alcanzado tu límite mensual."); return
@@ -96,6 +103,7 @@ def one_pager_ppt_mode(db_filtered, selected_files):
         if not use_repo and not use_uploads:
             st.error("⚠️ Selecciona una fuente de datos."); return
 
+        # --- Proceso ---
         with st.status("🎨 Diseñando tu One-Pager...", expanded=True) as status:
             
             # A. Contexto
@@ -118,9 +126,11 @@ def one_pager_ppt_mode(db_filtered, selected_files):
             status.write(f"🧠 Estructurando contenido para '{selected_template_name}'...")
             final_prompt_json = get_onepager_final_prompt(relevant_info, selected_template_name, tema_central)
             
+            data_json = None
             try:
                 json_generation_config = {"response_mime_type": "application/json"}
                 response_text = call_gemini_api(final_prompt_json, generation_config_override=json_generation_config)
+                
                 if not response_text: raise Exception("API vacía")
                 
                 cleaned_text = clean_gemini_json(response_text)
@@ -128,26 +138,27 @@ def one_pager_ppt_mode(db_filtered, selected_files):
             except Exception as e:
                 status.update(label="Error en IA", state="error"); st.error(f"Error IA: {e}"); return
 
-            # C. Renderizado Visual (NUEVO)
+            # C. Renderizado Visual (NUEVO - SOPORTE MULTI-PLANTILLA)
             matrix_image_bytes = None
-            if selected_template_name == "matriz_2x2": # O el nombre exacto de tu key
-                status.write("🖌️ Dibujando gráfico vectorial...")
+            if data_json:
+                status.write(f"🖌️ Dibujando gráfico visual para '{selected_template_name}'...")
                 try:
-                    # Llamamos a la función creada arriba (debes incluirla en tu código)
-                    matrix_image_bytes = generar_imagen_matriz_2x2(data_json)
-                    # Guardamos la imagen en el estado para mostrarla
-                    st.session_state.mode_state["generated_matrix_image"] = matrix_image_bytes
+                    # Aquí llamamos a la función factoría que decide si dibujar Matriz, FODA o Embudo
+                    # Asegúrate de importar esta función desde donde guardaste el Paso 1
+                    matrix_image_bytes = generar_visualizacion_onepager(selected_template_name, data_json)
                     
-                    # Opcional: Inyectar la imagen en el JSON si tu generador PPT lo soporta
-                    # data_json['image_bytes'] = matrix_image_bytes 
+                    if matrix_image_bytes:
+                        st.session_state.mode_state["generated_matrix_image"] = matrix_image_bytes
+                        # Opcional: Inyectar en JSON si el generador PPT lo usa
+                        # data_json['image_bytes'] = matrix_image_bytes.getvalue()
                 except Exception as e:
-                    print(f"Error dibujando matriz: {e}") # Log silencioso, seguimos con PPT texto si falla
+                    print(f"Advertencia: No se pudo generar gráfico visual: {e}")
+                    # No detenemos el flujo, seguimos con el PPT de texto si falla el gráfico
 
             # D. Ensamblaje PPT
             if data_json:
                 status.write("🛠️ Renderizando PowerPoint (.pptx)...")
                 try:
-                    # Aquí pasamos data_json. Si modificaste crear_ppt_desde_json para aceptar imagenes, genial.
                     ppt_bytes = crear_ppt_desde_json(data_json)
                     
                     if ppt_bytes:
