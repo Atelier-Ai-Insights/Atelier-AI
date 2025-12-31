@@ -1,280 +1,256 @@
-import json
-import traceback
-from io import BytesIO
-import os
 from pptx import Presentation
 from pptx.util import Inches, Pt
-from pptx.enum.text import PP_ALIGN, MSO_AUTO_SIZE
 from pptx.dml.color import RGBColor
+from pptx.enum.shapes import MSO_SHAPE
+from pptx.enum.text import PP_ALIGN
+import io
 
-# ==============================
-# CONFIGURACIÓN DE ESTILOS GLOBALES
-# ==============================
-# Definimos constantes para mantener consistencia visual en todo el reporte
-TITLE_FONT_SIZE = Pt(32)
-SUBTITLE_FONT_SIZE = Pt(20)
-BODY_FONT_SIZE = Pt(12)
-HEADER_FONT_SIZE = Pt(16)
-
-# Colores corporativos (aproximados al estilo Atelier)
-COLOR_BLACK = RGBColor(0x00, 0x00, 0x00)
-COLOR_DARK_GRAY = RGBColor(0x33, 0x33, 0x33)
-COLOR_BLUE_ACCENT = RGBColor(0x00, 0x33, 0x66)
-
-# Dimensiones estándar para diapositiva 16:9
-SLIDE_WIDTH = Inches(16)
-SLIDE_HEIGHT = Inches(9)
-
-# ==============================
-# FUNCIONES DE UTILIDAD (CORE)
-# ==============================
-
-def _add_text_box(slide, text, left, top, width, height, font_size=BODY_FONT_SIZE, is_bold=False, alignment=PP_ALIGN.LEFT, color=COLOR_BLACK):
+def crear_ppt_desde_json(data_json, image_stream=None):
     """
-    Función universal para crear cajas de texto con estilo consistente.
-    Elimina la repetición de código para configurar fuentes y párrafos.
+    Genera un PowerPoint con formas NATIVAS y EDITABLES basado en el JSON.
+    El argumento 'image_stream' se mantiene por compatibilidad pero NO se usa,
+    priorizando la creación de objetos editables.
     """
-    shape = slide.shapes.add_textbox(left, top, width, height)
-    tf = shape.text_frame
-    tf.word_wrap = True
-    # Ajustar forma al texto si es necesario, o viceversa. 
-    # SHAPE_TO_FIT_TEXT ajusta la caja al contenido.
-    tf.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
     
-    p = tf.paragraphs[0]
-    p.text = str(text) if text else ""
-    p.font.size = font_size
-    p.font.bold = is_bold
-    p.font.color.rgb = color
-    p.alignment = alignment
-    
-    return tf
+    # 1. Cargar Plantilla Base
+    # Asegúrate de que el nombre del archivo coincida con el que tienes en tu carpeta
+    try:
+        prs = Presentation("Plantilla_PPT_ATL.pptx")
+    except:
+        # Fallback si no encuentra la plantilla: crea una en blanco
+        prs = Presentation()
 
-def _add_bullet_points(text_frame, items, level=0, font_size=BODY_FONT_SIZE):
-    """
-    Agrega una lista de viñetas a un text_frame existente.
-    Maneja la lógica de si el cuadro está vacío o ya tiene texto.
-    """
-    if not items: return
-    
-    # Si es el primer párrafo y está vacío, lo usamos. Si no, agregamos uno nuevo.
-    start_idx = 0 if (len(text_frame.paragraphs) == 1 and not text_frame.paragraphs[0].text) else 1
-    
-    # Si agregamos, iteramos sobre los items
-    first = True
-    for item in items:
-        if first and start_idx == 0:
-            p = text_frame.paragraphs[0]
-            first = False
-        else:
-            p = text_frame.add_paragraph()
-        
-        p.text = str(item)
-        p.font.size = font_size
-        p.level = level
-        p.space_after = Pt(6) # Espacio entre bullets
+    # Usamos un layout vacío o de título y contenido (normalmente índice 1 o 6)
+    # Ajusta este índice según tu plantilla maestra. El 6 suele ser "Blank".
+    slide_layout = prs.slide_layouts[6] if len(prs.slide_layouts) > 6 else prs.slide_layouts[-1]
+    slide = prs.slides.add_slide(slide_layout)
 
-def _create_quadrant(slide, title, items, left, top, width, height):
-    """
-    Crea un bloque visual estándar (Título + Lista de Items).
-    Muy usado en matrices, DOFA, Mapas de Empatía.
-    """
-    # 1. Título del cuadrante (Header)
-    _add_text_box(slide, title, left, top, width, Inches(0.5), 
-                  font_size=HEADER_FONT_SIZE, is_bold=True, alignment=PP_ALIGN.CENTER, color=COLOR_DARK_GRAY)
-    
-    # 2. Contenido (Lista) debajo del título
-    content_top = top + Inches(0.6)
-    tf = _add_text_box(slide, "", left, content_top, width, height - Inches(0.6), font_size=BODY_FONT_SIZE)
-    
-    # Llenar lista
-    if items:
-        _add_bullet_points(tf, items, font_size=BODY_FONT_SIZE)
+    # 2. Configurar Título
+    # Si el layout no tiene título, creamos uno manual arriba
+    if slide.shapes.title:
+        slide.shapes.title.text = data_json.get('titulo_diapositiva', 'Resumen Estratégico')
     else:
-        tf.paragraphs[0].text = "N/A"
+        # Crear cuadro de título manual
+        title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(9), Inches(1))
+        tf = title_box.text_frame
+        tf.text = data_json.get('titulo_diapositiva', 'Resumen Estratégico')
+        tf.paragraphs[0].font.size = Pt(24)
+        tf.paragraphs[0].font.bold = True
+        tf.paragraphs[0].alignment = PP_ALIGN.CENTER
 
-# ==============================
-# CONSTRUCTORES DE DIAPOSITIVAS
-# ==============================
+    # 3. Detectar Tipo y Dibujar
+    template_type = data_json.get('template_type', '').lower()
+    
+    # Lógica de Fábrica de Formas
+    if "matriz" in template_type or "2x2" in template_type:
+        _dibujar_matriz_nativa(slide, data_json)
+    elif "foda" in template_type or "swot" in template_type:
+        _dibujar_foda_nativo(slide, data_json)
+    elif "embudo" in template_type or "funnel" in template_type:
+        _dibujar_embudo_nativo(slide, data_json)
+    else:
+        _dibujar_lista_generica(slide, data_json)
 
-def _slide_oportunidades(prs, data):
-    slide = prs.slides.add_slide(prs.slide_layouts[6]) # Blank layout
-    
-    # Título Principal
-    _add_text_box(slide, data.get("titulo_diapositiva", "Oportunidades"), Inches(1), Inches(0.5), Inches(14), Inches(1), 
-                  font_size=TITLE_FONT_SIZE, is_bold=True, alignment=PP_ALIGN.CENTER)
-    
-    # Insight Clave (Destacado)
-    _add_text_box(slide, f"Insight: {data.get('insight_clave', '')}", Inches(1), Inches(1.5), Inches(14), Inches(1), 
-                  font_size=Pt(18), is_bold=True, color=COLOR_BLUE_ACCENT)
-    
-    # Definición de Columnas
-    y_start = Inches(2.8)
-    col_w = Inches(4.5)
-    gap = Inches(0.25)
-    x1 = Inches(1)
-    x2 = x1 + col_w + gap
-    x3 = x2 + col_w + gap
-    
-    # Columna 1: Hallazgos
-    _add_text_box(slide, "Hallazgos Principales", x1, y_start, col_w, Inches(0.5), font_size=SUBTITLE_FONT_SIZE, is_bold=True)
-    tf_h = _add_text_box(slide, "", x1, y_start + Inches(0.7), col_w, Inches(4))
-    _add_bullet_points(tf_h, data.get("hallazgos_principales", []))
-    
-    # Columna 2: Oportunidades
-    _add_text_box(slide, "Oportunidades", x2, y_start, col_w, Inches(0.5), font_size=SUBTITLE_FONT_SIZE, is_bold=True)
-    tf_o = _add_text_box(slide, "", x2, y_start + Inches(0.7), col_w, Inches(4))
-    _add_bullet_points(tf_o, data.get("oportunidades", []))
-    
-    # Columna 3: Recomendación
-    _add_text_box(slide, "Recomendación", x3, y_start, col_w, Inches(0.5), font_size=SUBTITLE_FONT_SIZE, is_bold=True)
-    tf_r = _add_text_box(slide, "", x3, y_start + Inches(0.7), col_w, Inches(4))
-    rec = data.get("recomendacion_estrategica", "")
-    _add_bullet_points(tf_r, [rec] if isinstance(rec, str) else rec)
-    
-    return prs
-
-def _slide_dofa(prs, data):
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    
-    _add_text_box(slide, data.get("titulo_diapositiva", "Análisis DOFA"), Inches(1), Inches(0.5), Inches(14), Inches(1), 
-                  font_size=TITLE_FONT_SIZE, is_bold=True, alignment=PP_ALIGN.CENTER)
-    
-    # Matriz 2x2 centrada
-    center_x = SLIDE_WIDTH / 2
-    center_y = (SLIDE_HEIGHT / 2) + Inches(0.5)
-    box_w = Inches(6.5)
-    box_h = Inches(3.2)
-    gap = Inches(0.5)
-    
-    # Coordenadas: [Arriba-Izq, Arriba-Der, Abajo-Izq, Abajo-Der]
-    _create_quadrant(slide, "Fortalezas", data.get("fortalezas"), center_x - box_w - (gap/2), center_y - box_h - (gap/2), box_w, box_h)
-    _create_quadrant(slide, "Oportunidades", data.get("oportunidades"), center_x + (gap/2), center_y - box_h - (gap/2), box_w, box_h)
-    _create_quadrant(slide, "Debilidades", data.get("debilidades"), center_x - box_w - (gap/2), center_y + (gap/2), box_w, box_h)
-    _create_quadrant(slide, "Amenazas", data.get("amenazas"), center_x + (gap/2), center_y + (gap/2), box_w, box_h)
-    
-    return prs
-
-def _slide_empatia(prs, data):
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    _add_text_box(slide, data.get("titulo_diapositiva", "Mapa de Empatía"), Inches(1), Inches(0.5), Inches(14), Inches(1), 
-                  font_size=TITLE_FONT_SIZE, is_bold=True, alignment=PP_ALIGN.CENTER)
-    
-    # Diseño: 2 arriba, 2 medio, 2 abajo
-    top_y = Inches(1.5); mid_y = Inches(4.0); bot_y = Inches(6.5)
-    left_x = Inches(1); right_x = Inches(8.5)
-    w = Inches(6.5); h = Inches(2.2)
-    
-    _create_quadrant(slide, "Piensa y Siente", data.get("piensa_siente"), left_x, top_y, w, h)
-    _create_quadrant(slide, "Ve", data.get("ve"), right_x, top_y, w, h)
-    _create_quadrant(slide, "Dice y Hace", data.get("dice_hace", data.get("dice_ace")), left_x, mid_y, w, h)
-    _create_quadrant(slide, "Oye", data.get("oye"), right_x, mid_y, w, h)
-    _create_quadrant(slide, "Esfuerzos", data.get("esfuerzos"), left_x, bot_y, w, h)
-    _create_quadrant(slide, "Resultados", data.get("resultados"), right_x, bot_y, w, h)
-    
-    return prs
-
-def _slide_buyer_persona(prs, data):
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    _add_text_box(slide, data.get("titulo_diapositiva", "Buyer Persona"), Inches(1), Inches(0.5), Inches(14), Inches(1), 
-                  font_size=TITLE_FONT_SIZE, is_bold=True, alignment=PP_ALIGN.CENTER)
-    
-    # Panel Izquierdo: Identidad
-    _add_text_box(slide, data.get("perfil_nombre", "Nombre"), Inches(1), Inches(2), Inches(4), Inches(1), 
-                  font_size=Pt(26), is_bold=True, color=COLOR_BLUE_ACCENT)
-    _add_text_box(slide, data.get("perfil_demografia", ""), Inches(1), Inches(3), Inches(4), Inches(4), 
-                  font_size=Pt(14), is_bold=False)
-    
-    # Panel Derecho: Matriz de detalles (2x2)
-    r_x = Inches(5.5); r_w = Inches(4.8); r_h = Inches(3)
-    
-    _create_quadrant(slide, "Necesidades / JTBD", data.get("necesidades_jtbd"), r_x, Inches(2), r_w, r_h)
-    _create_quadrant(slide, "Deseos", data.get("deseos_motivaciones"), r_x + r_w + Inches(0.2), Inches(2), r_w, r_h)
-    _create_quadrant(slide, "Puntos de Dolor", data.get("puntos_dolor_frustraciones"), r_x, Inches(5.2), r_w, r_h)
-    _create_quadrant(slide, "Citas Clave", data.get("citas_clave"), r_x + r_w + Inches(0.2), Inches(5.2), r_w, r_h)
-
-    return prs
-
-def _slide_journey_map(prs, data):
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    _add_text_box(slide, data.get("titulo_diapositiva", "Journey Map"), Inches(1), Inches(0.5), Inches(14), Inches(1), 
-                  font_size=TITLE_FONT_SIZE, is_bold=True, alignment=PP_ALIGN.CENTER)
-    
-    # 4 Columnas
-    col_w = Inches(3.5); gap = Inches(0.2); start_x = Inches(0.8); top_y = Inches(1.5)
-    
-    for i, key in enumerate(["etapa_1", "etapa_2", "etapa_3", "etapa_4"]):
-        stage = data.get(key, {})
-        x_pos = start_x + (i * (col_w + gap))
+    # 4. Agregar Conclusión (Común a todos)
+    if 'conclusion_clave' in data_json:
+        # Cuadro de fondo para la conclusión
+        bg = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(6.5), Inches(9), Inches(0.8))
+        bg.fill.solid()
+        bg.fill.fore_color.rgb = RGBColor(240, 240, 240) # Gris muy claro
+        bg.line.color.rgb = RGBColor(200, 200, 200)
         
-        # Título Etapa
-        _add_text_box(slide, stage.get("nombre_etapa", f"Etapa {i+1}"), x_pos, top_y, col_w, Inches(0.5), 
-                      font_size=HEADER_FONT_SIZE, is_bold=True, alignment=PP_ALIGN.CENTER, color=COLOR_BLUE_ACCENT)
+        # Texto de conclusión
+        tf = bg.text_frame
+        tf.text = "💡 " + data_json['conclusion_clave']
+        p = tf.paragraphs[0]
+        p.font.size = Pt(11)
+        p.font.color.rgb = RGBColor(50, 50, 50)
+        p.alignment = PP_ALIGN.LEFT
+
+    # 5. Guardar y Retornar
+    output = io.BytesIO()
+    prs.save(output)
+    output.seek(0)
+    return output
+
+# ==============================================================================
+# FUNCIONES DE DIBUJO (HELPERS)
+# ==============================================================================
+
+def _dibujar_matriz_nativa(slide, data):
+    """Dibuja 4 cuadrantes editables y ejes."""
+    # Coordenadas base (Centro aprox: 5, 3.5 pulgadas)
+    center_x, center_y = 5.0, 3.5
+    width, height = 4.0, 2.2  # Tamaño de cada cuadrante
+    margin = 0.05 # Espacio pequeño entre cuadros
+
+    # Configuración de los 4 cuadrantes: (Left, Top, ColorRGB, KeyData)
+    quads = [
+        (center_x - width - margin, center_y - height - margin, (227, 242, 253), 'items_cuadrante_sup_izq'), # Sup Izq (Azul claro)
+        (center_x + margin,         center_y - height - margin, (232, 245, 233), 'items_cuadrante_sup_der'), # Sup Der (Verde claro)
+        (center_x - width - margin, center_y + margin,          (255, 243, 224), 'items_cuadrante_inf_izq'), # Inf Izq (Naranja claro)
+        (center_x + margin,         center_y + margin,          (243, 229, 245), 'items_cuadrante_inf_der')  # Inf Der (Morado claro)
+    ]
+
+    for left, top, color, key in quads:
+        # Crear forma rectangular
+        shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(height))
+        # Estilo
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = RGBColor(*color)
+        shape.line.color.rgb = RGBColor(200, 200, 200)
+        
+        # Llenar texto
+        items = data.get(key, [])
+        _llenar_text_frame(shape.text_frame, items)
+
+    # Etiquetas de Ejes (Cajas de texto flotantes)
+    # Eje Y (Arriba/Abajo)
+    _crear_etiqueta(slide, center_x, center_y - height - 0.4, data.get('eje_y_positivo', 'Alto'), bold=True)
+    _crear_etiqueta(slide, center_x, center_y + height + 0.4, data.get('eje_y_negativo', 'Bajo'), bold=True)
+    # Eje X (Izq/Der)
+    _crear_etiqueta(slide, center_x - width - 0.4, center_y, data.get('eje_x_negativo', 'Bajo'), bold=True)
+    _crear_etiqueta(slide, center_x + width + 0.4, center_y, data.get('eje_x_positivo', 'Alto'), bold=True)
+
+
+def _dibujar_foda_nativo(slide, data):
+    """Dibuja matriz FODA clásica editable."""
+    # Similar a la matriz pero con etiquetas fijas
+    center_x, center_y = 5.0, 3.5
+    width, height = 4.0, 2.2
+    margin = 0.1
+
+    configs = [
+        (center_x - width - margin, center_y - height - margin, (200, 230, 201), 'FORTALEZAS', data.get('fortalezas', [])),
+        (center_x + margin,         center_y - height - margin, (255, 205, 210), 'DEBILIDADES', data.get('debilidades', [])),
+        (center_x - width - margin, center_y + margin,          (187, 222, 251), 'OPORTUNIDADES', data.get('oportunidades', [])),
+        (center_x + margin,         center_y + margin,          (255, 224, 178), 'AMENAZAS', data.get('amenazas', []))
+    ]
+
+    for left, top, color, title, items in configs:
+        shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(height))
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = RGBColor(*color)
+        shape.line.color.rgb = RGBColor(150, 150, 150)
+        
+        # Texto: Primero el título en negrita
+        tf = shape.text_frame
+        p = tf.paragraphs[0]
+        p.text = title
+        p.font.bold = True
+        p.font.size = Pt(12)
+        
+        # Luego los items
+        for item in items:
+            p = tf.add_paragraph()
+            p.text = f"• {item}"
+            p.font.size = Pt(10)
+            p.level = 0
+
+
+def _dibujar_embudo_nativo(slide, data):
+    """Dibuja trapecios invertidos apilados."""
+    pasos = data.get('pasos', []) or data.get('etapas', [])
+    if not pasos: return # Fallback
+    
+    num = len(pasos)
+    start_y = 1.5
+    total_h = 4.5
+    step_h = total_h / num
+    max_w = 8.0
+    min_w = 2.0
+    
+    center_x = 5.0 # Centro de la diapositiva
+
+    for i, paso in enumerate(pasos):
+        # Calculamos ancho superior e inferior para simular embudo
+        top_w = max_w - (i * (max_w - min_w) / num)
+        
+        # Dibujamos un trapecio
+        shape = slide.shapes.add_shape(
+            MSO_SHAPE.TRAPEZOID, 
+            Inches(center_x - top_w/2), 
+            Inches(start_y + (i * step_h)), 
+            Inches(top_w), 
+            Inches(step_h - 0.1)
+        )
+        # Invertimos el trapecio (flip vertical no siempre funciona bien con texto, 
+        # así que usamos el trapecio estándar pero reducimos el ancho progresivamente)
+        # Nota: MSO_SHAPE.TRAPEZOID por defecto es base ancha abajo. 
+        # Para embudo visual simple, rectángulos de ancho decreciente es más seguro para texto.
+        
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = RGBColor(33, 150, 243) # Azul corporativo
+        
+        # Texto
+        tf = shape.text_frame
+        tf.text = paso
+        tf.paragraphs[0].font.color.rgb = RGBColor(255, 255, 255)
+        tf.paragraphs[0].alignment = PP_ALIGN.CENTER
+
+def _dibujar_lista_generica(slide, data):
+    """Lista simple para otros casos."""
+    left = Inches(1)
+    top = Inches(1.5)
+    width = Inches(8)
+    height = Inches(4.5)
+    
+    textbox = slide.shapes.add_textbox(left, top, width, height)
+    tf = textbox.text_frame
+    tf.word_wrap = True
+    
+    excluded_keys = ['titulo_diapositiva', 'template_type', 'conclusion_clave']
+    
+    for k, v in data.items():
+        if k in excluded_keys: continue
+        
+        # Título sección
+        p = tf.add_paragraph()
+        p.text = k.replace('_', ' ').upper()
+        p.font.bold = True
+        p.font.size = Pt(12)
+        p.font.color.rgb = RGBColor(0, 51, 102)
         
         # Contenido
-        content_y = top_y + Inches(0.6)
-        tf = _add_text_box(slide, "", x_pos, content_y, col_w, Inches(6))
+        if isinstance(v, list):
+            for item in v:
+                p = tf.add_paragraph()
+                p.text = f"• {item}"
+                p.level = 1
+                p.font.size = Pt(11)
+        else:
+            p = tf.add_paragraph()
+            p.text = str(v)
+            p.level = 1
+            p.font.size = Pt(11)
         
-        # Función local para añadir secciones dentro de la columna
-        def add_sec(title, items):
-            p = tf.add_paragraph(); p.text = title; p.font.bold = True; p.font.size = Pt(11)
-            for item in items:
-                p = tf.add_paragraph(); p.text = f"• {item}"; p.font.size = Pt(10); p.level = 0
-            tf.add_paragraph() # Espacio vacio
-            
-        add_sec("Acciones", stage.get("acciones", []))
-        add_sec("Emociones", stage.get("emociones", []))
-        add_sec("Puntos Dolor", stage.get("puntos_dolor", []))
-        add_sec("Oportunidades", stage.get("oportunidades", []))
+        # Espacio
+        p = tf.add_paragraph()
+        p.text = ""
+        p.font.size = Pt(6)
 
-    return prs
+def _llenar_text_frame(text_frame, lista_items):
+    """Helper para llenar listas de bullets."""
+    text_frame.word_wrap = True
+    # Limpiar párrafo inicial vacío si es necesario, o usarlo
+    p = text_frame.paragraphs[0]
+    if lista_items:
+        p.text = f"• {lista_items[0]}"
+        p.font.size = Pt(10)
+        p.font.color.rgb = RGBColor(50, 50, 50)
+        
+        for item in lista_items[1:]:
+            p = text_frame.add_paragraph()
+            p.text = f"• {item}"
+            p.font.size = Pt(10)
+            p.font.color.rgb = RGBColor(50, 50, 50)
 
-# ==============================
-# ENRUTADOR PRINCIPAL
-# ==============================
-
-def crear_ppt_desde_json(data: dict):
-    """
-    Función principal: Recibe JSON, devuelve bytes PPTX.
-    """
-    try:
-        template_path = "Plantilla_PPT_ATL.pptx"
-        if os.path.isfile(template_path):
-            prs = Presentation(template_path)
-        else:
-            prs = Presentation() # Crea una en blanco si no hay plantilla
-            
-        # Ajuste forzado a 16:9
-        prs.slide_width = SLIDE_WIDTH
-        prs.slide_height = SLIDE_HEIGHT
-
-        t_type = data.get("template_type", "")
-
-        # Mapeo simple de tipo -> función
-        if t_type == "oportunidades":
-            prs = _slide_oportunidades(prs, data)
-        elif t_type == "dofa":
-            prs = _slide_dofa(prs, data)
-        elif t_type == "empatia":
-            prs = _slide_empatia(prs, data)
-        elif t_type == "buyer_persona":
-            prs = _slide_buyer_persona(prs, data)
-        elif t_type == "journey_map":
-            prs = _slide_journey_map(prs, data)
-        # Puedes agregar más `elif` aquí para Propuesta de Valor, Matriz 2x2, etc.
-        # Usando los helpers existentes es muy rápido.
-        else:
-            # Fallback genérico por si el tipo no coincide
-            slide = prs.slides.add_slide(prs.slide_layouts[6])
-            _add_text_box(slide, f"Plantilla: {t_type}", Inches(1), Inches(1), Inches(10), Inches(1), font_size=TITLE_FONT_SIZE)
-            _add_text_box(slide, json.dumps(data, indent=2)[:2000], Inches(1), Inches(2.5), Inches(14), Inches(5), font_size=Pt(10))
-
-        f = BytesIO()
-        prs.save(f)
-        f.seek(0)
-        return f.getvalue()
-
-    except Exception as e:
-        print(f"Error crítico generando PPT: {e}")
-        traceback.print_exc()
-        return None
+def _crear_etiqueta(slide, x, y, texto, bold=False):
+    """Helper para etiquetas de ejes."""
+    tb = slide.shapes.add_textbox(Inches(x) - Inches(1), Inches(y) - Inches(0.3), Inches(2), Inches(0.6))
+    p = tb.text_frame.paragraphs[0]
+    p.text = texto
+    p.alignment = PP_ALIGN.CENTER
+    p.font.size = Pt(11)
+    p.font.bold = bold
+    p.font.color.rgb = RGBColor(80, 80, 80)
