@@ -8,8 +8,8 @@ import re
 
 def crear_ppt_desde_json(data_json, image_stream=None):
     """
-    Genera un PowerPoint con formas NATIVAS y EDITABLES basado en el JSON.
-    Soporta: Matriz 2x2, FODA, Embudo, Journey Map, Buyer Persona, Mapa Empatía y Propuesta Valor.
+    Genera un PowerPoint con formas NATIVAS y EDITABLES.
+    Incluye detección INTELIGENTE de plantillas para evitar listas genéricas.
     """
     
     # 1. Cargar Plantilla Base
@@ -34,34 +34,48 @@ def crear_ppt_desde_json(data_json, image_stream=None):
         tf.paragraphs[0].font.bold = True
         tf.paragraphs[0].alignment = PP_ALIGN.CENTER
 
-    # 3. Router de Plantillas (Detectar Tipo y Dibujar)
-    template_type = data_json.get('template_type', '').lower()
+    # =========================================================================
+    # 3. ROUTER INTELIGENTE (DETECCIÓN ROBUSTA)
+    # =========================================================================
     
-    # --- Lógica de Selección ---
-    if "matriz" in template_type or "2x2" in template_type:
+    # A. Normalización
+    template_type = data_json.get('template_type', '').lower()
+    keys_str = " ".join(data_json.keys()).lower() # Para buscar pistas en las claves
+    
+    # B. Lógica de Decisión (Prioridad: Nombre explícito -> Pistas en claves)
+    
+    # --- 1. MATRIZ 2x2 ---
+    if "matriz" in template_type or "2x2" in template_type or "cuadrante" in keys_str:
         _dibujar_matriz_nativa(slide, data_json)
-        
-    elif "foda" in template_type or "swot" in template_type or "dofa" in template_type:
+
+    # --- 2. FODA / DOFA ---
+    elif "foda" in template_type or "swot" in template_type or "dofa" in template_type or ("fortalezas" in keys_str and "amenazas" in keys_str):
         _dibujar_foda_nativo(slide, data_json)
-        
-    elif "embudo" in template_type or "funnel" in template_type:
+
+    # --- 3. EMBUDO ---
+    elif "embudo" in template_type or "funnel" in template_type or "conversion" in keys_str:
         _dibujar_embudo_nativo(slide, data_json)
-        
-    elif "journey" in template_type or "viaje" in template_type or "map" in template_type:
+
+    # --- 4. CUSTOMER JOURNEY (Tabla) ---
+    elif "journey" in template_type or "viaje" in template_type or "map" in template_type or "etapa 1" in keys_str:
         _dibujar_journey_nativo(slide, data_json)
-        
-    # --- NUEVAS PLANTILLAS ---
-    elif "persona" in template_type or "buyer" in template_type or "cliente" in template_type:
+
+    # --- 5. BUYER PERSONA (Tarjeta) ---
+    elif "persona" in template_type or "buyer" in template_type or "perfil" in template_type or ("demografia" in keys_str and "frustraciones" in keys_str):
         _dibujar_buyer_persona_nativo(slide, data_json)
-        
-    elif "empatia" in template_type or "empathy" in template_type:
+
+    # --- 6. MAPA EMPATÍA (Dice/Piensa) ---
+    elif "empatia" in template_type or "empathy" in template_type or ("dice" in keys_str and "piensa" in keys_str):
         _dibujar_mapa_empatia_nativo(slide, data_json)
-        
-    elif "valor" in template_type or "value" in template_type or "canvas" in template_type:
+
+    # --- 7. PROPUESTA DE VALOR (Canvas) ---
+    elif "valor" in template_type or "value" in template_type or ("alegrias" in keys_str and "dolores" in keys_str and "trabajos" in keys_str):
         _dibujar_propuesta_valor_nativo(slide, data_json)
-        
+
+    # --- 8. FALLBACK (Lista Genérica) ---
     else:
         _dibujar_lista_generica(slide, data_json)
+
 
     # 4. Agregar Conclusión (Común a todos)
     if 'conclusion_clave' in data_json:
@@ -87,196 +101,150 @@ def crear_ppt_desde_json(data_json, image_stream=None):
 
 
 # ==============================================================================
-# FUNCIONES DE DIBUJO (NUEVAS Y EXISTENTES)
+# FUNCIONES DE DIBUJO (ACTUALIZADAS PARA MAPEO FLEXIBLE)
 # ==============================================================================
 
 def _dibujar_buyer_persona_nativo(slide, data):
     """
-    Diseño de Tarjeta de Perfil:
-    - Izquierda: Barra lateral (Avatar + Bio + Demográficos)
-    - Derecha: Paneles principales (Metas, Frustraciones, Comportamiento)
+    Diseño de Tarjeta de Perfil con búsqueda de claves flexible (ej: 'NECESIDADES JTBD').
     """
-    # 1. Barra Lateral (Izquierda)
+    # 1. Barra Lateral
     sidebar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.5), Inches(1.2), Inches(2.5), Inches(5.2))
-    sidebar.fill.solid()
-    sidebar.fill.fore_color.rgb = RGBColor(230, 240, 250) # Azul muy pálido
-    sidebar.line.fill.background()
+    sidebar.fill.solid(); sidebar.fill.fore_color.rgb = RGBColor(230, 240, 250); sidebar.line.fill.background()
 
-    # Avatar (Placeholder)
+    # Avatar
     avatar = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(1.0), Inches(1.4), Inches(1.5), Inches(1.5))
-    avatar.fill.solid()
-    avatar.fill.fore_color.rgb = RGBColor(180, 200, 220)
-    avatar.line.color.rgb = RGBColor(255, 255, 255)
+    avatar.fill.solid(); avatar.fill.fore_color.rgb = RGBColor(180, 200, 220); avatar.line.color.rgb = RGBColor(255, 255, 255)
     
-    # Nombre del Persona
-    nombre = _get_case_insensitive_val(data, 'nombre') or "Nombre del Persona"
+    # Nombre (Busca 'nombre' o 'perfil nombre')
+    nombre = _buscar_clave_flexible(data, ['nombre', 'name']) or "Buyer Persona"
     tb_name = slide.shapes.add_textbox(Inches(0.6), Inches(3.0), Inches(2.3), Inches(0.5))
     p = tb_name.text_frame.paragraphs[0]
-    p.text = str(nombre)
-    p.font.bold = True
-    p.font.size = Pt(14)
-    p.alignment = PP_ALIGN.CENTER
-    p.font.color.rgb = RGBColor(0, 51, 102)
+    p.text = str(nombre).replace("PERFIL NOMBRE", "").strip()
+    p.font.bold = True; p.font.size = Pt(14); p.alignment = PP_ALIGN.CENTER; p.font.color.rgb = RGBColor(0, 51, 102)
 
-    # Datos Demográficos / Bio (En la barra lateral)
+    # Demográficos / Bio
     bio_text = []
-    demos = _get_case_insensitive(data, 'demograficos') or _get_case_insensitive(data, 'perfil')
-    if demos: 
-        if isinstance(demos, list): bio_text.extend(demos)
-        else: bio_text.append(str(demos))
+    # Busca 'demografia', 'demograficos', 'perfil'
+    demos = _buscar_clave_flexible(data, ['demografia', 'demografico', 'perfil', 'bio'])
+    if demos: bio_text.extend(demos if isinstance(demos, list) else [str(demos)])
     
-    role = _get_case_insensitive_val(data, 'rol') or _get_case_insensitive_val(data, 'trabajo')
-    if role and role != "-": bio_text.insert(0, f"Rol: {role}")
+    role = _buscar_clave_flexible(data, ['rol', 'trabajo', 'puesto'])
+    if role: bio_text.insert(0, f"Rol: {role}")
 
     if bio_text:
         tb_bio = slide.shapes.add_textbox(Inches(0.6), Inches(3.5), Inches(2.3), Inches(2.8))
-        tf_bio = tb_bio.text_frame
-        tf_bio.word_wrap = True
-        tf_bio.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+        tf_bio = tb_bio.text_frame; tf_bio.word_wrap = True; tf_bio.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
         _llenar_text_frame_flexible(tf_bio, bio_text)
 
     # 2. Paneles Principales (Derecha)
-    # Definimos 3 secciones horizontales
+    # Mapeo robusto basado en tu screenshot
     sections = [
-        ("METAS / OBJETIVOS", _get_case_insensitive(data, 'metas') or _get_case_insensitive(data, 'objetivos'), (232, 245, 233)), # Verde claro
-        ("FRUSTRACIONES / DOLORES", _get_case_insensitive(data, 'frustraciones') or _get_case_insensitive(data, 'dolores'), (255, 235, 238)), # Rojo claro
-        ("COMPORTAMIENTO / NECESIDADES", _get_case_insensitive(data, 'comportamiento') or _get_case_insensitive(data, 'necesidades'), (255, 248, 225)) # Amarillo claro
+        ("OBJETIVOS / MOTIVACIONES", _buscar_clave_flexible(data, ['metas', 'objetivos', 'deseos', 'motivaciones', 'wants']), (232, 245, 233)),
+        ("PUNTOS DE DOLOR / FRUSTRACIONES", _buscar_clave_flexible(data, ['frustraciones', 'dolores', 'pains', 'miedos']), (255, 235, 238)),
+        ("NECESIDADES / COMPORTAMIENTO", _buscar_clave_flexible(data, ['necesidades', 'jtbd', 'comportamiento', 'needs']), (255, 248, 225))
     ]
     
-    start_y = 1.2
-    h_panel = 1.6
-    gap = 0.2
-    
+    start_y = 1.2; h_panel = 1.6; gap = 0.2
     for i, (title, content, color) in enumerate(sections):
         y_pos = start_y + (i * (h_panel + gap))
-        
-        # Caja de fondo
         box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(3.2), Inches(y_pos), Inches(6.3), Inches(h_panel))
-        box.fill.solid()
-        box.fill.fore_color.rgb = RGBColor(*color)
-        box.line.color.rgb = RGBColor(200, 200, 200)
+        box.fill.solid(); box.fill.fore_color.rgb = RGBColor(*color); box.line.color.rgb = RGBColor(200, 200, 200)
         
-        # Título Sección
         tb_title = slide.shapes.add_textbox(Inches(3.3), Inches(y_pos + 0.1), Inches(6.0), Inches(0.3))
-        p = tb_title.text_frame.paragraphs[0]
-        p.text = title
-        p.font.bold = True
-        p.font.size = Pt(10)
-        p.font.color.rgb = RGBColor(80, 80, 80)
+        p = tb_title.text_frame.paragraphs[0]; p.text = title; p.font.bold = True; p.font.size = Pt(10); p.font.color.rgb = RGBColor(80, 80, 80)
         
-        # Contenido
         tb_content = slide.shapes.add_textbox(Inches(3.3), Inches(y_pos + 0.4), Inches(6.0), Inches(h_panel - 0.5))
-        tf = tb_content.text_frame
-        tf.word_wrap = True
-        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+        tf = tb_content.text_frame; tf.word_wrap = True; tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
         _llenar_text_frame_flexible(tf, content)
-
 
 def _dibujar_mapa_empatia_nativo(slide, data):
-    """Diseño en X o 4 Cuadrantes para Mapa de Empatía."""
-    center_x, center_y = 5.0, 3.8
-    w, h = 4.0, 2.2 # Ancho/Alto de cada cuadrante
-    margin = 0.05
-    
-    # Mapeo de cuadrantes
-    # Sup Izq: DICE, Sup Der: PIENSA, Inf Izq: HACE, Inf Der: SIENTE
+    """4 Cuadrantes centrados."""
+    center_x, center_y = 5.0, 3.8; w, h = 4.0, 2.2; margin = 0.05
     quads = [
-        (center_x - w - margin, center_y - h - margin, "DICE", _get_case_insensitive(data, 'dice'), (227, 242, 253)),
-        (center_x + margin, center_y - h - margin, "PIENSA", _get_case_insensitive(data, 'piensa'), (243, 229, 245)),
-        (center_x - w - margin, center_y + margin, "HACE", _get_case_insensitive(data, 'hace'), (232, 245, 233)),
-        (center_x + margin, center_y + margin, "SIENTE", _get_case_insensitive(data, 'siente'), (255, 243, 224))
+        (center_x - w - margin, center_y - h - margin, "DICE", _buscar_clave_flexible(data, ['dice', 'says']), (227, 242, 253)),
+        (center_x + margin, center_y - h - margin, "PIENSA", _buscar_clave_flexible(data, ['piensa', 'thinks']), (243, 229, 245)),
+        (center_x - w - margin, center_y + margin, "HACE", _buscar_clave_flexible(data, ['hace', 'does']), (232, 245, 233)),
+        (center_x + margin, center_y + margin, "SIENTE", _buscar_clave_flexible(data, ['siente', 'feels']), (255, 243, 224))
     ]
-    
     for left, top, title, content, color in quads:
         shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(top), Inches(w), Inches(h))
-        shape.fill.solid()
-        shape.fill.fore_color.rgb = RGBColor(*color)
-        shape.line.color.rgb = RGBColor(200, 200, 200)
+        shape.fill.solid(); shape.fill.fore_color.rgb = RGBColor(*color); shape.line.color.rgb = RGBColor(200, 200, 200)
         
-        # Título
         tb_title = slide.shapes.add_textbox(Inches(left), Inches(top + 0.1), Inches(w), Inches(0.3))
-        p = tb_title.text_frame.paragraphs[0]
-        p.text = f"¿QUÉ {title}?"
-        p.font.bold = True
-        p.alignment = PP_ALIGN.CENTER
-        p.font.size = Pt(11)
-        p.font.color.rgb = RGBColor(80, 80, 80)
+        p = tb_title.text_frame.paragraphs[0]; p.text = f"¿QUÉ {title}?"; p.font.bold = True; p.alignment = PP_ALIGN.CENTER; p.font.size = Pt(11); p.font.color.rgb = RGBColor(80, 80, 80)
         
-        # Contenido
         tb_cont = slide.shapes.add_textbox(Inches(left + 0.2), Inches(top + 0.4), Inches(w - 0.4), Inches(h - 0.5))
-        tf = tb_cont.text_frame
-        tf.word_wrap = True
-        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+        tf = tb_cont.text_frame; tf.word_wrap = True; tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
         _llenar_text_frame_flexible(tf, content)
         
-    # Icono central (Círculo decorativo)
     center_circle = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(center_x - 0.5), Inches(center_y - 0.5), Inches(1), Inches(1))
-    center_circle.fill.solid()
-    center_circle.fill.fore_color.rgb = RGBColor(255, 255, 255)
-    center_circle.line.color.rgb = RGBColor(100, 100, 100)
-    p = center_circle.text_frame.paragraphs[0]
-    p.text = "👤"
-    p.font.size = Pt(24)
-    p.alignment = PP_ALIGN.CENTER
-
+    center_circle.fill.solid(); center_circle.fill.fore_color.rgb = RGBColor(255, 255, 255); center_circle.line.color.rgb = RGBColor(100, 100, 100)
+    p = center_circle.text_frame.paragraphs[0]; p.text = "👤"; p.font.size = Pt(24); p.alignment = PP_ALIGN.CENTER
 
 def _dibujar_propuesta_valor_nativo(slide, data):
-    """Recreación del Canvas de Propuesta de Valor (Cuadrado Producto vs Círculo Cliente)."""
-    
-    # --- LADO PRODUCTO (Izquierda - Cuadrado) ---
-    # Título General
+    """Canvas Value Proposition."""
+    # LADO PRODUCTO
     tb_prod = slide.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(4.0), Inches(0.3))
-    tb_prod.text_frame.text = "MAPA DE VALOR (Producto)"
-    tb_prod.text_frame.paragraphs[0].font.bold = True
+    tb_prod.text_frame.text = "MAPA DE VALOR (Producto)"; tb_prod.text_frame.paragraphs[0].font.bold = True
     
-    # 1. Productos y Servicios (Izquierda Centro)
     s_prod = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.5), Inches(2.5), Inches(1.5), Inches(3.0))
     s_prod.fill.solid(); s_prod.fill.fore_color.rgb = RGBColor(220, 220, 220)
-    _poner_titulo_contenido(slide, s_prod, "Productos", _get_case_insensitive(data, 'productos') or _get_case_insensitive(data, 'servicios'))
+    _poner_titulo_contenido(slide, s_prod, "Productos", _buscar_clave_flexible(data, ['productos', 'servicios', 'products']))
 
-    # 2. Creadores de Alegrías (Arriba)
     s_gain_c = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(2.1), Inches(1.5), Inches(2.4), Inches(1.9))
-    s_gain_c.fill.solid(); s_gain_c.fill.fore_color.rgb = RGBColor(200, 230, 201) # Verde suave
-    _poner_titulo_contenido(slide, s_gain_c, "Creadores de Alegrías", _get_case_insensitive(data, 'creadores_alegrias'))
+    s_gain_c.fill.solid(); s_gain_c.fill.fore_color.rgb = RGBColor(200, 230, 201)
+    _poner_titulo_contenido(slide, s_gain_c, "Creadores de Alegrías", _buscar_clave_flexible(data, ['creadores', 'alegrias', 'gains']))
 
-    # 3. Aliviadores de Dolor (Abajo)
     s_pain_r = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(2.1), Inches(3.5), Inches(2.4), Inches(2.0))
-    s_pain_r.fill.solid(); s_pain_r.fill.fore_color.rgb = RGBColor(255, 205, 210) # Rojo suave
-    _poner_titulo_contenido(slide, s_pain_r, "Aliviadores de Dolor", _get_case_insensitive(data, 'aliviadores') or _get_case_insensitive(data, 'aliviadores_dolor'))
+    s_pain_r.fill.solid(); s_pain_r.fill.fore_color.rgb = RGBColor(255, 205, 210)
+    _poner_titulo_contenido(slide, s_pain_r, "Aliviadores de Dolor", _buscar_clave_flexible(data, ['aliviadores', 'dolor', 'pain']))
 
-
-    # --- LADO CLIENTE (Derecha - Círculo Implícito) ---
-    # Título General
+    # LADO CLIENTE
     tb_cust = slide.shapes.add_textbox(Inches(5.0), Inches(1.2), Inches(4.0), Inches(0.3))
-    p = tb_cust.text_frame.paragraphs[0]
-    p.text = "PERFIL DEL CLIENTE"; p.font.bold = True; p.alignment = PP_ALIGN.RIGHT
+    p = tb_cust.text_frame.paragraphs[0]; p.text = "PERFIL DEL CLIENTE"; p.font.bold = True; p.alignment = PP_ALIGN.RIGHT
 
-    # 4. Alegrías (Gains) - Arriba
     s_gains = slide.shapes.add_shape(MSO_SHAPE.CHORD, Inches(5.0), Inches(1.5), Inches(4.0), Inches(2.0))
-    s_gains.rotation = 180 # Para que parezca un sector superior
-    s_gains.adjustments[0] = 180 # Ajuste de forma para parecer sector circular
+    s_gains.rotation = 180; s_gains.adjustments[0] = 180
     s_gains.fill.solid(); s_gains.fill.fore_color.rgb = RGBColor(200, 230, 201)
-    # Corrección de rotación de texto manual
-    _poner_titulo_contenido_manual(slide, 5.5, 1.6, 3.0, 1.5, "Alegrías (Gains)", _get_case_insensitive(data, 'alegrias') or _get_case_insensitive(data, 'gains'))
+    _poner_titulo_contenido_manual(slide, 5.5, 1.6, 3.0, 1.5, "Alegrías (Gains)", _buscar_clave_flexible(data, ['alegrias', 'beneficios', 'gains']))
 
-    # 5. Dolores (Pains) - Abajo
     s_pains = slide.shapes.add_shape(MSO_SHAPE.CHORD, Inches(5.0), Inches(3.5), Inches(4.0), Inches(2.0))
-    # s_pains no necesita rotación si es la parte de abajo por defecto o ajuste
     s_pains.fill.solid(); s_pains.fill.fore_color.rgb = RGBColor(255, 205, 210)
-    _poner_titulo_contenido_manual(slide, 5.5, 3.8, 3.0, 1.5, "Dolores (Pains)", _get_case_insensitive(data, 'dolores') or _get_case_insensitive(data, 'pains') or _get_case_insensitive(data, 'frustraciones'))
+    _poner_titulo_contenido_manual(slide, 5.5, 3.8, 3.0, 1.5, "Dolores (Pains)", _buscar_clave_flexible(data, ['dolores', 'frustraciones', 'pains', 'miedos']))
 
-    # 6. Trabajos del Cliente (Jobs) - Derecha
     s_jobs = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(8.2), Inches(2.5), Inches(1.3), Inches(2.0))
     s_jobs.fill.solid(); s_jobs.fill.fore_color.rgb = RGBColor(220, 220, 220)
-    _poner_titulo_contenido(slide, s_jobs, "Trabajos (Jobs)", _get_case_insensitive(data, 'trabajos') or _get_case_insensitive(data, 'jobs') or _get_case_insensitive(data, 'acciones'))
+    _poner_titulo_contenido(slide, s_jobs, "Trabajos (Jobs)", _buscar_clave_flexible(data, ['trabajos', 'jobs', 'tareas', 'acciones']))
 
 
-# --- FUNCIONES DE DIBUJO EXISTENTES (MATRIZ, FODA, EMBUDO, JOURNEY) ---
+# ==============================================================================
+# HELPERS EXISTENTES Y DE BÚSQUEDA
+# ==============================================================================
+
+def _buscar_clave_flexible(data, lista_keywords):
+    """
+    Busca en el JSON una clave que contenga alguna de las keywords.
+    Ej: Si busco 'necesidades', encontrará 'NECESIDADES JTBD'.
+    """
+    # 1. Búsqueda exacta primero
+    for kw in lista_keywords:
+        if kw in data: return data[kw]
+    
+    # 2. Búsqueda parcial (case insensitive)
+    for key_json, val in data.items():
+        key_clean = key_json.lower()
+        for kw in lista_keywords:
+            if kw.lower() in key_clean:
+                return val
+    return None
+
+# (MANTENER LAS OTRAS FUNCIONES SIN CAMBIOS: _dibujar_matriz_nativa, _dibujar_foda_nativo, 
+# _dibujar_journey_nativo, _dibujar_embudo_nativo, _dibujar_lista_generica, 
+# _llenar_text_frame_flexible, _llenar_text_frame_tabla, _crear_etiqueta)
 
 def _dibujar_matriz_nativa(slide, data):
-    center_x, center_y = 5.0, 3.5
-    width, height = 4.0, 2.2
-    margin = 0.05
+    center_x, center_y = 5.0, 3.5; width, height = 4.0, 2.2; margin = 0.05
     quads = [
         (center_x - width - margin, center_y - height - margin, (227, 242, 253), 'items_cuadrante_sup_izq'),
         (center_x + margin,         center_y - height - margin, (232, 245, 233), 'items_cuadrante_sup_der'),
@@ -295,10 +263,10 @@ def _dibujar_matriz_nativa(slide, data):
 
 def _dibujar_foda_nativo(slide, data):
     center_x, center_y = 5.0, 3.5; width, height = 4.0, 2.2; margin = 0.1
-    fortalezas = _get_case_insensitive(data, 'fortalezas')
-    debilidades = _get_case_insensitive(data, 'debilidades')
-    oportunidades = _get_case_insensitive(data, 'oportunidades')
-    amenazas = _get_case_insensitive(data, 'amenazas')
+    fortalezas = _buscar_clave_flexible(data, ['fortalezas'])
+    debilidades = _buscar_clave_flexible(data, ['debilidades'])
+    oportunidades = _buscar_clave_flexible(data, ['oportunidades'])
+    amenazas = _buscar_clave_flexible(data, ['amenazas'])
     configs = [
         (center_x - width - margin, center_y - height - margin, (200, 230, 201), 'FORTALEZAS', fortalezas),
         (center_x + margin,         center_y - height - margin, (255, 205, 210), 'DEBILIDADES', debilidades),
@@ -310,8 +278,7 @@ def _dibujar_foda_nativo(slide, data):
         shape.fill.solid(); shape.fill.fore_color.rgb = RGBColor(*color); shape.line.color.rgb = RGBColor(180, 180, 180)
         tf = shape.text_frame; tf.word_wrap = True; tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
         p = tf.paragraphs[0]; p.text = title; p.font.bold = True; p.font.color.rgb = RGBColor(50, 50, 50)
-        for item in items:
-            p = tf.add_paragraph(); p.text = f"• {item}"; p.level = 0; p.font.color.rgb = RGBColor(50, 50, 50)
+        _llenar_text_frame_flexible(tf, items)
 
 def _dibujar_journey_nativo(slide, data):
     keys_candidates = [k for k in data.keys() if "etapa" in k.lower() or "stage" in k.lower()]
@@ -326,8 +293,7 @@ def _dibujar_journey_nativo(slide, data):
         if list_etapas and isinstance(list_etapas, list): etapas = list_etapas
     if not etapas: _dibujar_lista_generica(slide, data); return
 
-    num_etapas = min(len(etapas), 6)
-    etapas = etapas[:num_etapas]
+    num_etapas = min(len(etapas), 6); etapas = etapas[:num_etapas]
     rows = 5; cols = num_etapas + 1
     left = Inches(0.5); top = Inches(1.2); width = Inches(9.0); height = Inches(5.0)
     shape = slide.shapes.add_table(rows, cols, left, top, width, height); table = shape.table
@@ -352,7 +318,7 @@ def _dibujar_journey_nativo(slide, data):
             if row_idx == 0:
                 content = etapa_data.get("nombre_etapa", f"Etapa {col_idx+1}") if isinstance(etapa_data, dict) else f"Etapa {col_idx+1}"
             else:
-                content = _get_case_insensitive_val(etapa_data, key_part)
+                content = _buscar_clave_flexible(etapa_data, [key_part])
 
             tf = cell.text_frame; tf.word_wrap = True
             if row_idx == 0:
@@ -387,23 +353,6 @@ def _dibujar_lista_generica(slide, data):
         p.text = k.replace('_', ' ').upper(); p.font.bold = True; p.font.color.rgb = RGBColor(0, 51, 102); first = False
         _llenar_text_frame_flexible(tf, v if isinstance(v, list) else [v])
 
-# ==============================================================================
-# HELPERS AUXILIARES
-# ==============================================================================
-
-def _get_case_insensitive(data, key):
-    key = key.lower()
-    for k, v in data.items():
-        if k.lower() == key: return v
-    return []
-
-def _get_case_insensitive_val(data, key_part):
-    if not isinstance(data, dict): return None
-    if key_part in data: return data[key_part]
-    for k, v in data.items():
-        if key_part in k.lower(): return v
-    return None
-
 def _llenar_text_frame_flexible(text_frame, lista_items):
     if not lista_items: return
     if not isinstance(lista_items, list): lista_items = [str(lista_items)]
@@ -433,31 +382,14 @@ def _crear_etiqueta(slide, x, y, texto, bold=False, vertical=False):
     if vertical: tb.rotation = -90
 
 def _poner_titulo_contenido(slide, shape, title, content):
-    """Helper para Proposal Value Canvas (Shapes)"""
-    tf = shape.text_frame
-    tf.word_wrap = True
-    tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
-    p = tf.paragraphs[0]
-    p.text = title.upper()
-    p.font.bold = True
-    p.font.size = Pt(10)
-    p.alignment = PP_ALIGN.CENTER
-    
-    # Línea vacía
+    tf = shape.text_frame; tf.word_wrap = True; tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+    p = tf.paragraphs[0]; p.text = title.upper(); p.font.bold = True; p.font.size = Pt(10); p.alignment = PP_ALIGN.CENTER
     tf.add_paragraph()
     _llenar_text_frame_flexible(tf, content)
 
 def _poner_titulo_contenido_manual(slide, x, y, w, h, title, content):
-    """Helper para Proposal Value Canvas (Textboxes encima de formas complejas)"""
     tb = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
-    tf = tb.text_frame
-    tf.word_wrap = True
-    tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
-    p = tf.paragraphs[0]
-    p.text = title.upper()
-    p.font.bold = True
-    p.font.size = Pt(10)
-    p.alignment = PP_ALIGN.CENTER
-    
+    tf = tb.text_frame; tf.word_wrap = True; tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+    p = tf.paragraphs[0]; p.text = title.upper(); p.font.bold = True; p.font.size = Pt(10); p.alignment = PP_ALIGN.CENTER
     tf.add_paragraph()
     _llenar_text_frame_flexible(tf, content)
