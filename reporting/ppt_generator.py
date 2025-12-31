@@ -7,8 +7,8 @@ import io
 
 def crear_ppt_desde_json(data_json, image_stream=None):
     """
-    Genera un PowerPoint con formas NATIVAS y EDITABLES.
-    Corregido para detectar DOFA/SWOT/FODA robustamente.
+    Genera un PowerPoint con formas NATIVAS.
+    Actualizado para soportar Customer Journey Map en formato TABLA.
     """
     
     # 1. Cargar Plantilla
@@ -22,32 +22,34 @@ def crear_ppt_desde_json(data_json, image_stream=None):
 
     # 2. Configurar Título
     if slide.shapes.title:
-        slide.shapes.title.text = data_json.get('titulo_diapositiva', 'Resumen Estratégico')
+        slide.shapes.title.text = data_json.get('titulo_diapositiva', 'Customer Journey Map')
     else:
         title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.2), Inches(9), Inches(1))
         tf = title_box.text_frame
-        tf.text = data_json.get('titulo_diapositiva', 'Resumen Estratégico')
+        tf.text = data_json.get('titulo_diapositiva', 'Customer Journey Map')
         tf.paragraphs[0].font.size = Pt(24)
         tf.paragraphs[0].font.bold = True
         tf.paragraphs[0].alignment = PP_ALIGN.CENTER
 
-    # 3. Detectar Tipo y Dibujar (LÓGICA MEJORADA)
+    # 3. Detectar Tipo y Dibujar
     template_type = data_json.get('template_type', '').lower()
     
-    # Normalizamos el string para búsqueda
     if "matriz" in template_type or "2x2" in template_type:
         _dibujar_matriz_nativa(slide, data_json)
-    # AQUI AGREGAMOS "dofa" PARA QUE LO RECONOZCA
     elif "foda" in template_type or "swot" in template_type or "dofa" in template_type:
         _dibujar_foda_nativo(slide, data_json)
     elif "embudo" in template_type or "funnel" in template_type:
         _dibujar_embudo_nativo(slide, data_json)
+    # --- NUEVA CONDICIÓN PARA JOURNEY MAP ---
+    elif "journey" in template_type or "viaje" in template_type or "map" in template_type:
+        _dibujar_journey_nativo(slide, data_json)
     else:
         _dibujar_lista_generica(slide, data_json)
 
     # 4. Agregar Conclusión
     if 'conclusion_clave' in data_json:
-        bg = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(6.6), Inches(9), Inches(0.8))
+        # Ajustamos un poco la posición para que no choque con la tabla del Journey
+        bg = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(6.8), Inches(9), Inches(0.6))
         bg.fill.solid()
         bg.fill.fore_color.rgb = RGBColor(245, 245, 245)
         bg.line.color.rgb = RGBColor(220, 220, 220)
@@ -61,189 +63,158 @@ def crear_ppt_desde_json(data_json, image_stream=None):
         p.font.color.rgb = RGBColor(50, 50, 50)
         p.alignment = PP_ALIGN.LEFT
 
-    # 5. Guardar
     output = io.BytesIO()
     prs.save(output)
     output.seek(0)
     return output
 
 # ==============================================================================
-# FUNCIONES DE DIBUJO
+# NUEVA FUNCIÓN: JOURNEY MAP (TABLA)
+# ==============================================================================
+
+def _dibujar_journey_nativo(slide, data):
+    """
+    Construye una tabla detallada para el Customer Journey Map.
+    Filas: Dimensiones (Acciones, Emociones, etc.)
+    Columnas: Etapas del viaje.
+    """
+    # 1. Extraer y Ordenar Etapas
+    # Buscamos claves que empiecen con "ETAPA" o "STAGE" o que sean objetos diccionarios
+    etapas = []
+    
+    # Lógica para encontrar las etapas en el JSON (pueden venir como claves 'Etapa 1', 'Etapa 2'...)
+    sorted_keys = sorted([k for k in data.keys() if "etapa" in k.lower() or "stage" in k.lower()])
+    
+    for k in sorted_keys:
+        val = data[k]
+        # Si es un string (JSON mal parseado dentro de JSON), intentamos arreglarlo visualmente
+        # pero asumiremos que clean_gemini_json hizo su trabajo y 'val' es un dict.
+        if isinstance(val, dict):
+            etapas.append(val)
+        else:
+            # Fallback simple si viene plano
+            etapas.append({"nombre_etapa": k, "descripcion": str(val)})
+
+    if not etapas:
+        # Si no encontró claves "Etapa X", intenta buscar una lista llamada "pasos" o "etapas"
+        list_etapas = data.get('etapas', []) or data.get('pasos', [])
+        if list_etapas and isinstance(list_etapas, list):
+            etapas = list_etapas
+
+    if not etapas:
+        _dibujar_lista_generica(slide, data)
+        return
+
+    # 2. Configurar Tabla
+    num_etapas = len(etapas)
+    # Filas: Encabezado (Nombre Etapa) + Acciones + Emociones + Puntos Dolor + Oportunidades
+    rows = 5 
+    cols = num_etapas + 1 # +1 para la columna de etiquetas de la izquierda
+    
+    # Dimensiones de la tabla
+    left = Inches(0.5)
+    top = Inches(1.2)
+    width = Inches(9.0)
+    height = Inches(5.0)
+
+    shape = slide.shapes.add_table(rows, cols, left, top, width, height)
+    table = shape.table
+
+    # 3. Definir Encabezados de Fila (Columna 0)
+    row_headers = ["Fases", "Acciones", "Emociones", "Puntos de Dolor", "Oportunidades"]
+    colors = [(0, 51, 102), (240, 240, 240), (255, 255, 255), (255, 235, 238), (232, 245, 233)] # Azul, Gris, Blanco, Rojo claro, Verde claro
+    
+    for i, header in enumerate(row_headers):
+        cell = table.cell(i, 0)
+        cell.text = header
+        cell.fill.solid()
+        cell.fill.fore_color.rgb = RGBColor(*colors[i]) if i > 0 else RGBColor(0, 51, 102)
+        
+        p = cell.text_frame.paragraphs[0]
+        p.font.bold = True
+        p.font.size = Pt(10)
+        p.font.color.rgb = RGBColor(255, 255, 255) if i == 0 else RGBColor(0, 0, 0)
+
+    # 4. Llenar Datos (Columnas 1 a N)
+    keys_map = [
+        "nombre_etapa", # Fila 0
+        "acciones",     # Fila 1
+        "emociones",    # Fila 2
+        "puntos_dolor", # Fila 3
+        "oportunidades" # Fila 4
+    ]
+
+    for col_idx, etapa_data in enumerate(etapas):
+        real_col = col_idx + 1 # Saltamos la columna de headers
+        
+        for row_idx, key in enumerate(keys_map):
+            cell = table.cell(row_idx, real_col)
+            
+            # Formato de celda
+            cell.fill.solid()
+            # Alternar colores suaves o mantener blanco
+            cell.fill.fore_color.rgb = RGBColor(*colors[row_idx]) if row_idx > 0 else RGBColor(33, 150, 243) # Header azul claro
+            
+            # Obtener contenido
+            content = _get_case_insensitive_val(etapa_data, key)
+            
+            # Formatear texto
+            tf = cell.text_frame
+            tf.word_wrap = True
+            
+            p = tf.paragraphs[0]
+            # Estilo header
+            if row_idx == 0: 
+                p.text = str(content).upper()
+                p.font.bold = True
+                p.font.color.rgb = RGBColor(255, 255, 255)
+                p.alignment = PP_ALIGN.CENTER
+                p.font.size = Pt(10)
+            else:
+                # Estilo contenido
+                _llenar_text_frame_tabla(tf, content)
+
+
+# ==============================================================================
+# HELPERS EXISTENTES Y NUEVOS
 # ==============================================================================
 
 def _get_case_insensitive(data, key):
-    """Helper para encontrar claves (ej: 'Fortalezas') aunque estén en mayúsculas."""
+    """(Ya existente)"""
     key = key.lower()
     for k, v in data.items():
         if k.lower() == key:
             return v
     return []
 
-def _dibujar_foda_nativo(slide, data):
-    """Dibuja matriz DOFA/FODA en 4 cuadrantes con colores."""
-    center_x, center_y = 5.0, 3.5
-    width, height = 4.0, 2.2
-    margin = 0.1
-
-    # Usamos el helper _get_case_insensitive para ser robustos
-    fortalezas = _get_case_insensitive(data, 'fortalezas')
-    debilidades = _get_case_insensitive(data, 'debilidades')
-    oportunidades = _get_case_insensitive(data, 'oportunidades')
-    amenazas = _get_case_insensitive(data, 'amenazas')
-
-    configs = [
-        (center_x - width - margin, center_y - height - margin, (200, 230, 201), 'FORTALEZAS', fortalezas),    # Verde
-        (center_x + margin,         center_y - height - margin, (255, 205, 210), 'DEBILIDADES', debilidades),   # Rojo
-        (center_x - width - margin, center_y + margin,          (187, 222, 251), 'OPORTUNIDADES', oportunidades), # Azul
-        (center_x + margin,         center_y + margin,          (255, 224, 178), 'AMENAZAS', amenazas)      # Naranja
-    ]
-
-    for left, top, color, title, items in configs:
-        shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(height))
-        shape.fill.solid()
-        shape.fill.fore_color.rgb = RGBColor(*color)
-        shape.line.color.rgb = RGBColor(180, 180, 180)
-        
-        tf = shape.text_frame
-        tf.word_wrap = True
-        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
-
-        p = tf.paragraphs[0]
-        p.text = title
-        p.font.bold = True
-        p.font.color.rgb = RGBColor(50, 50, 50)
-        
-        for item in items:
-            p = tf.add_paragraph()
-            p.text = f"• {item}"
-            p.level = 0
-            p.font.color.rgb = RGBColor(50, 50, 50)
-
-def _dibujar_matriz_nativa(slide, data):
-    center_x, center_y = 5.0, 3.5
-    width, height = 4.0, 2.2
-    margin = 0.05
-
-    quads = [
-        (center_x - width - margin, center_y - height - margin, (227, 242, 253), 'items_cuadrante_sup_izq'),
-        (center_x + margin,         center_y - height - margin, (232, 245, 233), 'items_cuadrante_sup_der'),
-        (center_x - width - margin, center_y + margin,          (255, 243, 224), 'items_cuadrante_inf_izq'),
-        (center_x + margin,         center_y + margin,          (243, 229, 245), 'items_cuadrante_inf_der')
-    ]
-
-    for left, top, color, key in quads:
-        shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(height))
-        shape.fill.solid()
-        shape.fill.fore_color.rgb = RGBColor(*color)
-        shape.line.color.rgb = RGBColor(210, 210, 210)
-        
-        tf = shape.text_frame
-        tf.word_wrap = True
-        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
-        
-        items = data.get(key, [])
-        _llenar_text_frame_flexible(tf, items)
-
-    _crear_etiqueta(slide, center_x, center_y - height - 0.3, data.get('eje_y_positivo', 'Alto'), bold=True)
-    _crear_etiqueta(slide, center_x, center_y + height + 0.3, data.get('eje_y_negativo', 'Bajo'), bold=True)
-    _crear_etiqueta(slide, center_x - width - 0.3, center_y, data.get('eje_x_negativo', 'Bajo'), bold=True, vertical=True)
-    _crear_etiqueta(slide, center_x + width + 0.3, center_y, data.get('eje_x_positivo', 'Alto'), bold=True, vertical=True)
-
-
-def _dibujar_embudo_nativo(slide, data):
-    pasos = data.get('pasos', []) or data.get('etapas', [])
-    if not pasos: return
-    
-    num = len(pasos)
-    start_y = 1.5
-    total_h = 4.8
-    step_h = total_h / num
-    max_w = 8.5
-    min_w = 3.0
-    center_x = 5.0
-
-    for i, paso in enumerate(pasos):
-        top_w = max_w - (i * (max_w - min_w) / num)
-        
-        shape = slide.shapes.add_shape(
-            MSO_SHAPE.ROUNDED_RECTANGLE, 
-            Inches(center_x - top_w/2), Inches(start_y + (i * step_h) + (i*0.05)), 
-            Inches(top_w), Inches(step_h)
-        )
-        
-        shape.fill.solid()
-        blue_val = max(100, 220 - (i * 30))
-        shape.fill.fore_color.rgb = RGBColor(30, 130, blue_val)
-        shape.line.fill.background() 
-
-        tf = shape.text_frame
-        tf.word_wrap = True
-        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
-
-        tf.text = paso
-        tf.paragraphs[0].font.color.rgb = RGBColor(255, 255, 255)
-        tf.paragraphs[0].alignment = PP_ALIGN.CENTER
-        tf.paragraphs[0].font.bold = True
-
-def _dibujar_lista_generica(slide, data):
-    left = Inches(1)
-    top = Inches(1.5)
-    width = Inches(8)
-    height = Inches(4.8)
-    
-    textbox = slide.shapes.add_textbox(left, top, width, height)
-    tf = textbox.text_frame
-    tf.word_wrap = True
-    tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
-    
-    excluded_keys = ['titulo_diapositiva', 'template_type', 'conclusion_clave']
-    
-    first = True
+def _get_case_insensitive_val(data, key_part):
+    """Busca un valor en un dict si la clave contiene el string (ej: 'acciones' match con 'acciones_usuario')."""
+    if not isinstance(data, dict): return ""
+    # Búsqueda exacta primero
+    if key_part in data: return data[key_part]
+    # Búsqueda aproximada
     for k, v in data.items():
-        if k in excluded_keys: continue
-        
-        if not first: tf.add_paragraph() 
-        
-        p = tf.add_paragraph() if not first else tf.paragraphs[0]
-        p.text = k.replace('_', ' ').upper()
-        p.font.bold = True
-        p.font.color.rgb = RGBColor(0, 51, 102)
-        first = False
-        
-        if isinstance(v, list):
-            for item in v:
-                p = tf.add_paragraph()
-                p.text = f"• {item}"
-                p.level = 1
-        else:
-            p = tf.add_paragraph()
-            p.text = str(v)
-            p.level = 1
+        if key_part in k.lower():
+            return v
+    return "-"
 
-def _llenar_text_frame_flexible(text_frame, lista_items):
-    if not lista_items: return
-    p = text_frame.paragraphs[0]
-    p.text = f"• {lista_items[0]}"
-    p.font.color.rgb = RGBColor(40, 40, 40)
-    for item in lista_items[1:]:
+def _llenar_text_frame_tabla(text_frame, content):
+    """Helper para llenar celdas de tabla con letra pequeña."""
+    text_frame.clear() # Limpiar párrafo por defecto
+    
+    if isinstance(content, list):
+        for item in content:
+            p = text_frame.add_paragraph()
+            p.text = f"• {item}"
+            p.font.size = Pt(8) # Letra pequeña para que quepa todo
+            p.font.color.rgb = RGBColor(0, 0, 0)
+            p.space_after = Pt(2)
+    else:
         p = text_frame.add_paragraph()
-        p.text = f"• {item}"
-        p.font.color.rgb = RGBColor(40, 40, 40)
+        p.text = str(content)
+        p.font.size = Pt(8)
+        p.font.color.rgb = RGBColor(0, 0, 0)
 
-def _crear_etiqueta(slide, x, y, texto, bold=False, vertical=False):
-    w, h = (Inches(2), Inches(0.5)) if not vertical else (Inches(0.5), Inches(2))
-    x_pos = Inches(x) - w/2
-    y_pos = Inches(y) - h/2
-    
-    tb = slide.shapes.add_textbox(x_pos, y_pos, w, h)
-    tf = tb.text_frame
-    tf.word_wrap = True
-    tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
-    
-    p = tf.paragraphs[0]
-    p.text = texto
-    p.alignment = PP_ALIGN.CENTER
-    p.font.bold = bold
-    p.font.color.rgb = RGBColor(80, 80, 80)
-    if vertical:
-         tb.rotation = -90
+# (MANTENER AQUÍ EL RESTO DE TUS FUNCIONES: _dibujar_foda_nativo, _dibujar_matriz_nativa, etc.)
+# ...
+# ...
