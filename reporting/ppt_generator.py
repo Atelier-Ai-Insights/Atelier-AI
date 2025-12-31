@@ -4,11 +4,12 @@ from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN, MSO_AUTO_SIZE
 import io
+import re  # Importante para el ordenamiento natural de etapas
 
 def crear_ppt_desde_json(data_json, image_stream=None):
     """
     Genera un PowerPoint con formas NATIVAS y EDITABLES basado en el JSON.
-    Soporta: Matriz 2x2, FODA/DOFA, Embudo, Customer Journey Map (Tabla) y Listas.
+    Soporta: Matriz 2x2, FODA/DOFA, Embudo (Flat), Customer Journey Map (Tabla inteligente) y Listas.
     """
     
     # 1. Cargar Plantilla Base
@@ -161,11 +162,18 @@ def _dibujar_foda_nativo(slide, data):
 
 
 def _dibujar_journey_nativo(slide, data):
-    """Construye una TABLA para el Customer Journey Map."""
+    """Construye una TABLA mejorada para el Customer Journey Map."""
     # 1. Extraer Etapas
     etapas = []
     # Buscar claves que contengan 'etapa' o 'stage'
-    sorted_keys = sorted([k for k in data.keys() if "etapa" in k.lower() or "stage" in k.lower()])
+    keys_candidates = [k for k in data.keys() if "etapa" in k.lower() or "stage" in k.lower()]
+    
+    # -- MEJORA: ORDENAMIENTO NATURAL (1, 2, 10...) --
+    def natural_sort_key(s):
+        nums = re.findall(r'\d+', s)
+        return int(nums[0]) if nums else s
+
+    sorted_keys = sorted(keys_candidates, key=natural_sort_key)
     
     for k in sorted_keys:
         val = data[k]
@@ -181,12 +189,15 @@ def _dibujar_journey_nativo(slide, data):
             etapas = list_etapas
 
     if not etapas:
-        # Si falla todo, usar lista genérica
         _dibujar_lista_generica(slide, data)
         return
 
     # 2. Configurar Tabla
     num_etapas = len(etapas)
+    if num_etapas > 6: # Limitar columnas para legibilidad
+        etapas = etapas[:6]
+        num_etapas = 6
+        
     rows = 5 # Header + Acciones + Emociones + Puntos Dolor + Oportunidades
     cols = num_etapas + 1 # +1 para la columna de títulos izquierda
     
@@ -208,9 +219,13 @@ def _dibujar_journey_nativo(slide, data):
         cell.fill.solid()
         cell.fill.fore_color.rgb = RGBColor(*colors_rows[i]) if i > 0 else RGBColor(0, 51, 102)
         
+        # -- MEJORA: MÁRGENES --
+        cell.margin_left = Inches(0.05)
+        cell.margin_right = Inches(0.05)
+        
         p = cell.text_frame.paragraphs[0]
         p.font.bold = True
-        p.font.size = Pt(10)
+        p.font.size = Pt(9)
         p.font.color.rgb = RGBColor(255, 255, 255) if i == 0 else RGBColor(0, 0, 0)
 
     # 4. Llenar Datos
@@ -222,11 +237,14 @@ def _dibujar_journey_nativo(slide, data):
         for row_idx, key_part in enumerate(keys_map):
             cell = table.cell(row_idx, real_col)
             cell.fill.solid()
-            # Color de fondo igual a la fila, o header azul para la primera fila
             bg_color = colors_rows[row_idx] if row_idx > 0 else (33, 150, 243)
             cell.fill.fore_color.rgb = RGBColor(*bg_color)
             
-            # Obtener contenido (búsqueda flexible)
+            # Márgenes
+            cell.margin_left = Inches(0.05)
+            cell.margin_right = Inches(0.05)
+            
+            # Obtener contenido
             if row_idx == 0 and isinstance(etapa_data, dict) and "nombre_etapa" in etapa_data:
                  content = etapa_data["nombre_etapa"]
             elif row_idx == 0:
@@ -244,13 +262,13 @@ def _dibujar_journey_nativo(slide, data):
                 p.font.bold = True
                 p.font.color.rgb = RGBColor(255, 255, 255)
                 p.alignment = PP_ALIGN.CENTER
-                p.font.size = Pt(10)
+                p.font.size = Pt(9)
             else:
                 _llenar_text_frame_tabla(tf, content)
 
 
 def _dibujar_embudo_nativo(slide, data):
-    """Dibuja trapecios/rectángulos apilados."""
+    """Dibuja trapecios/rectángulos apilados (Estilo Flat)."""
     pasos = data.get('pasos', []) or data.get('etapas', [])
     if not pasos: return
     
@@ -274,6 +292,8 @@ def _dibujar_embudo_nativo(slide, data):
         shape.fill.solid()
         blue_val = max(100, 220 - (i * 30))
         shape.fill.fore_color.rgb = RGBColor(30, 130, blue_val)
+        
+        # -- MEJORA: SIN BORDE --
         shape.line.fill.background() 
 
         tf = shape.text_frame
@@ -312,15 +332,7 @@ def _dibujar_lista_generica(slide, data):
         p.font.color.rgb = RGBColor(0, 51, 102)
         first = False
         
-        if isinstance(v, list):
-            for item in v:
-                p = tf.add_paragraph()
-                p.text = f"• {item}"
-                p.level = 1
-        else:
-            p = tf.add_paragraph()
-            p.text = str(v)
-            p.level = 1
+        _llenar_text_frame_flexible(tf, v if isinstance(v, list) else [v])
 
 
 # ==============================================================================
@@ -337,43 +349,56 @@ def _get_case_insensitive(data, key):
 
 def _get_case_insensitive_val(data, key_part):
     """Busca valor si la clave contiene el string parcial (ej: 'acciones' -> 'acciones_usuario')."""
-    if not isinstance(data, dict): return "-"
+    if not isinstance(data, dict): return None # Retorna None explícito
     # Intento directo
     if key_part in data: return data[key_part]
     # Intento parcial
     for k, v in data.items():
         if key_part in k.lower():
             return v
-    return "-"
+    return None # Si no encuentra nada, retorna None
 
 def _llenar_text_frame_flexible(text_frame, lista_items):
-    """Llena bullets."""
+    """Llena bullets, filtrando Nones."""
     if not lista_items: return
     
-    # Usar el párrafo existente
+    # Asegurar que es lista
+    if not isinstance(lista_items, list): lista_items = [str(lista_items)]
+    
+    # Filtrar items vacíos o "None"
+    valid_items = [str(x) for x in lista_items if x and str(x).lower() != "none"]
+    if not valid_items: return
+
+    # Usar el párrafo existente para el primero
     p = text_frame.paragraphs[0]
-    p.text = f"• {lista_items[0]}"
+    p.text = f"• {valid_items[0]}"
     p.font.color.rgb = RGBColor(40, 40, 40)
     
-    for item in lista_items[1:]:
+    for item in valid_items[1:]:
         p = text_frame.add_paragraph()
         p.text = f"• {item}"
         p.font.color.rgb = RGBColor(40, 40, 40)
 
 def _llenar_text_frame_tabla(text_frame, content):
-    """Llena celdas de tabla con letra pequeña."""
+    """Llena celdas de tabla, manejando Nones y vacíos."""
     text_frame.clear() 
     
+    if content is None or str(content).strip().lower() == "none": 
+        content = "-"
+        
     if isinstance(content, list):
         for item in content:
+            if not item: continue
             p = text_frame.add_paragraph()
             p.text = f"• {item}"
             p.font.size = Pt(9)
             p.font.color.rgb = RGBColor(0, 0, 0)
             p.space_after = Pt(2)
     else:
+        text_str = str(content).strip()
+        if not text_str: return
         p = text_frame.add_paragraph()
-        p.text = str(content)
+        p.text = text_str
         p.font.size = Pt(9)
         p.font.color.rgb = RGBColor(0, 0, 0)
 
