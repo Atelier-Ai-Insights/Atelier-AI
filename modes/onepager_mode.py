@@ -9,12 +9,8 @@ from utils import get_relevant_info, extract_text_from_pdfs, clean_gemini_json
 from prompts import PROMPTS_ONEPAGER, get_onepager_final_prompt
 import constants as c
 
-# IMPORTANTE: Asegúrate de importar la función de visualización creada en el Paso 1
-# Si guardaste el código anterior en 'viz_utils.py', descomenta la siguiente línea:
-# from viz_utils import generar_visualizacion_onepager
-
 # =====================================================
-# MODO: GENERADOR DE ONE-PAGER PPT (FACTORY PATTERN)
+# MODO: GENERADOR DE ONE-PAGER PPT (EDITABLE / NATIVO)
 # =====================================================
 
 def one_pager_ppt_mode(db_filtered, selected_files):
@@ -32,24 +28,17 @@ def one_pager_ppt_mode(db_filtered, selected_files):
         limit_text = "**Tu plan actual no incluye la generación de One-Pagers.**"
 
     st.markdown(f"""
-        Sintetiza los hallazgos clave en una diapositiva visual y profesional.
+        Sintetiza los hallazgos clave en una diapositiva de PowerPoint **totalmente editable**.
         {limit_text}
     """)
 
-    # 2. Pantalla de Resultado (Descarga y Previsualización)
+    # 2. Pantalla de Resultado (Descarga)
     if "generated_ppt_bytes" in st.session_state.mode_state:
         st.divider()
         template_name = st.session_state.mode_state.get('generated_ppt_template_name', 'Estratégica')
-        st.success(f"✅ ¡Tu diapositiva '{template_name}' está lista!")
         
-        # --- VISTA PREVIA DEL GRÁFICO (Si se generó alguno) ---
-        if "generated_matrix_image" in st.session_state.mode_state:
-            st.markdown("### 👁️ Vista Previa del Gráfico Generado")
-            st.image(
-                st.session_state.mode_state["generated_matrix_image"], 
-                caption=f"Visualización automática para {template_name}", 
-                use_container_width=True
-            )
+        st.success(f"✅ ¡Tu diapositiva '{template_name}' está lista y es editable!")
+        st.info("ℹ️ Al ser un formato editable nativo, descárgalo para ver el diseño final en PowerPoint.")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -63,10 +52,9 @@ def one_pager_ppt_mode(db_filtered, selected_files):
             )
         with col2:
             if st.button("✨ Generar otra", width='stretch', type="secondary"):
-                # Limpiamos todo el estado visual y de archivo
+                # Limpiamos el estado
                 st.session_state.mode_state.pop("generated_ppt_bytes", None)
                 st.session_state.mode_state.pop("generated_ppt_template_name", None)
-                st.session_state.mode_state.pop("generated_matrix_image", None)
                 st.rerun()
         return
 
@@ -138,27 +126,11 @@ def one_pager_ppt_mode(db_filtered, selected_files):
             except Exception as e:
                 status.update(label="Error en IA", state="error"); st.error(f"Error IA: {e}"); return
 
-            # C. Renderizado Visual (NUEVO - SOPORTE MULTI-PLANTILLA)
-            matrix_image_bytes = None
+            # C. Ensamblaje PPT (Nativo Editable)
             if data_json:
-                status.write(f"🖌️ Dibujando gráfico visual para '{selected_template_name}'...")
+                status.write("🛠️ Construyendo formas editables en PowerPoint (.pptx)...")
                 try:
-                    # Aquí llamamos a la función factoría que decide si dibujar Matriz, FODA o Embudo
-                    # Asegúrate de importar esta función desde donde guardaste el Paso 1
-                    matrix_image_bytes = generar_visualizacion_onepager(selected_template_name, data_json)
-                    
-                    if matrix_image_bytes:
-                        st.session_state.mode_state["generated_matrix_image"] = matrix_image_bytes
-                        # Opcional: Inyectar en JSON si el generador PPT lo usa
-                        # data_json['image_bytes'] = matrix_image_bytes.getvalue()
-                except Exception as e:
-                    print(f"Advertencia: No se pudo generar gráfico visual: {e}")
-                    # No detenemos el flujo, seguimos con el PPT de texto si falla el gráfico
-
-            # D. Ensamblaje PPT
-            if data_json:
-                status.write("🛠️ Renderizando PowerPoint (.pptx)...")
-                try:
+                    # Llamamos al generador actualizado (sin imagen)
                     ppt_bytes = crear_ppt_desde_json(data_json)
                     
                     if ppt_bytes:
