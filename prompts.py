@@ -47,13 +47,26 @@ def get_report_prompt2(question, result1, relevant_info):
         f"{INSTRUCCIONES_DE_CITAS}\n"
     )
 
-def get_grounded_chat_prompt(conversation_history, relevant_info):
-    """Chat RAG estricto."""
+def get_grounded_chat_prompt(conversation_history, relevant_info, long_term_memory=""):
+    """
+    Chat RAG estricto con inyección de Memoria de Largo Plazo (Bitácora).
+    """
+    
+    bloque_memoria = ""
+    if long_term_memory:
+        bloque_memoria = f"""
+    **🧠 MEMORIA DEL PROYECTO (Bitácora de Hallazgos Previos):**
+    El usuario ha guardado estos insights clave en el pasado. Úsalos para dar contexto, pero prioriza la "Info Documentada" nueva si hay contradicción.
+    {long_term_memory}
+    --------------------------------------------------
+    """
+
     return (
         f"**Rol:** Asistente de investigación.\n"
-        f"**Tarea:** Responde la ÚLTIMA pregunta del historial usando SOLO la 'Información Documentada'.\n\n"
-        f"**Info Documentada:**\n{relevant_info}\n\n"
-        f"**Historial:**\n{conversation_history}\n\n"
+        f"**Tarea:** Responde la ÚLTIMA pregunta del historial usando SOLO la 'Información Documentada' y la 'Memoria del Proyecto'.\n\n"
+        f"{bloque_memoria}"
+        f"**📄 Info Documentada (Extractos actuales):**\n{relevant_info}\n\n"
+        f"**💬 Historial Reciente:**\n{conversation_history}\n\n"
         f"{INSTRUCCIONES_DE_CITAS}\n"
         "**Respuesta:**"
     )
