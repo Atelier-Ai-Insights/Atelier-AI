@@ -13,7 +13,7 @@ import constants as c
 
 def grounded_chat_mode(db, selected_files):
     st.subheader("Chat de Consulta Directa")
-    st.markdown("Preguntas específicas, respuestas basadas solo en hallazgos seleccionados.")
+    st.markdown("Respuestas a preguntas específicas basadas solo en hallazgos de estudios seleccionados.")
     
     # --- ¡MODIFICADO! ---
     if "chat_history" not in st.session_state.mode_state: 
