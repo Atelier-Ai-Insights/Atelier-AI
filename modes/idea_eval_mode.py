@@ -4,10 +4,11 @@ from services.gemini_api import call_gemini_stream
 from services.supabase_db import log_query_event
 from prompts import get_idea_eval_prompt 
 import constants as c
-from reporting.pdf_generator import generate_pdf_html
-# --- NUEVA IMPORTACIÓN ---
-from reporting.docx_generator import generate_docx
 from config import banner_file
+
+# --- GENERADORES (Top Level Import - FASE 1) ---
+from reporting.pdf_generator import generate_pdf_html
+from reporting.docx_generator import generate_docx
 
 # =====================================================
 # MODO: EVALUACIÓN DE PRE-IDEAS
