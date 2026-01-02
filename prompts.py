@@ -58,27 +58,23 @@ def get_grounded_chat_prompt(conversation_history, relevant_info):
         "**Respuesta:**"
     )
 
-def get_chat_suggestions_prompt(context_snippets):
+def get_followup_suggestions_prompt(previous_answer):
     """
-    Genera 3 preguntas sugeridas basadas en un VISTAZO REAL al contenido (Smart Sneak Peek).
+    Genera 3 preguntas de seguimiento basadas en la respuesta que acaba de dar la IA.
     """
     return f"""
-    **Rol:** Investigador Senior.
-    **Contexto:** Tienes acceso a los siguientes fragmentos introductorios de unos estudios de mercado:
+    **Contexto:** Acabas de dar esta respuesta a un usuario sobre un estudio de mercado:
+    "{previous_answer[:3000]}" (texto truncado para contexto)
     
-    --- INICIO FRAGMENTOS ---
-    {context_snippets}
-    --- FIN FRAGMENTOS ---
-    
-    **Tarea:** Identifica los temas centrales y genera 3 preguntas de investigación PROVOCADORAS y ESPECÍFICAS que un director de marketing haría para explotar esta información.
+    **Tarea:** Sugiere 3 preguntas cortas de seguimiento (Follow-up) que el usuario podría hacer para profundizar en ESTE tema específico.
     
     **Reglas:**
-    1. No hagas preguntas genéricas como "¿De qué trata?".
-    2. Ve al grano (ej: "¿Cuáles son las barreras de consumo en la región norte?").
-    3. Máximo 10 palabras por pregunta.
+    1. Que sean curiosas y estratégicas.
+    2. Máximo 10 palabras por pregunta.
+    3. No repitas lo que ya se dijo.
     
     **Salida:** SOLO devuelve un JSON con una lista de strings.
-    Ejemplo: ["¿Qué motiva la compra en jóvenes?", "¿Cómo afecta el precio a la percepción?", "¿Diferencias entre Bogotá y Medellín?"]
+    Ejemplo: ["¿Qué marcas lideran ese segmento?", "¿Hay diferencias por región?", "¿Qué dice sobre precios?"]
     """
 
 # ==============================================================================
@@ -504,7 +500,7 @@ def get_trend_synthesis_prompt(keyword, trend_context, geo_context, topics_conte
     {topics_context}
 
     **4. EVIDENCIA INTERNA (ADN de la Agencia):**
-    {internal_context if internal_context else "No hay menciones previas en el repositorio."}
+    {internal_context if internal_context else "⚠️ No se encontraron coincidencias directas ni temas relacionados en el repositorio."}
 
     **TAREA:**
     Genera un "Intelligence Brief" estratégico (Markdown):
