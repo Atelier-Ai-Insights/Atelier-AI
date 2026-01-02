@@ -2,6 +2,7 @@ import pandas as pd
 import scipy.stats as stats
 import numpy as np
 import io
+import re
 
 def get_dataframe_snapshot(df):
     """Genera un resumen textual técnico del DataFrame para enviarlo a la IA."""
@@ -47,3 +48,34 @@ def calculate_group_comparison(df, num_col, cat_col):
         test_type = "T-Test"
         
     return test_type, p, len(groups)
+
+def process_autocode_results(df, col_to_autocode, categories_list):
+    """
+    Procesa las categorías generadas por IA y cuenta coincidencias en el DataFrame usando Regex.
+    Retorna un DataFrame con los resultados.
+    """
+    results = []
+    full_text = df[col_to_autocode].astype(str)
+    total_rows = len(df)
+    
+    for cat in categories_list:
+        # Extraer keywords y limpiar
+        kw = [re.escape(k.strip()) for k in cat.get('keywords', []) if k.strip()]
+        if not kw: continue
+        
+        # Construir patrón regex seguro (word boundaries)
+        pattern = r'\b(?:' + '|'.join(kw) + r')\b'
+        
+        try:
+            count = full_text.str.contains(pattern, case=False, regex=True).sum()
+        except:
+            count = 0
+            
+        results.append({
+            "Categoría": cat['categoria'],
+            "Menciones": int(count),
+            "%": round((count / total_rows) * 100, 1),
+            "Keywords": ", ".join(cat.get('keywords', [])[:5]) # Guardar keywords para referencia
+        })
+    
+    return pd.DataFrame(results).sort_values("Menciones", ascending=False)
