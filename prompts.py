@@ -60,30 +60,27 @@ def get_grounded_chat_prompt(conversation_history, relevant_info):
 
 def get_followup_suggestions_prompt(previous_answer):
     """
-    Genera 3 preguntas de seguimiento GARANTISTAS (que probablemente tengan respuesta).
-    Estrategia: Profundizar (Drill-down) en lugar de ampliar (Expand-out).
+    Genera 3 preguntas de seguimiento CORTAS y SEGURAS.
+    Garantiza que la respuesta esté en el repositorio basándose en lo que YA se encontró.
     """
     return f"""
-    **Contexto:** Acabas de dar esta respuesta basada en un documento de investigación:
+    **Contexto:** Acabas de dar esta respuesta basada en un documento:
     "{previous_answer[:3000]}"
     
-    **Problema:** El usuario quiere saber más, pero no sabemos si el documento tiene datos numéricos exactos o fechas precisas que no mencionaste.
+    **Tarea:** Sugiere 3 preguntas MUY CORTAS para que el usuario profundice en los temas que ACABAS de mencionar.
     
-    **Tarea:** Sugiere 3 preguntas para continuar la conversación que tengan ALTA PROBABILIDAD de ser respondidas con la información disponible.
+    **Reglas de Oro:**
+    1. **GARANTÍA DE INFORMACIÓN:** Solo sugiere profundizar en temas que TÚ MISMO mencionaste en la respuesta anterior (ej: si hablaste de 'precio', sugiere profundizar en 'precio'). No inventes temas nuevos.
+    2. **SIN VERBATIMS:** No pidas "citas textuales" ni "verbatims". Pide "detalles", "razones" o "ejemplos".
+    3. **ULTRACORTAS:** Máximo 7-8 palabras por pregunta. Estilo "Botón de App".
     
-    **Estrategia de Preguntas (Usa estos ángulos):**
-    1. **El "Por qué":** Si la respuesta menciona un comportamiento o preferencia, pregunta por las razones.
-    2. **El "Cómo":** Pregunta por detalles de la experiencia, el uso o el hábito mencionado.
-    3. **Matices/Contrastes:** Pregunta si hay diferencias entre grupos (ej. jóvenes vs adultos) o regiones, SIEMPRE QUE el contexto lo sugiera.
-    4. **Ejemplos:** Pide "citas textuales", "verbatims" o "casos específicos" de lo mencionado.
-    
-    **Reglas de Seguridad:**
-    - 🚫 NO preguntes por datos financieros, fechas exactas o estadísticas si no se mencionaron ya.
-    - 🚫 NO preguntes "¿Qué más dice el documento?" (es muy vago).
-    - ✅ PREFIERE preguntas como: "¿Qué razones dan para...?", "¿Hay menciones sobre...?", "¿Cómo describen la experiencia de...?"
+    **Estructuras Recomendadas:**
+    - "¿Qué detalles hay sobre [Tema Mencionado]?"
+    - "¿Por qué sucede [Hecho Mencionado]?"
+    - "¿Existen diferencias por [Variable Mencionada]?"
     
     **Salida:** SOLO devuelve un JSON con una lista de strings.
-    Ejemplo: ["¿Qué razones dan para ese rechazo?", "¿Hay diferencias por región?", "¿Qué ejemplos específicos mencionan?"]
+    Ejemplo: ["¿Qué detalles dan sobre el precio?", "¿Por qué prefieren esa marca?", "¿Hay diferencias por región?"]
     """
 
 # ==============================================================================
