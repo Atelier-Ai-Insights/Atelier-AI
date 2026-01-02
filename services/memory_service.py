@@ -3,11 +3,12 @@ import streamlit as st
 
 def get_active_context():
     """
-    Intenta determinar el contexto actual (Proyecto) basado en los filtros de la sidebar.
-    Retorna un string, ej: "Proyecto Alpha, Proyecto Beta"
+    Determina el nombre del contexto para guardarlo como título del Pin.
+    Prioridad: Proyectos > Marca+Año > General.
     """
     projects = st.session_state.get("filter_projects", [])
     if projects:
+        # Si hay varios, los unimos, si es uno, queda el nombre del proyecto
         return ", ".join(projects)
     
     # Fallback: Si no hay filtro de proyecto, usar Marca + Año
@@ -28,7 +29,7 @@ def save_project_insight(content, context=None):
             
         data = {
             "user_id": user_id,
-            "project_context": context,
+            "project_context": context, # Aquí se guarda el Nombre del Proyecto
             "insight_content": content
         }
         supabase.table("project_insights").insert(data).execute()
@@ -38,33 +39,18 @@ def save_project_insight(content, context=None):
         return False
 
 def get_project_memory(context=None):
-    """Recupera los insights guardados para el contexto actual."""
+    """
+    Recupera los insights guardados.
+    CAMBIO: Ahora retorna TODOS los insights del usuario, ignorando los filtros activos
+    para cumplir el requerimiento de 'siempre visibles'.
+    """
     try:
         user_id = st.session_state.user_id
-        query = supabase.table("project_insights").select("*").eq("user_id", user_id)
-        
-        # Si hay un contexto específico (proyectos seleccionados), filtramos
-        # Nota: Hacemos un filtro 'ilike' simple para traer memorias que contengan el nombre del proyecto
-        active_projects = st.session_state.get("filter_projects", [])
-        if active_projects:
-            # Construimos una query OR para traer insights de cualquiera de los proyectos seleccionados
-            # Supabase postgrest filter syntax para OR es un poco compleja, 
-            # simplificaremos trayendo todo del usuario y filtrando en Python para este MVP
-            pass 
+        # Traemos todo lo del usuario ordenado por fecha
+        query = supabase.table("project_insights").select("*").eq("user_id", user_id).order("created_at", desc=True)
+        response = query.execute()
+        return response.data
             
-        response = query.order("created_at", desc=True).execute()
-        data = response.data
-        
-        # Filtro en memoria (Python) para mayor flexibilidad inicial
-        if active_projects:
-            filtered = []
-            for item in data:
-                # Si el insight pertenece a uno de los proyectos activos
-                if any(proj in item['project_context'] for proj in active_projects):
-                    filtered.append(item)
-            return filtered
-            
-        return data
     except Exception as e:
         print(f"Error fetching memory: {e}")
         return []
