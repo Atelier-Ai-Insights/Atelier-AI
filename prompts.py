@@ -464,42 +464,40 @@ C. **Contexto Externo:** {sources_instruction}
 
 def get_trend_synthesis_prompt(keyword, trend_context, geo_context, topics_context, internal_context):
     """
-    Nuevo prompt estratégico para el modo 'Radar 360' (PRO).
-    Triangula: Tiempo, Geo, Contexto Semántico y Datos Internos.
+    Prompt actualizado: Exige confrontación directa entre datos externos e internos.
     """
     return f"""
-    **Rol:** Director de Estrategia y Coolhunting.
-    **Objetivo:** Analizar la tendencia "{keyword}" con una visión 360°.
+    **Rol:** Estratega Senior de Inteligencia de Mercados.
+    **Misión:** Validar la tendencia "{keyword}" contrastando la "Calle" (Google) con la "Casa" (Repositorio Interno).
 
-    **1. COMPORTAMIENTO TEMPORAL (Cuándo):**
+    **FUENTES DE INFORMACIÓN:**
+    1. **MERCADO (Externo - Google Trends):**
     {trend_context}
-    
-    **2. FOCO GEOGRÁFICO (Dónde):**
     {geo_context}
-
-    **3. ECOSISTEMA SEMÁNTICO (Qué más):**
     {topics_context}
 
-    **4. EVIDENCIA INTERNA (ADN de la Agencia):**
-    {internal_context if internal_context else "No hay menciones previas en el repositorio."}
+    2. **MEMORIA DE LA AGENCIA (Interno - Hallazgos filtrados):**
+    {internal_context if internal_context else "⚠️ No se encontraron coincidencias directas ni temas relacionados en el repositorio."}
 
-    **TAREA:**
-    Genera un "Intelligence Brief" estratégico (Markdown):
+    **TAREA: Generar Brief de Validación Estratégica**
+
+    ### 1. El Pulso del Mercado (Externo)
+    Define en 2 líneas qué está pasando hoy con esta tendencia (¿Crece? ¿Cae? ¿Es estacional?). Usa los datos geográficos para dar contexto.
+
+    ### 2. CRUCE DE REALIDADES (El corazón del análisis)
+    *Instrucción: No seas genérico. Busca conexiones directas.*
     
-    ### 1. Diagnóstico de la Tendencia
-    ¿Es una moda pasajera (spike reciente) o un cambio cultural (crecimiento sostenido)? Usa los datos temporales.
-    
-    ### 2. Oportunidad Geográfica
-    Analiza las regiones top. ¿Por qué crees que es fuerte allí? (Cultural, climático, económico).
-    
-    ### 3. El "Vibe" del Momento (Contexto)
-    Usa los 'Temas Relacionados' para descifrar la intención. ¿La gente busca esto por salud, precio, lujo, miedo?
-    
-    ### 4. Cruce con Data Interna
-    Integra los hallazgos del repositorio (si existen) con lo que ves en Google.
-    
-    ### 5. Recomendación de Acción
-    1 Idea Táctica (Marketing Digital basada en geo/temas) y 1 Idea Estratégica (Producto/Servicio).
+    | Dimensión | Lo que dice Google (Calle) | Lo que sabíamos (Casa) | Veredicto |
+    | :--- | :--- | :--- | :--- |
+    | **Interés** | (¿Sube/Baja?) | (¿Teníamos estudios del tema?) | (¿Validado / Sorpresa / Oportunidad Perdida?) |
+    | **Lenguaje** | (¿Cómo lo busca la gente? Ver 'Temas') | (¿Cómo lo llamamos nosotros?) | (¿Debemos ajustar nuestro vocabulario?) |
+
+    ### 3. Profundización en Data Interna
+    *(Si hay info interna):* Analiza los fragmentos encontrados. ¿Nuestros hallazgos previos explican el comportamiento actual o quedaron obsoletos? Cita el documento específico.
+    *(Si NO hay info interna):* Declara explícitamente: "Es una **Zona Ciega**. No tenemos inteligencia previa sobre '{keyword}' o sus categorías adyacentes."
+
+    ### 4. Recomendación de Acción
+    Basado en este cruce, sugiere el siguiente paso estratégico para un cliente.
     """
 
 # ==============================================================================
