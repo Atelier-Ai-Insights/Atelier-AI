@@ -18,11 +18,32 @@ from admin.dashboard import show_admin_dashboard
 from utils import extract_brand, validate_session_integrity 
 import constants as c
 
+# --- GESTIÓN DE ESTADO INTELIGENTE (Persistencia entre pestañas) ---
+def init_app_memory():
+    if "app_memory" not in st.session_state:
+        st.session_state.app_memory = {}
+
 def set_mode_and_reset(new_mode):
-    """Cambia el modo y limpia el estado para evitar 'contaminación' entre herramientas."""
-    if 'current_mode' not in st.session_state or st.session_state.current_mode != new_mode:
-        st.session_state.mode_state = {} 
-        st.session_state.current_mode = new_mode
+    """
+    Cambia el modo pero GUARDA el estado del modo anterior en memoria
+    para restaurarlo si el usuario regresa.
+    """
+    init_app_memory()
+    
+    # 1. Guardar estado del modo actual antes de salir
+    current = st.session_state.get("current_mode")
+    if current and "mode_state" in st.session_state:
+        # Hacemos una copia superficial para guardar
+        st.session_state.app_memory[current] = st.session_state.mode_state.copy()
+    
+    # 2. Cambiar modo
+    st.session_state.current_mode = new_mode
+    
+    # 3. Restaurar estado si existe en memoria, sino iniciar limpio
+    if new_mode in st.session_state.app_memory:
+        st.session_state.mode_state = st.session_state.app_memory[new_mode]
+    else:
+        st.session_state.mode_state = {}
 
 # =====================================================
 # FUNCIÓN PARA EL MODO USUARIO 
@@ -47,6 +68,7 @@ def run_user_mode(db_full, user_features, footer_html):
             c.MODE_TEXT_ANALYSIS: user_features.get("transcript_file_limit", 0) > 0,
             c.MODE_DATA_ANALYSIS: True,
             c.MODE_ETNOCHAT: user_features.get("has_etnochat_analysis"),
+            c.MODE_TREND_ANALYSIS: True # Nuevo modo
         },
         "Evaluación": {
             c.MODE_IDEA_EVAL: user_features.get("has_idea_evaluation"),
@@ -72,6 +94,7 @@ def run_user_mode(db_full, user_features, footer_html):
             break
             
     for category_name, modes_dict in all_categories.items():
+        # Verificar si hay al menos un modo activo en la categoría
         if any(modes_dict.values()):
             with st.sidebar.expander(category_name, expanded=(default_expanded == category_name)):
                 for mode_key, has_access in modes_dict.items():
@@ -88,40 +111,36 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.header("Filtros de Búsqueda")
     
     # Algunos modos no requieren filtros de BD
-    run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT] 
+    run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT, c.MODE_TREND_ANALYSIS] 
     
     # 0. PREPARACIÓN INICIAL DE DATOS
-    # Aplicamos el filtro de seguridad de cliente primero (si es demo)
     user_client_name = st.session_state.get("cliente", "")
     db_base = db_full
     if user_client_name == "atelier demo":
         db_base = [doc for doc in db_full if doc.get("cliente") and "atelier" in str(doc.get("cliente")).lower()]
 
     if run_filters:
-        # --- NIVEL 1: MARCA (Campo: 'filtro') ---
-        # Las opciones salen de la base completa (ya filtrada por cliente)
+        # --- NIVEL 1: MARCA ---
         marcas_options = sorted({doc.get("filtro", "") for doc in db_base if doc.get("filtro")})
         selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas")
         
-        # Filtramos DB para el siguiente paso
+        # Filtramos DB
         if selected_marcas:
             db_step_1 = [d for d in db_base if d.get("filtro") in selected_marcas]
         else:
             db_step_1 = db_base
 
-        # --- NIVEL 2: AÑO (Campo: 'marca' según tu esquema original) ---
-        # Las opciones salen de db_step_1
+        # --- NIVEL 2: AÑO ---
         years_options = sorted({doc.get("marca", "") for doc in db_step_1 if doc.get("marca")})
         selected_years = st.sidebar.multiselect("Año(s):", years_options, key="filter_years")
         
-        # Filtramos DB para el siguiente paso
+        # Filtramos DB
         if selected_years:
             db_step_2 = [d for d in db_step_1 if d.get("marca") in selected_years]
         else:
             db_step_2 = db_step_1
 
-        # --- NIVEL 3: PROYECTO (Campo: extract_brand de 'nombre_archivo') ---
-        # Las opciones salen de db_step_2
+        # --- NIVEL 3: PROYECTO ---
         brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_step_2 if extract_brand(d.get("nombre_archivo", ""))})
         selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects")
         
@@ -132,12 +151,8 @@ def run_user_mode(db_full, user_features, footer_html):
             db_filtered = db_step_2
             
     else:
-        # Si estamos en un modo que no usa filtros, pasamos la base limpia
         db_filtered = db_full
-        # Creamos variables vacías para evitar errores de renderizado si st.sidebar las reusa
-        selected_marcas, selected_years, selected_brands = [], [], []
         if run_filters is False:
-             # Deshabilitamos visualmente si es necesario, o simplemente no mostramos nada
              st.sidebar.caption("Filtros no disponibles en este modo.")
 
     # --- LOGOUT ---
@@ -151,11 +166,9 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.divider()
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
     
-    # --- EJECUCIÓN DEL MODO SELECCIONADO (CON LAZY IMPORT) ---
-    # Pasamos solo los datos filtrados y la lista de archivos relevantes
+    # --- EJECUCIÓN DEL MODO SELECCIONADO ---
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
     
-    # Enrutador de Modos con Importación Diferida
     if modo == c.MODE_REPORT: 
         from modes.report_mode import report_mode
         report_mode(db_filtered, selected_files)
@@ -203,28 +216,34 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == c.MODE_SYNTHETIC: 
         from modes.synthetic_mode import synthetic_users_mode
         synthetic_users_mode(db_filtered, selected_files)
+        
+    elif modo == c.MODE_TREND_ANALYSIS:
+        from modes.trend_analysis_mode import google_trends_mode
+        google_trends_mode()
     
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
 def main():
     st.set_page_config(
-    page_title="Atelier Data Studio", 
-    page_icon="Logo_Casa.png", 
-    layout="wide",
-    initial_sidebar_state="expanded"  # O "collapsed" si quieres que inicie cerrado
-)
+        page_title="Atelier Data Studio", 
+        page_icon="Logo_Casa.png", 
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
     apply_styles()
 
+    # Inicialización de estado
     if 'page' not in st.session_state: st.session_state.page = "login"
     if "mode_state" not in st.session_state: st.session_state.mode_state = {}
     if 'current_mode' not in st.session_state: st.session_state.current_mode = c.MODE_CHAT
+    init_app_memory() # Inicializar memoria persistente
     
     params = st.query_params 
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
-    # 1. RUTA DE ACTIVACIÓN (INVITACIÓN O RECUPERACIÓN)
+    # 1. RUTAS DE ACTIVACIÓN (LOGIN)
     if st.session_state.get('flow_email_verified'):
         apply_login_styles()
         col1, col2, col3 = st.columns([3, 2, 3])
@@ -250,19 +269,16 @@ def main():
     if st.session_state.get("logged_in"):
         validate_session_integrity()
         
-        # Restaurar sesión si es necesario
         if st.session_state.get("access_token"):
             try: supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
             except: supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
         
-        # Cargar DB (SOLO UNA VEZ POR SESIÓN)
         if not hasattr(st.session_state, 'db_full'):
             try: 
                 with st.spinner("Cargando repositorio de conocimientos..."):
                     st.session_state.db_full = load_database(st.session_state.cliente)
             except: st.session_state.clear(); st.rerun()
         
-        # Renderizar Dashboard
         if st.session_state.get("is_admin", False):
             t1, t2 = st.tabs(["Modo Usuario", "Modo Administrador"])
             with t1: run_user_mode(st.session_state.db_full, st.session_state.plan_features, footer_html)
