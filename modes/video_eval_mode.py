@@ -1,18 +1,19 @@
 import streamlit as st
 from io import BytesIO
-from utils import get_relevant_info
+from utils import get_relevant_info, render_process_status
 from services.gemini_api import call_gemini_stream 
 from services.supabase_db import log_query_event
-from reporting.pdf_generator import generate_pdf_html
-# --- NUEVA IMPORTACIÓN ---
-from reporting.docx_generator import generate_docx
 from config import banner_file
 from prompts import get_video_eval_prompt_parts
 import constants as c
 
+# --- GENERADORES (Fase 1: Top Level) ---
+from reporting.pdf_generator import generate_pdf_html
+from reporting.docx_generator import generate_docx
+
 def video_evaluation_mode(db, selected_files):
     st.subheader("Evaluación de Video")
-    st.markdown("Analiza piezas audiovisuales.") 
+    st.markdown("Analiza piezas audiovisuales comparando objetivos contra hallazgos del repositorio.") 
     
     uploaded_file = st.file_uploader("Sube tu video aquí:", type=["mp4", "mov", "avi", "wmv", "mkv"])
     target_audience = st.text_area("Describe el público objetivo:", height=100)
@@ -50,11 +51,16 @@ def video_evaluation_mode(db, selected_files):
     elif st.button("Evaluar Video", width='stretch', disabled=(uploaded_file is None)):
         if not video_bytes or not target_audience.strip() or not comm_objectives.strip(): 
             st.warning("Completa los campos."); return
+        
+        # --- IMPLEMENTACIÓN FASE 2: STATUS VISUAL ---
+        stream = None
+        with render_process_status("🎬 Analizando video y contexto...", expanded=True) as status:
             
-        with st.spinner("Analizando video (esto puede tomar un momento)..."):
+            status.write("Consultando repositorio para contexto del target...")
             relevant_text_context = get_relevant_info(db, f"Contexto: {target_audience}", selected_files)
             if len(relevant_text_context) > 200000: relevant_text_context = relevant_text_context[:200000]
-                
+            
+            status.write("Procesando video con visión artificial (Gemini)...")
             video_file_data = {'mime_type': uploaded_file.type, 'data': video_bytes}
             prompt_parts = get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context)
             prompt_parts.append("\n\n**Video para evaluar:**")
@@ -62,11 +68,16 @@ def video_evaluation_mode(db, selected_files):
             
             stream = call_gemini_stream(prompt_parts)
             
-            if stream: 
-                st.markdown("### Resultados Evaluación:")
-                response = st.write_stream(stream)
-                st.session_state.mode_state["video_evaluation_result"] = response
-                log_query_event(f"Evaluación Video: {uploaded_file.name}", mode=c.MODE_VIDEO_EVAL)
-                st.rerun()
-            else: 
-                st.error("No se pudo generar evaluación video.")
+            if stream:
+                status.update(label="¡Análisis completado!", state="complete", expanded=False)
+            else:
+                status.update(label="Error en el análisis", state="error")
+        
+        if stream: 
+            st.markdown("### Resultados Evaluación:")
+            response = st.write_stream(stream)
+            st.session_state.mode_state["video_evaluation_result"] = response
+            log_query_event(f"Evaluación Video: {uploaded_file.name}", mode=c.MODE_VIDEO_EVAL)
+            st.rerun()
+        else: 
+            st.error("No se pudo generar evaluación video.")
