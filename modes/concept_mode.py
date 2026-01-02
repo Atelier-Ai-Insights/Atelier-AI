@@ -4,19 +4,17 @@ from services.gemini_api import call_gemini_stream
 from services.supabase_db import log_query_event
 from prompts import get_concept_gen_prompt
 import constants as c 
-from reporting.pdf_generator import generate_pdf_html
-# NOTA: Quitamos docx_generator de aquí para evitar el error circular
 from config import banner_file
+
+# --- GENERADORES (Top Level Import - FASE 1) ---
+from reporting.pdf_generator import generate_pdf_html
+from reporting.docx_generator import generate_docx
 
 # =====================================================
 # MODO: GENERACIÓN DE CONCEPTOS
 # =====================================================
 
 def concept_generation_mode(db, selected_files):
-    # --- FIX IMPORTACIÓN CIRCULAR ---
-    # Importamos esto AQUÍ dentro, solo cuando se necesita.
-    from reporting.docx_generator import generate_docx
-    # --------------------------------
     
     st.subheader("Generación de Conceptos")
     st.markdown("Genera concepto de producto/servicio a partir de idea y hallazgos.")
@@ -27,13 +25,11 @@ def concept_generation_mode(db, selected_files):
         st.markdown("### Concepto Generado")
         st.markdown(st.session_state.mode_state["generated_concept"])
         
-        st.divider() # Línea separadora visual
+        st.divider()
 
-        # --- BOTONES DE ACCIÓN ---
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            # Generar PDF
             pdf_bytes = generate_pdf_html(
                 st.session_state.mode_state["generated_concept"], 
                 title="Concepto de Innovación", 
@@ -43,7 +39,6 @@ def concept_generation_mode(db, selected_files):
                 st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name="concepto.pdf", mime="application/pdf", width='stretch')
 
         with col2:
-            # Generar Word
             docx_bytes = generate_docx(
                 st.session_state.mode_state["generated_concept"], 
                 title="Concepto de Innovación"
@@ -75,7 +70,6 @@ def concept_generation_mode(db, selected_files):
                 context_info = get_relevant_info(db, product_idea, selected_files)
                 prompt = get_concept_gen_prompt(product_idea, context_info)
                 
-                # --- STREAMING ---
                 stream = call_gemini_stream(prompt)
                 
                 if stream:
