@@ -8,7 +8,7 @@ from prompts import get_trend_synthesis_prompt
 import random
 import json
 
-# --- NUEVAS IMPORTACIONES PARA LOGS ---
+# --- IMPORTS DE LOGS ---
 from services.supabase_db import log_query_event
 import constants as c
 
@@ -22,7 +22,7 @@ def smart_internal_search(db, keyword):
     2. Busca en el repositorio fragmentos que coincidan con CUALQUIERA de los términos.
     3. Retorna un contexto denso y relevante.
     """
-    # 1. Expansión Semántica (Rápida)
+    # 1. Expansión Semántica
     expand_prompt = f"Para investigar '{keyword}' en una base de datos de investigación de mercados, dame 3 palabras clave adicionales (sinónimos, categorías superiores o temas técnicos relacionados). Solo las palabras separadas por coma, nada más."
     try:
         variants_str = call_gemini_api(expand_prompt)
@@ -38,14 +38,13 @@ def smart_internal_search(db, keyword):
     
     for doc in db:
         doc_name = doc.get('nombre_archivo', 'Documento sin nombre')
-        # Aplanamos el contenido del doc para buscar
         content_chunks = []
         for grupo in doc.get("grupos", []):
             content_chunks.append(str(grupo.get('contenido_texto', '')))
         
         full_text = " ".join(content_chunks).lower()
         
-        # Scoring simple: ¿Cuántos términos aparecen?
+        # Scoring simple
         score = 0
         matched_terms = []
         for term in search_terms:
@@ -54,7 +53,7 @@ def smart_internal_search(db, keyword):
                 matched_terms.append(term)
         
         if score > 0:
-            # Extraer un fragmento relevante (Snippet)
+            # Snippet
             start_idx = -1
             for term in matched_terms:
                 idx = full_text.find(term)
@@ -73,9 +72,9 @@ def smart_internal_search(db, keyword):
                 "matches": matched_terms
             })
 
-    # 3. Ordenar por relevancia y formatear
+    # 3. Ordenar
     hits.sort(key=lambda x: x['score'], reverse=True)
-    top_hits = hits[:7] # Top 7 documentos más relevantes
+    top_hits = hits[:7] 
     
     if not top_hits:
         return ""
@@ -89,7 +88,7 @@ def smart_internal_search(db, keyword):
     return context_str
 
 # =====================================================
-# MODO: TREND RADAR 360 (CON LOGS ACTIVOS)
+# MODO: TREND RADAR 360 (CORREGIDO)
 # =====================================================
 
 def calculate_growth(df):
@@ -196,8 +195,13 @@ def google_trends_mode():
         t1, t2, t3 = st.tabs(["Temporal", "Geográfico", "Contexto"])
         
         with t1:
-            c = alt.Chart(trend_df).mark_area(line={'color':'#29B5E8'}, color=alt.Gradient(gradient='linear', stops=[alt.GradientStop(color='#29B5E8', offset=0), alt.GradientStop(color='white', offset=1)], x1=1, x2=1, y1=1, y2=0)).encode(x='Fecha:T', y='Interés:Q', tooltip=['Fecha', 'Interés']).properties(height=300)
-            st.altair_chart(c, use_container_width=True)
+            # CAMBIO: Usamos chart_time en lugar de c para evitar conflictos
+            chart_time = alt.Chart(trend_df).mark_area(
+                line={'color':'#29B5E8'}, 
+                color=alt.Gradient(gradient='linear', stops=[alt.GradientStop(color='#29B5E8', offset=0), alt.GradientStop(color='white', offset=1)], x1=1, x2=1, y1=1, y2=0)
+            ).encode(x='Fecha:T', y='Interés:Q', tooltip=['Fecha', 'Interés']).properties(height=300)
+            
+            st.altair_chart(chart_time, use_container_width=True)
         
         with t2:
             if geo_df is not None:
@@ -216,10 +220,12 @@ def google_trends_mode():
                     st.markdown(internal_context)
 
         st.divider()
-        st.markdown("### 🎯 Brief de Estrategia")
+        st.markdown("### Brief de Estrategia")
         
-        # --- AQUÍ ESTABA EL ERROR: AGREGAMOS EL LOG ---
         if stream:
             st.write_stream(stream)
-            # REGISTRO EN SUPABASE
-            log_query_event(f"Trend Radar: {keyword}", mode=c.MODE_TREND_ANALYSIS)
+            # REGISTRO EN SUPABASE (Ahora funcionará porque 'c' es el módulo constants)
+            try:
+                log_query_event(f"Trend Radar: {keyword}", mode=c.MODE_TREND_ANALYSIS)
+            except Exception as e:
+                print(f"Error logging: {e}")
