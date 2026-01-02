@@ -56,11 +56,11 @@ def grounded_chat_mode(db, selected_files):
         suggestions = st.session_state.mode_state.get("chat_suggestions", [])
         if suggestions:
             st.write("") # Espaciador visual
-            st.caption("🤔 **Profundizar en el tema:**")
+            st.caption("**Profundizar en el tema:**")
             
             # Mostramos una debajo de la otra
             for i, sugg in enumerate(suggestions):
-                if st.button(f"👉 {sugg}", key=f"sugg_btn_{i}", use_container_width=True):
+                if st.button(f"{sugg}", key=f"sugg_btn_{i}", use_container_width=True):
                     prompt_to_process = sugg
             st.write("") # Espaciador antes del input
 
