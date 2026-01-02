@@ -36,7 +36,7 @@ def concept_generation_mode(db, selected_files):
                 banner_path=banner_file
             )
             if pdf_bytes:
-                st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name="concepto.pdf", mime="application/pdf", width='stretch')
+                st.download_button("Descargar PDF", data=pdf_bytes, file_name="concepto.pdf", mime="application/pdf", width='stretch')
 
         with col2:
             docx_bytes = generate_docx(
@@ -45,7 +45,7 @@ def concept_generation_mode(db, selected_files):
             )
             if docx_bytes:
                 st.download_button(
-                    "📝 Descargar Word", 
+                    "Descargar Word", 
                     data=docx_bytes, 
                     file_name="concepto.docx", 
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
@@ -54,7 +54,7 @@ def concept_generation_mode(db, selected_files):
                 )
 
         with col3:
-            if st.button("🔄 Nuevo Concepto", width='stretch'): 
+            if st.button("Nuevo Concepto", width='stretch'): 
                 st.session_state.mode_state.pop("generated_concept")
                 st.rerun()
 
