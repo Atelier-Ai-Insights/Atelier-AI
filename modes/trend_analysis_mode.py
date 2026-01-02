@@ -111,7 +111,7 @@ def google_trends_mode():
     geo_map = {"Colombia": "CO", "México": "MX", "Global": ""}
     geo_code = geo_map[market]
 
-    if st.button("🚀 Escanear Tendencia", type="primary", use_container_width=True):
+    if st.button("Escanear Tendencia", type="primary", use_container_width=True):
         if not keyword: st.warning("Ingresa un término."); return
 
         trend_df, geo_df = None, None
