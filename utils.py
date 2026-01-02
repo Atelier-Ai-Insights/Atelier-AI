@@ -4,6 +4,7 @@ import json
 import re
 import fitz  # PyMuPDF
 import time
+from contextlib import contextmanager
 
 # ==============================
 # GESTIÓN DE STOPWORDS
@@ -22,6 +23,30 @@ def get_stopwords():
         'video', 'audio', 'imagen', 'transcripcion'
     }
     return base_stopwords | custom_list
+
+# ==============================
+# UI COMPONENTS (NUEVO FASE 2)
+# ==============================
+@contextmanager
+def render_process_status(label="Procesando solicitud...", expanded=True):
+    """
+    Componente visual estandarizado para procesos largos.
+    Uso:
+        with render_process_status("Analizando video...") as status:
+            # Tu código aquí
+            status.write("Paso 1 completado")
+            status.update(label="¡Listo!", state="complete", expanded=False)
+    """
+    status_container = st.status(label, expanded=expanded)
+    try:
+        yield status_container
+    except Exception as e:
+        status_container.update(label="❌ Error en el proceso", state="error", expanded=True)
+        st.error(f"Ocurrió un error inesperado: {str(e)}")
+        # Opcional: Relanzar error si queremos que lo capture otro handler
+        # raise e
+    # No cerramos automáticamente el status aquí para permitir que el código interno
+    # decida cuándo marcarlo como 'complete' o dejarlo abierto.
 
 # ==============================
 # FUNCIONES AUXILIARES
@@ -54,7 +79,7 @@ def clean_gemini_json(text):
     return text.strip()
 
 # ==============================
-# PROCESAMIENTO DE PDFS (ONE PAGER)
+# PROCESAMIENTO DE PDFS
 # ==============================
 def extract_text_from_pdfs(uploaded_files):
     combined_text = ""
@@ -73,7 +98,7 @@ def extract_text_from_pdfs(uploaded_files):
     return combined_text
 
 # ==============================
-# RAG: RECUPERACIÓN DE INFORMACIÓN (Segura)
+# RAG: RECUPERACIÓN DE INFORMACIÓN
 # ==============================
 def get_relevant_info(db, question, selected_files, max_chars=150000):
     all_text = ""
@@ -111,14 +136,10 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
 
             except Exception as e: 
                 print(f"Error proc doc '{doc_name}': {e}")
-
-    print(f"🔥 DEBUG TAMAÑO: Enviando contexto de {len(all_text)} caracteres a la IA.")
     return all_text
 
 def build_rag_context(query, documents, max_chars=100000):
-    """
-    Filtra y construye un contexto relevante para Text Analysis.
-    """
+    """Filtra y construye un contexto relevante para Text Analysis."""
     if not query or not documents: return ""
 
     query_terms = set(normalize_text(query).split())
