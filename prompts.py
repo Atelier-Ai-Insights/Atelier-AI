@@ -60,21 +60,30 @@ def get_grounded_chat_prompt(conversation_history, relevant_info):
 
 def get_followup_suggestions_prompt(previous_answer):
     """
-    Genera 3 preguntas de seguimiento basadas en la respuesta que acaba de dar la IA.
+    Genera 3 preguntas de seguimiento GARANTISTAS (que probablemente tengan respuesta).
+    Estrategia: Profundizar (Drill-down) en lugar de ampliar (Expand-out).
     """
     return f"""
-    **Contexto:** Acabas de dar esta respuesta a un usuario sobre un estudio de mercado:
-    "{previous_answer[:3000]}" (texto truncado para contexto)
+    **Contexto:** Acabas de dar esta respuesta basada en un documento de investigación:
+    "{previous_answer[:3000]}"
     
-    **Tarea:** Sugiere 3 preguntas cortas de seguimiento (Follow-up) que el usuario podría hacer para profundizar en ESTE tema específico.
+    **Problema:** El usuario quiere saber más, pero no sabemos si el documento tiene datos numéricos exactos o fechas precisas que no mencionaste.
     
-    **Reglas:**
-    1. Que sean curiosas y estratégicas.
-    2. Máximo 10 palabras por pregunta.
-    3. No repitas lo que ya se dijo.
+    **Tarea:** Sugiere 3 preguntas para continuar la conversación que tengan ALTA PROBABILIDAD de ser respondidas con la información disponible.
+    
+    **Estrategia de Preguntas (Usa estos ángulos):**
+    1. **El "Por qué":** Si la respuesta menciona un comportamiento o preferencia, pregunta por las razones.
+    2. **El "Cómo":** Pregunta por detalles de la experiencia, el uso o el hábito mencionado.
+    3. **Matices/Contrastes:** Pregunta si hay diferencias entre grupos (ej. jóvenes vs adultos) o regiones, SIEMPRE QUE el contexto lo sugiera.
+    4. **Ejemplos:** Pide "citas textuales", "verbatims" o "casos específicos" de lo mencionado.
+    
+    **Reglas de Seguridad:**
+    - 🚫 NO preguntes por datos financieros, fechas exactas o estadísticas si no se mencionaron ya.
+    - 🚫 NO preguntes "¿Qué más dice el documento?" (es muy vago).
+    - ✅ PREFIERE preguntas como: "¿Qué razones dan para...?", "¿Hay menciones sobre...?", "¿Cómo describen la experiencia de...?"
     
     **Salida:** SOLO devuelve un JSON con una lista de strings.
-    Ejemplo: ["¿Qué marcas lideran ese segmento?", "¿Hay diferencias por región?", "¿Qué dice sobre precios?"]
+    Ejemplo: ["¿Qué razones dan para ese rechazo?", "¿Hay diferencias por región?", "¿Qué ejemplos específicos mencionan?"]
     """
 
 # ==============================================================================
