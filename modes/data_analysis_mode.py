@@ -63,19 +63,19 @@ def show_project_analyzer(df):
     # --- MENÚ DE NAVEGACIÓN ---
     st.markdown("---")
     c1 = st.columns(3)
-    if plan.get("da_has_pivot_table") and c1[0].button("🧮 Tablas Dinámicas", type="primary" if sub_modo=="Tabla Dinámica" else "secondary", use_container_width=True): 
+    if plan.get("da_has_pivot_table") and c1[0].button("Tablas Dinámicas", type="primary" if sub_modo=="Tabla Dinámica" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Tabla Dinámica"; st.rerun()
-    if plan.get("da_has_autocode") and c1[1].button("🏷️ Auto-Code", type="primary" if sub_modo=="Auto-Codificación" else "secondary", use_container_width=True): 
+    if plan.get("da_has_autocode") and c1[1].button("Auto-Code", type="primary" if sub_modo=="Auto-Codificación" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Auto-Codificación"; st.rerun()
-    if plan.get("da_has_wordcloud") and c1[2].button("☁️ Nube Palabras", type="primary" if sub_modo=="Nube de Palabras" else "secondary", use_container_width=True): 
+    if plan.get("da_has_wordcloud") and c1[2].button("Nube Palabras", type="primary" if sub_modo=="Nube de Palabras" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Nube de Palabras"; st.rerun()
     
     c2 = st.columns(3)
-    if plan.get("da_has_correlation") and c2[0].button("🔥 Correlación", type="primary" if sub_modo=="Análisis de Correlación" else "secondary", use_container_width=True): 
+    if plan.get("da_has_correlation") and c2[0].button("Correlación", type="primary" if sub_modo=="Análisis de Correlación" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Análisis de Correlación"; st.rerun()
-    if plan.get("da_has_group_comparison") and c2[1].button("🆚 Comparar Grupos", type="primary" if sub_modo=="Comparación de Grupos" else "secondary", use_container_width=True): 
+    if plan.get("da_has_group_comparison") and c2[1].button("Comparar Grupos", type="primary" if sub_modo=="Comparación de Grupos" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Comparación de Grupos"; st.rerun()
-    if plan.get("da_has_ppt_export") and c2[2].button("💾 Exportar PPT", type="primary" if sub_modo=="Exportar a PPT" else "secondary", use_container_width=True): 
+    if plan.get("da_has_ppt_export") and c2[2].button("Exportar PPT", type="primary" if sub_modo=="Exportar a PPT" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Exportar a PPT"; st.rerun()
 
     st.divider()
@@ -213,7 +213,7 @@ def show_project_analyzer(df):
                 
                 out = io.BytesIO()
                 prs.save(out)
-                st.download_button("📥 Descargar Archivo", data=out.getvalue(), file_name=f"analisis.pptx")
+                st.download_button("Descargar Archivo", data=out.getvalue(), file_name=f"analisis.pptx")
                 
             except Exception as e:
                 st.error(f"Error generando PPT: {e}")
