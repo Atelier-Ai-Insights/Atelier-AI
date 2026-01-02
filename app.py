@@ -68,7 +68,6 @@ def run_user_mode(db_full, user_features, footer_html):
             c.MODE_TEXT_ANALYSIS: user_features.get("transcript_file_limit", 0) > 0,
             c.MODE_DATA_ANALYSIS: True,
             c.MODE_ETNOCHAT: user_features.get("has_etnochat_analysis"),
-            # --- ¡AQUÍ AGREGAMOS LA TENDENCIA! ---
             c.MODE_TREND_ANALYSIS: True 
         },
         "Evaluación": {
@@ -112,7 +111,6 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.header("Filtros de Búsqueda")
     
     # Algunos modos no requieren filtros de BD
-    # Agregamos c.MODE_TREND_ANALYSIS a la lista de excepciones si no quieres filtros allí
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT, c.MODE_TREND_ANALYSIS] 
     
     # 0. PREPARACIÓN INICIAL DE DATOS
@@ -157,6 +155,13 @@ def run_user_mode(db_full, user_features, footer_html):
         if run_filters is False:
              st.sidebar.caption("Filtros no disponibles en este modo.")
 
+    # ==============================================================================
+    # 2. ESPACIO RESERVADO PARA BITÁCORA (Justo antes de cerrar sesión)
+    # ==============================================================================
+    # Este contenedor vacío se pasa al Chat para que "pinte" la bitácora aquí,
+    # asegurando que quede encima del botón de logout.
+    bitacora_placeholder = st.sidebar.container()
+
     # --- LOGOUT ---
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         try:
@@ -185,7 +190,8 @@ def run_user_mode(db_full, user_features, footer_html):
 
     elif modo == c.MODE_CHAT: 
         from modes.chat_mode import grounded_chat_mode
-        grounded_chat_mode(db_filtered, selected_files)
+        # PASAMOS EL PLACEHOLDER AL CHAT
+        grounded_chat_mode(db_filtered, selected_files, bitacora_placeholder)
 
     elif modo == c.MODE_IDEA_EVAL: 
         from modes.idea_eval_mode import idea_evaluator_mode
@@ -219,7 +225,6 @@ def run_user_mode(db_full, user_features, footer_html):
         from modes.synthetic_mode import synthetic_users_mode
         synthetic_users_mode(db_filtered, selected_files)
         
-    # --- ¡ENRUTADOR NUEVO! ---
     elif modo == c.MODE_TREND_ANALYSIS:
         from modes.trend_analysis_mode import google_trends_mode
         google_trends_mode()
