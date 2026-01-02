@@ -18,7 +18,7 @@ def update_query_rating(query_id, rating):
     except Exception as e: print(f"Error rating: {e}")
 
 # =====================================================
-# MODO: CHAT DE CONSULTA DIRECTA
+# MODO: CHAT DE CONSULTA DIRECTA (CON VISOR DE BITÁCORA)
 # =====================================================
 
 def grounded_chat_mode(db, selected_files, sidebar_container=None):
@@ -27,33 +27,62 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
     target_area = sidebar_container if sidebar_container else st.sidebar
     
     with target_area:
-        # 1. ELIMINAMOS LA LÍNEA DE AQUÍ (Para que quede pegado a los filtros)
-        # st.divider() 
-        
+        # st.divider() se removió para pegar a filtros
         st.markdown("### 🧠 Bitácora del Proyecto")
         memories = get_project_memory()
         
         if memories:
             for mem in memories:
+                # Snippet para el título
                 snippet = " ".join(mem['insight_content'].split()[:5])
                 if len(snippet) < len(mem['insight_content']): snippet += "..."
                 
                 with st.expander(f"📌 {snippet}", expanded=False):
-                    st.caption(f"📅 {mem['created_at'][:10]} | {mem['project_context']}")
-                    st.write(mem['insight_content'])
+                    st.caption(f"📅 {mem['created_at'][:10]}")
                     
-                    if st.button("Eliminar", key=f"del_mem_{mem['id']}", use_container_width=True):
-                        delete_insight(mem['id'])
-                        st.rerun()
+                    # DOS BOTONES: VER y BORRAR
+                    c_view, c_del = st.columns([1, 1])
+                    
+                    with c_view:
+                        # AL CLICAR: Guardamos el insight en el estado para verlo en el centro
+                        if st.button("👁️ Leer", key=f"view_mem_{mem['id']}", use_container_width=True):
+                            st.session_state.focused_insight = mem
+                            st.rerun()
+                    
+                    with c_del:
+                        if st.button("🗑️", key=f"del_mem_{mem['id']}", use_container_width=True, help="Eliminar"):
+                            delete_insight(mem['id'])
+                            # Si borramos el que estamos viendo, limpiamos la vista
+                            if st.session_state.get("focused_insight", {}).get("id") == mem['id']:
+                                del st.session_state.focused_insight
+                            st.rerun()
         else:
-            st.caption("No hay insights guardados para este proyecto aún.")
+            st.caption("No hay insights guardados.")
             
-        # 2. PONEMOS LA LÍNEA AQUÍ (Para separar del botón Cerrar Sesión)
-        st.divider() 
+        st.divider() # Línea al final
     
     # --- ÁREA PRINCIPAL ---
     st.subheader("Chat de Consulta Directa")
     
+    # === [NUEVO] VISOR DE INSIGHT EN ZONA DE TRABAJO ===
+    if "focused_insight" in st.session_state:
+        insight = st.session_state.focused_insight
+        
+        with st.container(border=True):
+            # Encabezado del Visor
+            col_h1, col_h2 = st.columns([8, 1])
+            with col_h1:
+                st.markdown(f"**📌 Insight Guardado:** *{insight['project_context']}*")
+            with col_h2:
+                # Botón X para cerrar el visor
+                if st.button("✕", key="close_insight_view"):
+                    del st.session_state.focused_insight
+                    st.rerun()
+            
+            # Contenido grande y legible
+            st.info(insight['insight_content'], icon="🧠")
+            st.caption(f"Guardado el: {insight['created_at']}")
+
     # 1. VALIDACIÓN INICIAL
     if not selected_files:
         st.info("👈 **Para comenzar:** Selecciona una Marca, Año y Proyecto en el menú lateral.")
