@@ -9,13 +9,15 @@ from services.gemini_api import call_gemini_api, call_gemini_stream
 from services.supabase_db import log_query_event, supabase, get_daily_usage
 from prompts import get_transcript_prompt, get_autocode_prompt, get_text_analysis_summary_prompt
 import constants as c
+from config import banner_file
+from utils import reset_transcript_chat_workflow, render_process_status
+
+# --- GENERADORES (Fase 1: Top Level Import) ---
 from reporting.pdf_generator import generate_pdf_html
 from reporting.docx_generator import generate_docx
-from config import banner_file
-from utils import reset_transcript_chat_workflow, build_rag_context
 
 # =====================================================
-# MODO: ANÁLISIS DE TEXTOS (OPTIMIZADO PARA SÍNTESIS Y PATRONES)
+# MODO: ANÁLISIS DE TEXTOS (OPTIMIZADO)
 # =====================================================
 
 TEXT_PROJECT_BUCKET = "text_project_files"
@@ -63,14 +65,21 @@ def show_text_project_creator(user_id, plan_limit):
             if not all([p_name, p_brand, u_files]): st.warning("Completa campos."); return
             
             p_folder = f"{user_id}/{uuid.uuid4()}"
-            with st.spinner("Subiendo archivos..."):
+            
+            # --- STATUS VISUAL ---
+            with render_process_status("Subiendo archivos al repositorio...", expanded=True) as status:
                 try:
-                    for f in u_files:
+                    for idx, f in enumerate(u_files):
+                        status.write(f"Procesando {idx+1}/{len(u_files)}: {f.name}")
                         safe_name = re.sub(r'[^\w._-]', '', f.name.replace(' ', '_'))
                         supabase.storage.from_(TEXT_PROJECT_BUCKET).upload(f"{p_folder}/{safe_name}", f.getvalue(), {"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"})
+                    
                     supabase.table("text_projects").insert({"project_name": p_name, "project_brand": p_brand, "project_year": int(p_year), "storage_path": p_folder, "user_id": user_id}).execute()
+                    status.update(label="¡Proyecto creado!", state="complete", expanded=False)
                     st.success("Proyecto creado!"); st.rerun()
-                except Exception as e: st.error(f"Error: {e}")
+                except Exception as e: 
+                    status.update(label="Error en creación", state="error")
+                    st.error(f"Error: {e}")
 
 def show_text_project_list(user_id):
     st.subheader("Mis Proyectos de Texto")
@@ -93,23 +102,21 @@ def show_text_project_list(user_id):
                     except Exception as e: st.error(f"Error: {e}")
     except Exception as e: st.error(f"Error: {e}")
 
-# --- Función de Análisis (MODIFICADA PARA SÍNTESIS PROFUNDA) ---
+# --- Función de Análisis ---
 
 def show_text_project_analyzer(summary_context, project_name, documents_list):
     st.markdown(f"### Analizando: **{project_name}**")
     if st.button("← Volver"): st.session_state.mode_state = {}; st.rerun()
     st.divider()
     
-    # 1. PREPARACIÓN DE CONTEXTO COMPLETO (EVIDENCIA REAL)
-    # Concatenamos el texto real de los documentos para alimentar a la IA con datos crudos, no resumen.
-    # Límite de seguridad de 500k caracteres (Gemini Flash soporta ~1M tokens, esto es seguro).
+    # Contexto completo con límite de seguridad
     all_docs_text = "\n".join([f"--- DOC: {d['source']} ---\n{d['content']}" for d in documents_list])
     if len(all_docs_text) > 500000: 
         all_docs_text = all_docs_text[:500000] + "\n...(texto truncado por límite de seguridad)"
     
     tab_chat, tab_autocode = st.tabs(["Análisis de Notas y Transcripciones", "Auto-Codificación"])
 
-    # --- PESTAÑA 1: CHAT DE SÍNTESIS Y PATRONES ---
+    # --- PESTAÑA 1: CHAT DE SÍNTESIS ---
     with tab_chat:
         st.header("Análisis de Notas y Transcripciones")
         if "transcript_chat_history" not in st.session_state.mode_state: 
@@ -132,16 +139,19 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                 st.error(f"Límite diario alcanzado.")
             else:
                 with st.chat_message("assistant", avatar="✨"):
-                    status_ph = st.empty()
-                    status_ph.markdown("🕵️ **Buscando patrones en la evidencia...**")
                     
-                    # RAG Híbrido: Priorizamos 'all_docs_text' (la evidencia) sobre el resumen.
-                    final_context = f"{all_docs_text}\n\n--- CONTEXTO GENERAL (Resumen) ---\n{summary_context}"
-                    
-                    chat_prompt = get_transcript_prompt(final_context, user_prompt)
-                    
-                    stream = call_gemini_stream(chat_prompt) 
-                    status_ph.empty()
+                    # --- STATUS VISUAL ---
+                    stream = None
+                    with render_process_status("🕵️ Buscando patrones en la evidencia...", expanded=True) as status:
+                        
+                        final_context = f"{all_docs_text}\n\n--- CONTEXTO GENERAL (Resumen) ---\n{summary_context}"
+                        chat_prompt = get_transcript_prompt(final_context, user_prompt)
+                        
+                        stream = call_gemini_stream(chat_prompt) 
+                        if stream:
+                             status.update(label="¡Respuesta generada!", state="complete", expanded=False)
+                        else:
+                             status.update(label="Error en respuesta", state="error")
 
                     if stream:
                         response_text = st.write_stream(stream)
@@ -189,14 +199,15 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
             if st.button("Generar Códigos y Patrones", type="primary", width='stretch'):
                 if not topic.strip(): st.warning("Describe el tema para orientar a la IA.")
                 else:
-                    status_ph = st.empty()
-                    status_ph.markdown("🔍 **Leyendo documentos y detectando frecuencias...**")
-                    
-                    # USAMOS EL TEXTO COMPLETO (all_docs_text) EN LUGAR DEL RESUMEN
-                    prompt = get_autocode_prompt(all_docs_text, topic)
-                    
-                    stream = call_gemini_stream(prompt)
-                    status_ph.empty()
+                    # --- STATUS VISUAL ---
+                    stream = None
+                    with render_process_status("🔍 Leyendo documentos y detectando frecuencias...", expanded=True) as status:
+                        prompt = get_autocode_prompt(all_docs_text, topic)
+                        stream = call_gemini_stream(prompt)
+                        if stream:
+                             status.update(label="¡Análisis completado!", state="complete", expanded=False)
+                        else:
+                             status.update(label="Error en análisis", state="error")
                     
                     if stream:
                         res = st.write_stream(stream)
@@ -211,19 +222,21 @@ def text_analysis_mode():
 
     # 1. Cargar Docs
     if "ta_selected_project_id" in st.session_state.mode_state and "ta_documents_list" not in st.session_state.mode_state:
-        ph = st.empty(); ph.info("📥 Descargando archivos...")
-        docs = load_text_project_data(st.session_state.mode_state["ta_storage_path"]) 
-        ph.empty()
+        with render_process_status("Descargando archivos del repositorio...", expanded=True) as status:
+            docs = load_text_project_data(st.session_state.mode_state["ta_storage_path"]) 
+            status.update(label="Carga completa", state="complete", expanded=False)
+            
         if docs: st.session_state.mode_state["ta_documents_list"] = docs
         else: st.session_state.mode_state.pop("ta_selected_project_id")
 
-    # 2. Generar Resumen (Se mantiene como contexto auxiliar, pero ya no es la única fuente)
+    # 2. Generar Resumen Inicial
     if "ta_documents_list" in st.session_state.mode_state and "ta_summary_context" not in st.session_state.mode_state:
-        ph = st.empty(); ph.info("🧠 Generando resumen inicial...")
-        docs = st.session_state.mode_state["ta_documents_list"]
-        summ_in = "".join([f"\nDoc: {d['source']}\n{d['content'][:2500]}\n..." for d in docs])
-        summ = call_gemini_api(get_text_analysis_summary_prompt(summ_in), generation_config_override={"max_output_tokens": 8192})
-        ph.empty()
+        with render_process_status("🧠 Generando resumen ejecutivo inicial...", expanded=True) as status:
+            docs = st.session_state.mode_state["ta_documents_list"]
+            summ_in = "".join([f"\nDoc: {d['source']}\n{d['content'][:2500]}\n..." for d in docs])
+            summ = call_gemini_api(get_text_analysis_summary_prompt(summ_in), generation_config_override={"max_output_tokens": 8192})
+            status.update(label="Listo", state="complete", expanded=False)
+            
         if summ: st.session_state.mode_state["ta_summary_context"] = summ; st.rerun()
 
     # 3. Vistas
