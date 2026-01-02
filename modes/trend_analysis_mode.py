@@ -8,171 +8,183 @@ from prompts import get_trend_synthesis_prompt
 import random
 
 # =====================================================
-# MODO: TREND RADAR 360 (ROBUSTO ANTI-ERROR)
+# MODO: TREND RADAR PRO (GEO + TEMAS + METRICAS)
 # =====================================================
 
-def google_trends_mode():
-    st.subheader("📡 Radar de Tendencias 360°")
-    st.markdown("Triangulación de datos: **Mercado en Vivo** + **Inteligencia Interna** + **IA**.")
-    
-    # Mensaje de ayuda para educar al usuario sobre Keywords vs Frases
-    with st.expander("ℹ️ Tips de búsqueda"):
-        st.caption("Google Trends funciona mejor con **términos cortos** (ej: 'Sellos Octagonales', 'Air Fryer') en lugar de frases largas. La IA se encargará de profundizar en el análisis.")
+def calculate_growth(df):
+    """Calcula el crecimiento porcentual entre el promedio inicial y final."""
+    if df.empty or len(df) < 2: return 0
+    first_half = df['Interés'].iloc[:len(df)//2].mean()
+    last_half = df['Interés'].iloc[len(df)//2:].mean()
+    if first_half == 0: return 100 if last_half > 0 else 0
+    return ((last_half - first_half) / first_half) * 100
 
-    # Input: Simple y limpio
-    c1, c2 = st.columns([3, 1])
-    keyword = c1.text_input("Término a explorar:", placeholder="Ej: Sellos Octagonales")
-    market = c2.selectbox("Mercado", ["Colombia", "México", "Global"], index=0)
-    
-    # Mapeo de códigos de país para Pytrends
+def google_trends_mode():
+    st.subheader("📡 Radar de Tendencias Pro")
+    st.markdown("Análisis multidimensional: **Tiempo + Espacio + Contexto**.")
+
+    # --- FILTROS AVANZADOS ---
+    with st.container(border=True):
+        c1, c2, c3 = st.columns([2, 1, 1])
+        keyword = c1.text_input("Término:", placeholder="Ej: Ropa de Segunda, Creatina...")
+        market = c2.selectbox("Mercado", ["Colombia", "México", "Global"], index=0)
+        timeframe = c3.selectbox("Ventana de Tiempo", 
+                                 options=["today 1-m", "today 12-m", "today 5-y"], 
+                                 format_func=lambda x: "Últimos 30 días" if "1-m" in x else "Último Año" if "12-m" in x else "5 Años")
+
     geo_map = {"Colombia": "CO", "México": "MX", "Global": ""}
     geo_code = geo_map[market]
 
-    if st.button("Escanear Radar", type="primary", use_container_width=True):
+    if st.button("🚀 Escanear Tendencia", type="primary", use_container_width=True):
         if not keyword:
             st.warning("Ingresa un término."); return
 
         # Variables de estado
         trend_df = None
-        rising_terms = []
+        geo_df = None
+        related_topics = []
+        rising_queries = []
+        
         internal_context = ""
         is_simulation = False
-        simulation_reason = "" # Razón por la cual se activó la simulación
-        
-        # --- PROCESO UNIFICADO CON STATUS ---
-        stream = None
+        simulation_reason = ""
         
         # Acceso a DB
         db = st.session_state.get("db_full", [])
         all_files = [d['nombre_archivo'] for d in db] if db else []
 
-        with render_process_status(f"Analizando '{keyword}' en múltiples fuentes...", expanded=True) as status:
+        with render_process_status(f"Ejecutando análisis profundo para '{keyword}'...", expanded=True) as status:
             
-            # PASO 1: CONTEXTO INTERNO (RAG)
-            status.write("📂 Buscando huellas en repositorio interno...")
-            internal_context = get_relevant_info(db, keyword, all_files, max_chars=10000)
+            # 1. RAG INTERNO
+            status.write("📂 Cruzando con repositorio interno...")
+            internal_context = get_relevant_info(db, keyword, all_files, max_chars=8000)
             
-            # PASO 2: GOOGLE TRENDS (INTENTO ROBUSTO)
-            status.write("🌍 Conectando con Google Trends (Live)...")
+            # 2. GOOGLE TRENDS API
+            status.write("🌍 Extrayendo datos de Google Trends (Time & Geo)...")
             try:
-                pytrends = TrendReq(hl='es', tz=300, timeout=(5, 10)) # Timeout corto para fallar rápido si es necesario
-                pytrends.build_payload([keyword], cat=0, timeframe='today 12-m', geo=geo_code)
+                pytrends = TrendReq(hl='es', tz=300, timeout=(5, 20))
+                pytrends.build_payload([keyword], cat=0, timeframe=timeframe, geo=geo_code)
                 
-                # A. Interés en el tiempo
+                # A. INTERÉS EN EL TIEMPO
                 data = pytrends.interest_over_time()
-                
-                # --- CORRECCIÓN CLAVE: MANEJO DE DATOS VACÍOS ---
-                if data.empty:
-                    # Si está vacío, lanzamos excepción manual para activar el fallback
-                    raise ValueError("EmptyData")
+                if data.empty: raise ValueError("EmptyData")
                 
                 data = data.reset_index()
                 trend_df = data.rename(columns={keyword: 'Interés', 'date': 'Fecha'})
                 
-                # B. Consultas Relacionadas (Rising)
+                # B. INTERÉS POR REGIÓN (Nuevo)
                 try:
-                    related = pytrends.related_queries()
-                    if related and keyword in related:
-                        rising_df = related[keyword]['rising']
-                        if rising_df is not None:
-                            rising_terms = rising_df.head(5)['query'].tolist()
-                except:
-                    pass 
+                    status.write("🗺️ Mapeando interés regional...")
+                    geo_data = pytrends.interest_by_region(resolution='REGION', inc_low_vol=True, inc_geo_code=False)
+                    geo_data = geo_data[geo_data[keyword] > 0].sort_values(keyword, ascending=False).head(10)
+                    if not geo_data.empty:
+                        geo_df = geo_data.reset_index().rename(columns={keyword: 'Interés', 'geoName': 'Región'})
+                except: pass
+
+                # C. TEMAS Y CONSULTAS (Nuevo)
+                try:
+                    status.write("🔗 Analizando contexto semántico...")
+                    # Queries
+                    rel_queries = pytrends.related_queries()
+                    if rel_queries and keyword in rel_queries:
+                        r_q = rel_queries[keyword]['rising']
+                        if r_q is not None: rising_queries = r_q.head(7)['query'].tolist()
+                    
+                    # Topics (Conceptos más amplios)
+                    rel_topics = pytrends.related_topics()
+                    if rel_topics and keyword in rel_topics:
+                        r_t = rel_topics[keyword]['rising']
+                        if r_t is not None: related_topics = r_t.head(5)['topic_title'].tolist()
+                except: pass
 
             except Exception as e:
-                # --- FALLBACK INTELIGENTE (SIMULACIÓN) ---
+                # FALLBACK (Simulación)
                 is_simulation = True
-                
-                # Determinamos la razón del fallo para informar al usuario
                 if "EmptyData" in str(e):
-                    simulation_reason = "El término es muy específico o largo para Google Trends."
-                    status.write("⚠️ Término muy específico (Sin volumen en Google). Activando IA Estratégica...")
+                    simulation_reason = "Término muy específico (Nicho)."
                 else:
-                    simulation_reason = "Google Trends no responde (Conexión/Bloqueo)."
-                    status.write("⚠️ Señal externa débil. Activando estimación predictiva...")
+                    simulation_reason = "Bloqueo temporal de API Google."
                 
-                # Generamos curva dummy coherente para que la UI no se rompa
-                dates = pd.date_range(end=pd.Timestamp.now(), periods=52, freq='W')
-                base = random.randint(20, 50)
-                # Creamos una tendencia aleatoria pero realista
-                values = [min(100, max(0, base + (i * 0.5) + random.randint(-15, 15))) for i in range(52)]
+                status.write(f"⚠️ {simulation_reason} Generando proyección IA...")
+                
+                # Generar datos dummy
+                periods = 30 if "1-m" in timeframe else 52
+                freq = 'D' if "1-m" in timeframe else 'W'
+                dates = pd.date_range(end=pd.Timestamp.now(), periods=periods, freq=freq)
+                values = [min(100, max(0, random.randint(20, 60) + (i * 0.5) + random.randint(-10, 10))) for i in range(periods)]
                 trend_df = pd.DataFrame({'Fecha': dates, 'Interés': values})
-                
-                # Rising terms simulados basados en la keyword del usuario
-                rising_terms = [f"tendencia {keyword}", f"futuro de {keyword}", f"análisis {keyword}"]
+                rising_queries = [f"precio {keyword}", f"opiniones {keyword}", f"donde comprar {keyword}"]
 
-            # PASO 3: SÍNTESIS CON IA
-            status.write("🧠 El Estratega Virtual está conectando los puntos...")
+            # 3. SÍNTESIS IA
+            status.write("🧠 Generando Brief Estratégico...")
             
-            # Preparamos los textos para el prompt
-            trend_summary = f"Tendencia {'simulada (estimación)' if is_simulation else 'real'}. Interés actual calculado: {trend_df['Interés'].iloc[-1]}/100."
-            rising_str = ", ".join(rising_terms) if rising_terms else "No se detectaron breakouts específicos."
+            # Preparar textos para el prompt
+            trend_txt = f"Tendencia {'simulada' if is_simulation else 'real'}. Valor actual: {trend_df['Interés'].iloc[-1]}."
+            geo_txt = ", ".join([f"{r['Región']} ({r['Interés']})" for i, r in geo_df.iterrows()]) if geo_df is not None else "Datos regionales no disponibles."
+            topics_txt = f"Temas: {', '.join(related_topics)}. Consultas: {', '.join(rising_queries)}."
             
-            # IMPORTANTE: Si es simulación por frase larga, le damos contexto extra a la IA
-            extra_instruction = ""
+            extra_inst = ""
             if is_simulation and "específico" in simulation_reason:
-                extra_instruction = f"NOTA: El usuario buscó una frase muy larga ('{keyword}'). Google Trends no dio datos. Asume el rol de consultor experto y responde analíticamente sobre el TEMA implícito en la frase."
+                extra_inst = f"NOTA: El usuario buscó '{keyword}', que es muy específico. Asume el rol de experto y analiza el TEMA general."
 
-            final_prompt = get_trend_synthesis_prompt(keyword, trend_summary + extra_instruction, internal_context, rising_str)
-            
+            final_prompt = get_trend_synthesis_prompt(keyword, trend_txt + extra_inst, geo_txt, topics_txt, internal_context)
             stream = call_gemini_stream(final_prompt)
             
-            if stream:
-                status.update(label="¡Análisis completado!", state="complete", expanded=False)
-            else:
-                status.update(label="Error en síntesis", state="error")
+            status.update(label="¡Análisis 360 Completado!", state="complete", expanded=False)
 
-        # --- VISUALIZACIÓN DE RESULTADOS ---
+        # --- DASHBOARD DE RESULTADOS ---
         
-        # Aviso de Simulación (Transparencia con el usuario)
+        # 1. KPIs
+        growth = calculate_growth(trend_df)
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Interés Actual", f"{int(trend_df['Interés'].iloc[-1])}/100")
+        k2.metric("Tendencia (Crecimiento)", f"{growth:.1f}%", delta_color="normal" if growth > 0 else "inverse")
+        k3.metric("Fuente", "IA Estimada" if is_simulation else "Google Live")
+        k4.metric("Validación Interna", "Sí" if len(internal_context) > 100 else "No", delta="Repo" if len(internal_context)>100 else None)
+
         if is_simulation:
-            st.warning(f"ℹ️ **Modo Estimación Activado:** {simulation_reason} Los datos del gráfico son una proyección referencial de la IA, no datos directos de Google.")
+            st.info(f"ℹ️ **Modo: {simulation_reason}** Los datos visuales son simulados, pero el análisis estratégico es real.")
 
-        # 1. KPIs Rápidos
-        k1, k2, k3 = st.columns(3)
-        last_val = trend_df['Interés'].iloc[-1]
+        # 2. Gráficos (Pestañas)
+        tab_time, tab_geo, tab_rel = st.tabs(["📈 Evolución Temporal", "🗺️ Mapa de Calor", "🔗 Contexto Semántico"])
         
-        k1.metric("Interés Proyectado", f"{int(last_val)}/100")
-        k2.metric("Fuente de Datos", "Estimación IA" if is_simulation else "Google Trends Live", delta_color="off")
-        k3.metric("Menciones Internas", "Sí detectadas" if len(internal_context) > 100 else "No detectadas", 
-                 delta="Validado" if len(internal_context) > 100 else "Nuevo Territorio")
-
-        # 2. Gráfico y Contexto
-        tab_main, tab_internal = st.tabs(["📈 Radar de Mercado", "🗂️ Evidencia Interna"])
-        
-        with tab_main:
-            # Gráfico
-            chart = alt.Chart(trend_df).mark_area(
+        with tab_time:
+            c = alt.Chart(trend_df).mark_area(
                 line={'color':'#29B5E8'},
-                color=alt.Gradient(
-                    gradient='linear',
-                    stops=[alt.GradientStop(color='#29B5E8', offset=0),
-                           alt.GradientStop(color='rgba(255,255,255,0)', offset=1)],
-                    x1=1, x2=1, y1=1, y2=0
-                )
-            ).encode(
-                x=alt.X('Fecha:T', title="Último Año"),
-                y=alt.Y('Interés:Q', title="Interés"),
-                tooltip=['Fecha', 'Interés']
-            ).properties(height=300)
-            st.altair_chart(chart, use_container_width=True)
-            
-            # Rising Terms (Píldoras)
-            if rising_terms:
-                st.caption("🔥 Temas Relacionados / Breakout Trends:")
-                tags_html = " ".join([f"<span style='background-color:#f0f2f6; padding:4px 8px; border-radius:12px; margin-right:5px; font-size:12px;'>📈 {term}</span>" for term in rising_terms])
-                st.markdown(tags_html, unsafe_allow_html=True)
+                color=alt.Gradient(gradient='linear', stops=[alt.GradientStop(color='#29B5E8', offset=0), alt.GradientStop(color='white', offset=1)], x1=1, x2=1, y1=1, y2=0)
+            ).encode(x=alt.X('Fecha:T'), y=alt.Y('Interés:Q'), tooltip=['Fecha', 'Interés']).properties(height=300)
+            st.altair_chart(c, use_container_width=True)
 
-        with tab_internal:
-            if len(internal_context) > 100:
-                st.info("💡 La IA encontró fragmentos relevantes en tus estudios anteriores:")
-                with st.container(height=300):
-                    st.markdown(internal_context)
+        with tab_geo:
+            if geo_df is not None and not geo_df.empty:
+                c_geo = alt.Chart(geo_df).mark_bar().encode(
+                    x=alt.X('Interés:Q'),
+                    y=alt.Y('Región:N', sort='-x'),
+                    color=alt.Color('Interés:Q', scale=alt.Scale(scheme='blues')),
+                    tooltip=['Región', 'Interés']
+                ).properties(height=400)
+                st.altair_chart(c_geo, use_container_width=True)
             else:
-                st.markdown("Esta tendencia parece ser nueva para la organización. No se encontraron referencias directas en el repositorio.")
+                st.caption("No hay suficientes datos regionales para este término.")
 
-        # 3. Output Estratégico de la IA
+        with tab_rel:
+            c_col1, c_col2 = st.columns(2)
+            with c_col1:
+                st.markdown("**🔥 Consultas en Aumento**")
+                if rising_queries:
+                    for q in rising_queries: st.markdown(f"- 📈 {q}")
+                else: st.caption("Sin datos.")
+            with c_col2:
+                st.markdown("**💡 Temas Relacionados**")
+                if related_topics:
+                    for t in related_topics: st.markdown(f"- 🏷️ {t}")
+                else: st.caption("Sin datos.")
+
+        # 3. Output Estratégico
         st.divider()
-        if stream:
-            st.markdown("### 🎯 Atelier Strategic Brief")
-            st.write_stream(stream)
+        st.markdown("### 🧠 Brief Estratégico Atelier")
+        if stream: st.write_stream(stream)
+        
+        if len(internal_context) > 100:
+            with st.expander("Ver evidencia del repositorio interno"):
+                st.markdown(internal_context)
