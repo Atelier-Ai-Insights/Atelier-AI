@@ -68,7 +68,8 @@ def run_user_mode(db_full, user_features, footer_html):
             c.MODE_TEXT_ANALYSIS: user_features.get("transcript_file_limit", 0) > 0,
             c.MODE_DATA_ANALYSIS: True,
             c.MODE_ETNOCHAT: user_features.get("has_etnochat_analysis"),
-            c.MODE_TREND_ANALYSIS: True # Nuevo modo
+            # --- ¡AQUÍ AGREGAMOS LA TENDENCIA! ---
+            c.MODE_TREND_ANALYSIS: True 
         },
         "Evaluación": {
             c.MODE_IDEA_EVAL: user_features.get("has_idea_evaluation"),
@@ -111,6 +112,7 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.header("Filtros de Búsqueda")
     
     # Algunos modos no requieren filtros de BD
+    # Agregamos c.MODE_TREND_ANALYSIS a la lista de excepciones si no quieres filtros allí
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT, c.MODE_TREND_ANALYSIS] 
     
     # 0. PREPARACIÓN INICIAL DE DATOS
@@ -217,6 +219,7 @@ def run_user_mode(db_full, user_features, footer_html):
         from modes.synthetic_mode import synthetic_users_mode
         synthetic_users_mode(db_filtered, selected_files)
         
+    # --- ¡ENRUTADOR NUEVO! ---
     elif modo == c.MODE_TREND_ANALYSIS:
         from modes.trend_analysis_mode import google_trends_mode
         google_trends_mode()
