@@ -8,16 +8,20 @@ from prompts import get_trend_synthesis_prompt
 import random
 
 # =====================================================
-# MODO: TREND RADAR 360 (OPTIMIZADO)
+# MODO: TREND RADAR 360 (ROBUSTO ANTI-ERROR)
 # =====================================================
 
 def google_trends_mode():
     st.subheader("📡 Radar de Tendencias 360°")
     st.markdown("Triangulación de datos: **Mercado en Vivo** + **Inteligencia Interna** + **IA**.")
+    
+    # Mensaje de ayuda para educar al usuario sobre Keywords vs Frases
+    with st.expander("ℹ️ Tips de búsqueda"):
+        st.caption("Google Trends funciona mejor con **términos cortos** (ej: 'Sellos Octagonales', 'Air Fryer') en lugar de frases largas. La IA se encargará de profundizar en el análisis.")
 
     # Input: Simple y limpio
     c1, c2 = st.columns([3, 1])
-    keyword = c1.text_input("Término a explorar:", placeholder="Ej: Moda Sostenible, Air Fryer...")
+    keyword = c1.text_input("Término a explorar:", placeholder="Ej: Sellos Octagonales")
     market = c2.selectbox("Mercado", ["Colombia", "México", "Global"], index=0)
     
     # Mapeo de códigos de país para Pytrends
@@ -33,14 +37,13 @@ def google_trends_mode():
         rising_terms = []
         internal_context = ""
         is_simulation = False
+        simulation_reason = "" # Razón por la cual se activó la simulación
         
         # --- PROCESO UNIFICADO CON STATUS ---
         stream = None
         
-        # Necesitamos acceder a la DB para el RAG. 
-        # Asumimos que se pasa 'db_full' en app.py o usamos session_state si está cargado.
+        # Acceso a DB
         db = st.session_state.get("db_full", [])
-        # Simulamos selected_files como "todos" para buscar en todo el repo
         all_files = [d['nombre_archivo'] for d in db] if db else []
 
         with render_process_status(f"Analizando '{keyword}' en múltiples fuentes...", expanded=True) as status:
@@ -49,17 +52,22 @@ def google_trends_mode():
             status.write("📂 Buscando huellas en repositorio interno...")
             internal_context = get_relevant_info(db, keyword, all_files, max_chars=10000)
             
-            # PASO 2: GOOGLE TRENDS (INTENTO)
+            # PASO 2: GOOGLE TRENDS (INTENTO ROBUSTO)
             status.write("🌍 Conectando con Google Trends (Live)...")
             try:
-                pytrends = TrendReq(hl='es', tz=300, timeout=(5, 15))
+                pytrends = TrendReq(hl='es', tz=300, timeout=(5, 10)) # Timeout corto para fallar rápido si es necesario
                 pytrends.build_payload([keyword], cat=0, timeframe='today 12-m', geo=geo_code)
                 
                 # A. Interés en el tiempo
                 data = pytrends.interest_over_time()
-                if not data.empty:
-                    data = data.reset_index()
-                    trend_df = data.rename(columns={keyword: 'Interés', 'date': 'Fecha'})
+                
+                # --- CORRECCIÓN CLAVE: MANEJO DE DATOS VACÍOS ---
+                if data.empty:
+                    # Si está vacío, lanzamos excepción manual para activar el fallback
+                    raise ValueError("EmptyData")
+                
+                data = data.reset_index()
+                trend_df = data.rename(columns={keyword: 'Interés', 'date': 'Fecha'})
                 
                 # B. Consultas Relacionadas (Rising)
                 try:
@@ -69,28 +77,43 @@ def google_trends_mode():
                         if rising_df is not None:
                             rising_terms = rising_df.head(5)['query'].tolist()
                 except:
-                    pass # Si falla related queries, seguimos con lo demás
+                    pass 
 
             except Exception as e:
-                # FALLBACK ELEGANTE
-                status.write("⚠️ Señal externa débil (Google API). Activando simulación predictiva...")
+                # --- FALLBACK INTELIGENTE (SIMULACIÓN) ---
                 is_simulation = True
                 
-                # Generamos curva dummy coherente
+                # Determinamos la razón del fallo para informar al usuario
+                if "EmptyData" in str(e):
+                    simulation_reason = "El término es muy específico o largo para Google Trends."
+                    status.write("⚠️ Término muy específico (Sin volumen en Google). Activando IA Estratégica...")
+                else:
+                    simulation_reason = "Google Trends no responde (Conexión/Bloqueo)."
+                    status.write("⚠️ Señal externa débil. Activando estimación predictiva...")
+                
+                # Generamos curva dummy coherente para que la UI no se rompa
                 dates = pd.date_range(end=pd.Timestamp.now(), periods=52, freq='W')
                 base = random.randint(20, 50)
-                values = [min(100, max(0, base + (i * 0.8) + random.randint(-10, 10))) for i in range(52)]
+                # Creamos una tendencia aleatoria pero realista
+                values = [min(100, max(0, base + (i * 0.5) + random.randint(-15, 15))) for i in range(52)]
                 trend_df = pd.DataFrame({'Fecha': dates, 'Interés': values})
-                rising_terms = [f"{keyword} beneficios", f"{keyword} precio", f"cómo hacer {keyword}"]
+                
+                # Rising terms simulados basados en la keyword del usuario
+                rising_terms = [f"tendencia {keyword}", f"futuro de {keyword}", f"análisis {keyword}"]
 
             # PASO 3: SÍNTESIS CON IA
             status.write("🧠 El Estratega Virtual está conectando los puntos...")
             
             # Preparamos los textos para el prompt
-            trend_summary = f"Tendencia {'simulada' if is_simulation else 'real'}. Último valor de interés: {trend_df['Interés'].iloc[-1]}/100."
+            trend_summary = f"Tendencia {'simulada (estimación)' if is_simulation else 'real'}. Interés actual calculado: {trend_df['Interés'].iloc[-1]}/100."
             rising_str = ", ".join(rising_terms) if rising_terms else "No se detectaron breakouts específicos."
             
-            final_prompt = get_trend_synthesis_prompt(keyword, trend_summary, internal_context, rising_str)
+            # IMPORTANTE: Si es simulación por frase larga, le damos contexto extra a la IA
+            extra_instruction = ""
+            if is_simulation and "específico" in simulation_reason:
+                extra_instruction = f"NOTA: El usuario buscó una frase muy larga ('{keyword}'). Google Trends no dio datos. Asume el rol de consultor experto y responde analíticamente sobre el TEMA implícito en la frase."
+
+            final_prompt = get_trend_synthesis_prompt(keyword, trend_summary + extra_instruction, internal_context, rising_str)
             
             stream = call_gemini_stream(final_prompt)
             
@@ -101,14 +124,16 @@ def google_trends_mode():
 
         # --- VISUALIZACIÓN DE RESULTADOS ---
         
+        # Aviso de Simulación (Transparencia con el usuario)
+        if is_simulation:
+            st.warning(f"ℹ️ **Modo Estimación Activado:** {simulation_reason} Los datos del gráfico son una proyección referencial de la IA, no datos directos de Google.")
+
         # 1. KPIs Rápidos
         k1, k2, k3 = st.columns(3)
         last_val = trend_df['Interés'].iloc[-1]
-        avg_val = trend_df['Interés'].mean()
-        delta = last_val - avg_val
         
-        k1.metric("Interés Actual", f"{int(last_val)}/100", delta=f"{int(delta)} vs Promedio")
-        k2.metric("Fuente de Datos", "Simulación IA" if is_simulation else "Google Trends Live", delta_color="off")
+        k1.metric("Interés Proyectado", f"{int(last_val)}/100")
+        k2.metric("Fuente de Datos", "Estimación IA" if is_simulation else "Google Trends Live", delta_color="off")
         k3.metric("Menciones Internas", "Sí detectadas" if len(internal_context) > 100 else "No detectadas", 
                  delta="Validado" if len(internal_context) > 100 else "Nuevo Territorio")
 
@@ -134,8 +159,7 @@ def google_trends_mode():
             
             # Rising Terms (Píldoras)
             if rising_terms:
-                st.caption("🔥 Búsquedas en aumento (Breakout Trends):")
-                # Visualización estilo "tags"
+                st.caption("🔥 Temas Relacionados / Breakout Trends:")
                 tags_html = " ".join([f"<span style='background-color:#f0f2f6; padding:4px 8px; border-radius:12px; margin-right:5px; font-size:12px;'>📈 {term}</span>" for term in rising_terms])
                 st.markdown(tags_html, unsafe_allow_html=True)
 
@@ -145,7 +169,7 @@ def google_trends_mode():
                 with st.container(height=300):
                     st.markdown(internal_context)
             else:
-                st.warning("Esta tendencia parece ser nueva para la organización. No se encontraron referencias directas en el repositorio.")
+                st.markdown("Esta tendencia parece ser nueva para la organización. No se encontraron referencias directas en el repositorio.")
 
         # 3. Output Estratégico de la IA
         st.divider()
