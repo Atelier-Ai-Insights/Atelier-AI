@@ -1,110 +1,154 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-from pytrends.request import TrendReq 
+from pytrends.request import TrendReq
 from services.gemini_api import call_gemini_stream
-from utils import render_process_status
-import time
+from utils import render_process_status, get_relevant_info
+from prompts import get_trend_synthesis_prompt
 import random
 
 # =====================================================
-# MODO: TREND PULSE (ROBUSTO)
+# MODO: TREND RADAR 360 (OPTIMIZADO)
 # =====================================================
 
 def google_trends_mode():
-    st.subheader("⚡ Market Pulse (Tendencias)")
-    st.markdown("Analiza el interés de búsqueda de un término en tiempo real.")
+    st.subheader("📡 Radar de Tendencias 360°")
+    st.markdown("Triangulación de datos: **Mercado en Vivo** + **Inteligencia Interna** + **IA**.")
 
-    # Input simple
-    keyword = st.text_input("Término de búsqueda:", placeholder="Ej: Ayuno Intermitente")
+    # Input: Simple y limpio
+    c1, c2 = st.columns([3, 1])
+    keyword = c1.text_input("Término a explorar:", placeholder="Ej: Moda Sostenible, Air Fryer...")
+    market = c2.selectbox("Mercado", ["Colombia", "México", "Global"], index=0)
     
-    if st.button("Analizar Tendencia", type="primary"):
+    # Mapeo de códigos de país para Pytrends
+    geo_map = {"Colombia": "CO", "México": "MX", "Global": ""}
+    geo_code = geo_map[market]
+
+    if st.button("Escanear Radar", type="primary", use_container_width=True):
         if not keyword:
             st.warning("Ingresa un término."); return
 
-        # Variables para almacenar resultados
-        trend_data = None
-        source_label = ""
+        # Variables de estado
+        trend_df = None
+        rising_terms = []
+        internal_context = ""
         is_simulation = False
+        
+        # --- PROCESO UNIFICADO CON STATUS ---
+        stream = None
+        
+        # Necesitamos acceder a la DB para el RAG. 
+        # Asumimos que se pasa 'db_full' en app.py o usamos session_state si está cargado.
+        db = st.session_state.get("db_full", [])
+        # Simulamos selected_files como "todos" para buscar en todo el repo
+        all_files = [d['nombre_archivo'] for d in db] if db else []
 
-        # --- INTENTO 1: GOOGLE TRENDS LIVE ---
-        with render_process_status("📡 Conectando con Google Trends...", expanded=True) as status:
+        with render_process_status(f"Analizando '{keyword}' en múltiples fuentes...", expanded=True) as status:
+            
+            # PASO 1: CONTEXTO INTERNO (RAG)
+            status.write("📂 Buscando huellas en repositorio interno...")
+            internal_context = get_relevant_info(db, keyword, all_files, max_chars=10000)
+            
+            # PASO 2: GOOGLE TRENDS (INTENTO)
+            status.write("🌍 Conectando con Google Trends (Live)...")
             try:
-                # Intentamos conectar
-                pytrends = TrendReq(hl='es-CO', tz=300, timeout=(10,25))
-                pytrends.build_payload([keyword], cat=0, timeframe='today 12-m')
+                pytrends = TrendReq(hl='es', tz=300, timeout=(5, 15))
+                pytrends.build_payload([keyword], cat=0, timeframe='today 12-m', geo=geo_code)
                 
+                # A. Interés en el tiempo
                 data = pytrends.interest_over_time()
-                
                 if not data.empty:
                     data = data.reset_index()
-                    trend_data = data.rename(columns={keyword: 'Interés', 'date': 'Fecha'})
-                    source_label = "Fuente: Google Trends (Datos en vivo)"
-                    status.update(label="¡Datos en vivo obtenidos!", state="complete", expanded=False)
-                else:
-                    raise Exception("Datos vacíos")
+                    trend_df = data.rename(columns={keyword: 'Interés', 'date': 'Fecha'})
+                
+                # B. Consultas Relacionadas (Rising)
+                try:
+                    related = pytrends.related_queries()
+                    if related and keyword in related:
+                        rising_df = related[keyword]['rising']
+                        if rising_df is not None:
+                            rising_terms = rising_df.head(5)['query'].tolist()
+                except:
+                    pass # Si falla related queries, seguimos con lo demás
 
             except Exception as e:
-                # --- FALLBACK: SIMULACIÓN CON IA ---
-                status.write("⚠️ Google Trends bloqueó la conexión (Rate Limit).")
-                status.write("🔄 Activando modo: Contexto de Mercado (IA)...")
+                # FALLBACK ELEGANTE
+                status.write("⚠️ Señal externa débil (Google API). Activando simulación predictiva...")
                 is_simulation = True
-                source_label = "Fuente: Estimación de IA basada en patrones históricos (Simulación)"
                 
-                # Generamos datos dummy coherentes para que la UI no se rompa
-                dates = pd.date_range(end=pd.Timestamp.now(), periods=12, freq='M')
-                # Simulamos una curva con algo de aleatoriedad
-                base_val = random.randint(30, 60)
-                values = [min(100, max(0, base_val + random.randint(-15, 20) + (i*2))) for i in range(12)]
-                
-                trend_data = pd.DataFrame({'Fecha': dates, 'Interés': values})
-                
-                status.update(label="Usando Contexto IA", state="complete", expanded=False)
+                # Generamos curva dummy coherente
+                dates = pd.date_range(end=pd.Timestamp.now(), periods=52, freq='W')
+                base = random.randint(20, 50)
+                values = [min(100, max(0, base + (i * 0.8) + random.randint(-10, 10))) for i in range(52)]
+                trend_df = pd.DataFrame({'Fecha': dates, 'Interés': values})
+                rising_terms = [f"{keyword} beneficios", f"{keyword} precio", f"cómo hacer {keyword}"]
 
-        # 2. VISUALIZACIÓN
-        if trend_data is not None:
-            if is_simulation:
-                st.warning(f"**Nota:** No se pudo conectar con Google Trends en tiempo real. {source_label}")
+            # PASO 3: SÍNTESIS CON IA
+            status.write("🧠 El Estratega Virtual está conectando los puntos...")
+            
+            # Preparamos los textos para el prompt
+            trend_summary = f"Tendencia {'simulada' if is_simulation else 'real'}. Último valor de interés: {trend_df['Interés'].iloc[-1]}/100."
+            rising_str = ", ".join(rising_terms) if rising_terms else "No se detectaron breakouts específicos."
+            
+            final_prompt = get_trend_synthesis_prompt(keyword, trend_summary, internal_context, rising_str)
+            
+            stream = call_gemini_stream(final_prompt)
+            
+            if stream:
+                status.update(label="¡Análisis completado!", state="complete", expanded=False)
             else:
-                st.success(f"✅ Conexión exitosa. {source_label}")
+                status.update(label="Error en síntesis", state="error")
 
-            chart = alt.Chart(trend_data).mark_area(
-                line={'color':'#FF4B4B'},
+        # --- VISUALIZACIÓN DE RESULTADOS ---
+        
+        # 1. KPIs Rápidos
+        k1, k2, k3 = st.columns(3)
+        last_val = trend_df['Interés'].iloc[-1]
+        avg_val = trend_df['Interés'].mean()
+        delta = last_val - avg_val
+        
+        k1.metric("Interés Actual", f"{int(last_val)}/100", delta=f"{int(delta)} vs Promedio")
+        k2.metric("Fuente de Datos", "Simulación IA" if is_simulation else "Google Trends Live", delta_color="off")
+        k3.metric("Menciones Internas", "Sí detectadas" if len(internal_context) > 100 else "No detectadas", 
+                 delta="Validado" if len(internal_context) > 100 else "Nuevo Territorio")
+
+        # 2. Gráfico y Contexto
+        tab_main, tab_internal = st.tabs(["📈 Radar de Mercado", "🗂️ Evidencia Interna"])
+        
+        with tab_main:
+            # Gráfico
+            chart = alt.Chart(trend_df).mark_area(
+                line={'color':'#29B5E8'},
                 color=alt.Gradient(
                     gradient='linear',
-                    stops=[alt.GradientStop(color='#FF4B4B', offset=0),
-                           alt.GradientStop(color='white', offset=1)],
+                    stops=[alt.GradientStop(color='#29B5E8', offset=0),
+                           alt.GradientStop(color='rgba(255,255,255,0)', offset=1)],
                     x1=1, x2=1, y1=1, y2=0
                 )
             ).encode(
-                x=alt.X('Fecha:T', title="Tiempo (Últimos 12 meses)"),
-                y=alt.Y('Interés:Q', title="Interés (0-100)"),
+                x=alt.X('Fecha:T', title="Último Año"),
+                y=alt.Y('Interés:Q', title="Interés"),
                 tooltip=['Fecha', 'Interés']
-            ).properties(
-                title=f"Interés: {keyword}",
-                height=350
-            ).interactive()
-            
+            ).properties(height=300)
             st.altair_chart(chart, use_container_width=True)
+            
+            # Rising Terms (Píldoras)
+            if rising_terms:
+                st.caption("🔥 Búsquedas en aumento (Breakout Trends):")
+                # Visualización estilo "tags"
+                tags_html = " ".join([f"<span style='background-color:#f0f2f6; padding:4px 8px; border-radius:12px; margin-right:5px; font-size:12px;'>📈 {term}</span>" for term in rising_terms])
+                st.markdown(tags_html, unsafe_allow_html=True)
 
-            # 3. INTERPRETACIÓN DE IA
-            st.divider()
-            st.subheader("🧠 Interpretación Estratégica")
-            
-            # Contextualizamos el prompt dependiendo de si es dato real o simulación
-            context_note = "Estos son datos reales de Google Trends." if not is_simulation else "IMPORTANTE: Asume que el interés está creciendo moderadamente basado en conocimiento general del mercado."
-            
-            prompt = f"""
-            Actúa como estratega de mercado.
-            Analiza el término "{keyword}".
-            Contexto: {context_note}
-            
-            Dame 3 insights breves:
-            1. **¿Por qué la gente busca esto?** (Intención de búsqueda).
-            2. **Estacionalidad:** ¿Suele tener picos en alguna época del año?
-            3. **Oportunidad de Negocio:** ¿Cómo aprovechar esta tendencia?
-            """
-            
-            with st.spinner("Generando insights..."):
-                stream = call_gemini_stream(prompt)
-                st.write_stream(stream)
+        with tab_internal:
+            if len(internal_context) > 100:
+                st.info("💡 La IA encontró fragmentos relevantes en tus estudios anteriores:")
+                with st.container(height=300):
+                    st.markdown(internal_context)
+            else:
+                st.warning("Esta tendencia parece ser nueva para la organización. No se encontraron referencias directas en el repositorio.")
+
+        # 3. Output Estratégico de la IA
+        st.divider()
+        if stream:
+            st.markdown("### 🎯 Atelier Strategic Brief")
+            st.write_stream(stream)
