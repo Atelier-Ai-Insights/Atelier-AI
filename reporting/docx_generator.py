@@ -7,7 +7,7 @@ import markdown2
 from bs4 import BeautifulSoup
 
 # ==============================
-# GENERADOR DE WORD (DOCX)
+# GENERADOR DE WORD (DOCX) - PURO
 # ==============================
 
 def clean_text(text):
@@ -45,14 +45,21 @@ def process_rich_text(paragraph, html_content):
             # Recursividad simple para tags anidados o texto plano dentro de otros tags
             paragraph.add_run(child.get_text())
 
-def generate_docx(markdown_text, title="Reporte Atelier", template_path="Plantilla_Word_ATL.docx"):
+def generate_docx(markdown_text, title="Reporte Atelier", template_path=None):
     """
     Convierte Markdown a un documento Word (.docx).
-    Si existe 'template_path', lo usa como base (útil para logos y encabezados).
+    
+    Args:
+        markdown_text (str): El contenido en markdown.
+        title (str): Título del documento.
+        template_path (str, optional): Ruta a un archivo .docx para usar como plantilla base.
+    
+    Returns:
+        bytes: El contenido del archivo .docx listo para descargar.
     """
     try:
         # 1. Cargar Plantilla o Crear Nuevo
-        if os.path.exists(template_path):
+        if template_path and os.path.exists(template_path):
             doc = Document(template_path)
         else:
             doc = Document()
