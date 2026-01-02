@@ -13,11 +13,12 @@ from services.gemini_api import call_gemini_api, call_gemini_stream
 from services.supabase_db import log_query_event, supabase, get_daily_usage
 from prompts import get_etnochat_prompt, get_media_transcription_prompt 
 import constants as c
-from reporting.pdf_generator import generate_pdf_html
-# --- NUEVA IMPORTACIÓN ---
-from reporting.docx_generator import generate_docx
 from config import banner_file
-from utils import reset_etnochat_chat_workflow
+from utils import reset_etnochat_chat_workflow, render_process_status
+
+# --- GENERADORES (Top Level Import - Fase 1) ---
+from reporting.pdf_generator import generate_pdf_html
+from reporting.docx_generator import generate_docx
 
 # =====================================================
 # MODO: ANÁLISIS DE ETNOCHAT (OPTIMIZADO)
@@ -199,10 +200,15 @@ def show_etnochat_project_creator(user_id, project_limit, files_per_project_limi
 
         project_storage_folder = f"{user_id}/{uuid.uuid4()}" 
         
-        with st.spinner(f"Creando proyecto y subiendo {len(uploaded_files)} archivo(s)..."):
+        # Uso de st.status para la creación (Fase 2)
+        with render_process_status("Creando proyecto y subiendo archivos...", expanded=True) as status:
             try:
                 uploaded_file_paths = [] 
-                for uploaded_file in uploaded_files: 
+                total_upload = len(uploaded_files)
+                
+                for idx, uploaded_file in enumerate(uploaded_files): 
+                    status.write(f"Subiendo {idx+1}/{total_upload}: {uploaded_file.name}")
+                    
                     base_name = uploaded_file.name.replace(' ', '_')
                     safe_name = re.sub(r'[^\w._-]', '', base_name)
                     file_ext = os.path.splitext(safe_name)[1].lower()
@@ -228,10 +234,12 @@ def show_etnochat_project_creator(user_id, project_limit, files_per_project_limi
                 }
                 
                 supabase.table("etnochat_projects").insert(project_data).execute()
+                status.update(label="¡Proyecto Creado!", state="complete", expanded=False)
                 st.success(f"¡Proyecto '{project_name}' creado exitosamente!")
                 st.rerun()
 
             except Exception as e:
+                status.update(label="Error en creación", state="error")
                 st.error(f"Error al crear el proyecto: {e}")
 
 def show_etnochat_project_list(user_id):
@@ -302,12 +310,25 @@ def show_etnochat_project_analyzer(text_context, file_parts, project_name):
             return
 
         with st.chat_message("assistant", avatar="✨"):
-            history_str = "\n".join(f"{m['role']}: {m['content']}" for m in st.session_state.mode_state["etno_chat_history"][-10:])
-            prompt_text = get_etnochat_prompt(history_str, text_context)
-            final_prompt_list = [prompt_text] + file_parts
             
-            stream = call_gemini_stream(final_prompt_list) 
-
+            # --- IMPLEMENTACIÓN FASE 2: STATUS VISUAL ---
+            stream = None
+            with render_process_status("🧠 Analizando archivos y generando respuesta...") as status:
+                
+                status.write("Procesando historial de conversación...")
+                history_str = "\n".join(f"{m['role']}: {m['content']}" for m in st.session_state.mode_state["etno_chat_history"][-10:])
+                
+                status.write("Consultando motor multimodal (Gemini)...")
+                prompt_text = get_etnochat_prompt(history_str, text_context)
+                final_prompt_list = [prompt_text] + file_parts
+                
+                stream = call_gemini_stream(final_prompt_list) 
+                
+                if stream:
+                    status.update(label="¡Respuesta generada!", state="complete", expanded=False)
+                else:
+                    status.update(label="Error en respuesta", state="error")
+            
             if stream:
                 response_text = st.write_stream(stream) 
                 log_query_event(user_prompt, mode=c.MODE_ETNOCHAT)
@@ -333,7 +354,7 @@ def show_etnochat_project_analyzer(text_context, file_parts, project_name):
                 st.download_button("📄 Chat en PDF", data=pdf_bytes, file_name="etno_chat.pdf", mime="application/pdf", width='stretch')
         
         with col2:
-            # WORD (Nuevo)
+            # WORD
             docx_bytes = generate_docx(chat_content_raw, title=f"EtnoChat - {project_name}")
             if docx_bytes:
                 st.download_button("📝 Chat en Word", data=docx_bytes, file_name="etno_chat.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
@@ -354,7 +375,11 @@ def etnochat_mode():
 
     # 1. Cargar datos si hay proyecto seleccionado
     if "etno_selected_project_id" in st.session_state.mode_state and "etno_file_parts" not in st.session_state.mode_state:
-        text_ctx, file_parts = load_etnochat_project_data(st.session_state.mode_state["etno_storage_path"]) 
+        # Usamos status también para la carga inicial
+        with render_process_status("Cargando proyecto y convirtiendo multimedia...", expanded=True) as status:
+            text_ctx, file_parts = load_etnochat_project_data(st.session_state.mode_state["etno_storage_path"]) 
+            status.update(label="Carga completa", state="complete", expanded=False)
+
         if text_ctx is not None:
             st.session_state.mode_state["etno_context_str"] = text_ctx
             st.session_state.mode_state["etno_file_parts"] = file_parts
