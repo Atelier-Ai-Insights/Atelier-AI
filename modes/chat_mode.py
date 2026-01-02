@@ -18,7 +18,7 @@ def update_query_rating(query_id, rating):
     except Exception as e: print(f"Error rating: {e}")
 
 # =====================================================
-# MODO: CHAT DE CONSULTA DIRECTA (FINAL)
+# MODO: CHAT DE CONSULTA DIRECTA
 # =====================================================
 
 def grounded_chat_mode(db, selected_files, sidebar_container=None):
@@ -32,11 +32,9 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
         
         if memories:
             for mem in memories:
-                # CAMBIO: El título es el 'project_context' (Nombre del Proyecto/Filtro)
                 pin_title = mem.get('project_context', 'Sin Título')
                 
                 with st.expander(f"📌 {pin_title}", expanded=False):
-                    # El contenido es el insight
                     st.caption(f"📅 {mem['created_at'][:10]}")
                     
                     c_view, c_del = st.columns([1, 1])
@@ -73,6 +71,9 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
     # 1. VALIDACIÓN
     if not selected_files:
         st.info("👈 **Para comenzar:** Selecciona una Marca, Año y Proyecto en el menú lateral.")
+        # Limpiamos sugerencias si no hay archivos
+        if "chat_suggestions" in st.session_state.mode_state:
+            del st.session_state.mode_state["chat_suggestions"]
         if "chat_history" not in st.session_state.mode_state:
             st.session_state.mode_state["chat_history"] = []
     else:
@@ -81,6 +82,17 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
     # 2. INICIALIZACIÓN
     if "chat_history" not in st.session_state.mode_state: 
         st.session_state.mode_state["chat_history"] = []
+
+    # === [LÓGICA NUEVA] SUGERENCIAS INICIALES ESTÁTICAS ===
+    # Si hay archivos seleccionados Y el historial está vacío, cargamos las preguntas fijas.
+    if selected_files and not st.session_state.mode_state["chat_history"]:
+        # Solo las seteamos si no existen ya, para evitar loops
+        if "chat_suggestions" not in st.session_state.mode_state:
+            st.session_state.mode_state["chat_suggestions"] = [
+                "Enumera los objetivos de investigación",
+                "Detalles de la metodología y ficha técnica",
+                "Principales hallazgos"
+            ]
 
     # 3. MOSTRAR HISTORIAL
     for idx, msg in enumerate(st.session_state.mode_state["chat_history"]):
@@ -102,12 +114,15 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
     # 4. GESTIÓN DE INPUT
     prompt_to_process = None
     
-    # A. Botones de Sugerencia
+    # A. Botones de Sugerencia (Siempre visibles si existen en el estado)
     if selected_files and "chat_suggestions" in st.session_state.mode_state:
         suggestions = st.session_state.mode_state.get("chat_suggestions", [])
         if suggestions:
             st.write("") 
-            st.caption("🤔 **Temas sugeridos:**")
+            # Cambiamos el título según si es inicio o seguimiento
+            titulo_sugg = "🚀 **Para iniciar:**" if not st.session_state.mode_state["chat_history"] else "🤔 **Temas sugeridos:**"
+            st.caption(titulo_sugg)
+            
             for i, sugg in enumerate(suggestions):
                 if st.button(f"👉 {sugg}", key=f"sugg_btn_{i}", use_container_width=True):
                     prompt_to_process = sugg
@@ -120,7 +135,7 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
 
     # 5. PROCESAMIENTO
     if prompt_to_process and selected_files:
-        # Limpiamos sugerencias viejas
+        # AL PROCESAR: Borramos las sugerencias actuales (ya sean las estáticas o las viejas)
         if "chat_suggestions" in st.session_state.mode_state:
             del st.session_state.mode_state["chat_suggestions"]
             
@@ -139,7 +154,7 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
             
             # RAG + Memoria
             relevant_info = get_relevant_info(db, prompt_to_process, selected_files)
-            memory_list = get_project_memory() # Trae todas las memorias
+            memory_list = get_project_memory() 
             memory_text = "\n".join([f"- {m['insight_content']}" for m in memory_list])
             conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.mode_state["chat_history"][-10:])
             
@@ -150,26 +165,16 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
             if response: 
                 message_placeholder.markdown(response)
                 
-                # --- LÓGICA DE SUGERENCIAS ---
-                # CAMBIO CLAVE: Definir qué sugerir basado en el turno de la conversación
-                
-                # Turno 1 (Acaba de responder la 1ra pregunta, len history es 2: User + Assistant)
-                if len(st.session_state.mode_state["chat_history"]) < 2: 
-                    # Forzamos las 3 estáticas
-                    st.session_state.mode_state["chat_suggestions"] = [
-                        "Enumera los objetivos de investigación",
-                        "Detalles de la metodología y ficha técnica",
-                        "Principales hallazgos"
-                    ]
-                else:
-                    # Turno 2 en adelante: Usamos IA Follow-up (o nada, si se prefiere)
-                    try:
-                        prompt_followup = get_followup_suggestions_prompt(response)
-                        resp_sugg = call_gemini_api(prompt_followup, generation_config_override={"response_mime_type": "application/json"})
-                        if resp_sugg:
-                            new_suggestions = json.loads(clean_gemini_json(resp_sugg))
-                            st.session_state.mode_state["chat_suggestions"] = new_suggestions
-                    except: st.session_state.mode_state["chat_suggestions"] = []
+                # --- GENERAR NUEVAS SUGERENCIAS (FOLLOW-UP) ---
+                # Ya no usamos las estáticas. Ahora usamos IA para dar continuidad.
+                try:
+                    prompt_followup = get_followup_suggestions_prompt(response)
+                    resp_sugg = call_gemini_api(prompt_followup, generation_config_override={"response_mime_type": "application/json"})
+                    if resp_sugg:
+                        new_suggestions = json.loads(clean_gemini_json(resp_sugg))
+                        st.session_state.mode_state["chat_suggestions"] = new_suggestions
+                except: 
+                    st.session_state.mode_state["chat_suggestions"] = []
 
                 # Logging
                 try:
@@ -195,5 +200,6 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
         with col2: 
             def clean_all():
                 reset_chat_workflow()
+                # Borramos sugerencias para que al reiniciar vuelvan a salir las estáticas
                 if "chat_suggestions" in st.session_state.mode_state: del st.session_state.mode_state["chat_suggestions"]
             st.button("🗑️ Limpiar", on_click=clean_all, key="new_grounded_chat_btn", use_container_width=True)
