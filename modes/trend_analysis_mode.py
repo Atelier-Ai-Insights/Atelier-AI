@@ -8,6 +8,10 @@ from prompts import get_trend_synthesis_prompt
 import random
 import json
 
+# --- NUEVAS IMPORTACIONES PARA LOGS ---
+from services.supabase_db import log_query_event
+import constants as c
+
 # =====================================================
 # MOTOR DE BÚSQUEDA SEMÁNTICA (INTEGRADO)
 # =====================================================
@@ -51,7 +55,6 @@ def smart_internal_search(db, keyword):
         
         if score > 0:
             # Extraer un fragmento relevante (Snippet)
-            # Buscamos la posición de la primera coincidencia para dar contexto
             start_idx = -1
             for term in matched_terms:
                 idx = full_text.find(term)
@@ -86,7 +89,7 @@ def smart_internal_search(db, keyword):
     return context_str
 
 # =====================================================
-# MODO: TREND RADAR 360 (CON PUENTE SEMÁNTICO)
+# MODO: TREND RADAR 360 (CON LOGS ACTIVOS)
 # =====================================================
 
 def calculate_growth(df):
@@ -122,7 +125,7 @@ def google_trends_mode():
 
         with render_process_status(f"Analizando '{keyword}'...", expanded=True) as status:
             
-            # 1. BÚSQUEDA SEMÁNTICA INTERNA (NUEVO)
+            # 1. BÚSQUEDA SEMÁNTICA INTERNA
             status.write("🧠 Activando puente semántico con repositorio...")
             if db:
                 internal_context = smart_internal_search(db, keyword)
@@ -190,7 +193,7 @@ def google_trends_mode():
 
         if is_simulation: st.warning(f"⚠️ **Modo Estimación:** {simulation_reason}. Análisis basado en IA.")
 
-        t1, t2, t3 = st.tabs(["📈 Temporal", "🗺️ Geográfico", "🧠 Contexto"])
+        t1, t2, t3 = st.tabs(["Temporal", "Geográfico", "Contexto"])
         
         with t1:
             c = alt.Chart(trend_df).mark_area(line={'color':'#29B5E8'}, color=alt.Gradient(gradient='linear', stops=[alt.GradientStop(color='#29B5E8', offset=0), alt.GradientStop(color='white', offset=1)], x1=1, x2=1, y1=1, y2=0)).encode(x='Fecha:T', y='Interés:Q', tooltip=['Fecha', 'Interés']).properties(height=300)
@@ -214,4 +217,9 @@ def google_trends_mode():
 
         st.divider()
         st.markdown("### 🎯 Brief de Estrategia")
-        if stream: st.write_stream(stream)
+        
+        # --- AQUÍ ESTABA EL ERROR: AGREGAMOS EL LOG ---
+        if stream:
+            st.write_stream(stream)
+            # REGISTRO EN SUPABASE
+            log_query_event(f"Trend Radar: {keyword}", mode=c.MODE_TREND_ANALYSIS)
