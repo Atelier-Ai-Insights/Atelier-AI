@@ -18,39 +18,38 @@ def update_query_rating(query_id, rating):
     except Exception as e: print(f"Error rating: {e}")
 
 # =====================================================
-# MODO: CHAT DE CONSULTA DIRECTA (ESTILO MINIMALISTA)
+# MODO: CHAT DE CONSULTA DIRECTA
 # =====================================================
 
 def grounded_chat_mode(db, selected_files, sidebar_container=None):
     
-    # --- BARRA LATERAL: BITÁCORA DE PROYECTO (ESTILO LISTA) ---
+    # --- BARRA LATERAL: BITÁCORA DE PROYECTO ---
     target_area = sidebar_container if sidebar_container else st.sidebar
     
     with target_area:
-        st.divider() 
-        # Encabezado con estilo
-        st.markdown("### 🧠 Bitácora")
+        # 1. ELIMINAMOS LA LÍNEA DE AQUÍ (Para que quede pegado a los filtros)
+        # st.divider() 
+        
+        st.markdown("### 🧠 Bitácora del Proyecto")
         memories = get_project_memory()
         
         if memories:
             for mem in memories:
-                # 1. GENERAR TÍTULO CORTO (Snippet)
-                # Tomamos las primeras 5 palabras para que parezca un título
                 snippet = " ".join(mem['insight_content'].split()[:5])
                 if len(snippet) < len(mem['insight_content']): snippet += "..."
                 
-                # 2. RENDERIZADO VISUAL
-                # Usamos el emoji de pin en el expander para simular el ícono
                 with st.expander(f"📌 {snippet}", expanded=False):
                     st.caption(f"📅 {mem['created_at'][:10]} | {mem['project_context']}")
                     st.write(mem['insight_content'])
                     
-                    # Botón de borrar discreto
                     if st.button("Eliminar", key=f"del_mem_{mem['id']}", use_container_width=True):
                         delete_insight(mem['id'])
                         st.rerun()
         else:
-            st.caption("No hay insights guardados.")
+            st.caption("No hay insights guardados para este proyecto aún.")
+            
+        # 2. PONEMOS LA LÍNEA AQUÍ (Para separar del botón Cerrar Sesión)
+        st.divider() 
     
     # --- ÁREA PRINCIPAL ---
     st.subheader("Chat de Consulta Directa")
@@ -72,10 +71,8 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
         with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
             st.markdown(msg['message'])
             
-            # --- BARRA DE ACCIONES DEL ASISTENTE (FEEDBACK + PIN) ---
+            # --- BARRA DE ACCIONES (FEEDBACK + PIN) ---
             if msg['role'] == "Asistente":
-                # Usamos columnas para alinear los iconos a la derecha o izquierda
-                # Estructura: [Feedback (Left)] ....... [Pin (Right)]
                 c_feed, c_spacer, c_pin = st.columns([2, 6, 1])
                 
                 with c_feed:
@@ -86,8 +83,6 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
                             update_query_rating(msg['query_id'], score)
                 
                 with c_pin:
-                    # BOTÓN PIN MINIMALISTA (Solo Icono)
-                    # help="Guardar en bitácora" aparece al pasar el mouse
                     with st.popover("📌", use_container_width=False, help="Guardar hallazgo"):
                         st.markdown("**¿Guardar en Bitácora?**")
                         if st.button("Confirmar", key=f"save_mem_{idx}"):
@@ -133,7 +128,6 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
             message_placeholder = st.empty()
             message_placeholder.markdown("Pensando...")
             
-            # Contexto + Memoria
             relevant_info = get_relevant_info(db, prompt_to_process, selected_files)
             memory_list = get_project_memory()
             memory_text = "\n".join([f"- {m['insight_content']}" for m in memory_list])
