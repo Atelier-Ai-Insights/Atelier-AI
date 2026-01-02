@@ -18,31 +18,39 @@ def update_query_rating(query_id, rating):
     except Exception as e: print(f"Error rating: {e}")
 
 # =====================================================
-# MODO: CHAT DE CONSULTA DIRECTA (CON MEMORIA POSICIONADA)
+# MODO: CHAT DE CONSULTA DIRECTA (ESTILO MINIMALISTA)
 # =====================================================
 
 def grounded_chat_mode(db, selected_files, sidebar_container=None):
     
-    # --- BARRA LATERAL: BITÁCORA DE PROYECTO ---
-    # Usamos el contenedor que nos pasó app.py (antes del logout)
-    # Si por alguna razón es None, usamos st.sidebar normal
+    # --- BARRA LATERAL: BITÁCORA DE PROYECTO (ESTILO LISTA) ---
     target_area = sidebar_container if sidebar_container else st.sidebar
     
     with target_area:
-        st.divider() # Línea visual para separar de los filtros
-        st.markdown("### 🧠 Bitácora del Proyecto")
+        st.divider() 
+        # Encabezado con estilo
+        st.markdown("### 🧠 Bitácora")
         memories = get_project_memory()
         
         if memories:
             for mem in memories:
-                with st.expander(f"📌 {mem['created_at'][:10]}...", expanded=False):
-                    st.caption(f"Contexto: {mem['project_context']}")
+                # 1. GENERAR TÍTULO CORTO (Snippet)
+                # Tomamos las primeras 5 palabras para que parezca un título
+                snippet = " ".join(mem['insight_content'].split()[:5])
+                if len(snippet) < len(mem['insight_content']): snippet += "..."
+                
+                # 2. RENDERIZADO VISUAL
+                # Usamos el emoji de pin en el expander para simular el ícono
+                with st.expander(f"📌 {snippet}", expanded=False):
+                    st.caption(f"📅 {mem['created_at'][:10]} | {mem['project_context']}")
                     st.write(mem['insight_content'])
-                    if st.button("Borrar", key=f"del_mem_{mem['id']}"):
+                    
+                    # Botón de borrar discreto
+                    if st.button("Eliminar", key=f"del_mem_{mem['id']}", use_container_width=True):
                         delete_insight(mem['id'])
                         st.rerun()
         else:
-            st.caption("No hay insights guardados para este proyecto aún.")
+            st.caption("No hay insights guardados.")
     
     # --- ÁREA PRINCIPAL ---
     st.subheader("Chat de Consulta Directa")
@@ -53,48 +61,49 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
         if "chat_history" not in st.session_state.mode_state:
             st.session_state.mode_state["chat_history"] = []
     else:
-        st.markdown(f"Analizando **{len(selected_files)} documento(s)** seleccionados.")
+        st.caption(f"Analizando **{len(selected_files)} documento(s)** seleccionados.")
 
     # 2. INICIALIZACIÓN
     if "chat_history" not in st.session_state.mode_state: 
         st.session_state.mode_state["chat_history"] = []
 
-    # 3. MOSTRAR HISTORIAL E INTERACCIONES
+    # 3. MOSTRAR HISTORIAL
     for idx, msg in enumerate(st.session_state.mode_state["chat_history"]):
         with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
             st.markdown(msg['message'])
             
-            # SOLO EN MENSAJES DEL ASISTENTE: Feedback y Guardar Memoria
+            # --- BARRA DE ACCIONES DEL ASISTENTE (FEEDBACK + PIN) ---
             if msg['role'] == "Asistente":
-                c1, c2 = st.columns([1, 10])
+                # Usamos columnas para alinear los iconos a la derecha o izquierda
+                # Estructura: [Feedback (Left)] ....... [Pin (Right)]
+                c_feed, c_spacer, c_pin = st.columns([2, 6, 1])
                 
-                # Botón de Feedback
-                with c1:
+                with c_feed:
                     if 'query_id' in msg:
                         rating = st.feedback("thumbs", key=f"feed_{msg.get('query_id', idx)}")
                         if rating is not None:
                             score = 1 if rating == 1 else -1
                             update_query_rating(msg['query_id'], score)
                 
-                # Botón de Guardar en Bitácora (Pin)
-                with c2:
-                    with st.popover("📌 Pin Insight"):
-                        st.markdown("**¿Guardar este hallazgo en la Bitácora del Proyecto?**")
-                        st.caption("La IA recordará esto en futuras conversaciones.")
-                        if st.button("Confirmar Guardado", key=f"save_mem_{idx}"):
+                with c_pin:
+                    # BOTÓN PIN MINIMALISTA (Solo Icono)
+                    # help="Guardar en bitácora" aparece al pasar el mouse
+                    with st.popover("📌", use_container_width=False, help="Guardar hallazgo"):
+                        st.markdown("**¿Guardar en Bitácora?**")
+                        if st.button("Confirmar", key=f"save_mem_{idx}"):
                             if save_project_insight(msg['message']):
-                                st.toast("✅ Insight guardado en la memoria del proyecto.")
+                                st.toast("✅ Guardado en Bitácora")
                                 st.rerun() 
 
     # 4. GESTIÓN DE INPUT
     prompt_to_process = None
     
-    # A. Botones de Sugerencia (Contextuales)
+    # A. Botones de Sugerencia
     if selected_files and "chat_suggestions" in st.session_state.mode_state:
         suggestions = st.session_state.mode_state.get("chat_suggestions", [])
         if suggestions:
             st.write("") 
-            st.caption("🤔 **Profundizar en el tema:**")
+            st.caption("🤔 **Profundizar:**")
             for i, sugg in enumerate(suggestions):
                 if st.button(f"👉 {sugg}", key=f"sugg_btn_{i}", use_container_width=True):
                     prompt_to_process = sugg
@@ -124,12 +133,10 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
             message_placeholder = st.empty()
             message_placeholder.markdown("Pensando...")
             
-            # --- CONSTRUCCIÓN DEL CONTEXTO CON MEMORIA ---
+            # Contexto + Memoria
             relevant_info = get_relevant_info(db, prompt_to_process, selected_files)
-            
             memory_list = get_project_memory()
             memory_text = "\n".join([f"- {m['insight_content']}" for m in memory_list])
-            
             conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.mode_state["chat_history"][-10:])
             
             grounded_prompt = get_grounded_chat_prompt(conversation_history, relevant_info, long_term_memory=memory_text)
@@ -169,10 +176,10 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
             chat_content_raw = "\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.mode_state["chat_history"])
             pdf_bytes = generate_pdf_html(chat_content_raw.replace("](#)", "]"), title="Historial Consulta", banner_path=banner_file)
             if pdf_bytes: 
-                st.download_button("📥 Descargar Chat PDF", data=pdf_bytes, file_name="chat_consulta.pdf", mime="application/pdf", width='stretch')
+                st.download_button("📥 PDF", data=pdf_bytes, file_name="chat.pdf", mime="application/pdf", use_container_width=True)
         with col2: 
             def clean_all():
                 reset_chat_workflow()
                 if "chat_suggestions" in st.session_state.mode_state:
                     del st.session_state.mode_state["chat_suggestions"]
-            st.button("🗑️ Nueva Conversación", on_click=clean_all, key="new_grounded_chat_btn", width='stretch')
+            st.button("🗑️ Limpiar", on_click=clean_all, key="new_grounded_chat_btn", use_container_width=True)
