@@ -6,7 +6,7 @@ from services.supabase_db import get_daily_usage, log_query_event, supabase
 from services.memory_service import save_project_insight, get_project_memory, delete_insight 
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
-from prompts import get_grounded_chat_prompt, get_followup_suggestions_prompt
+from prompts import get_grounded_chat_prompt
 import constants as c 
 
 # =====================================================
@@ -83,10 +83,9 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
     if "chat_history" not in st.session_state.mode_state: 
         st.session_state.mode_state["chat_history"] = []
 
-    # === [LÓGICA NUEVA] SUGERENCIAS INICIALES ESTÁTICAS ===
-    # Si hay archivos seleccionados Y el historial está vacío, cargamos las preguntas fijas.
+    # === SUGERENCIAS INICIALES ESTÁTICAS (SOLO AL INICIO) ===
+    # Si hay archivos Y historial vacío -> mostramos las 3 fijas
     if selected_files and not st.session_state.mode_state["chat_history"]:
-        # Solo las seteamos si no existen ya, para evitar loops
         if "chat_suggestions" not in st.session_state.mode_state:
             st.session_state.mode_state["chat_suggestions"] = [
                 "Enumera los objetivos de investigación",
@@ -114,14 +113,12 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
     # 4. GESTIÓN DE INPUT
     prompt_to_process = None
     
-    # A. Botones de Sugerencia (Siempre visibles si existen en el estado)
+    # A. Botones de Sugerencia (Solo visibles si el historial está vacío)
     if selected_files and "chat_suggestions" in st.session_state.mode_state:
         suggestions = st.session_state.mode_state.get("chat_suggestions", [])
         if suggestions:
             st.write("") 
-            # Cambiamos el título según si es inicio o seguimiento
-            titulo_sugg = "🚀 **Para iniciar:**" if not st.session_state.mode_state["chat_history"] else "🤔 **Temas sugeridos:**"
-            st.caption(titulo_sugg)
+            st.caption("🚀 **Para iniciar:**")
             
             for i, sugg in enumerate(suggestions):
                 if st.button(f"👉 {sugg}", key=f"sugg_btn_{i}", use_container_width=True):
@@ -135,7 +132,7 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
 
     # 5. PROCESAMIENTO
     if prompt_to_process and selected_files:
-        # AL PROCESAR: Borramos las sugerencias actuales (ya sean las estáticas o las viejas)
+        # AL PROCESAR CUALQUIER COSA: Borramos las sugerencias para siempre
         if "chat_suggestions" in st.session_state.mode_state:
             del st.session_state.mode_state["chat_suggestions"]
             
@@ -165,16 +162,8 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
             if response: 
                 message_placeholder.markdown(response)
                 
-                # --- GENERAR NUEVAS SUGERENCIAS (FOLLOW-UP) ---
-                # Ya no usamos las estáticas. Ahora usamos IA para dar continuidad.
-                try:
-                    prompt_followup = get_followup_suggestions_prompt(response)
-                    resp_sugg = call_gemini_api(prompt_followup, generation_config_override={"response_mime_type": "application/json"})
-                    if resp_sugg:
-                        new_suggestions = json.loads(clean_gemini_json(resp_sugg))
-                        st.session_state.mode_state["chat_suggestions"] = new_suggestions
-                except: 
-                    st.session_state.mode_state["chat_suggestions"] = []
+                # NO GENERAMOS NUEVAS SUGERENCIAS.
+                # Se mantiene limpio para la segunda interacción.
 
                 # Logging
                 try:
