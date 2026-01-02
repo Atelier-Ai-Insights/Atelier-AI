@@ -390,7 +390,7 @@ def get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups):
     return base
 
 # ==============================================================================
-# SECCIÓN: ANÁLISIS DE TENDENCIAS 2.0 (RADAR 360 & INTELLIGENCE BRIEF)
+# SECCIÓN: ANÁLISIS DE TENDENCIAS (RADAR 360 & INTELLIGENCE BRIEF)
 # ==============================================================================
 
 SOURCE_LENSES = {
@@ -405,7 +405,9 @@ SOURCE_LENSES = {
 }
 
 def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_list):
-    
+    """
+    Prompt heredado para Intelligence Brief clásico (si se usa en otros modos).
+    """
     current_date = datetime.now().strftime("%d de %B de %Y")
     
     sources_instruction = ""
@@ -460,36 +462,44 @@ C. **Contexto Externo:** {sources_instruction}
 * [1] Documento: "Nombre Exacto del Archivo"
 """
 
-def get_trend_synthesis_prompt(keyword, trend_context, internal_context, rising_queries):
+def get_trend_synthesis_prompt(keyword, trend_context, geo_context, topics_context, internal_context):
     """
-    Nuevo prompt estratégico para el modo 'Radar 360' (Fase 4).
-    Triangula: Google Trends (Live) + Data Interna + Inteligencia IA.
+    Nuevo prompt estratégico para el modo 'Radar 360' (PRO).
+    Triangula: Tiempo, Geo, Contexto Semántico y Datos Internos.
     """
     return f"""
     **Rol:** Director de Estrategia y Coolhunting.
-    **Objetivo:** Analizar la tendencia "{keyword}" cruzando datos de mercado con inteligencia interna.
+    **Objetivo:** Analizar la tendencia "{keyword}" con una visión 360°.
 
-    **1. DATOS DE MERCADO (Google Trends):**
+    **1. COMPORTAMIENTO TEMPORAL (Cuándo):**
     {trend_context}
     
-    **2. BÚSQUEDAS EN AUMENTO (Lo que la gente está preguntando ahora):**
-    {rising_queries}
+    **2. FOCO GEOGRÁFICO (Dónde):**
+    {geo_context}
 
-    **3. EVIDENCIA INTERNA (Tus estudios previos):**
+    **3. ECOSISTEMA SEMÁNTICO (Qué más):**
+    {topics_context}
+
+    **4. EVIDENCIA INTERNA (ADN de la Agencia):**
     {internal_context if internal_context else "No hay menciones previas en el repositorio."}
 
     **TAREA:**
-    Genera un "Brief de Oportunidad" breve y directo (Markdown):
+    Genera un "Intelligence Brief" estratégico (Markdown):
     
-    ### 1. El "Vibe" del Momento
-    ¿Qué está impulsando esta búsqueda *hoy*? (Usa las búsquedas en aumento para descifrar la intención real detrás de la keyword).
+    ### 1. Diagnóstico de la Tendencia
+    ¿Es una moda pasajera (spike reciente) o un cambio cultural (crecimiento sostenido)? Usa los datos temporales.
     
-    ### 2. Cruce Estratégico (Interno vs. Externo)
-    *Si hay data interna:* ¿Nuestros estudios previos validan esta tendencia o nos está tomando por sorpresa? Cita el documento interno si existe.
-    *Si NO hay data interna:* Advierte que es un territorio inexplorado para la agencia.
+    ### 2. Oportunidad Geográfica
+    Analiza las regiones top. ¿Por qué crees que es fuerte allí? (Cultural, climático, económico).
     
-    ### 3. Ideas de Activación (Quick Wins)
-    2 ideas concretas para que una marca aproveche esto la próxima semana.
+    ### 3. El "Vibe" del Momento (Contexto)
+    Usa los 'Temas Relacionados' para descifrar la intención. ¿La gente busca esto por salud, precio, lujo, miedo?
+    
+    ### 4. Cruce con Data Interna
+    Integra los hallazgos del repositorio (si existen) con lo que ves en Google.
+    
+    ### 5. Recomendación de Acción
+    1 Idea Táctica (Marketing Digital basada en geo/temas) y 1 Idea Estratégica (Producto/Servicio).
     """
 
 # ==============================================================================
