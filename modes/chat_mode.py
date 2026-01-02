@@ -21,21 +21,16 @@ def get_file_sneak_peek(db, selected_files, char_limit=4000):
     Extrae los primeros N caracteres de los archivos seleccionados para dar contexto a las sugerencias.
     """
     preview_text = ""
-    # Convertimos a set para búsqueda rápida
     sel_set = set(selected_files)
     
     found_count = 0
     for doc in db:
         if doc.get('nombre_archivo') in sel_set:
-            # Intentamos obtener texto del primer grupo (generalmente la intro)
             grupos = doc.get("grupos", [])
             if grupos:
-                # Tomamos el primer fragmento de texto disponible
-                text_chunk = str(grupos[0].get('contenido_texto', ''))[:1000] # 1000 chars por doc
+                text_chunk = str(grupos[0].get('contenido_texto', ''))[:1000] 
                 preview_text += f"\n[Doc: {doc.get('nombre_archivo')}]\n{text_chunk}...\n"
                 found_count += 1
-            
-            # Limitamos a leer máximo 3 documentos para no saturar el prompt de sugerencias
             if found_count >= 3: break
             
     if len(preview_text) > char_limit:
@@ -48,18 +43,28 @@ def get_file_sneak_peek(db, selected_files, char_limit=4000):
 
 def grounded_chat_mode(db, selected_files):
     st.subheader("Chat de Consulta Directa")
-    st.markdown("Preguntas específicas, respuestas basadas solo en hallazgos seleccionados.")
     
-    # 1. INICIALIZACIÓN
+    # 1. VALIDACIÓN INICIAL DE FILTROS
+    # Si no hay archivos seleccionados, mostramos aviso y detenemos sugerencias
+    if not selected_files:
+        st.info("👈 **Para comenzar:** Selecciona una Marca, Año y Proyecto en el menú lateral.")
+        st.caption("El chat se activará cuando hayas definido qué documentos analizar.")
+        
+        # Inicializamos historial vacío para que no rompa
+        if "chat_history" not in st.session_state.mode_state:
+            st.session_state.mode_state["chat_history"] = []
+    else:
+        st.markdown(f"Analizando **{len(selected_files)} documento(s)** seleccionados.")
+
+    # 2. INICIALIZACIÓN DE ESTADO
     if "chat_history" not in st.session_state.mode_state: 
         st.session_state.mode_state["chat_history"] = []
     
-    # 2. GENERACIÓN DE SUGERENCIAS INTELIGENTES (CONTEXTUALES)
+    # 3. GENERACIÓN DE SUGERENCIAS (SOLO SI HAY ARCHIVOS Y CHAT VACÍO)
     if selected_files and not st.session_state.mode_state["chat_history"]:
         if "chat_suggestions" not in st.session_state.mode_state:
             with st.spinner("🧠 Leyendo documentos para sugerir preguntas estratégicas..."):
                 try:
-                    # AQUI ESTÁ EL CAMBIO: Leemos el contenido real
                     context_preview = get_file_sneak_peek(db, selected_files)
                     
                     if context_preview:
@@ -69,13 +74,12 @@ def grounded_chat_mode(db, selected_files):
                             suggestions = json.loads(clean_gemini_json(resp_sugg))
                             st.session_state.mode_state["chat_suggestions"] = suggestions
                     else:
-                        # Si no pudimos leer texto (ej. archivo vacío), no sugerimos nada
                         st.session_state.mode_state["chat_suggestions"] = []
                 except Exception as e:
                     print(f"Error sugiriendo: {e}")
                     st.session_state.mode_state["chat_suggestions"] = []
 
-    # 3. MOSTRAR HISTORIAL
+    # 4. MOSTRAR HISTORIAL
     for msg in st.session_state.mode_state["chat_history"]:
         with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
             st.markdown(msg['message'])
@@ -85,25 +89,30 @@ def grounded_chat_mode(db, selected_files):
                     score = 1 if rating == 1 else -1
                     update_query_rating(msg['query_id'], score)
 
-    # 4. GESTIÓN DE INPUT
+    # 5. GESTIÓN DE INPUT
     prompt_to_process = None
     
-    # A. Botones de Sugerencia (Contextuales)
-    if "chat_suggestions" in st.session_state.mode_state and not st.session_state.mode_state["chat_history"]:
-        if st.session_state.mode_state["chat_suggestions"]:
-            st.caption("💡 **Preguntas sugeridas por la IA:**")
-            cols = st.columns(len(st.session_state.mode_state["chat_suggestions"]))
-            for i, sugg in enumerate(st.session_state.mode_state["chat_suggestions"]):
-                if cols[i].button(sugg, key=f"sugg_btn_{i}", use_container_width=True):
+    # A. Botones de Sugerencia (Verticales y Abajo)
+    # Solo se muestran si: 1) Hay archivos, 2) Chat vacío, 3) Hay sugerencias generadas
+    if selected_files and "chat_suggestions" in st.session_state.mode_state and not st.session_state.mode_state["chat_history"]:
+        suggestions = st.session_state.mode_state.get("chat_suggestions", [])
+        if suggestions:
+            st.write("") # Espaciador
+            st.markdown("##### 💡 Preguntas sugeridas para estos documentos:")
+            
+            # CAMBIO: Iteración vertical simple (una debajo de otra)
+            for i, sugg in enumerate(suggestions):
+                # Use container width hace que parezcan opciones de menú móvil, muy limpio
+                if st.button(f"👉 {sugg}", key=f"sugg_btn_{i}", use_container_width=True):
                     prompt_to_process = sugg
 
-    # B. Input Usuario
-    user_input = st.chat_input("Escribe tu pregunta...")
+    # B. Input Usuario (Siempre visible, pero deshabilitado si no hay archivos opcionalmente)
+    user_input = st.chat_input("Escribe tu pregunta...", disabled=not selected_files)
     if user_input:
         prompt_to_process = user_input
 
-    # 5. PROCESAMIENTO
-    if prompt_to_process:
+    # 6. PROCESAMIENTO
+    if prompt_to_process and selected_files:
         st.session_state.mode_state["chat_history"].append({"role": "Usuario", "message": prompt_to_process})
         with st.chat_message("Usuario", avatar="👤"): 
             st.markdown(prompt_to_process)
@@ -128,9 +137,6 @@ def grounded_chat_mode(db, selected_files):
                 message_placeholder.markdown(response)
                 
                 try:
-                    # LOGGING + FEEDBACK ID
-                    # Asumimos que log_query_event ahora retorna ID. Si no, ajustar supabase_db.py
-                    # Para mantener compatibilidad si no has cambiado supabase_db, usamos un try/except
                     res_log = log_query_event(prompt_to_process, mode=c.MODE_CHAT)
                     query_id = res_log if res_log else f"temp_{len(st.session_state.mode_state['chat_history'])}"
                 except: query_id = None
@@ -144,7 +150,7 @@ def grounded_chat_mode(db, selected_files):
             else: 
                 message_placeholder.error("Error al generar respuesta.")
                 
-    # 6. EXPORTACIÓN
+    # 7. EXPORTACIÓN Y LIMPIEZA
     if st.session_state.mode_state["chat_history"]:
         st.divider()
         col1, col2 = st.columns([1,1])
