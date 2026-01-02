@@ -5,7 +5,7 @@ from services.gemini_api import call_gemini_api
 from services.supabase_db import get_daily_usage, log_query_event, supabase 
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
-from prompts import get_grounded_chat_prompt, get_chat_suggestions_prompt
+from prompts import get_grounded_chat_prompt, get_followup_suggestions_prompt # <--- CAMBIO AQUÍ
 import constants as c 
 
 # =====================================================
@@ -16,27 +16,6 @@ def update_query_rating(query_id, rating):
         supabase.table("queries").update({"rating": rating}).eq("id", query_id).execute()
     except Exception as e: print(f"Error rating: {e}")
 
-def get_file_sneak_peek(db, selected_files, char_limit=4000):
-    """
-    Extrae los primeros N caracteres de los archivos seleccionados para dar contexto a las sugerencias.
-    """
-    preview_text = ""
-    sel_set = set(selected_files)
-    
-    found_count = 0
-    for doc in db:
-        if doc.get('nombre_archivo') in sel_set:
-            grupos = doc.get("grupos", [])
-            if grupos:
-                text_chunk = str(grupos[0].get('contenido_texto', ''))[:1000] 
-                preview_text += f"\n[Doc: {doc.get('nombre_archivo')}]\n{text_chunk}...\n"
-                found_count += 1
-            if found_count >= 3: break
-            
-    if len(preview_text) > char_limit:
-        return preview_text[:char_limit]
-    return preview_text
-
 # =====================================================
 # MODO: CHAT DE CONSULTA DIRECTA (GROUNDED)
 # =====================================================
@@ -44,42 +23,21 @@ def get_file_sneak_peek(db, selected_files, char_limit=4000):
 def grounded_chat_mode(db, selected_files):
     st.subheader("Chat de Consulta Directa")
     
-    # 1. VALIDACIÓN INICIAL DE FILTROS
-    # Si no hay archivos seleccionados, mostramos aviso y detenemos sugerencias
+    # 1. VALIDACIÓN INICIAL
     if not selected_files:
         st.info("👈 **Para comenzar:** Selecciona una Marca, Año y Proyecto en el menú lateral.")
-        st.caption("El chat se activará cuando hayas definido qué documentos analizar.")
-        
-        # Inicializamos historial vacío para que no rompa
         if "chat_history" not in st.session_state.mode_state:
             st.session_state.mode_state["chat_history"] = []
     else:
         st.markdown(f"Analizando **{len(selected_files)} documento(s)** seleccionados.")
 
-    # 2. INICIALIZACIÓN DE ESTADO
+    # 2. INICIALIZACIÓN
     if "chat_history" not in st.session_state.mode_state: 
         st.session_state.mode_state["chat_history"] = []
     
-    # 3. GENERACIÓN DE SUGERENCIAS (SOLO SI HAY ARCHIVOS Y CHAT VACÍO)
-    if selected_files and not st.session_state.mode_state["chat_history"]:
-        if "chat_suggestions" not in st.session_state.mode_state:
-            with st.spinner("🧠 Leyendo documentos para sugerir preguntas estratégicas..."):
-                try:
-                    context_preview = get_file_sneak_peek(db, selected_files)
-                    
-                    if context_preview:
-                        prompt_sugg = get_chat_suggestions_prompt(context_preview)
-                        resp_sugg = call_gemini_api(prompt_sugg, generation_config_override={"response_mime_type": "application/json"})
-                        if resp_sugg:
-                            suggestions = json.loads(clean_gemini_json(resp_sugg))
-                            st.session_state.mode_state["chat_suggestions"] = suggestions
-                    else:
-                        st.session_state.mode_state["chat_suggestions"] = []
-                except Exception as e:
-                    print(f"Error sugiriendo: {e}")
-                    st.session_state.mode_state["chat_suggestions"] = []
+    # (ELIMINADO: Bloque de sugerencias iniciales "Sneak Peek")
 
-    # 4. MOSTRAR HISTORIAL
+    # 3. MOSTRAR HISTORIAL
     for msg in st.session_state.mode_state["chat_history"]:
         with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
             st.markdown(msg['message'])
@@ -89,30 +47,34 @@ def grounded_chat_mode(db, selected_files):
                     score = 1 if rating == 1 else -1
                     update_query_rating(msg['query_id'], score)
 
-    # 5. GESTIÓN DE INPUT
+    # 4. GESTIÓN DE INPUT
     prompt_to_process = None
     
-    # A. Botones de Sugerencia (Verticales y Abajo)
-    # Solo se muestran si: 1) Hay archivos, 2) Chat vacío, 3) Hay sugerencias generadas
-    if selected_files and "chat_suggestions" in st.session_state.mode_state and not st.session_state.mode_state["chat_history"]:
+    # A. Botones de Sugerencia (Contextuales - Follow Up)
+    # Se muestran si existen en el estado (generadas tras la última respuesta)
+    if selected_files and "chat_suggestions" in st.session_state.mode_state:
         suggestions = st.session_state.mode_state.get("chat_suggestions", [])
         if suggestions:
-            st.write("") # Espaciador
-            st.markdown("##### 💡 Preguntas sugeridas para estos documentos:")
+            st.write("") # Espaciador visual
+            st.caption("🤔 **Profundizar en el tema:**")
             
-            # CAMBIO: Iteración vertical simple (una debajo de otra)
+            # Mostramos una debajo de la otra
             for i, sugg in enumerate(suggestions):
-                # Use container width hace que parezcan opciones de menú móvil, muy limpio
                 if st.button(f"👉 {sugg}", key=f"sugg_btn_{i}", use_container_width=True):
                     prompt_to_process = sugg
+            st.write("") # Espaciador antes del input
 
-    # B. Input Usuario (Siempre visible, pero deshabilitado si no hay archivos opcionalmente)
+    # B. Input Usuario
     user_input = st.chat_input("Escribe tu pregunta...", disabled=not selected_files)
     if user_input:
         prompt_to_process = user_input
 
-    # 6. PROCESAMIENTO
+    # 5. PROCESAMIENTO
     if prompt_to_process and selected_files:
+        # Limpiar sugerencias viejas al hacer una nueva pregunta para no confundir
+        if "chat_suggestions" in st.session_state.mode_state:
+            del st.session_state.mode_state["chat_suggestions"]
+            
         st.session_state.mode_state["chat_history"].append({"role": "Usuario", "message": prompt_to_process})
         with st.chat_message("Usuario", avatar="👤"): 
             st.markdown(prompt_to_process)
@@ -136,6 +98,21 @@ def grounded_chat_mode(db, selected_files):
             if response: 
                 message_placeholder.markdown(response)
                 
+                # --- GENERACIÓN DE NUEVAS SUGERENCIAS (FOLLOW-UP) ---
+                # Generamos las sugerencias basadas en ESTA respuesta para el siguiente turno
+                try:
+                    prompt_followup = get_followup_suggestions_prompt(response)
+                    # Llamada silenciosa (sin spinner que bloquee) o muy rápida
+                    resp_sugg = call_gemini_api(prompt_followup, generation_config_override={"response_mime_type": "application/json"})
+                    if resp_sugg:
+                        new_suggestions = json.loads(clean_gemini_json(resp_sugg))
+                        st.session_state.mode_state["chat_suggestions"] = new_suggestions
+                except Exception as e:
+                    # Si falla la sugerencia, no importa, el chat principal funcionó
+                    print(f"Error generando follow-up: {e}")
+                    st.session_state.mode_state["chat_suggestions"] = []
+
+                # Guardado y Logging
                 try:
                     res_log = log_query_event(prompt_to_process, mode=c.MODE_CHAT)
                     query_id = res_log if res_log else f"temp_{len(st.session_state.mode_state['chat_history'])}"
@@ -146,11 +123,13 @@ def grounded_chat_mode(db, selected_files):
                     "message": response,
                     "query_id": query_id
                 })
+                
+                # Rerun para que aparezcan los botones de sugerencia nuevos abajo
                 st.rerun()
             else: 
                 message_placeholder.error("Error al generar respuesta.")
                 
-    # 7. EXPORTACIÓN Y LIMPIEZA
+    # 6. EXPORTACIÓN
     if st.session_state.mode_state["chat_history"]:
         st.divider()
         col1, col2 = st.columns([1,1])
@@ -160,4 +139,10 @@ def grounded_chat_mode(db, selected_files):
             if pdf_bytes: 
                 st.download_button("📥 Descargar Chat PDF", data=pdf_bytes, file_name="chat_consulta.pdf", mime="application/pdf", width='stretch')
         with col2: 
-            st.button("🗑️ Nueva Conversación", on_click=reset_chat_workflow, key="new_grounded_chat_btn", width='stretch')
+            # Al limpiar, también borramos sugerencias
+            def clean_all():
+                reset_chat_workflow()
+                if "chat_suggestions" in st.session_state.mode_state:
+                    del st.session_state.mode_state["chat_suggestions"]
+            
+            st.button("🗑️ Nueva Conversación", on_click=clean_all, key="new_grounded_chat_btn", width='stretch')
