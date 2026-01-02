@@ -390,18 +390,18 @@ def get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups):
     return base
 
 # ==============================================================================
-# SECCIÓN: ANÁLISIS DE TENDENCIAS 2.0 (INTELLIGENCE BRIEF)
+# SECCIÓN: ANÁLISIS DE TENDENCIAS 2.0 (RADAR 360 & INTELLIGENCE BRIEF)
 # ==============================================================================
 
 SOURCE_LENSES = {
-    "DANE (Datos Demográficos/Económicos)": "Prioriza indicadores duros: IPC (Inflación), Tasa de Desempleo, PIB trimestral, Pulso Social y gasto de los hogares. (Web: https://www.dane.gov.co)",
-    "Banco de la República (Macroeconomía)": "Enfócate en tasas de interés de intervención, TRM (Dólar), balanza comercial y política monetaria. (Web: https://www.banrep.gov.co)",
-    "Fenalco (Comercio y Retail)": "Usa la 'Bitácora Económica': comportamiento en punto de venta, fechas comerciales (Día de la Madre, etc.) y clima de negocios. (Web: https://www.fenalco.com.co)",
-    "Camacol (Vivienda y Construcción)": "Analiza Coordenada Urbana: ventas de vivienda VIS/No VIS, iniciaciones y licenciamiento. (Web: https://camacol.co)",
-    "Euromonitor (Tendencias Globales)": "Conecta con Megatendencias (ej. Bienestar, Sostenibilidad), tamaño de mercado y benchmarks internacionales. (Web: https://www.euromonitor.com)",
-    "Google Trends (Intención Digital)": "Estima el interés de búsqueda online, estacionalidad de las consultas y palabras clave emergentes. (Web: https://trends.google.com)",
-    "McKinsey/Deloitte (Consultoría Estratégica)": "Aplica marcos de 'Futuro del Consumidor', transformación digital y predicciones a 2030. (Web: https://www.mckinsey.com / https://www2.deloitte.com)",
-    "Superintendencia (SIC) (Regulación)": "Considera el marco legal, protección al consumidor, habeas data y libre competencia. (Web: https://www.sic.gov.co)"
+    "DANE (Datos Demográficos/Económicos)": "Prioriza indicadores duros: IPC (Inflación), Tasa de Desempleo, PIB trimestral, Pulso Social y gasto de los hogares.",
+    "Banco de la República (Macroeconomía)": "Enfócate en tasas de interés de intervención, TRM (Dólar), balanza comercial y política monetaria.",
+    "Fenalco (Comercio y Retail)": "Usa la 'Bitácora Económica': comportamiento en punto de venta, fechas comerciales y clima de negocios.",
+    "Camacol (Vivienda y Construcción)": "Analiza Coordenada Urbana: ventas de vivienda VIS/No VIS, iniciaciones y licenciamiento.",
+    "Euromonitor (Tendencias Globales)": "Conecta con Megatendencias (ej. Bienestar, Sostenibilidad), tamaño de mercado y benchmarks internacionales.",
+    "Google Trends (Intención Digital)": "Estima el interés de búsqueda online, estacionalidad de las consultas y palabras clave emergentes.",
+    "McKinsey/Deloitte (Consultoría Estratégica)": "Aplica marcos de 'Futuro del Consumidor', transformación digital y predicciones.",
+    "Superintendencia (SIC) (Regulación)": "Considera el marco legal, protección al consumidor, habeas data y libre competencia."
 }
 
 def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_list):
@@ -434,53 +434,63 @@ C. **Contexto Externo:** {sources_instruction}
 # Radar de Tendencia: {topic}
 
 ## 1. The Big Idea (Resumen Ejecutivo)
-*Escribe un párrafo potente (máx 5 líneas) que defina la oportunidad central. Debe ser inspirador pero basado en datos.*
+*Escribe un párrafo potente (máx 5 líneas) que defina la oportunidad central.*
 
-## 2. Drivers de Cambio (¿Por qué ahora?)
-*Identifica las fuerzas macro que impulsan esta tendencia (Ej: Inflación, Digitalización, Cambio Climático).*
-* **[Driver 1]:** Explicación conectada con el tema.
-* **[Driver 2]:** Explicación conectada con el tema.
+## 2. Drivers de Cambio
+*Identifica las fuerzas macro que impulsan esta tendencia.*
+* **[Driver 1]:** Explicación.
+* **[Driver 2]:** Explicación.
 
 ## 3. Triangulación de Evidencia (Interna vs. Externa)
 | Lo que dicen nuestros datos (Interno) | Validación de Mercado ({', '.join(public_sources_list) if public_sources_list else 'Mercado'}) | Veredicto |
 | :--- | :--- | :--- |
-| (Hallazgo clave del repo [Cita]) | (Dato macro o tendencia de consumo que lo confirma/refuta) | (¿Oportunidad Real o Ruido?) |
-| (Hallazgo clave del repo [Cita]) | (Dato macro o tendencia de consumo que lo confirma/refuta) | (¿Oportunidad Real o Ruido?) |
-| (Hallazgo clave del repo [Cita]) | (Dato macro o tendencia de consumo que lo confirma/refuta) | (¿Oportunidad Real o Ruido?) |
+| (Hallazgo clave del repo [Cita]) | (Dato macro o tendencia que lo confirma/refuta) | (¿Oportunidad o Ruido?) |
 
-## 4. Señales del Consumidor (Evidencia Cualitativa)
-*Extrae 'Verbatims' o comportamientos específicos del Repositorio que demuestren la tendencia en acción.*
-* 💬 *"Cita textual o paráfrasis de un consumidor"* [Fuente: Documento X]
-* 🛒 *Comportamiento observado (ej. cambio en punto de venta)* [Fuente: Documento Y]
+## 4. Señales del Consumidor
+*Extrae 'Verbatims' del Repositorio.*
+* 💬 *"Cita textual"* [Fuente: Documento X]
 
-## 5. Plan de Activación (Horizonte de Innovación)
-* **AHORA (Quick Wins):** Acciones de Marketing/Ventas para capturar valor este mes.
-* **LUEGO (Desarrollo):** Ajustes de producto/servicio (R&D) para los próximos 6 meses.
-* **DESPUÉS (Visión):** Hacia dónde evolucionará esto en 2-3 años.
-
-## 6. Radar de Noticias (Contexto: {current_date})
-*IMPORTANTE: Solo incluye noticias si estás 100% seguro de su veracidad y ocurrencia reciente (últimas semanas). NO INVENTES NOTICIAS.*
-*Si no tienes acceso a noticias específicas de los últimos 7 días, presenta tendencias macroeconómicas confirmadas recientes aclarando que es "Contexto General".*
-
-* **[Titular de la Noticia]**
-  * *Resumen:* Breve impacto en la tendencia.
-  * *Fuente:* [Nombre del Medio] - [Link Web funcional al Home del medio o a la noticia si la conoces]
-
-* **Titular de la Noticia]**
-  * *Resumen:* Breve impacto en la tendencia.
-  * *Fuente:* [Nombre del Medio] - [Link Web funcional al Home del medio o a la noticia si la conoces]
+## 5. Plan de Activación
+* **AHORA (Quick Wins):** Acciones para este mes.
+* **LUEGO (Desarrollo):** R&D próximos 6 meses.
+* **DESPUÉS (Visión):** Evolución a 2-3 años.
 
 ---
-## Bibliografía y Fuentes Consultadas
-
-### Fuentes Internas (Repositorio y PDFs)
-* [1] Documento: "Nombre Exacto del Archivo/Proyecto en la BD"
-* [2] Documento: "Nombre Exacto del Archivo/Proyecto en la BD"
-
-### Fuentes Externas (Referencias Públicas)
-* [3] Link: (URL de referencia de noticia o entidad pública utilizada)
-* [4] Link: (URL de referencia de noticia o entidad pública utilizada)
+## Bibliografía y Fuentes
+* [1] Documento: "Nombre Exacto del Archivo"
 """
+
+def get_trend_synthesis_prompt(keyword, trend_context, internal_context, rising_queries):
+    """
+    Nuevo prompt estratégico para el modo 'Radar 360' (Fase 4).
+    Triangula: Google Trends (Live) + Data Interna + Inteligencia IA.
+    """
+    return f"""
+    **Rol:** Director de Estrategia y Coolhunting.
+    **Objetivo:** Analizar la tendencia "{keyword}" cruzando datos de mercado con inteligencia interna.
+
+    **1. DATOS DE MERCADO (Google Trends):**
+    {trend_context}
+    
+    **2. BÚSQUEDAS EN AUMENTO (Lo que la gente está preguntando ahora):**
+    {rising_queries}
+
+    **3. EVIDENCIA INTERNA (Tus estudios previos):**
+    {internal_context if internal_context else "No hay menciones previas en el repositorio."}
+
+    **TAREA:**
+    Genera un "Brief de Oportunidad" breve y directo (Markdown):
+    
+    ### 1. El "Vibe" del Momento
+    ¿Qué está impulsando esta búsqueda *hoy*? (Usa las búsquedas en aumento para descifrar la intención real detrás de la keyword).
+    
+    ### 2. Cruce Estratégico (Interno vs. Externo)
+    *Si hay data interna:* ¿Nuestros estudios previos validan esta tendencia o nos está tomando por sorpresa? Cita el documento interno si existe.
+    *Si NO hay data interna:* Advierte que es un territorio inexplorado para la agencia.
+    
+    ### 3. Ideas de Activación (Quick Wins)
+    2 ideas concretas para que una marca aproveche esto la próxima semana.
+    """
 
 # ==============================================================================
 # PROMPTS DE PERFILES SINTÉTICOS (AJUSTADO: TONO NEUTRO)
@@ -495,7 +505,7 @@ def get_persona_generation_prompt(segment_name, relevant_info):
     **Datos de Investigación (Fuente de Verdad):**
     {relevant_info[:25000]}
     
-    **Instrucción de Estilo:** El perfil debe sentirse humano, pero su forma de hablar debe ser **estándar y neutra**, evitando jergas locales fuertes o modismos difíciles de entender internacionalmente.
+    **Instrucción de Estilo:** El perfil debe sentirse humano, pero su forma de hablar debe ser **estándar y neutra**, evitando jergas locales fuertes.
     
     **Salida requerida (JSON):**
     Genera un JSON con esta estructura exacta:
@@ -504,10 +514,10 @@ def get_persona_generation_prompt(segment_name, relevant_info):
         "edad": "Rango de edad",
         "ocupacion": "Ocupación típica",
         "bio_breve": "Resumen de su vida, contexto familiar y situación económica.",
-        "personalidad": "3-4 adjetivos (ej. Escéptico, Pragmático, Impulsivo).",
+        "personalidad": "3-4 adjetivos.",
         "dolores_principales": ["Dolor 1", "Dolor 2"],
         "motivadores_compra": ["Motivador 1", "Motivador 2"],
-        "estilo_comunicacion": "Define un estilo natural pero neutro (Ej: 'Directo y claro', 'Amable y formal', 'Práctico y sencillo').",
+        "estilo_comunicacion": "Define un estilo natural pero neutro.",
         "creencias_limitantes": "Qué prejuicios tiene sobre la categoría."
     }}
     """
@@ -534,7 +544,7 @@ def get_persona_chat_instruction(persona_json, user_question):
     1. Responde SOLO como {p.get('nombre')}. No salgas del personaje ni menciones que eres un modelo de lenguaje.
     2. **IDIOMA Y TONO:** Usa un **Español Neutro Latinoamericano**. 
        - 🚫 PROHIBIDO usar modismos regionales fuertes (ej: NO digas 'parce', 'wey', 'chévere', 'fome', 'vos', etc.).
-       - ✅ Usa un vocabulario estándar, claro y universal, pero mantén la naturalidad de una persona real (no suenes robótico).
+       - ✅ Usa un vocabulario estándar, claro y universal, pero mantén la naturalidad de una persona real.
     3. Usa tus "dolores" ({', '.join(p.get('dolores_principales', []))}) para justificar tus respuestas.
     4. Sé honesto. Si el producto no te gusta o es muy caro para ti, dilo abiertamente.
     5. No des respuestas largas y estructuradas como un consultor. Sé conversacional y ve al punto.
