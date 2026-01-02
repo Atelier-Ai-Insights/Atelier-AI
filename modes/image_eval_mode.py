@@ -1,15 +1,16 @@
 import streamlit as st
 from PIL import Image
 from io import BytesIO
-from utils import get_relevant_info
+from utils import get_relevant_info, render_process_status
 from services.gemini_api import call_gemini_stream 
 from services.supabase_db import log_query_event
-from reporting.pdf_generator import generate_pdf_html
-# --- NUEVA IMPORTACIÓN ---
-from reporting.docx_generator import generate_docx
 from config import banner_file
 from prompts import get_image_eval_prompt_parts
 import constants as c
+
+# --- GENERADORES (Fase 1: Top Level Import) ---
+from reporting.pdf_generator import generate_pdf_html
+from reporting.docx_generator import generate_docx
 
 def image_evaluation_mode(db, selected_files):
     st.subheader("Evaluación Visual")
@@ -53,11 +54,16 @@ def image_evaluation_mode(db, selected_files):
     elif st.button("Evaluar Imagen", width='stretch', disabled=(uploaded_file is None)):
         if not image_bytes or not target_audience.strip() or not comm_objectives.strip(): 
             st.warning("Completa todos los campos."); return
+        
+        # --- IMPLEMENTACIÓN FASE 2: STATUS VISUAL ---
+        stream = None
+        with render_process_status("👁️ Analizando imagen y estrategia...", expanded=True) as status:
             
-        with st.spinner("Analizando imagen..."):
+            status.write("Consultando repositorio para contexto del target...")
             relevant_text_context = get_relevant_info(db, f"Contexto: {target_audience}", selected_files)
             if len(relevant_text_context) > 800000: relevant_text_context = relevant_text_context[:800000]
-                
+            
+            status.write("Procesando imagen con visión artificial (Gemini)...")
             prompt_parts = get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context)
             image_data = Image.open(BytesIO(image_bytes))
             prompt_parts.append("\n\n**Imagen para evaluar:**")
@@ -65,11 +71,16 @@ def image_evaluation_mode(db, selected_files):
             
             stream = call_gemini_stream(prompt_parts)
             
-            if stream: 
-                st.markdown("### Resultados Evaluación:")
-                response = st.write_stream(stream)
-                st.session_state.mode_state["image_evaluation_result"] = response
-                log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode=c.MODE_IMAGE_EVAL)
-                st.rerun() 
-            else: 
-                st.error("No se pudo generar evaluación.")
+            if stream:
+                status.update(label="¡Análisis completado!", state="complete", expanded=False)
+            else:
+                status.update(label="Error en el análisis", state="error")
+            
+        if stream: 
+            st.markdown("### Resultados Evaluación:")
+            response = st.write_stream(stream)
+            st.session_state.mode_state["image_evaluation_result"] = response
+            log_query_event(f"Evaluación Imagen: {uploaded_file.name}", mode=c.MODE_IMAGE_EVAL)
+            st.rerun() 
+        else: 
+            st.error("No se pudo generar evaluación.")
