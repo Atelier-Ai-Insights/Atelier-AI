@@ -351,16 +351,16 @@ def show_etnochat_project_analyzer(text_context, file_parts, project_name):
             # PDF
             pdf_bytes = generate_pdf_html(chat_content_raw.replace("](#)", "]"), title=f"EtnoChat - {project_name}", banner_path=banner_file)
             if pdf_bytes: 
-                st.download_button("📄 Chat en PDF", data=pdf_bytes, file_name="etno_chat.pdf", mime="application/pdf", width='stretch')
+                st.download_button("Chat en PDF", data=pdf_bytes, file_name="etno_chat.pdf", mime="application/pdf", width='stretch')
         
         with col2:
             # WORD
             docx_bytes = generate_docx(chat_content_raw, title=f"EtnoChat - {project_name}")
             if docx_bytes:
-                st.download_button("📝 Chat en Word", data=docx_bytes, file_name="etno_chat.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
+                st.download_button("Chat en Word", data=docx_bytes, file_name="etno_chat.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
 
         with col3: 
-            st.button("🔄 Reiniciar Chat", on_click=reset_etnochat_chat_workflow, key="new_etno_chat_btn", width='stretch')
+            st.button("Reiniciar Chat", on_click=reset_etnochat_chat_workflow, key="new_etno_chat_btn", width='stretch')
 
 # --- FUNCIÓN PRINCIPAL DEL MODO ---
 
