@@ -1,106 +1,87 @@
 import streamlit as st
-from utils import get_relevant_info, reset_report_workflow
+import time
 from services.gemini_api import call_gemini_api, call_gemini_stream
-from services.supabase_db import get_monthly_usage, log_query_event
-from reporting.pdf_generator import generate_pdf_html
-# --- NUEVA IMPORTACIÓN ---
-from reporting.docx_generator import generate_docx 
-from config import banner_file
+from utils import get_relevant_info, render_process_status, process_text_with_tooltips # <--- IMPORTANTE
 from prompts import get_report_prompt1, get_report_prompt2
-import constants as c 
-
-def generate_final_report_stream(question, db, selected_files, status_container=None):
-    """
-    Versión modificada que acepta un contenedor de estado para actualizar el progreso visual.
-    """
-    # Paso 1: Búsqueda y Hallazgos
-    relevant_info = get_relevant_info(db, question, selected_files)
-    
-    if status_container:
-        status_container.write("🧠 Identificando hallazgos clave en la base de conocimientos...")
-        
-    prompt1 = get_report_prompt1(question, relevant_info)
-    result1 = call_gemini_api(prompt1)
-    
-    if result1 is None: return None
-    
-    # Paso 2: Redacción Final
-    if status_container:
-        status_container.write("✍️ Redactando informe ejecutivo final...")
-        
-    prompt2 = get_report_prompt2(question, result1, relevant_info)
-    stream2 = call_gemini_stream(prompt2)
-    return stream2
+from reporting.pdf_generator import generate_pdf_html
+from config import banner_file
+from services.supabase_db import log_query_event
+import constants as c
 
 def report_mode(db, selected_files):
-    st.markdown("### Generar Reporte de Reportes")
-    st.markdown("Herramienta potente para síntesis. Analiza estudios seleccionados y genera informe consolidado.")
+    st.subheader("📝 Generador de Informes de Investigación")
     
-    # --- PANTALLA DE RESULTADOS ---
-    if "report" in st.session_state.mode_state and st.session_state.mode_state["report"]:
-        st.markdown("---"); st.markdown("### Informe Generado"); 
-        st.markdown(st.session_state.mode_state["report"], unsafe_allow_html=True); st.markdown("---")
+    # 1. Input
+    user_question = st.text_input("¿Qué objetivo de investigación deseas abordar?", placeholder="Ej: Analizar la percepción de precios en la categoría...")
+    
+    if not selected_files:
+        st.warning("Selecciona documentos en el menú lateral.")
+        return
+
+    # 2. Botón de Acción
+    if st.button("Generar Informe", type="primary"):
+        if not user_question: return
         
-        # Generar archivos en memoria
-        pdf_bytes = generate_pdf_html(st.session_state.mode_state["report"], title="Informe Final", banner_path=banner_file)
+        # Resetear estado anterior
+        for k in ["report_step1", "report_final"]: st.session_state.mode_state.pop(k, None)
         
-        # --- GENERAR WORD ---
-        docx_bytes = generate_docx(
-            st.session_state.mode_state["report"], 
-            title="Informe de Investigación Atelier"
-        )
+        with render_process_status("Iniciando investigación...", expanded=True) as status:
+            
+            # --- FASE 1: BÚSQUEDA Y HALLAZGOS ---
+            status.write("🔍 Fase 1: Escaneando documentos y extrayendo evidencia...")
+            relevant_info = get_relevant_info(db, user_question, selected_files, top_k=15)
+            
+            if not relevant_info:
+                status.update(label="No se encontró información relevante.", state="error")
+                return
+
+            prompt1 = get_report_prompt1(user_question, relevant_info)
+            findings = call_gemini_api(prompt1)
+            st.session_state.mode_state["report_step1"] = findings
+            
+            # --- FASE 2: REDACCIÓN ---
+            status.write("✍️ Fase 2: Redactando informe ejecutivo...")
+            prompt2 = get_report_prompt2(user_question, findings, relevant_info)
+            
+            final_report_stream = call_gemini_stream(prompt2)
+            
+            # Consumir el stream para guardarlo en variable
+            full_response = ""
+            placeholder = st.empty()
+            
+            # En modo streaming no podemos procesar tooltips en tiempo real fácilmente sin romper el HTML
+            # Así que mostramos el stream raw, y al final renderizamos el bonito.
+            for chunk in final_report_stream:
+                full_response += chunk
+                placeholder.markdown(full_response + "▌")
+            
+            st.session_state.mode_state["report_final"] = full_response
+            placeholder.empty() # Limpiamos el stream sucio
+            
+            status.update(label="¡Informe completado!", state="complete", expanded=False)
+            
+            # Log
+            log_query_event(f"Reporte: {user_question}", mode=c.MODE_REPORT)
+
+    # 3. Visualización de Resultados (SIEMPRE PERSISTENTE)
+    if "report_final" in st.session_state.mode_state:
+        final_text = st.session_state.mode_state["report_final"]
         
-        # --- BOTONES DE ACCIÓN ---
+        # RENDERIZADO CON TOOLTIPS
+        # Procesamos el texto final para convertir las citas en tooltips interactivos
+        html_content = process_text_with_tooltips(final_text)
+        
         st.divider()
-        col1, col2, col3 = st.columns(3)
+        st.markdown(html_content, unsafe_allow_html=True)
         
-        with col1:
-            if pdf_bytes: 
-                st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name="Informe_Atelier.pdf", mime="application/pdf", width='stretch', type="secondary")
-        
-        with col2:
-            if docx_bytes:
-                st.download_button(
-                    "📝 Descargar Word", 
-                    data=docx_bytes, 
-                    file_name="Informe_Atelier.docx", 
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
-                    width='stretch', 
-                    type="primary",
-                    help="Descarga editable para trabajar en Word"
-                )
-
-        with col3: 
-            st.button("🔄 Nueva consulta", on_click=reset_report_workflow, key="new_rep_btn", width='stretch')
-    
-    # --- PANTALLA DE CONSULTA ---
-    else:
-        question = st.text_area("Escribe tu consulta...", value=st.session_state.mode_state.get("last_question", ""), height=150, placeholder="Ej: ¿Cuáles son los principales insights sobre la categoría de lácteos en 2024?")
-        
-        if st.button("Generar Reporte", width='stretch', type="primary"):
-            if not question.strip(): st.warning("Por favor, ingresa una consulta."); return
-            
-            st.session_state.mode_state["last_question"] = question
-            
-            # --- MEJORA UX: st.status paso a paso ---
-            stream = None
-            with st.status("🚀 Iniciando motor de investigación...", expanded=True) as status:
-                status.write("📂 Accediendo al repositorio de documentos...")
-                
-                stream = generate_final_report_stream(question, db, selected_files, status_container=status)
-                
-                if stream:
-                    status.update(label="¡Análisis completado! Generando respuesta...", state="complete", expanded=False)
-                else:
-                    status.update(label="Hubo un problema al generar el reporte.", state="error")
-
-            if stream: 
-                st.markdown("---")
-                st.markdown("### Informe Generado")
-                response = st.write_stream(stream)
-                
-                st.session_state.mode_state["report"] = response
-                log_query_event(question, mode=c.MODE_REPORT)
-                st.rerun()
-            else: 
-                st.error("No se pudo generar el reporte. Intenta reformular tu pregunta.")
+        # Botón PDF
+        st.write("")
+        pdf_bytes = generate_pdf_html(final_text, title="Informe de Investigación", banner_path=banner_file)
+        if pdf_bytes:
+            st.download_button(
+                label="📥 Descargar Informe PDF",
+                data=pdf_bytes,
+                file_name="Informe_Investigacion.pdf",
+                mime="application/pdf",
+                type="secondary"
+            )
