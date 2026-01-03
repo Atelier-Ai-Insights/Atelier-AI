@@ -148,7 +148,7 @@ def run_user_mode(db_full, user_features, footer_html):
             clean_text = remove_html_tags(raw_content) # Limpiamos HTML para el título
             
             # Título del acordeón: Fecha + 30 caracteres
-            expander_label = f"📅 {date_str} | {clean_text[:30]}..."
+            expander_label = f" {date_str} | {clean_text[:30]}..."
             
             # Usamos EXPANDER (Acordeón)
             with st.sidebar.expander(expander_label, expanded=False):
