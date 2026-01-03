@@ -1,8 +1,6 @@
 import streamlit as st
-import time
 from services.gemini_api import call_gemini_api, call_gemini_stream
-# Aseguramos importar process_text_with_tooltips para los tooltips
-from utils import get_relevant_info, render_process_status, process_text_with_tooltips 
+from utils import get_relevant_info, render_process_status, process_text_with_tooltips
 from prompts import get_report_prompt1, get_report_prompt2
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
@@ -12,15 +10,16 @@ import constants as c
 def report_mode(db, selected_files):
     st.subheader("Generador de Informes de Investigación")
     
-    # 1. Input
+    # 1. INPUT
     user_question = st.text_input("¿Qué objetivo de investigación deseas abordar?", placeholder="Ej: Analizar la percepción de precios en la categoría...")
     
     if not selected_files:
         st.warning("Selecciona documentos en el menú lateral.")
         return
 
-    # 2. Botón de Acción
-    if st.button("Generar Informe", type="primary"):
+    # 2. BOTÓN DE ACCIÓN (AJUSTE 1: De lado a lado)
+    # Agregamos use_container_width=True para que ocupe todo el ancho
+    if st.button("Generar Informe", type="primary", use_container_width=True):
         if not user_question: return
         
         # Resetear estado anterior
@@ -29,9 +28,8 @@ def report_mode(db, selected_files):
         with render_process_status("Iniciando investigación...", expanded=True) as status:
             
             # --- FASE 1: BÚSQUEDA Y HALLAZGOS ---
-            status.write("🔍 Fase 1: Escaneando documentos y extrayendo evidencia...")
+            status.write("Fase 1: Escaneando documentos y extrayendo evidencia...")
             
-            # CORRECCIÓN: Eliminado 'top_k=15'. Tu función usa 'max_chars'.
             relevant_info = get_relevant_info(db, user_question, selected_files)
             
             if not relevant_info:
@@ -43,7 +41,7 @@ def report_mode(db, selected_files):
             st.session_state.mode_state["report_step1"] = findings
             
             # --- FASE 2: REDACCIÓN ---
-            status.write("✍️ Fase 2: Redactando informe ejecutivo...")
+            status.write("Fase 2: Redactando informe ejecutivo...")
             prompt2 = get_report_prompt2(user_question, findings, relevant_info)
             
             final_report_stream = call_gemini_stream(prompt2)
@@ -62,26 +60,44 @@ def report_mode(db, selected_files):
             status.update(label="¡Informe completado!", state="complete", expanded=False)
             
             # Log
-            log_query_event(f"Reporte: {user_question}", mode=c.MODE_REPORT)
+            try:
+                log_query_event(f"Reporte: {user_question}", mode=c.MODE_REPORT)
+            except: pass
 
-    # 3. Visualización de Resultados
+    # 3. VISUALIZACIÓN DE RESULTADOS
     if "report_final" in st.session_state.mode_state:
         final_text = st.session_state.mode_state["report_final"]
         
-        # RENDERIZADO CON TOOLTIPS (Usando tu función nueva en utils.py)
+        # Renderizado con Tooltips
         html_content = process_text_with_tooltips(final_text)
         
         st.divider()
         st.markdown(html_content, unsafe_allow_html=True)
         
-        # Botón PDF
-        st.write("")
+        # --- BOTONES DE ACCIÓN (AJUSTE 2: Simétricos) ---
+        st.divider()
+        
+        # Generar PDF
         pdf_bytes = generate_pdf_html(final_text, title="Informe de Investigación", banner_path=banner_file)
-        if pdf_bytes:
-            st.download_button(
-                label="Descargar Informe PDF",
-                data=pdf_bytes,
-                file_name="Informe_Investigacion.pdf",
-                mime="application/pdf",
-                type="secondary"
-            )
+        
+        # Creamos dos columnas iguales para los botones
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if pdf_bytes:
+                st.download_button(
+                    label="Descargar PDF",
+                    data=pdf_bytes,
+                    file_name="Informe_Investigacion.pdf",
+                    mime="application/pdf",
+                    type="secondary",
+                    use_container_width=True # Ancho completo de la columna
+                )
+        
+        with col2:
+            # Botón para limpiar y empezar uno nuevo
+            if st.button("Nuevo Reporte", type="primary", use_container_width=True):
+                # Limpiamos las variables del reporte actual
+                st.session_state.mode_state.pop("report_step1", None)
+                st.session_state.mode_state.pop("report_final", None)
+                st.rerun()
