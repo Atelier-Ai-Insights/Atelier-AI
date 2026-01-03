@@ -28,7 +28,7 @@ def synthetic_users_mode(db, selected_files):
                 st.warning("⚠️ Define un nombre para el segmento.")
                 return
             
-            # Usamos el componente visual de estado para consistencia
+            # Usamos el componente visual de estado
             with render_process_status("Analizando datos y construyendo psique...", expanded=True) as status:
                 
                 # A. Buscar contexto
@@ -51,7 +51,7 @@ def synthetic_users_mode(db, selected_files):
                         clean_resp = clean_gemini_json(resp)
                         persona_data = json.loads(clean_resp)
                         
-                        # --- CORRECCIÓN DE LISTA (Tu lógica anti-error) ---
+                        # --- CORRECCIÓN DE LISTA (Anti-Error) ---
                         if isinstance(persona_data, list):
                             if len(persona_data) > 0:
                                 persona_data = persona_data[0]
@@ -62,8 +62,11 @@ def synthetic_users_mode(db, selected_files):
                         st.session_state.mode_state["synthetic_persona_data"] = persona_data
                         st.session_state.mode_state["synthetic_chat_history"] = [] 
                         
-                        # Registrar evento
-                        log_query_event(f"Persona: {segment_name}", mode=c.MODE_PERSONA)
+                        # Registrar evento (Ahora sí funcionará con constants.py actualizado)
+                        try:
+                            log_query_event(f"Persona: {segment_name}", mode=c.MODE_PERSONA)
+                        except Exception as e:
+                            print(f"Log warning: {e}") # Evita crash si falla el log
                         
                         status.update(label="¡Perfil Creado!", state="complete", expanded=False)
                         st.rerun()
@@ -106,7 +109,7 @@ def synthetic_users_mode(db, selected_files):
                 st.markdown("**Motivadores:**")
                 st.write(p.get('motivadores_compra', []))
             
-            st.markdown(f"**🗣️ Estilo:** *{p.get('estilo_comunicacion', 'Estándar')}*")
+            st.markdown(f"**Estilo:** *{p.get('estilo_comunicacion', 'Estándar')}*")
 
         # 3. INTERFAZ DE CHAT (ENTREVISTA)
         st.divider()
@@ -142,8 +145,6 @@ def synthetic_users_mode(db, selected_files):
                     if stream:
                         response = st.write_stream(stream)
                         st.session_state.mode_state["synthetic_chat_history"].append({"role": "assistant", "content": response})
-                        # No hacemos rerun forzado aquí para evitar parpadeos, Streamlit ya muestra el stream.
-                        # El historial se guardó para la próxima recarga.
 
         # --- SECCIÓN DE ACCIONES (EXPORTAR / REINICIAR) ---
         if st.session_state.mode_state["synthetic_chat_history"]:
@@ -160,7 +161,7 @@ def synthetic_users_mode(db, selected_files):
                 
                 pdf_bytes = generate_pdf_html(chat_content, title=f"Entrevista - {p.get('nombre')}", banner_path=banner_file)
                 if pdf_bytes:
-                    st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"entrevista_{p.get('nombre')}.pdf", use_container_width=True)
+                    st.download_button("Descargar PDF", data=pdf_bytes, file_name=f"entrevista_{p.get('nombre')}.pdf", use_container_width=True)
 
             with c2:
                 if st.button("Reiniciar Chat", use_container_width=True, help="Borra la conversación actual pero mantiene al personaje"):
