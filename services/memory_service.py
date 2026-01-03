@@ -31,7 +31,7 @@ def get_project_memory():
         print(f"Error fetching memory: {e}")
         return []
 
-# 3. BORRAR (La función que faltaba y causaba el error)
+# 3. BORRAR (ESTA ES LA FUNCIÓN QUE TE FALTA Y CAUSA EL ERROR)
 def delete_project_memory(pin_id):
     """Elimina un pin específico por su ID."""
     try:
