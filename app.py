@@ -1,5 +1,6 @@
 import streamlit as st
 import time 
+import re # <--- NUEVO: Para limpiar el HTML sucio
 from datetime import datetime, timezone
 
 # ==============================
@@ -9,39 +10,30 @@ from styles import apply_styles, apply_login_styles
 from config import PLAN_FEATURES, banner_file
 from services.storage import load_database 
 from services.supabase_db import supabase
-from auth import (
-    show_login_page, 
-    show_reset_password_page, 
-    show_activation_flow 
-)
+from auth import show_login_page, show_reset_password_page, show_activation_flow 
 from admin.dashboard import show_admin_dashboard
 from utils import extract_brand, validate_session_integrity 
-# --- NUEVA IMPORTACIÓN PARA BITÁCORA ---
-from services.memory_service import get_project_memory 
+# IMPORTAMOS LA FUNCIÓN DE BORRAR
+from services.memory_service import get_project_memory, delete_project_memory 
 import constants as c
 
-# --- GESTIÓN DE ESTADO INTELIGENTE (Persistencia entre pestañas) ---
+# --- FUNCIÓN AUXILIAR PARA LIMPIAR HTML (NUEVO) ---
+def remove_html_tags(text):
+    """Elimina las etiquetas HTML para la vista previa de texto."""
+    clean = re.compile('<.*?>')
+    return re.sub(clean, '', text)
+
+# --- GESTIÓN DE ESTADO INTELIGENTE ---
 def init_app_memory():
     if "app_memory" not in st.session_state:
         st.session_state.app_memory = {}
 
 def set_mode_and_reset(new_mode):
-    """
-    Cambia el modo pero GUARDA el estado del modo anterior en memoria
-    para restaurarlo si el usuario regresa.
-    """
     init_app_memory()
-    
-    # 1. Guardar estado del modo actual antes de salir
     current = st.session_state.get("current_mode")
     if current and "mode_state" in st.session_state:
-        # Hacemos una copia superficial para guardar
         st.session_state.app_memory[current] = st.session_state.mode_state.copy()
-    
-    # 2. Cambiar modo
     st.session_state.current_mode = new_mode
-    
-    # 3. Restaurar estado si existe en memoria, sino iniciar limpio
     if new_mode in st.session_state.app_memory:
         st.session_state.mode_state = st.session_state.app_memory[new_mode]
     else:
@@ -56,14 +48,13 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.image("LogoDataStudio.png", width=220)
     
     st.sidebar.write(f"Usuario: {st.session_state.user}")
-    if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador")
+    if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
     st.sidebar.divider()
     
     # --- SELECTOR DE MODOS ---
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.session_state.current_mode
     
-    # Definición de categorías y permisos
     all_categories = {
         "Análisis": {
             c.MODE_CHAT: True,
@@ -88,7 +79,6 @@ def run_user_mode(db_full, user_features, footer_html):
         }
     }
     
-    # Lógica de visualización de botones (UI)
     default_expanded = ""
     for category, modes in all_categories.items():
         if modo in modes:
@@ -96,7 +86,6 @@ def run_user_mode(db_full, user_features, footer_html):
             break
             
     for category_name, modes_dict in all_categories.items():
-        # Verificar si hay al menos un modo activo en la categoría
         if any(modes_dict.values()):
             with st.sidebar.expander(category_name, expanded=(default_expanded == category_name)):
                 for mode_key, has_access in modes_dict.items():
@@ -109,87 +98,85 @@ def run_user_mode(db_full, user_features, footer_html):
                             type="primary" if modo == mode_key else "secondary"
                         )
 
-    # --- FILTROS DE BÚSQUEDA ANIDADOS (CASCADA) ---
+    # --- FILTROS ---
     st.sidebar.header("Filtros de Búsqueda")
-    
-    # Algunos modos no requieren filtros de BD
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT, c.MODE_TREND_ANALYSIS] 
     
-    # 0. PREPARACIÓN INICIAL DE DATOS
     user_client_name = st.session_state.get("cliente", "")
     db_base = db_full
     if user_client_name == "atelier demo":
         db_base = [doc for doc in db_full if doc.get("cliente") and "atelier" in str(doc.get("cliente")).lower()]
 
     if run_filters:
-        # --- NIVEL 1: MARCA ---
         marcas_options = sorted({doc.get("filtro", "") for doc in db_base if doc.get("filtro")})
         selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas")
         
-        # Filtramos DB
-        if selected_marcas:
-            db_step_1 = [d for d in db_base if d.get("filtro") in selected_marcas]
-        else:
-            db_step_1 = db_base
+        if selected_marcas: db_step_1 = [d for d in db_base if d.get("filtro") in selected_marcas]
+        else: db_step_1 = db_base
 
-        # --- NIVEL 2: AÑO ---
         years_options = sorted({doc.get("marca", "") for doc in db_step_1 if doc.get("marca")})
         selected_years = st.sidebar.multiselect("Año(s):", years_options, key="filter_years")
         
-        # Filtramos DB
-        if selected_years:
-            db_step_2 = [d for d in db_step_1 if d.get("marca") in selected_years]
-        else:
-            db_step_2 = db_step_1
+        if selected_years: db_step_2 = [d for d in db_step_1 if d.get("marca") in selected_years]
+        else: db_step_2 = db_step_1
 
-        # --- NIVEL 3: PROYECTO ---
         brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_step_2 if extract_brand(d.get("nombre_archivo", ""))})
         selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects")
         
-        # Filtro Final
-        if selected_brands:
-            db_filtered = [d for d in db_step_2 if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
-        else:
-            db_filtered = db_step_2
+        if selected_brands: db_filtered = [d for d in db_step_2 if extract_brand(d.get("nombre_archivo", "")) in selected_brands]
+        else: db_filtered = db_step_2
             
     else:
         db_filtered = db_full
-        if run_filters is False:
-             st.sidebar.caption("Filtros no disponibles en este modo.")
+        if run_filters is False: st.sidebar.caption("Filtros no disponibles en este modo.")
 
     # ==============================================================================
-    # 2. SECCIÓN DE BITÁCORA / PINES GUARDADOS (Visualización Global)
+    # 2. BITÁCORA DE PROYECTO (ARREGLADA)
     # ==============================================================================
     st.sidebar.divider()
-    st.sidebar.subheader("Bitácora de Proyecto")
+    st.sidebar.subheader("📌 Bitácora de Proyecto")
     
-    # Botón para refrescar la lista manualmente
-    if st.sidebar.button("Actualizar Bitácora", type="secondary", use_container_width=True, key="refresh_pins"):
+    if st.sidebar.button("🔄 Actualizar", type="secondary", use_container_width=True, key="refresh_pins"):
         st.rerun()
 
-    # Traer datos
     saved_pins = get_project_memory()
     
     if saved_pins:
-        with st.sidebar.expander(f"Ver {len(saved_pins)} hallazgos", expanded=False):
-            for pin in saved_pins:
-                # Formato visual de tarjeta pequeña
+        # Usamos un contenedor con borde para cada pin
+        for pin in saved_pins:
+            with st.sidebar.container(border=True):
+                # Fecha
                 date_str = pin.get('created_at', '')[:10]
-                icon = "🤖" if pin.get('source') == 'auto' else "📌"
+                st.caption(f"📅 {date_str}")
                 
-                st.sidebar.markdown(f"**{icon} {date_str}**")
-                # Vista previa corta de 150 caracteres
-                content_preview = pin.get('content', '')
-                if len(content_preview) > 150:
-                    content_preview = content_preview[:150] + "..."
+                # VISTA PREVIA LIMPIA (Sin HTML sucio)
+                raw_content = pin.get('content', '')
+                clean_preview = remove_html_tags(raw_content) # <--- Aquí limpiamos el HTML
+                st.write(clean_preview[:90] + "...")
                 
-                st.sidebar.info(content_preview)
-                st.sidebar.caption("---")
+                # BOTONES DE ACCIÓN (Ver y Borrar)
+                c1, c2 = st.columns(2)
+                
+                with c1:
+                    # Usamos Popover para "VER" el contenido completo renderizado
+                    with st.popover("👁️", use_container_width=True, help="Leer completo"):
+                        st.markdown(f"**Hallazgo del {date_str}**")
+                        st.divider()
+                        # Aquí SÍ permitimos HTML para que se vean los tooltips
+                        st.markdown(raw_content, unsafe_allow_html=True)
+                
+                with c2:
+                    # Botón de borrar
+                    if st.button("🗑️", key=f"del_{pin['id']}", use_container_width=True, help="Borrar"):
+                        if delete_project_memory(pin['id']):
+                            st.toast("Elemento eliminado")
+                            time.sleep(0.5)
+                            st.rerun()
     else:
-        st.sidebar.caption("No hay hallazgos guardados aún.")
+        st.sidebar.caption("No hay hallazgos guardados.")
 
     # --- LOGOUT ---
-    st.sidebar.write("") # Espaciador
+    st.sidebar.write("") 
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         try:
             if 'user_id' in st.session_state:
@@ -200,7 +187,7 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.divider()
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
     
-    # --- EJECUCIÓN DEL MODO SELECCIONADO ---
+    # --- EJECUCIÓN DE MODOS ---
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
     
     if modo == c.MODE_REPORT: 
@@ -217,7 +204,6 @@ def run_user_mode(db_full, user_features, footer_html):
 
     elif modo == c.MODE_CHAT: 
         from modes.chat_mode import grounded_chat_mode
-        # Ya no necesitamos pasar placeholder, la bitácora es global en app.py
         grounded_chat_mode(db_filtered, selected_files)
 
     elif modo == c.MODE_IDEA_EVAL: 
@@ -255,10 +241,7 @@ def run_user_mode(db_full, user_features, footer_html):
     elif modo == c.MODE_TREND_ANALYSIS:
         from modes.trend_analysis_mode import google_trends_mode
         google_trends_mode()
-    
-# =====================================================
-# FUNCIÓN PRINCIPAL DE LA APLICACIÓN
-# =====================================================
+
 def main():
     st.set_page_config(
         page_title="Atelier Data Studio", 
@@ -268,17 +251,15 @@ def main():
     )
     apply_styles()
 
-    # Inicialización de estado
     if 'page' not in st.session_state: st.session_state.page = "login"
     if "mode_state" not in st.session_state: st.session_state.mode_state = {}
     if 'current_mode' not in st.session_state: st.session_state.current_mode = c.MODE_CHAT
-    init_app_memory() # Inicializar memoria persistente
+    init_app_memory()
     
     params = st.query_params 
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
-    # 1. RUTAS DE ACTIVACIÓN (LOGIN)
     if st.session_state.get('flow_email_verified'):
         apply_login_styles()
         col1, col2, col3 = st.columns([3, 2, 3])
@@ -300,14 +281,11 @@ def main():
             show_activation_flow(access_token, auth_type)
         st.divider(); st.markdown(footer_html, unsafe_allow_html=True); st.stop()
 
-    # 2. RUTA DE SESIÓN ACTIVA
     if st.session_state.get("logged_in"):
         validate_session_integrity()
-        
         if st.session_state.get("access_token"):
             try: supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
             except: supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
-        
         if not hasattr(st.session_state, 'db_full'):
             try: 
                 with st.spinner("Cargando repositorio de conocimientos..."):
@@ -322,15 +300,12 @@ def main():
             run_user_mode(st.session_state.db_full, st.session_state.plan_features, footer_html)
         st.stop() 
 
-    # 3. PANTALLA DE LOGIN
     apply_login_styles()
     col1, col2, col3 = st.columns([3, 2, 3])
     with col2:
         st.image("LogoDataStudio.png", use_container_width=True)
-        if st.session_state.page == "reset_password": 
-            show_reset_password_page()
-        else: 
-            show_login_page() 
+        if st.session_state.page == "reset_password": show_reset_password_page()
+        else: show_login_page() 
             
     st.divider()
     st.markdown(footer_html, unsafe_allow_html=True)
