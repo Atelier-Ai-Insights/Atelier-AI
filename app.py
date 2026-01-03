@@ -46,7 +46,10 @@ def run_user_mode(db_full, user_features, footer_html):
     # --- LOGO SIDEBAR ---
     st.sidebar.image("LogoDataStudio.png", width=220)
     
-    st.sidebar.write(f"Usuario: {st.session_state.user}")
+    # --- CORRECCIÓN DE ERROR (Uso de .get para evitar caídas) ---
+    usuario_actual = st.session_state.get("user", "Usuario")
+    st.sidebar.write(f"Usuario: {usuario_actual}")
+    
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador")
     st.sidebar.divider()
     
@@ -130,44 +133,43 @@ def run_user_mode(db_full, user_features, footer_html):
         if run_filters is False: st.sidebar.caption("Filtros no disponibles en este modo.")
 
     # ==============================================================================
-    # 2. BITÁCORA DE PROYECTO (PLEGABLE)
+    # 2. BITÁCORA DE PROYECTO (VERSIÓN PLEGABLE & SIN BOTÓN ACTUALIZAR)
     # ==============================================================================
     st.sidebar.divider()
     st.sidebar.subheader("Bitácora de Proyecto")
     
-    # (Botón Actualizar eliminado a petición)
-
+    # Se eliminó el botón "Actualizar Bitácora"
+    
     saved_pins = get_project_memory()
     
     if saved_pins:
         for pin in saved_pins:
-            # Preparamos los datos para el título del Expander
+            # Preparamos los datos
             date_str = pin.get('created_at', '')[:10]
             raw_content = pin.get('content', '')
-            clean_text = remove_html_tags(raw_content) # Limpiamos HTML
+            clean_text = remove_html_tags(raw_content) # Limpiamos HTML para el título
             
-            # Título: Fecha + Primeras 30 letras del contenido
+            # Título del acordeón: Fecha + 30 caracteres
             expander_label = f"📅 {date_str} | {clean_text[:30]}..."
             
-            # Usamos EXPANDER en lugar de CONTAINER
+            # Usamos EXPANDER (Acordeón)
             with st.sidebar.expander(expander_label, expanded=False):
-                
-                # Contenido al abrir
+                # Contenido desplegado
                 st.caption(f"ID: {pin['id']}")
-                st.info(clean_text[:100] + "...") # Vista previa un poco más larga
+                st.info(clean_text[:120] + "...") 
                 
                 # Botones de Acción
                 c1, c2 = st.columns(2)
                 
                 with c1:
-                    # Botón VER
+                    # VER
                     with st.popover("Leer", use_container_width=True, help="Leer completo"):
                         st.markdown(f"**Hallazgo del {date_str}**")
                         st.divider()
                         st.markdown(raw_content, unsafe_allow_html=True)
                 
                 with c2:
-                    # Botón BORRAR
+                    # BORRAR
                     if st.button("Borrar", key=f"del_{pin['id']}", use_container_width=True, help="Borrar"):
                         if delete_project_memory(pin['id']):
                             st.toast("Elemento eliminado")
@@ -243,6 +245,9 @@ def run_user_mode(db_full, user_features, footer_html):
         from modes.trend_analysis_mode import google_trends_mode
         google_trends_mode()
 
+# =====================================================
+# FUNCIÓN PRINCIPAL DE LA APLICACIÓN
+# =====================================================
 def main():
     st.set_page_config(
         page_title="Atelier Data Studio", 
@@ -261,6 +266,7 @@ def main():
     footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
+    # --- RUTAS DE LOGIN ---
     if st.session_state.get('flow_email_verified'):
         apply_login_styles()
         col1, col2, col3 = st.columns([3, 2, 3])
@@ -282,11 +288,21 @@ def main():
             show_activation_flow(access_token, auth_type)
         st.divider(); st.markdown(footer_html, unsafe_allow_html=True); st.stop()
 
+    # --- RUTA DE SESIÓN ACTIVA ---
     if st.session_state.get("logged_in"):
         validate_session_integrity()
+        
+        # --- PROTECCIÓN ANTI-CRASH (NUEVO) ---
+        # Si logged_in es True pero 'user' no existe (por error de sync), forzamos logout
+        # para evitar el AttributeError.
+        if "user" not in st.session_state:
+            st.session_state.clear()
+            st.rerun()
+
         if st.session_state.get("access_token"):
             try: supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
             except: supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
+        
         if not hasattr(st.session_state, 'db_full'):
             try: 
                 with st.spinner("Cargando repositorio de conocimientos..."):
@@ -301,6 +317,7 @@ def main():
             run_user_mode(st.session_state.db_full, st.session_state.plan_features, footer_html)
         st.stop() 
 
+    # --- PANTALLA DE LOGIN ---
     apply_login_styles()
     col1, col2, col3 = st.columns([3, 2, 3])
     with col2:
