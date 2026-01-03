@@ -18,7 +18,6 @@ import constants as c
 
 # --- FUNCIÓN AUXILIAR PARA LIMPIAR HTML ---
 def remove_html_tags(text):
-    """Elimina las etiquetas HTML para la vista previa de texto."""
     clean = re.compile('<.*?>')
     return re.sub(clean, '', text)
 
@@ -46,7 +45,6 @@ def run_user_mode(db_full, user_features, footer_html):
     # --- LOGO SIDEBAR ---
     st.sidebar.image("LogoDataStudio.png", width=220)
     
-    # --- CORRECCIÓN DE ERROR (Uso de .get para evitar caídas) ---
     usuario_actual = st.session_state.get("user", "Usuario")
     st.sidebar.write(f"Usuario: {usuario_actual}")
     
@@ -133,7 +131,7 @@ def run_user_mode(db_full, user_features, footer_html):
         if run_filters is False: st.sidebar.caption("Filtros no disponibles en este modo.")
 
     # ==============================================================================
-    # 2. BITÁCORA DE PROYECTO (VERSIÓN PLEGABLE & SIN BOTÓN ACTUALIZAR)
+    # 2. BITÁCORA DE PROYECTO
     # ==============================================================================
     st.sidebar.divider()
     st.sidebar.subheader("Bitácora de Proyecto")
@@ -142,32 +140,21 @@ def run_user_mode(db_full, user_features, footer_html):
     
     if saved_pins:
         for pin in saved_pins:
-            # Preparamos los datos
             date_str = pin.get('created_at', '')[:10]
             raw_content = pin.get('content', '')
-            clean_text = remove_html_tags(raw_content) # Limpiamos HTML para el título
+            clean_text = remove_html_tags(raw_content)
+            expander_label = f"📅 {date_str} | {clean_text[:30]}..."
             
-            # Título del acordeón: Fecha + 30 caracteres
-            expander_label = f" {date_str} | {clean_text[:30]}..."
-            
-            # Usamos EXPANDER (Acordeón)
             with st.sidebar.expander(expander_label, expanded=False):
-                # Contenido desplegado
                 st.caption(f"ID: {pin['id']}")
                 st.info(clean_text[:120] + "...") 
-                
-                # Botones de Acción
                 c1, c2 = st.columns(2)
-                
                 with c1:
-                    # VER
                     with st.popover("Leer", use_container_width=True, help="Leer completo"):
                         st.markdown(f"**Hallazgo del {date_str}**")
                         st.divider()
                         st.markdown(raw_content, unsafe_allow_html=True)
-                
                 with c2:
-                    # BORRAR
                     if st.button("Borrar", key=f"del_{pin['id']}", use_container_width=True, help="Borrar"):
                         if delete_project_memory(pin['id']):
                             st.toast("Elemento eliminado")
@@ -188,73 +175,80 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.divider()
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
     
-    # --- EJECUCIÓN DE MODOS (CON SPINNERS PARA EVITAR LAG) ---
+    # --- EJECUCIÓN DEL MODO SELECCIONADO (CON TÉCNICA DE CONTENEDOR MAESTRO) ---
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
     
-    if modo == c.MODE_REPORT: 
-        with st.spinner("Cargando Reportes..."):
-            from modes.report_mode import report_mode
-            report_mode(db_filtered, selected_files)
-
-    elif modo == c.MODE_IDEATION: 
-        with st.spinner("Cargando Ideación..."):
-            from modes.ideation_mode import ideacion_mode
-            ideacion_mode(db_filtered, selected_files)
-
-    elif modo == c.MODE_CONCEPT: 
-        with st.spinner("Cargando Conceptos..."):
-            from modes.concept_mode import concept_generation_mode
-            concept_generation_mode(db_filtered, selected_files)
-
-    elif modo == c.MODE_CHAT: 
-        with st.spinner("Cargando Chat..."):
-            from modes.chat_mode import grounded_chat_mode
-            grounded_chat_mode(db_filtered, selected_files)
-
-    elif modo == c.MODE_IDEA_EVAL: 
-        with st.spinner("Cargando Evaluador..."):
-            from modes.idea_eval_mode import idea_evaluator_mode
-            idea_evaluator_mode(db_filtered, selected_files)
-
-    elif modo == c.MODE_IMAGE_EVAL: 
-        with st.spinner("Cargando Evaluación Visual..."):
-            from modes.image_eval_mode import image_evaluation_mode
-            image_evaluation_mode(db_filtered, selected_files)
-
-    elif modo == c.MODE_VIDEO_EVAL: 
-        with st.spinner("Cargando Evaluación de Video..."):
-            from modes.video_eval_mode import video_evaluation_mode
-            video_evaluation_mode(db_filtered, selected_files)
-
-    elif modo == c.MODE_TEXT_ANALYSIS: 
-        with st.spinner("Cargando Análisis de Textos..."):
-            from modes.text_analysis_mode import text_analysis_mode
-            text_analysis_mode()
-
-    elif modo == c.MODE_ONEPAGER: 
-        with st.spinner("Cargando One-Pager..."):
-            from modes.onepager_mode import one_pager_ppt_mode
-            one_pager_ppt_mode(db_filtered, selected_files)
-
-    elif modo == c.MODE_DATA_ANALYSIS: 
-        with st.spinner("Cargando Análisis de Datos..."):
-            from modes.data_analysis_mode import data_analysis_mode
-            data_analysis_mode(db_filtered, selected_files)
-
-    elif modo == c.MODE_ETNOCHAT: 
-        with st.spinner("Cargando EtnoChat..."):
-            from modes.etnochat_mode import etnochat_mode
-            etnochat_mode()
+    # 1. Creamos un "Placeholder" MAESTRO que ocupa toda la zona principal.
+    #    Al hacer esto, reservamos el espacio y forzamos a Streamlit a refrescar esta zona.
+    main_placeholder = st.empty()
+    
+    # 2. Ejecutamos el modo DENTRO de este contenedor.
+    with main_placeholder.container():
         
-    elif modo == c.MODE_SYNTHETIC: 
-        with st.spinner("Cargando Perfiles Sintéticos..."):
-            from modes.synthetic_mode import synthetic_users_mode
-            synthetic_users_mode(db_filtered, selected_files)
-        
-    elif modo == c.MODE_TREND_ANALYSIS:
-        with st.spinner("Cargando Tendencias..."):
-            from modes.trend_analysis_mode import google_trends_mode
-            google_trends_mode()
+        if modo == c.MODE_REPORT: 
+            with st.spinner("Preparando Generador de Reportes..."):
+                from modes.report_mode import report_mode
+                report_mode(db_filtered, selected_files)
+
+        elif modo == c.MODE_IDEATION: 
+            with st.spinner("Iniciando Ideación Creativa..."):
+                from modes.ideation_mode import ideacion_mode
+                ideacion_mode(db_filtered, selected_files)
+
+        elif modo == c.MODE_CONCEPT: 
+            with st.spinner("Preparando Generador de Conceptos..."):
+                from modes.concept_mode import concept_generation_mode
+                concept_generation_mode(db_filtered, selected_files)
+
+        elif modo == c.MODE_CHAT: 
+            with st.spinner("Conectando con el Asistente..."):
+                from modes.chat_mode import grounded_chat_mode
+                grounded_chat_mode(db_filtered, selected_files)
+
+        elif modo == c.MODE_IDEA_EVAL: 
+            with st.spinner("Cargando Shark Tank AI..."):
+                from modes.idea_eval_mode import idea_evaluator_mode
+                idea_evaluator_mode(db_filtered, selected_files)
+
+        elif modo == c.MODE_IMAGE_EVAL: 
+            with st.spinner("Preparando análisis visual..."):
+                from modes.image_eval_mode import image_evaluation_mode
+                image_evaluation_mode(db_filtered, selected_files)
+
+        elif modo == c.MODE_VIDEO_EVAL: 
+            with st.spinner("Preparando análisis de video..."):
+                from modes.video_eval_mode import video_evaluation_mode
+                video_evaluation_mode(db_filtered, selected_files)
+
+        elif modo == c.MODE_TEXT_ANALYSIS: 
+            with st.spinner("Cargando herramientas de texto..."):
+                from modes.text_analysis_mode import text_analysis_mode
+                text_analysis_mode()
+
+        elif modo == c.MODE_ONEPAGER: 
+            with st.spinner("Preparando One-Pager..."):
+                from modes.onepager_mode import one_pager_ppt_mode
+                one_pager_ppt_mode(db_filtered, selected_files)
+
+        elif modo == c.MODE_DATA_ANALYSIS: 
+            with st.spinner("Cargando analista de datos..."):
+                from modes.data_analysis_mode import data_analysis_mode
+                data_analysis_mode(db_filtered, selected_files)
+
+        elif modo == c.MODE_ETNOCHAT: 
+            with st.spinner("Iniciando EtnoChat..."):
+                from modes.etnochat_mode import etnochat_mode
+                etnochat_mode()
+            
+        elif modo == c.MODE_SYNTHETIC: 
+            with st.spinner("Simulando perfiles..."):
+                from modes.synthetic_mode import synthetic_users_mode
+                synthetic_users_mode(db_filtered, selected_files)
+            
+        elif modo == c.MODE_TREND_ANALYSIS:
+            with st.spinner("Analizando tendencias..."):
+                from modes.trend_analysis_mode import google_trends_mode
+                google_trends_mode()
 
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
@@ -268,19 +262,27 @@ def main():
     )
     apply_styles()
 
-    # --- CORRECCIÓN GHOSTING (CSS) ---
-    # Esto elimina las animaciones de transición para que el cambio de página sea instantáneo
+    # --- CSS AGRESIVO ANTI-GHOSTING Y TRANSICIONES ---
+    # Forzamos que el contenedor principal no tenga animación de opacidad
     st.markdown("""
         <style>
-            .element-container, .stMarkdown, .stDataFrame, .stPlotlyChart {
+            /* Elimina animaciones de carga */
+            .stAppViewBlockContainer {
                 transition: none !important;
                 animation: none !important;
             }
-            .stAppViewBlockContainer {
+            /* Asegura que los elementos nuevos aparezcan de golpe */
+            .element-container {
                 transition: none !important;
+                opacity: 1 !important;
             }
+            /* Oculta los 'skeletons' de carga que parpadean */
             .stSkeleton {
                 display: none !important;
+            }
+            /* Reduce el padding superior para evitar saltos */
+            .block-container {
+                padding-top: 2rem !important;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -291,7 +293,7 @@ def main():
     init_app_memory()
     
     params = st.query_params 
-    footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2026"
+    footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
     # --- RUTAS DE LOGIN ---
@@ -320,7 +322,6 @@ def main():
     if st.session_state.get("logged_in"):
         validate_session_integrity()
         
-        # --- PROTECCIÓN ANTI-CRASH ---
         if "user" not in st.session_state:
             st.session_state.clear()
             st.rerun()
