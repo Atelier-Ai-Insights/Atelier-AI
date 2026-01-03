@@ -13,7 +13,6 @@ def synthetic_users_mode(db, selected_files):
     st.markdown("Simula conversaciones con perfiles de consumidor generados a partir de tus datos reales.")
     
     # 1. CONFIGURACIÓN DEL PERFIL
-    # Determinar si mostramos el configurador abierto o cerrado
     show_config = "synthetic_persona_data" not in st.session_state.mode_state
     
     with st.expander("Configurar Perfil Sintético", expanded=show_config):
@@ -28,7 +27,6 @@ def synthetic_users_mode(db, selected_files):
                 st.warning("⚠️ Define un nombre para el segmento.")
                 return
             
-            # Usamos el componente visual de estado
             with render_process_status("Analizando datos y construyendo psique...", expanded=True) as status:
                 
                 # A. Buscar contexto
@@ -43,7 +41,6 @@ def synthetic_users_mode(db, selected_files):
                 status.write("Diseñando personalidad...")
                 prompt = get_persona_generation_prompt(segment_name, context)
                 
-                # Llamada a la API
                 resp = call_gemini_api(prompt, generation_config_override={"response_mime_type": "application/json"})
                 
                 if resp: 
@@ -51,22 +48,20 @@ def synthetic_users_mode(db, selected_files):
                         clean_resp = clean_gemini_json(resp)
                         persona_data = json.loads(clean_resp)
                         
-                        # --- CORRECCIÓN DE LISTA (Anti-Error) ---
                         if isinstance(persona_data, list):
                             if len(persona_data) > 0:
                                 persona_data = persona_data[0]
                             else:
                                 raise ValueError("La IA devolvió una lista vacía.")
                         
-                        # Guardar en sesión
                         st.session_state.mode_state["synthetic_persona_data"] = persona_data
                         st.session_state.mode_state["synthetic_chat_history"] = [] 
                         
-                        # Registrar evento (Ahora sí funcionará con constants.py actualizado)
+                        # --- CORRECCIÓN AQUÍ: Usamos MODE_SYNTHETIC ---
                         try:
-                            log_query_event(f"Persona: {segment_name}", mode=c.MODE_PERSONA)
+                            log_query_event(f"Persona: {segment_name}", mode=c.MODE_SYNTHETIC)
                         except Exception as e:
-                            print(f"Log warning: {e}") # Evita crash si falla el log
+                            print(f"Log warning: {e}")
                         
                         status.update(label="¡Perfil Creado!", state="complete", expanded=False)
                         st.rerun()
@@ -81,7 +76,6 @@ def synthetic_users_mode(db, selected_files):
     if "synthetic_persona_data" in st.session_state.mode_state:
         p = st.session_state.mode_state["synthetic_persona_data"]
         
-        # Validación extra de seguridad
         if not isinstance(p, dict):
             st.error("Error: El perfil generado no tiene el formato correcto.")
             if st.button("Reiniciar"):
@@ -91,7 +85,6 @@ def synthetic_users_mode(db, selected_files):
 
         st.divider()
         
-        # --- TARJETA DE IDENTIDAD ---
         col_img, col_info = st.columns([1, 4])
         with col_img:
             st.markdown(f"<div style='font-size: 80px; text-align: center; line-height: 1;'>👤</div>", unsafe_allow_html=True)
@@ -111,14 +104,13 @@ def synthetic_users_mode(db, selected_files):
             
             st.markdown(f"**Estilo:** *{p.get('estilo_comunicacion', 'Estándar')}*")
 
-        # 3. INTERFAZ DE CHAT (ENTREVISTA)
+        # 3. CHAT
         st.divider()
-        st.markdown(f"#### 💬 Entrevista a {p.get('nombre', 'Usuario')}")
+        st.markdown(f"#### Entrevista a {p.get('nombre', 'Usuario')}")
         
         if "synthetic_chat_history" not in st.session_state.mode_state:
             st.session_state.mode_state["synthetic_chat_history"] = []
             
-        # Mostrar historial
         for msg in st.session_state.mode_state["synthetic_chat_history"]:
             role = msg['role']
             name = "Entrevistador" if role == "user" else p.get('nombre', 'Usuario')
@@ -127,32 +119,27 @@ def synthetic_users_mode(db, selected_files):
             with st.chat_message(name, avatar=avatar):
                 st.markdown(msg['content'])
 
-        # Input Usuario
         user_question = st.chat_input(f"Hazle una pregunta a {p.get('nombre', 'Usuario')}...")
         
         if user_question:
-            # A. Mostrar pregunta usuario
             st.session_state.mode_state["synthetic_chat_history"].append({"role": "user", "content": user_question})
             with st.chat_message("Entrevistador", avatar="🎤"):
                 st.markdown(user_question)
             
-            # B. Generar respuesta (Acting)
             with st.chat_message(p.get('nombre', 'Usuario'), avatar="👤"):
                 with st.spinner(f"{p.get('nombre')} está pensando..."):
                     acting_prompt = get_persona_chat_instruction(p, user_question)
-                    
                     stream = call_gemini_stream(acting_prompt)
                     if stream:
                         response = st.write_stream(stream)
                         st.session_state.mode_state["synthetic_chat_history"].append({"role": "assistant", "content": response})
 
-        # --- SECCIÓN DE ACCIONES (EXPORTAR / REINICIAR) ---
+        # --- ACCIONES ---
         if st.session_state.mode_state["synthetic_chat_history"]:
             st.divider()
             c1, c2, c3 = st.columns(3)
             
             with c1:
-                # Generar contenido para PDF
                 chat_content = f"# Entrevista con Perfil Sintético: {p.get('nombre')}\n\n"
                 chat_content += f"**Perfil:** {p.get('edad')}, {p.get('ocupacion')}\n\n---\n\n"
                 for m in st.session_state.mode_state["synthetic_chat_history"]:
@@ -164,12 +151,12 @@ def synthetic_users_mode(db, selected_files):
                     st.download_button("Descargar PDF", data=pdf_bytes, file_name=f"entrevista_{p.get('nombre')}.pdf", use_container_width=True)
 
             with c2:
-                if st.button("Reiniciar Chat", use_container_width=True, help="Borra la conversación actual pero mantiene al personaje"):
+                if st.button("Reiniciar Chat", use_container_width=True):
                     st.session_state.mode_state["synthetic_chat_history"] = []
                     st.rerun()
 
             with c3:
-                if st.button("Crear Nuevo Perfil", use_container_width=True, type="secondary", help="Borra el personaje actual para crear uno diferente"):
+                if st.button("Crear Nuevo Perfil", use_container_width=True, type="secondary"):
                     st.session_state.mode_state.pop("synthetic_persona_data", None)
                     st.session_state.mode_state.pop("synthetic_chat_history", None)
                     st.rerun()
