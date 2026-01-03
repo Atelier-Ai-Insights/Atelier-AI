@@ -92,11 +92,39 @@ def get_ideation_prompt(conv_history, relevant):
     )
 
 def get_concept_gen_prompt(product_idea, context_info):
+    """Concepto estructurado con desglose forzado de Insight/What/RTB."""
     return (
-        f"**Rol:** Estratega de Producto.\n"
-        f"**Idea:** \"{product_idea}\"\n"
-        f"**Contexto:** \"{context_info}\"\n"
-        f"Genera concepto estructurado (Necesidad, Descripción, Beneficios, Rutas).\n{INSTRUCCIONES_DE_CITAS}"
+        f"**Rol:** Estratega de Producto Senior.\n"
+        f"**Tarea:** Desarrolla un concepto GANADOR para la idea: \"{product_idea}\".\n"
+        f"**Contexto de Mercado:** \"{context_info}\".\n\n"
+        
+        f"**Formato de Salida OBLIGATORIO (Markdown):**\n\n"
+        
+        f"### 1. Consumer Truth (La Necesidad)\n"
+        f"(Describe la tensión o necesidad oculta del consumidor. Sustenta con citas [x])\n\n"
+        
+        f"### 2. La Solución (Product Idea)\n"
+        f"(Descripción enriquecida del producto)\n\n"
+        
+        f"### 3. Beneficios Clave\n"
+        f"(Lista de 3-4 beneficios funcionales y emocionales)\n\n"
+        
+        f"### 4. Conceptos Creativos (2 Rutas Diferenciadas)\n"
+        f"Debes proponer 2 rutas distintas de posicionamiento. Para cada una usa esta estructura exacta:\n\n"
+        
+        f"#### Ruta A: [Ponle un Nombre Creativo]\n"
+        f"* **Insight:** (La verdad humana profunda que detona la compra).\n"
+        f"* **What (Beneficio):** (La promesa principal: qué gano yo).\n"
+        f"* **Reason to Believe:** (La evidencia técnica o de mercado que lo hace creíble. Usa citas [x]).\n"
+        f"* **Claim/Slogan:** (Frase de cierre memorable).\n\n"
+        
+        f"#### Ruta B: [Ponle un Nombre Alternativo]\n"
+        f"* **Insight:** ...\n"
+        f"* **What (Beneficio):** ...\n"
+        f"* **Reason to Believe:** ...\n"
+        f"* **Claim/Slogan:** ...\n\n"
+        
+        f"{INSTRUCCIONES_DE_CITAS}"
     )
 
 def get_idea_eval_prompt(idea_input, context_info):
