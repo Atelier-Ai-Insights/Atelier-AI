@@ -8,7 +8,7 @@ from config import banner_file
 import constants as c
 
 def concept_generation_mode(db, selected_files):
-    st.subheader("🧬 Generador de Conceptos de Producto")
+    st.subheader("Generador de Conceptos de Producto")
     st.caption("Estructura ideas de innovación en conceptos de marketing sólidos.")
 
     idea_input = st.text_area("Describe tu idea o hipótesis de producto:", height=100)
@@ -41,4 +41,4 @@ def concept_generation_mode(db, selected_files):
         
         pdf_bytes = generate_pdf_html(content, title="Concepto de Producto", banner_path=banner_file)
         if pdf_bytes:
-            st.download_button("📥 Descargar Concepto", data=pdf_bytes, file_name="Concepto.pdf", mime="application/pdf")
+            st.download_button("Descargar Concepto", data=pdf_bytes, file_name="Concepto.pdf", mime="application/pdf")
