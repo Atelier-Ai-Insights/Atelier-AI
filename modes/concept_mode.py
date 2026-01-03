@@ -1,84 +1,44 @@
 import streamlit as st
-from utils import get_relevant_info
-from services.gemini_api import call_gemini_stream 
+from utils import get_relevant_info, render_process_status, process_text_with_tooltips # <--- IMPORTANTE
+from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event
 from prompts import get_concept_gen_prompt
-import constants as c 
-from config import banner_file
-
-# --- GENERADORES (Top Level Import - FASE 1) ---
 from reporting.pdf_generator import generate_pdf_html
-from reporting.docx_generator import generate_docx
-
-# =====================================================
-# MODO: GENERACIÓN DE CONCEPTOS
-# =====================================================
+from config import banner_file
+import constants as c
 
 def concept_generation_mode(db, selected_files):
+    st.subheader("🧬 Generador de Conceptos de Producto")
+    st.caption("Estructura ideas de innovación en conceptos de marketing sólidos.")
+
+    idea_input = st.text_area("Describe tu idea o hipótesis de producto:", height=100)
     
-    st.subheader("Generación de Conceptos")
-    st.markdown("Genera concepto de producto/servicio a partir de idea y hallazgos.")
-    
-    # --- PANTALLA DE RESULTADOS ---
-    if "generated_concept" in st.session_state.mode_state:
-        st.markdown("---")
-        st.markdown("### Concepto Generado")
-        st.markdown(st.session_state.mode_state["generated_concept"])
+    if st.button("Desarrollar Concepto", type="primary", disabled=not selected_files):
+        if not idea_input:
+            st.warning("Escribe una idea base.")
+            return
+
+        with render_process_status("Validando con el mercado...", expanded=True) as status:
+            status.write("Buscando evidencia de soporte...")
+            relevant_info = get_relevant_info(db, idea_input, selected_files)
+            
+            status.write("Estructurando concepto...")
+            prompt = get_concept_gen_prompt(idea_input, relevant_info)
+            response = call_gemini_api(prompt)
+            
+            st.session_state.mode_state["last_concept"] = response
+            status.update(label="Concepto Generado", state="complete", expanded=False)
+            
+            log_query_event(f"Concepto: {idea_input[:50]}...", mode=c.MODE_CONCEPT)
+
+    if "last_concept" in st.session_state.mode_state:
+        # Renderizar con Tooltips
+        content = st.session_state.mode_state["last_concept"]
+        enriched_html = process_text_with_tooltips(content)
         
         st.divider()
-
-        col1, col2, col3 = st.columns(3)
+        st.markdown(enriched_html, unsafe_allow_html=True)
         
-        with col1:
-            pdf_bytes = generate_pdf_html(
-                st.session_state.mode_state["generated_concept"], 
-                title="Concepto de Innovación", 
-                banner_path=banner_file
-            )
-            if pdf_bytes:
-                st.download_button("Descargar PDF", data=pdf_bytes, file_name="concepto.pdf", mime="application/pdf", width='stretch')
-
-        with col2:
-            docx_bytes = generate_docx(
-                st.session_state.mode_state["generated_concept"], 
-                title="Concepto de Innovación"
-            )
-            if docx_bytes:
-                st.download_button(
-                    "Descargar Word", 
-                    data=docx_bytes, 
-                    file_name="concepto.docx", 
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
-                    width='stretch',
-                    type="primary"
-                )
-
-        with col3:
-            if st.button("Nuevo Concepto", width='stretch'): 
-                st.session_state.mode_state.pop("generated_concept")
-                st.rerun()
-
-    # --- PANTALLA DE FORMULARIO ---
-    else:
-        product_idea = st.text_area("Describe tu idea:", height=150, placeholder="Ej: Snack saludable...")
-        
-        if st.button("Generar Concepto", width='stretch'):
-            if not product_idea.strip(): 
-                st.warning("Describe tu idea."); return
-                
-            with st.spinner("Iniciando generación creativa..."):
-                context_info = get_relevant_info(db, product_idea, selected_files)
-                prompt = get_concept_gen_prompt(product_idea, context_info)
-                
-                stream = call_gemini_stream(prompt)
-                
-                if stream:
-                    st.markdown("---")
-                    st.markdown("### Concepto Generado")
-                    response = st.write_stream(stream)
-                    
-                    st.session_state.mode_state["generated_concept"] = response
-                    log_query_event(product_idea, mode=c.MODE_CONCEPT)
-                    st.rerun()
-                else: 
-                    st.error("No se pudo generar concepto.")
+        pdf_bytes = generate_pdf_html(content, title="Concepto de Producto", banner_path=banner_file)
+        if pdf_bytes:
+            st.download_button("📥 Descargar Concepto", data=pdf_bytes, file_name="Concepto.pdf", mime="application/pdf")
