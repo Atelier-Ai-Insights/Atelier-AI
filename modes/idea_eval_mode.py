@@ -1,84 +1,90 @@
 import streamlit as st
-from utils import get_relevant_info
-from services.gemini_api import call_gemini_stream 
+# Importamos la función de tooltips y componentes visuales
+from utils import get_relevant_info, render_process_status, process_text_with_tooltips
+from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event
-from prompts import get_idea_eval_prompt 
-import constants as c
-from config import banner_file
-
-# --- GENERADORES (Top Level Import - FASE 1) ---
+from prompts import get_idea_eval_prompt
 from reporting.pdf_generator import generate_pdf_html
-from reporting.docx_generator import generate_docx
-
-# =====================================================
-# MODO: EVALUACIÓN DE PRE-IDEAS
-# =====================================================
+from config import banner_file
+import constants as c
 
 def idea_evaluator_mode(db, selected_files):
-    st.subheader("Evaluación de Pre-Ideas")
-    st.markdown("Evalúa potencial de idea contra hallazgos.")
-    
-    # --- PANTALLA DE RESULTADOS ---
-    if "evaluation_result" in st.session_state.mode_state:
-        st.markdown("---")
-        st.markdown("### Evaluación")
-        st.markdown(st.session_state.mode_state["evaluation_result"])
+    st.subheader("⚖️ Evaluador de Ideas (Shark Tank AI)")
+    st.caption("Somete tu idea o hipótesis al juicio crítico de los datos de mercado.")
 
-        st.divider() 
-        
-        # --- BOTONES DE ACCIÓN ---
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            pdf_bytes = generate_pdf_html(
-                st.session_state.mode_state["evaluation_result"], 
-                title="Evaluación de Idea", 
-                banner_path=banner_file
-            )
-            if pdf_bytes:
-                st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name="evaluacion.pdf", mime="application/pdf", width='stretch')
+    # 1. INPUT DEL USUARIO
+    idea_input = st.text_area(
+        "Describe la idea, producto o estrategia que deseas evaluar:", 
+        height=150,
+        placeholder="Ej: Lanzar una bebida energizante natural enfocada en gamers universitarios..."
+    )
 
-        with col2:
-            docx_bytes = generate_docx(
-                st.session_state.mode_state["evaluation_result"], 
-                title="Evaluación de Idea"
-            )
-            if docx_bytes:
+    # 2. BOTÓN DE ACCIÓN
+    if st.button("Evaluar Viabilidad", type="primary"):
+        if not selected_files:
+            st.warning("⚠️ Por favor selecciona al menos un documento en el menú lateral.")
+            return
+        
+        if not idea_input:
+            st.warning("⚠️ Debes escribir una idea para evaluar.")
+            return
+
+        # Limpiar estado anterior para nueva evaluación
+        if "eval_result" in st.session_state.mode_state:
+            del st.session_state.mode_state["eval_result"]
+
+        # 3. PROCESAMIENTO
+        with render_process_status("Analizando viabilidad contra el mercado...", expanded=True) as status:
+            
+            # A. Búsqueda de Evidencia
+            status.write("🔍 Cruzando idea con hallazgos del repositorio...")
+            relevant_info = get_relevant_info(db, idea_input, selected_files)
+            
+            if not relevant_info:
+                status.update(label="No se encontró suficiente evidencia relacionada.", state="error")
+                return
+
+            # B. Evaluación con IA
+            status.write("🧠 Consultando al Director de Estrategia...")
+            prompt = get_idea_eval_prompt(idea_input, relevant_info)
+            response = call_gemini_api(prompt)
+            
+            if response:
+                st.session_state.mode_state["eval_result"] = response
+                status.update(label="¡Evaluación Completada!", state="complete", expanded=False)
+                
+                # C. Logging
+                try:
+                    log_query_event(f"Evaluación: {idea_input[:50]}...", mode=c.MODE_IDEA_EVAL)
+                except Exception as e:
+                    print(f"Error logging: {e}")
+            else:
+                status.update(label="Error al generar respuesta.", state="error")
+
+    # 4. VISUALIZACIÓN DE RESULTADOS
+    if "eval_result" in st.session_state.mode_state:
+        result_text = st.session_state.mode_state["eval_result"]
+        
+        st.divider()
+        st.markdown("### 📊 Veredicto Estratégico")
+        
+        # --- AQUÍ APLICAMOS LA MAGIA DE LOS TOOLTIPS ---
+        # Convertimos el texto con citas [1] en HTML interactivo
+        enriched_html = process_text_with_tooltips(result_text)
+        st.markdown(enriched_html, unsafe_allow_html=True)
+        
+        # 5. EXPORTACIÓN A PDF
+        st.write("")
+        st.write("")
+        pdf_bytes = generate_pdf_html(result_text, title="Evaluación de Viabilidad", banner_path=banner_file)
+        
+        if pdf_bytes:
+            col1, col2 = st.columns([1, 4])
+            with col1:
                 st.download_button(
-                    "📝 Descargar Word", 
-                    data=docx_bytes, 
-                    file_name="evaluacion.docx", 
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
-                    width='stretch',
-                    type="primary"
+                    label="📥 Descargar PDF",
+                    data=pdf_bytes,
+                    file_name="Evaluacion_Idea.pdf",
+                    mime="application/pdf",
+                    type="secondary"
                 )
-
-        with col3:
-            if st.button("🔄 Evaluar otra", width='stretch'): 
-                st.session_state.mode_state.pop("evaluation_result", None)
-                st.rerun()
-
-    # --- PANTALLA DE FORMULARIO ---
-    else:
-        idea_input = st.text_area("Describe la idea a evaluar:", height=150, placeholder="Ej: Yogures con probióticos...")
-        
-        if st.button("Evaluar Idea", width='stretch'):
-            if not idea_input.strip(): 
-                st.warning("Describe una idea."); return
-                
-            with st.spinner("Conectando con analista virtual..."):
-                context_info = get_relevant_info(db, idea_input, selected_files)
-                prompt = get_idea_eval_prompt(idea_input, context_info)
-                
-                stream = call_gemini_stream(prompt)
-                
-                if stream:
-                    st.markdown("---")
-                    st.markdown("### Evaluación")
-                    response = st.write_stream(stream)
-                    
-                    st.session_state.mode_state["evaluation_result"] = response
-                    log_query_event(idea_input, mode=c.MODE_IDEA_EVAL)
-                    st.rerun()
-                else: 
-                    st.error("No se pudo generar evaluación.")
