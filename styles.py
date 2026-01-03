@@ -5,14 +5,12 @@ import streamlit as st
 # ==============================================================================
 TABS_CSS = """
 <style>
-     /* Contenedor principal de las pestañas */
      div[data-testid="stTabs"] > div[role="tablist"] {
          border-bottom: 1px solid #e0e0e0;
          gap: 5px;
          padding-bottom: 0px;
      }
 
-     /* Botones individuales de las pestañas (inactivas) */
      button[data-baseweb="tab"] {
          border: 1px solid #e0e0e0;
          border-bottom: none;
@@ -26,13 +24,11 @@ TABS_CSS = """
          bottom: -1px;
      }
 
-     /* Efecto hover en pestañas inactivas */
      button[data-baseweb="tab"]:not([aria-selected="true"]):hover {
          background-color: #e5e5e5;
          color: #333;
      }
 
-     /* Pestaña activa */
      button[data-baseweb="tab"][aria-selected="true"] {
          background-color: white;
          border-color: #e0e0e0;
@@ -42,12 +38,10 @@ TABS_CSS = """
          z-index: 1;
      }
 
-     /* Ocultar la línea azul indicadora por defecto */
      div[data-baseweb="tab-highlight"] {
          display: none;
      }
 
-     /* Contenido debajo de las pestañas */
      div[data-testid="stTabContent"] {
          padding-top: 20px;
          border-top: none;
@@ -60,16 +54,10 @@ TABS_CSS = """
 # ==============================================================================
 HIDE_ST_STYLE = """
      <style>
-     /* 1. Ocultar el menú de hamburguesa de la DERECHA (los 3 puntos de configuración) */
      #MainMenu {visibility: hidden;}
-
-     /* 2. Ocultar el "Made with Streamlit" del pie de página */
      footer {visibility: hidden;}
-
-     /* 3. Ocultar la barra de estado inferior */
      [data-testid="stStatusWidget"] {visibility: hidden;}
      
-     /* 4. AJUSTE DEL HEADER (BARRA SUPERIOR) */
      header {
         background: transparent !important;
      }
@@ -78,7 +66,6 @@ HIDE_ST_STYLE = """
         background-color: rgba(0,0,0,0);
      }
      
-     /* 5. Asegurar que el botón de colapsar sea visible */
      [data-testid="collapsedControl"] {
         display: block;
         color: #333;
@@ -108,60 +95,62 @@ LOGIN_PAGE_CSS = """
 """
 
 # ==============================================================================
-# ESTILOS NUEVOS PARA CITAS (TOOLTIPS) - AGREGADO
+# ESTILOS DE CITAS (TOOLTIPS) - AJUSTADO (AZUL OSCURO Y PEQUEÑO)
 # ==============================================================================
 TOOLTIP_CSS = """
     <style>
         /* Estilo base para el número de cita [1] */
         .citation-ref {
             cursor: help;
-            color: #29B5E8; /* Azul de marca */
+            color: #0056b3; /* CAMBIO: Azul Oscuro Profesional */
             font-weight: bold;
-            border-bottom: 2px solid rgba(41, 181, 232, 0.3);
+            font-size: 0.75em; /* CAMBIO: Fuente más pequeña */
+            vertical-align: super; /* CAMBIO: Estilo superíndice */
+            border-bottom: 1px dotted #0056b3; /* Línea punteada sutil */
             position: relative;
             display: inline-block;
-            margin: 0 2px;
-            padding: 0 2px;
-            border-radius: 4px;
+            margin: 0 1px;
+            padding: 0 1px;
+            border-radius: 2px;
             transition: background 0.2s;
+            line-height: 1; /* Evita que el superíndice rompa el interlineado */
         }
         
         .citation-ref:hover {
-            background-color: rgba(41, 181, 232, 0.1);
+            background-color: rgba(0, 86, 179, 0.1);
+            border-bottom: 1px solid #0056b3;
         }
 
         /* El cuadro de texto flotante (Tooltip) */
         .citation-ref .tooltip-text {
             visibility: hidden;
-            width: 320px; /* Ancho cómodo para lectura */
-            background-color: #262730; /* Fondo oscuro estándar de Streamlit */
+            width: 320px;
+            background-color: #262730;
             color: #ffffff;
             text-align: left;
             border-radius: 8px;
             padding: 12px;
-            font-size: 0.85rem;
+            font-size: 0.85rem; /* Tamaño normal para leer cómodo */
             line-height: 1.4;
             font-weight: normal;
             
-            /* Sombra y Borde */
+            /* Posicionamiento */
             box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
             border: 1px solid #444;
-            
-            /* Posicionamiento */
             position: absolute;
             z-index: 1000;
-            bottom: 140%; /* Aparece encima del número */
+            bottom: 150%; /* Un poco más arriba por el superíndice */
             left: 50%;
-            margin-left: -160px; /* Centrado respecto al número */
+            margin-left: -160px;
             
-            /* Animación suave */
+            /* Animación */
             opacity: 0;
             transform: translateY(10px);
             transition: opacity 0.3s, transform 0.3s;
-            pointer-events: none; /* Para no interferir con el mouse */
+            pointer-events: none;
         }
 
-        /* Flechita decorativa debajo del cuadro */
+        /* Flechita decorativa */
         .citation-ref .tooltip-text::after {
             content: "";
             position: absolute;
@@ -173,18 +162,16 @@ TOOLTIP_CSS = """
             border-color: #262730 transparent transparent transparent;
         }
 
-        /* Acción al pasar el mouse */
         .citation-ref:hover .tooltip-text {
             visibility: visible;
             opacity: 1;
             transform: translateY(0);
         }
         
-        /* Estilo para el título del archivo dentro del tooltip */
         .tooltip-source-title {
             display: block;
             font-weight: bold;
-            color: #29B5E8;
+            color: #29B5E8; /* El título dentro del tooltip sí lo dejamos claro para contraste con fondo negro */
             margin-bottom: 6px;
             font-size: 0.75rem;
             text-transform: uppercase;
@@ -202,7 +189,7 @@ TOOLTIP_CSS = """
 def apply_styles():
     st.markdown(TABS_CSS, unsafe_allow_html=True)
     st.markdown(HIDE_ST_STYLE, unsafe_allow_html=True)
-    st.markdown(TOOLTIP_CSS, unsafe_allow_html=True) # <--- Aquí inyectamos los nuevos estilos
+    st.markdown(TOOLTIP_CSS, unsafe_allow_html=True)
 
 def apply_login_styles():
     st.markdown(LOGIN_PAGE_CSS, unsafe_allow_html=True)
