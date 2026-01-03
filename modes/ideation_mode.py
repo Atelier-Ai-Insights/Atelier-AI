@@ -1,71 +1,51 @@
 import streamlit as st
-from utils import get_relevant_info, reset_chat_workflow
+from utils import get_relevant_info, render_process_status, process_text_with_tooltips # <--- IMPORTANTE
 from services.gemini_api import call_gemini_api
 from services.supabase_db import log_query_event
-from reporting.pdf_generator import generate_pdf_html
-from config import banner_file
 from prompts import get_ideation_prompt
-import constants as c 
-
-# =====================================================
-# MODO: CONVERSACIONES CREATIVAS (IDEACIÓN)
-# =====================================================
+import constants as c
 
 def ideacion_mode(db, selected_files):
-    st.subheader("Conversaciones Creativas")
-    st.markdown("Explora ideas novedosas basadas en hallazgos.")
-    
-    # --- ¡MODIFICADO! ---
-    if "chat_history" not in st.session_state.mode_state: 
-        st.session_state.mode_state["chat_history"] = []
-        
-    # --- ¡MODIFICADO! ---
-    for msg in st.session_state.mode_state["chat_history"]:
-        with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
-            st.markdown(msg['message'])
-            
-    user_input = st.chat_input("Lanza una idea o pregunta...")
+    st.subheader("💡 Ideación Estratégica")
+    st.caption("Brainstorming creativo fundamentado en datos del repositorio.")
+
+    if not selected_files:
+        st.info("Selecciona documentos para comenzar.")
+        return
+
+    # Inicializar historial si no existe
+    if "ideation_history" not in st.session_state.mode_state:
+        st.session_state.mode_state["ideation_history"] = []
+
+    # Mostrar Historial
+    for msg in st.session_state.mode_state["ideation_history"]:
+        with st.chat_message(msg["role"], avatar="✨" if msg["role"]=="assistant" else "👤"):
+            if msg["role"] == "assistant":
+                # Aplicamos Tooltips al historial
+                st.markdown(process_text_with_tooltips(msg["content"]), unsafe_allow_html=True)
+            else:
+                st.markdown(msg["content"])
+
+    # Input
+    user_input = st.chat_input("Escribe un desafío creativo...")
     
     if user_input:
-        # --- ¡MODIFICADO! ---
-        st.session_state.mode_state["chat_history"].append({"role": "Usuario", "message": user_input})
-        with st.chat_message("Usuario", avatar="👤"): 
+        # Guardar User Msg
+        st.session_state.mode_state["ideation_history"].append({"role": "user", "content": user_input})
+        with st.chat_message("user", avatar="👤"):
             st.markdown(user_input)
+
+        with st.chat_message("assistant", avatar="✨"):
+            with render_process_status("Conectando puntos...", expanded=False):
+                relevant_info = get_relevant_info(db, user_input, selected_files)
+                hist_str = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.mode_state["ideation_history"][-5:]])
+                prompt = get_ideation_prompt(hist_str, relevant_info)
+                response = call_gemini_api(prompt)
             
-        with st.chat_message("Asistente", avatar="✨"):
-            message_placeholder = st.empty()
-            message_placeholder.markdown("Generando ideas...")
-            
-            relevant = get_relevant_info(db, user_input, selected_files)
-            # --- ¡MODIFICADO! ---
-            conv_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.mode_state["chat_history"][-10:])
-            
-            conv_prompt = get_ideation_prompt(conv_history, relevant)
-            
-            resp = call_gemini_api(conv_prompt)
-            
-            if resp: 
-                message_placeholder.markdown(resp)
-                log_query_event(user_input, mode=c.MODE_IDEATION) 
-                # --- ¡MODIFICADO! ---
-                st.session_state.mode_state["chat_history"].append({
-                    "role": "Asistente", 
-                    "message": resp
-                })
-                st.rerun()
-            else: 
-                message_placeholder.error("Error generando respuesta.")
+            if response:
+                # Renderizar con Tooltips
+                enriched_html = process_text_with_tooltips(response)
+                st.markdown(enriched_html, unsafe_allow_html=True)
                 
-    # --- ¡MODIFICADO! ---
-    if st.session_state.mode_state["chat_history"]:
-        col1, col2 = st.columns([1,1])
-        with col1:
-            # --- ¡MODIFICADO! ---
-            chat_content_raw = "\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.mode_state["chat_history"])
-            chat_content_for_pdf = chat_content_raw.replace("](#)", "]")
-            pdf_bytes = generate_pdf_html(chat_content_for_pdf, title="Historial Creativo", banner_path=banner_file)
-            
-            if pdf_bytes: 
-                st.download_button("Descargar Chat PDF", data=pdf_bytes, file_name="chat_creativo.pdf", mime="application/pdf", width='stretch')
-        with col2: 
-            st.button("Nueva conversación", on_click=reset_chat_workflow, key="new_chat_btn", width='stretch')
+                st.session_state.mode_state["ideation_history"].append({"role": "assistant", "content": response})
+                log_query_event(f"Ideación: {user_input}", mode=c.MODE_IDEATION)
