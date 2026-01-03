@@ -138,8 +138,6 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.divider()
     st.sidebar.subheader("Bitácora de Proyecto")
     
-    # Se eliminó el botón "Actualizar Bitácora"
-    
     saved_pins = get_project_memory()
     
     if saved_pins:
@@ -190,60 +188,73 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.divider()
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
     
-    # --- EJECUCIÓN DE MODOS ---
+    # --- EJECUCIÓN DE MODOS (CON SPINNERS PARA EVITAR LAG) ---
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
     
     if modo == c.MODE_REPORT: 
-        from modes.report_mode import report_mode
-        report_mode(db_filtered, selected_files)
+        with st.spinner("Cargando Reportes..."):
+            from modes.report_mode import report_mode
+            report_mode(db_filtered, selected_files)
 
     elif modo == c.MODE_IDEATION: 
-        from modes.ideation_mode import ideacion_mode
-        ideacion_mode(db_filtered, selected_files)
+        with st.spinner("Cargando Ideación..."):
+            from modes.ideation_mode import ideacion_mode
+            ideacion_mode(db_filtered, selected_files)
 
     elif modo == c.MODE_CONCEPT: 
-        from modes.concept_mode import concept_generation_mode
-        concept_generation_mode(db_filtered, selected_files)
+        with st.spinner("Cargando Conceptos..."):
+            from modes.concept_mode import concept_generation_mode
+            concept_generation_mode(db_filtered, selected_files)
 
     elif modo == c.MODE_CHAT: 
-        from modes.chat_mode import grounded_chat_mode
-        grounded_chat_mode(db_filtered, selected_files)
+        with st.spinner("Cargando Chat..."):
+            from modes.chat_mode import grounded_chat_mode
+            grounded_chat_mode(db_filtered, selected_files)
 
     elif modo == c.MODE_IDEA_EVAL: 
-        from modes.idea_eval_mode import idea_evaluator_mode
-        idea_evaluator_mode(db_filtered, selected_files)
+        with st.spinner("Cargando Evaluador..."):
+            from modes.idea_eval_mode import idea_evaluator_mode
+            idea_evaluator_mode(db_filtered, selected_files)
 
     elif modo == c.MODE_IMAGE_EVAL: 
-        from modes.image_eval_mode import image_evaluation_mode
-        image_evaluation_mode(db_filtered, selected_files)
+        with st.spinner("Cargando Evaluación Visual..."):
+            from modes.image_eval_mode import image_evaluation_mode
+            image_evaluation_mode(db_filtered, selected_files)
 
     elif modo == c.MODE_VIDEO_EVAL: 
-        from modes.video_eval_mode import video_evaluation_mode
-        video_evaluation_mode(db_filtered, selected_files)
+        with st.spinner("Cargando Evaluación de Video..."):
+            from modes.video_eval_mode import video_evaluation_mode
+            video_evaluation_mode(db_filtered, selected_files)
 
     elif modo == c.MODE_TEXT_ANALYSIS: 
-        from modes.text_analysis_mode import text_analysis_mode
-        text_analysis_mode()
+        with st.spinner("Cargando Análisis de Textos..."):
+            from modes.text_analysis_mode import text_analysis_mode
+            text_analysis_mode()
 
     elif modo == c.MODE_ONEPAGER: 
-        from modes.onepager_mode import one_pager_ppt_mode
-        one_pager_ppt_mode(db_filtered, selected_files)
+        with st.spinner("Cargando One-Pager..."):
+            from modes.onepager_mode import one_pager_ppt_mode
+            one_pager_ppt_mode(db_filtered, selected_files)
 
     elif modo == c.MODE_DATA_ANALYSIS: 
-        from modes.data_analysis_mode import data_analysis_mode
-        data_analysis_mode(db_filtered, selected_files)
+        with st.spinner("Cargando Análisis de Datos..."):
+            from modes.data_analysis_mode import data_analysis_mode
+            data_analysis_mode(db_filtered, selected_files)
 
     elif modo == c.MODE_ETNOCHAT: 
-        from modes.etnochat_mode import etnochat_mode
-        etnochat_mode()
+        with st.spinner("Cargando EtnoChat..."):
+            from modes.etnochat_mode import etnochat_mode
+            etnochat_mode()
         
     elif modo == c.MODE_SYNTHETIC: 
-        from modes.synthetic_mode import synthetic_users_mode
-        synthetic_users_mode(db_filtered, selected_files)
+        with st.spinner("Cargando Perfiles Sintéticos..."):
+            from modes.synthetic_mode import synthetic_users_mode
+            synthetic_users_mode(db_filtered, selected_files)
         
     elif modo == c.MODE_TREND_ANALYSIS:
-        from modes.trend_analysis_mode import google_trends_mode
-        google_trends_mode()
+        with st.spinner("Cargando Tendencias..."):
+            from modes.trend_analysis_mode import google_trends_mode
+            google_trends_mode()
 
 # =====================================================
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
@@ -257,13 +268,30 @@ def main():
     )
     apply_styles()
 
+    # --- CORRECCIÓN GHOSTING (CSS) ---
+    # Esto elimina las animaciones de transición para que el cambio de página sea instantáneo
+    st.markdown("""
+        <style>
+            .element-container, .stMarkdown, .stDataFrame, .stPlotlyChart {
+                transition: none !important;
+                animation: none !important;
+            }
+            .stAppViewBlockContainer {
+                transition: none !important;
+            }
+            .stSkeleton {
+                display: none !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
     if 'page' not in st.session_state: st.session_state.page = "login"
     if "mode_state" not in st.session_state: st.session_state.mode_state = {}
     if 'current_mode' not in st.session_state: st.session_state.current_mode = c.MODE_CHAT
     init_app_memory()
     
     params = st.query_params 
-    footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
+    footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2026"
     footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
     # --- RUTAS DE LOGIN ---
@@ -292,9 +320,7 @@ def main():
     if st.session_state.get("logged_in"):
         validate_session_integrity()
         
-        # --- PROTECCIÓN ANTI-CRASH (NUEVO) ---
-        # Si logged_in es True pero 'user' no existe (por error de sync), forzamos logout
-        # para evitar el AttributeError.
+        # --- PROTECCIÓN ANTI-CRASH ---
         if "user" not in st.session_state:
             st.session_state.clear()
             st.rerun()
