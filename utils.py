@@ -31,11 +31,6 @@ def get_stopwords():
 def render_process_status(label="Procesando solicitud...", expanded=True):
     """
     Componente visual estandarizado para procesos largos.
-    Uso:
-        with render_process_status("Analizando video...") as status:
-            # Tu código aquí
-            status.write("Paso 1 completado")
-            status.update(label="¡Listo!", state="complete", expanded=False)
     """
     status_container = st.status(label, expanded=expanded)
     try:
@@ -43,10 +38,6 @@ def render_process_status(label="Procesando solicitud...", expanded=True):
     except Exception as e:
         status_container.update(label="❌ Error en el proceso", state="error", expanded=True)
         st.error(f"Ocurrió un error inesperado: {str(e)}")
-        # Opcional: Relanzar error si queremos que lo capture otro handler
-        # raise e
-    # No cerramos automáticamente el status aquí para permitir que el código interno
-    # decida cuándo marcarlo como 'complete' o dejarlo abierto.
 
 # ==============================
 # FUNCIONES AUXILIARES
@@ -186,6 +177,9 @@ def reset_report_workflow():
 
 def reset_chat_workflow():
     st.session_state.mode_state.pop("chat_history", None)
+    # Limpieza de sugerencias también
+    if "mode_state" in st.session_state and "chat_suggestions" in st.session_state.mode_state:
+        del st.session_state.mode_state["chat_suggestions"]
 
 def reset_transcript_chat_workflow():
     st.session_state.mode_state.pop("transcript_chat_history", None)
@@ -216,3 +210,85 @@ def validate_session_integrity():
         except Exception as e:
             print(f"Warning session check: {e}")
             pass
+
+# =========================================================
+# LÓGICA DE LIMPIEZA Y VISUALIZACIÓN DE CITAS (NUEVO)
+# =========================================================
+def process_text_with_tooltips(text):
+    """
+    1. Lee las fuentes generadas por la IA (con contexto |||).
+    2. Inyecta el contexto en el Tooltip del HTML.
+    3. RE-GENERA la lista de fuentes al final SOLO con los nombres de archivo (limpia).
+    """
+    
+    # 1. Separar cuerpo y sección de fuentes
+    # La IA suele poner "**Fuentes:**" o "## Fuentes"
+    split_patterns = [r"\n\*\*Fuentes:?\*\*", r"\n## Fuentes", r"\n### Fuentes", r"\nFuentes:"]
+    
+    body = text
+    sources_raw = ""
+    
+    for pattern in split_patterns:
+        # Usamos split una sola vez
+        parts = re.split(pattern, text, maxsplit=1, flags=re.IGNORECASE)
+        if len(parts) > 1:
+            body = parts[0]
+            sources_raw = parts[1]
+            break
+            
+    if not sources_raw:
+        return text # Si no hay fuentes, devolvemos texto plano
+
+    # 2. Mapear IDs a {Archivo, Contexto}
+    source_map = {}
+    
+    # Regex: [1] Archivo.pdf ||| Contexto largo...
+    matches = re.findall(r"\[(\d+)\]\s*(.*?)\s*\|\|\|\s*(.*)", sources_raw)
+    
+    # Fallback: Si la IA olvidó el separador |||, capturamos todo como nombre
+    if not matches:
+        matches_simple = re.findall(r"\[(\d+)\]\s*(.*)", sources_raw)
+        for num, content in matches_simple:
+            clean_name = content.strip()
+            source_map[num] = {
+                "file": clean_name,
+                "context": "Referencia del documento." 
+            }
+    else:
+        for num, filename, context in matches:
+            source_map[num] = {
+                "file": filename.strip(),
+                "context": context.strip() # Esto irá al tooltip
+            }
+
+    # 3. Reemplazar [1] en el cuerpo por HTML con Tooltip
+    def replace_citation(match):
+        citation_num = match.group(1)
+        data = source_map.get(citation_num)
+        
+        if data:
+            # Aquí va el texto largo (context) oculto en el tooltip
+            return f'''
+            <span class="citation-ref">
+                [{citation_num}]
+                <span class="tooltip-text">
+                    <span class="tooltip-source-title">{data['file']}</span>
+                    {data['context']}
+                </span>
+            </span>
+            '''
+        else:
+            return f"[{citation_num}]"
+    
+    enriched_body = re.sub(r"\[(\d+)\]", replace_citation, body)
+    
+    # 4. RE-GENERAR PIE DE PÁGINA LIMPIO
+    clean_footer = "\n\n---\n**Fuentes Consultadas:**\n"
+    sorted_ids = sorted(source_map.keys(), key=lambda x: int(x))
+    
+    for num in sorted_ids:
+        filename = source_map[num]['file']
+        filename = filename.replace('"', '').replace("Documento:", "").strip()
+        clean_footer += f"* **[{num}]** {filename}\n"
+
+    return enriched_body + clean_footer
