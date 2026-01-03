@@ -2,16 +2,24 @@ import streamlit as st
 from datetime import datetime
 
 # ==============================================================================
-# INSTRUCCIONES GLOBALES
+# INSTRUCCIONES GLOBALES (ACTUALIZADO PARA TOOLTIPS)
 # ==============================================================================
 
-# --- BLOQUE DE INSTRUCCIONES DE CITAS (ESTRICTO) ---
+# --- BLOQUE DE INSTRUCCIONES DE CITAS (CON CONTEXTO) ---
+# CAMBIO: Se ajustó para pedir el formato "Archivo ||| Contexto"
 INSTRUCCIONES_DE_CITAS = """
-**REGLAS DE CITAS (ESTRICTO):**
+**REGLAS DE CITAS Y EVIDENCIA (ESTRICTO):**
 1. **Base:** Solo usa la 'Información documentada'. No alucines información externa sin sustentarla.
-2. **Formato Interno:** Asigna un ID numérico único [x] a cada documento del repositorio/PDF la primera vez que lo uses.
-3. **Sintaxis:** Frase del hallazgo [1]. Otra frase contrastada [2].
-4. **Sección Fuentes:** Al final, DEBES generar una lista consolidada donde se mapea el número [x] con el **Nombre Exacto del Archivo o Proyecto**.
+2. **Formato en Texto:** Usa [x] para referenciar dentro de los párrafos. Ej: "El mercado creció un 5% [1]".
+3. **SECCIÓN FUENTES (OBLIGATORIA AL FINAL):**
+   Debes generar una lista al final con este formato EXACTO (usando '|||' como separador entre el archivo y la explicación):
+   
+   **Fuentes:**
+   [1] NombreArchivo.pdf ||| Breve frase (máx 20 palabras) que resume el dato específico o cita textual extraída de este archivo.
+   [2] OtroArchivo.pdf ||| Explicación del hallazgo que soporta la afirmación.
+
+   *Ejemplo de salida esperada:*
+   [1] Reporte_Q1_2024.pdf ||| "El consumo en hogares aumentó un 15% en zonas urbanas".
 """
 
 # ==============================================================================
