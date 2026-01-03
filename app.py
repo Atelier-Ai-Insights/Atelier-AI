@@ -1,6 +1,6 @@
 import streamlit as st
 import time 
-import re # <--- NUEVO: Para limpiar el HTML sucio
+import re 
 from datetime import datetime, timezone
 
 # ==============================
@@ -13,11 +13,10 @@ from services.supabase_db import supabase
 from auth import show_login_page, show_reset_password_page, show_activation_flow 
 from admin.dashboard import show_admin_dashboard
 from utils import extract_brand, validate_session_integrity 
-# IMPORTAMOS LA FUNCIÓN DE BORRAR
 from services.memory_service import get_project_memory, delete_project_memory 
 import constants as c
 
-# --- FUNCIÓN AUXILIAR PARA LIMPIAR HTML (NUEVO) ---
+# --- FUNCIÓN AUXILIAR PARA LIMPIAR HTML ---
 def remove_html_tags(text):
     """Elimina las etiquetas HTML para la vista previa de texto."""
     clean = re.compile('<.*?>')
@@ -48,7 +47,7 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.image("LogoDataStudio.png", width=220)
     
     st.sidebar.write(f"Usuario: {st.session_state.user}")
-    if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
+    if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador")
     st.sidebar.divider()
     
     # --- SELECTOR DE MODOS ---
@@ -131,43 +130,45 @@ def run_user_mode(db_full, user_features, footer_html):
         if run_filters is False: st.sidebar.caption("Filtros no disponibles en este modo.")
 
     # ==============================================================================
-    # 2. BITÁCORA DE PROYECTO (ARREGLADA)
+    # 2. BITÁCORA DE PROYECTO (PLEGABLE)
     # ==============================================================================
     st.sidebar.divider()
-    st.sidebar.subheader("📌 Bitácora de Proyecto")
+    st.sidebar.subheader("Bitácora de Proyecto")
     
-    if st.sidebar.button("🔄 Actualizar", type="secondary", use_container_width=True, key="refresh_pins"):
-        st.rerun()
+    # (Botón Actualizar eliminado a petición)
 
     saved_pins = get_project_memory()
     
     if saved_pins:
-        # Usamos un contenedor con borde para cada pin
         for pin in saved_pins:
-            with st.sidebar.container(border=True):
-                # Fecha
-                date_str = pin.get('created_at', '')[:10]
-                st.caption(f"📅 {date_str}")
+            # Preparamos los datos para el título del Expander
+            date_str = pin.get('created_at', '')[:10]
+            raw_content = pin.get('content', '')
+            clean_text = remove_html_tags(raw_content) # Limpiamos HTML
+            
+            # Título: Fecha + Primeras 30 letras del contenido
+            expander_label = f"📅 {date_str} | {clean_text[:30]}..."
+            
+            # Usamos EXPANDER en lugar de CONTAINER
+            with st.sidebar.expander(expander_label, expanded=False):
                 
-                # VISTA PREVIA LIMPIA (Sin HTML sucio)
-                raw_content = pin.get('content', '')
-                clean_preview = remove_html_tags(raw_content) # <--- Aquí limpiamos el HTML
-                st.write(clean_preview[:90] + "...")
+                # Contenido al abrir
+                st.caption(f"ID: {pin['id']}")
+                st.info(clean_text[:100] + "...") # Vista previa un poco más larga
                 
-                # BOTONES DE ACCIÓN (Ver y Borrar)
+                # Botones de Acción
                 c1, c2 = st.columns(2)
                 
                 with c1:
-                    # Usamos Popover para "VER" el contenido completo renderizado
-                    with st.popover("👁️", use_container_width=True, help="Leer completo"):
+                    # Botón VER
+                    with st.popover("Leer", use_container_width=True, help="Leer completo"):
                         st.markdown(f"**Hallazgo del {date_str}**")
                         st.divider()
-                        # Aquí SÍ permitimos HTML para que se vean los tooltips
                         st.markdown(raw_content, unsafe_allow_html=True)
                 
                 with c2:
-                    # Botón de borrar
-                    if st.button("🗑️", key=f"del_{pin['id']}", use_container_width=True, help="Borrar"):
+                    # Botón BORRAR
+                    if st.button("Borrar", key=f"del_{pin['id']}", use_container_width=True, help="Borrar"):
                         if delete_project_memory(pin['id']):
                             st.toast("Elemento eliminado")
                             time.sleep(0.5)
