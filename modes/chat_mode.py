@@ -1,171 +1,132 @@
 import streamlit as st
-import json
-# IMPORTANTE: Asegúrate que process_text_with_tooltips esté en esta lista de imports
-from utils import get_relevant_info, reset_chat_workflow, clean_gemini_json, process_text_with_tooltips
-from services.gemini_api import call_gemini_api
-from services.supabase_db import get_daily_usage, log_query_event, supabase 
-from services.memory_service import save_project_insight, get_project_memory, delete_insight 
+import time
+from services.gemini_api import call_gemini_stream
+from utils import get_relevant_info, render_process_status, process_text_with_tooltips
+from prompts import get_grounded_chat_prompt, get_followup_suggestions_prompt
+from services.supabase_db import log_query_event
+# --- CORRECCIÓN AQUÍ: Solo importamos SAVE, ya no necesitamos get ni delete ---
+from services.memory_service import save_project_insight 
+import constants as c
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
-from prompts import get_grounded_chat_prompt
-import constants as c 
 
-def update_query_rating(query_id, rating):
-    try:
-        supabase.table("queries").update({"rating": rating}).eq("id", query_id).execute()
-    except Exception as e: print(f"Error rating: {e}")
-
-def grounded_chat_mode(db, selected_files, sidebar_container=None):
-    
-    # --- BITÁCORA LATERAL ---
-    target_area = sidebar_container if sidebar_container else st.sidebar
-    with target_area:
-        st.markdown("### Bitácora de Búsquedas")
-        memories = get_project_memory()
-        if memories:
-            for mem in memories:
-                pin_title = mem.get('project_context', 'Sin Título')
-                with st.expander(f"📌 {pin_title}", expanded=False):
-                    st.caption(f"📅 {mem['created_at'][:10]}")
-                    c_view, c_del = st.columns([1, 1])
-                    with c_view:
-                        if st.button("Leer", key=f"view_mem_{mem['id']}", use_container_width=True, help="Leer"):
-                            st.session_state.focused_insight = mem
-                            st.rerun()
-                    with c_del:
-                        if st.button("Eliminar", key=f"del_mem_{mem['id']}", use_container_width=True, help="Eliminar"):
-                            delete_insight(mem['id'])
-                            if st.session_state.get("focused_insight", {}).get("id") == mem['id']:
-                                del st.session_state.focused_insight
-                            st.rerun()
-        else:
-            st.caption("No hay insights guardados.")
-        st.divider() 
-    
-    # --- ÁREA PRINCIPAL ---
+def grounded_chat_mode(db, selected_files):
     st.subheader("Chat de Consulta Directa")
-    
-    # Visor de Insight
-    if "focused_insight" in st.session_state:
-        insight = st.session_state.focused_insight
-        with st.container(border=True):
-            col_h1, col_h2 = st.columns([8, 1])
-            with col_h1: st.markdown(f"**📌 Insight Guardado:** *{insight['project_context']}*")
-            with col_h2:
-                if st.button("✕", key="close_insight_view"):
-                    del st.session_state.focused_insight
-                    st.rerun()
-            st.info(insight['insight_content'], icon="🧠")
+    st.caption("Respuestas precisas basadas estrictamente en tu documentación.")
 
-    # Validación
     if not selected_files:
-        st.info("**Para comenzar:** Selecciona una Marca, Año y Proyecto en el menú lateral.")
-        if "chat_suggestions" in st.session_state.mode_state: del st.session_state.mode_state["chat_suggestions"]
-        if "chat_history" not in st.session_state.mode_state: st.session_state.mode_state["chat_history"] = []
-    else:
-        st.caption(f"Analizando **{len(selected_files)} documento(s)** seleccionados.")
+        st.info("👈 Selecciona documentos en el menú lateral para comenzar.")
+        return
 
-    # Inicialización
-    if "chat_history" not in st.session_state.mode_state: st.session_state.mode_state["chat_history"] = []
+    # 1. INICIALIZAR HISTORIAL
+    if "chat_history" not in st.session_state.mode_state:
+        st.session_state.mode_state["chat_history"] = []
 
-    # Sugerencias Estáticas (Solo al inicio)
-    if selected_files and not st.session_state.mode_state["chat_history"]:
-        if "chat_suggestions" not in st.session_state.mode_state:
-            st.session_state.mode_state["chat_suggestions"] = [
-                "Enumera los objetivos de investigación",
-                "Detalles de la metodología y ficha técnica",
-                "Principales hallazgos"
-            ]
-
-    # MOSTRAR HISTORIAL
+    # 2. MOSTRAR HISTORIAL (Con soporte para Tooltips y Pines)
     for idx, msg in enumerate(st.session_state.mode_state["chat_history"]):
-        with st.chat_message(msg['role'], avatar="✨" if msg['role'] == "Asistente" else "👤"): 
-            
-            # --- AQUÍ OCURRE EL RENDERIZADO CON TOOLTIPS ---
-            if msg['role'] == "Asistente":
-                # Procesamos el texto para inyectar los tooltips de contexto y limpiar fuentes
-                enriched_html = process_text_with_tooltips(msg['message'])
-                st.markdown(enriched_html, unsafe_allow_html=True)
+        with st.chat_message(msg["role"], avatar="✨" if msg["role"]=="assistant" else "👤"):
+            if msg["role"] == "assistant":
+                # Layout: Contenido (90%) | Pin (10%)
+                col_txt, col_pin = st.columns([9, 1])
                 
-                # Barra de acciones
-                c_feed, c_spacer, c_pin = st.columns([2, 6, 1])
-                with c_feed:
-                    if 'query_id' in msg:
-                        rating = st.feedback("thumbs", key=f"feed_{msg.get('query_id', idx)}")
-                        if rating is not None: update_query_rating(msg['query_id'], 1 if rating == 1 else -1)
-                with c_pin:
-                    with st.popover("📌", use_container_width=False, help="Guardar hallazgo"):
-                        st.markdown("**¿Guardar en Bitácora?**")
-                        if st.button("Confirmar", key=f"save_mem_{idx}"):
-                            if save_project_insight(msg['message']):
-                                st.toast("✅ Guardado"); st.rerun()
+                with col_txt:
+                    # Procesamos tooltips si existen en el historial
+                    content_html = process_text_with_tooltips(msg["content"])
+                    st.markdown(content_html, unsafe_allow_html=True)
+                
+                with col_pin:
+                    # Botón Pin discreto
+                    with st.popover("📌", use_container_width=False, help="Guardar en Bitácora"):
+                        st.markdown("¿Guardar?")
+                        if st.button("Sí", key=f"pin_old_{idx}"):
+                            if save_project_insight(msg["content"], source_mode="chat"):
+                                st.toast("Guardado en bitácora")
+                                time.sleep(0.5)
+                                st.rerun() # Recargar para que aparezca en el sidebar
             else:
-                st.markdown(msg['message'])
+                st.markdown(msg["content"])
 
-    # Input
-    prompt_to_process = None
-    
-    # Botones Sugerencias
-    if selected_files and "chat_suggestions" in st.session_state.mode_state:
-        suggestions = st.session_state.mode_state.get("chat_suggestions", [])
-        if suggestions:
-            st.write(""); st.caption("**Para iniciar:**")
-            for i, sugg in enumerate(suggestions):
-                if st.button(f" {sugg}", key=f"sugg_btn_{i}", use_container_width=True): prompt_to_process = sugg
-            st.write("") 
+    # 3. INPUT DEL USUARIO (Fijo abajo)
+    if user_input := st.chat_input("Haz una pregunta sobre tus documentos..."):
+        
+        # A. Guardar y mostrar pregunta
+        st.session_state.mode_state["chat_history"].append({"role": "user", "content": user_input})
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(user_input)
 
-    user_input = st.chat_input("Escribe tu pregunta...", disabled=not selected_files)
-    if user_input: prompt_to_process = user_input
-
-    # Procesamiento
-    if prompt_to_process and selected_files:
-        if "chat_suggestions" in st.session_state.mode_state: del st.session_state.mode_state["chat_suggestions"]
-        st.session_state.mode_state["chat_history"].append({"role": "Usuario", "message": prompt_to_process})
-        with st.chat_message("Usuario", avatar="👤"): st.markdown(prompt_to_process)
+        # B. Generar Respuesta
+        with st.chat_message("assistant", avatar="✨"):
+            full_response = ""
+            placeholder = st.empty()
             
-        query_limit = st.session_state.plan_features.get('chat_queries_per_day', 0)
-        current_queries = get_daily_usage(st.session_state.user, c.MODE_CHAT)
-        if current_queries >= query_limit and query_limit != float('inf'): st.error(f"Límite alcanzado."); return
-            
-        with st.chat_message("Asistente", avatar="✨"):
-            message_placeholder = st.empty()
-            message_placeholder.markdown("Pensando...")
-            
-            relevant_info = get_relevant_info(db, prompt_to_process, selected_files)
-            memory_list = get_project_memory() 
-            memory_text = "\n".join([f"- {m['insight_content']}" for m in memory_list])
-            conversation_history = "\n".join(f"{m['role']}: {m['message']}" for m in st.session_state.mode_state["chat_history"][-10:])
-            
-            grounded_prompt = get_grounded_chat_prompt(conversation_history, relevant_info, long_term_memory=memory_text)
-            
-            response = call_gemini_api(grounded_prompt)
-            
-            if response: 
-                # AQUÍ TAMBIÉN APLICAMOS EL PROCESADOR ANTES DE MOSTRAR LA RESPUESTA FINAL
-                message_placeholder.markdown(process_text_with_tooltips(response), unsafe_allow_html=True)
+            with render_process_status("Consultando base de conocimientos...", expanded=True) as status:
+                # 1. Búsqueda
+                relevant_info = get_relevant_info(db, user_input, selected_files)
+                if not relevant_info:
+                    status.update(label="No encontré información relevante", state="error")
+                    st.stop()
                 
-                try:
-                    res_log = log_query_event(prompt_to_process, mode=c.MODE_CHAT)
-                    query_id = res_log if res_log else f"temp_{len(st.session_state.mode_state['chat_history'])}"
-                except: query_id = None
-
-                st.session_state.mode_state["chat_history"].append({
-                    "role": "Asistente", "message": response, "query_id": query_id
-                })
-                st.rerun()
-            else: 
-                message_placeholder.error("Error al generar respuesta.")
+                # 2. Prompt
+                hist_str = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.mode_state["chat_history"][-5:]])
+                prompt = get_grounded_chat_prompt(hist_str, relevant_info)
                 
-    # Exportación
+                # 3. Stream
+                stream = call_gemini_stream(prompt)
+                
+                if stream:
+                    status.update(label="Generando respuesta...", state="running")
+                    for chunk in stream:
+                        full_response += chunk
+                        placeholder.markdown(full_response + "▌")
+                    
+                    status.update(label="Respuesta completada", state="complete", expanded=False)
+                else:
+                    status.update(label="Error de conexión", state="error")
+            
+            # C. Renderizado Final (Quitar cursor y poner tooltips)
+            placeholder.empty()
+            
+            # Layout respuesta nueva
+            col_new_txt, col_new_pin = st.columns([9, 1])
+            with col_new_txt:
+                final_html = process_text_with_tooltips(full_response)
+                st.markdown(final_html, unsafe_allow_html=True)
+            
+            with col_new_pin:
+                with st.popover("📌", use_container_width=False, help="Guardar en Bitácora"):
+                    st.markdown("¿Guardar?")
+                    if st.button("Sí", key="pin_new_resp"):
+                        if save_project_insight(full_response, source_mode="chat"):
+                            st.toast("Guardado en bitácora")
+                            time.sleep(0.5)
+                            st.rerun()
+
+            # Guardar en historial
+            st.session_state.mode_state["chat_history"].append({"role": "assistant", "content": full_response})
+            
+            # Log
+            try:
+                log_query_event(user_input, mode=c.MODE_CHAT)
+            except: pass
+
+    # 4. BOTONES DE ACCIÓN (Exportar Chat)
     if st.session_state.mode_state["chat_history"]:
-        st.divider()
-        col1, col2 = st.columns([1,1])
+        st.write("")
+        col1, col2 = st.columns(2)
+        
+        # Generar texto plano para PDF
+        chat_text = ""
+        for m in st.session_state.mode_state["chat_history"]:
+            role = "Usuario" if m["role"] == "user" else "Asistente"
+            chat_text += f"**{role}:**\n{m['content']}\n\n"
+            
+        pdf_bytes = generate_pdf_html(chat_text, title="Historial de Chat", banner_path=banner_file)
+        
         with col1:
-            chat_content_raw = "\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.mode_state["chat_history"])
-            pdf_bytes = generate_pdf_html(chat_content_raw.replace("](#)", "]"), title="Historial Consulta", banner_path=banner_file)
-            if pdf_bytes: st.download_button("PDF", data=pdf_bytes, file_name="chat.pdf", mime="application/pdf", use_container_width=True)
-        with col2: 
-            def clean_all():
-                reset_chat_workflow()
-                if "chat_suggestions" in st.session_state.mode_state: del st.session_state.mode_state["chat_suggestions"]
-            st.button("Limpiar", on_click=clean_all, key="new_grounded_chat_btn", use_container_width=True)
+            if pdf_bytes:
+                st.download_button("Descargar PDF", data=pdf_bytes, file_name="Chat_Export.pdf", mime="application/pdf", use_container_width=True)
+        
+        with col2:
+            if st.button("Nueva Conversación", type="secondary", use_container_width=True):
+                st.session_state.mode_state["chat_history"] = []
+                st.rerun()
