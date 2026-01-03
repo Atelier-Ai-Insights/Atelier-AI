@@ -49,7 +49,6 @@ def get_report_prompt2(question, result1, relevant_info):
 
 def get_grounded_chat_prompt(conversation_history, relevant_info, long_term_memory=""):
     """Chat RAG estricto con tooltips ricos."""
-    
     bloque_memoria = ""
     if long_term_memory:
         bloque_memoria = f"""
@@ -114,13 +113,13 @@ def get_concept_gen_prompt(product_idea, context_info):
         
         f"#### Ruta A: [Ponle un Nombre Creativo]\n"
         f"* **Insight:** (La verdad humana profunda que detona la compra).\n"
-        f"* **What (Beneficio):** (La promesa principal: qué gano yo).\n"
+        f"* **What:** (La promesa principal: qué gano yo).\n"
         f"* **Reason to Believe:** (La evidencia técnica o de mercado que lo hace creíble. Usa citas [x]).\n"
         f"* **Claim/Slogan:** (Frase de cierre memorable).\n\n"
         
         f"#### Ruta B: [Ponle un Nombre Alternativo]\n"
         f"* **Insight:** ...\n"
-        f"* **What (Beneficio):** ...\n"
+        f"* **What:** ...\n"
         f"* **Reason to Believe:** ...\n"
         f"* **Claim/Slogan:** ...\n\n"
         
@@ -279,7 +278,7 @@ def get_trend_synthesis_prompt(keyword, trend_context, geo_context, topics_conte
     """
 
 # ==============================================================================
-# PROMPTS DE PERFILES SINTÉTICOS
+# PROMPTS DE PERFILES SINTÉTICOS (Corregido y Ajustado)
 # ==============================================================================
 
 def get_persona_generation_prompt(segment_name, relevant_info):
@@ -305,4 +304,16 @@ def get_persona_generation_prompt(segment_name, relevant_info):
         "estilo_comunicacion": "Cómo habla (formal, coloquial, etc).",
         "creencias_limitantes": "Prejuicios sobre el producto."
     }}
+    """
+
+def get_persona_chat_instruction(persona_json, user_question):
+    """Instrucción para el roleplay del chat."""
+    p = persona_json 
+    return f"""
+    **ACTING:** ERES **{p.get('nombre')}**.
+    **Perfil:** {p.get('bio_breve')}
+    **Pregunta:** "{user_question}"
+    
+    Responde estrictamente como {p.get('nombre')}. 
+    Usa un tono natural de acuerdo a su estilo: {p.get('estilo_comunicacion')}.
     """
