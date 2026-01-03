@@ -5,6 +5,7 @@ from prompts import get_report_prompt1, get_report_prompt2
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 from services.supabase_db import log_query_event
+from services.memory_service import save_project_insight # <--- IMPORTANTE: Nueva importación
 import constants as c
 
 def report_mode(db, selected_files):
@@ -17,8 +18,7 @@ def report_mode(db, selected_files):
         st.warning("Selecciona documentos en el menú lateral.")
         return
 
-    # 2. BOTÓN DE ACCIÓN (AJUSTE 1: De lado a lado)
-    # Agregamos use_container_width=True para que ocupe todo el ancho
+    # 2. BOTÓN DE ACCIÓN (Lado a lado)
     if st.button("Generar Informe", type="primary", use_container_width=True):
         if not user_question: return
         
@@ -72,15 +72,27 @@ def report_mode(db, selected_files):
         html_content = process_text_with_tooltips(final_text)
         
         st.divider()
-        st.markdown(html_content, unsafe_allow_html=True)
         
-        # --- BOTONES DE ACCIÓN (AJUSTE 2: Simétricos) ---
+        # --- IMPLEMENTACIÓN DEL PIN (Layout Columnas) ---
+        c_content, c_pin = st.columns([9, 1])
+        
+        with c_content:
+            st.markdown(html_content, unsafe_allow_html=True)
+            
+        with c_pin:
+            # Botón de Pin (Guardar en Bitácora)
+            with st.popover("📌", use_container_width=False, help="Guardar reporte en Bitácora"):
+                st.markdown("**¿Guardar?**")
+                if st.button("Confirmar", key="save_report_pin"):
+                    if save_project_insight(final_text):
+                        st.toast("✅ Reporte guardado en la bitácora")
+        
+        # --- BOTONES DE ACCIÓN (Simétricos) ---
         st.divider()
         
         # Generar PDF
         pdf_bytes = generate_pdf_html(final_text, title="Informe de Investigación", banner_path=banner_file)
         
-        # Creamos dos columnas iguales para los botones
         col1, col2 = st.columns(2)
         
         with col1:
@@ -91,13 +103,11 @@ def report_mode(db, selected_files):
                     file_name="Informe_Investigacion.pdf",
                     mime="application/pdf",
                     type="secondary",
-                    use_container_width=True # Ancho completo de la columna
+                    use_container_width=True
                 )
         
         with col2:
-            # Botón para limpiar y empezar uno nuevo
             if st.button("Nuevo Reporte", type="primary", use_container_width=True):
-                # Limpiamos las variables del reporte actual
                 st.session_state.mode_state.pop("report_step1", None)
                 st.session_state.mode_state.pop("report_final", None)
                 st.rerun()
