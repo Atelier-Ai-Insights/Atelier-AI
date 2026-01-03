@@ -20,7 +20,7 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
     # --- BITÁCORA LATERAL ---
     target_area = sidebar_container if sidebar_container else st.sidebar
     with target_area:
-        st.markdown("### 🧠 Bitácora del Proyecto")
+        st.markdown("### Bitácora de Búsquedas")
         memories = get_project_memory()
         if memories:
             for mem in memories:
@@ -29,11 +29,11 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
                     st.caption(f"📅 {mem['created_at'][:10]}")
                     c_view, c_del = st.columns([1, 1])
                     with c_view:
-                        if st.button("👁️ Leer", key=f"view_mem_{mem['id']}", use_container_width=True):
+                        if st.button("Leer", key=f"view_mem_{mem['id']}", use_container_width=True, help="Leer"):
                             st.session_state.focused_insight = mem
                             st.rerun()
                     with c_del:
-                        if st.button("🗑️", key=f"del_mem_{mem['id']}", use_container_width=True, help="Eliminar"):
+                        if st.button("Eliminar", key=f"del_mem_{mem['id']}", use_container_width=True, help="Eliminar"):
                             delete_insight(mem['id'])
                             if st.session_state.get("focused_insight", {}).get("id") == mem['id']:
                                 del st.session_state.focused_insight
@@ -59,7 +59,7 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
 
     # Validación
     if not selected_files:
-        st.info("👈 **Para comenzar:** Selecciona una Marca, Año y Proyecto en el menú lateral.")
+        st.info("**Para comenzar:** Selecciona una Marca, Año y Proyecto en el menú lateral.")
         if "chat_suggestions" in st.session_state.mode_state: del st.session_state.mode_state["chat_suggestions"]
         if "chat_history" not in st.session_state.mode_state: st.session_state.mode_state["chat_history"] = []
     else:
@@ -109,9 +109,9 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
     if selected_files and "chat_suggestions" in st.session_state.mode_state:
         suggestions = st.session_state.mode_state.get("chat_suggestions", [])
         if suggestions:
-            st.write(""); st.caption("🚀 **Para iniciar:**")
+            st.write(""); st.caption("**Para iniciar:**")
             for i, sugg in enumerate(suggestions):
-                if st.button(f"👉 {sugg}", key=f"sugg_btn_{i}", use_container_width=True): prompt_to_process = sugg
+                if st.button(f" {sugg}", key=f"sugg_btn_{i}", use_container_width=True): prompt_to_process = sugg
             st.write("") 
 
     user_input = st.chat_input("Escribe tu pregunta...", disabled=not selected_files)
@@ -163,9 +163,9 @@ def grounded_chat_mode(db, selected_files, sidebar_container=None):
         with col1:
             chat_content_raw = "\n\n".join(f"**{m['role']}:** {m['message']}" for m in st.session_state.mode_state["chat_history"])
             pdf_bytes = generate_pdf_html(chat_content_raw.replace("](#)", "]"), title="Historial Consulta", banner_path=banner_file)
-            if pdf_bytes: st.download_button("📥 PDF", data=pdf_bytes, file_name="chat.pdf", mime="application/pdf", use_container_width=True)
+            if pdf_bytes: st.download_button("PDF", data=pdf_bytes, file_name="chat.pdf", mime="application/pdf", use_container_width=True)
         with col2: 
             def clean_all():
                 reset_chat_workflow()
                 if "chat_suggestions" in st.session_state.mode_state: del st.session_state.mode_state["chat_suggestions"]
-            st.button("🗑️ Limpiar", on_click=clean_all, key="new_grounded_chat_btn", use_container_width=True)
+            st.button("Limpiar", on_click=clean_all, key="new_grounded_chat_btn", use_container_width=True)
