@@ -56,7 +56,7 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.image("LogoDataStudio.png", width=220)
     
     st.sidebar.write(f"Usuario: {st.session_state.user}")
-    if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador 👑")
+    if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador")
     st.sidebar.divider()
     
     # --- SELECTOR DE MODOS ---
@@ -161,10 +161,10 @@ def run_user_mode(db_full, user_features, footer_html):
     # 2. SECCIÓN DE BITÁCORA / PINES GUARDADOS (Visualización Global)
     # ==============================================================================
     st.sidebar.divider()
-    st.sidebar.subheader("📌 Bitácora de Proyecto")
+    st.sidebar.subheader("Bitácora de Proyecto")
     
     # Botón para refrescar la lista manualmente
-    if st.sidebar.button("🔄 Actualizar Bitácora", type="secondary", use_container_width=True, key="refresh_pins"):
+    if st.sidebar.button("Actualizar Bitácora", type="secondary", use_container_width=True, key="refresh_pins"):
         st.rerun()
 
     # Traer datos
