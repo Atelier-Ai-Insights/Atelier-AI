@@ -4,14 +4,13 @@ from services.gemini_api import call_gemini_stream
 from utils import get_relevant_info, render_process_status, process_text_with_tooltips
 from prompts import get_grounded_chat_prompt
 from services.supabase_db import log_query_event
-# --- CORRECCIÓN: Solo importamos SAVE (evita el ImportError) ---
 from services.memory_service import save_project_insight 
 import constants as c
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 
 def grounded_chat_mode(db, selected_files):
-    st.subheader("💬 Chat de Consulta Directa")
+    st.subheader("Chat de Consulta Directa")
     st.caption("Respuestas precisas basadas estrictamente en tu documentación.")
 
     if not selected_files:
@@ -22,34 +21,30 @@ def grounded_chat_mode(db, selected_files):
     if "chat_history" not in st.session_state.mode_state:
         st.session_state.mode_state["chat_history"] = []
 
-    # 2. MOSTRAR HISTORIAL (Mensajes anteriores)
+    # 2. MOSTRAR HISTORIAL
     for idx, msg in enumerate(st.session_state.mode_state["chat_history"]):
         with st.chat_message(msg["role"], avatar="✨" if msg["role"]=="assistant" else "👤"):
+            # A. Mostrar contenido procesado (Tooltips)
             if msg["role"] == "assistant":
-                # Layout: Texto (Ancho) | Pin (Estrecho)
-                col_txt, col_pin = st.columns([9, 1])
+                content_html = process_text_with_tooltips(msg["content"])
+                st.markdown(content_html, unsafe_allow_html=True)
                 
-                with col_txt:
-                    # Renderizar texto con tooltips
-                    content_html = process_text_with_tooltips(msg["content"])
-                    st.markdown(content_html, unsafe_allow_html=True)
-                
+                # B. BOTÓN PIN MINIMALISTA (Abajo a la derecha)
+                # Usamos columnas para empujarlo a la derecha sin romper el texto
+                col_spacer, col_pin = st.columns([15, 1])
                 with col_pin:
-                    # Botón Pin con lógica de recarga
-                    with st.popover("📌", use_container_width=False, help="Guardar en Bitácora"):
-                        st.markdown("¿Guardar hallazgo?")
-                        if st.button("Confirmar", key=f"pin_hist_{idx}"):
-                            if save_project_insight(msg["content"], source_mode="chat"):
-                                st.toast("✅ Guardado en bitácora")
-                                time.sleep(0.5) # Espera visual
-                                st.rerun()      # Recarga para actualizar sidebar
+                    if st.button("📌", key=f"pin_hist_{idx}", help="Guardar en Bitácora", type="secondary"):
+                        if save_project_insight(msg["content"], source_mode="chat"):
+                            st.toast("✅ Guardado")
+                            time.sleep(1) # Dar tiempo a la BD
+                            st.rerun()    # Recargar para ver en Sidebar
             else:
                 st.markdown(msg["content"])
 
-    # 3. INPUT DEL USUARIO (Fijo abajo)
+    # 3. INPUT DEL USUARIO
     if user_input := st.chat_input("Haz una pregunta sobre tus documentos..."):
         
-        # A. Mostrar pregunta usuario
+        # A. Guardar pregunta
         st.session_state.mode_state["chat_history"].append({"role": "user", "content": user_input})
         with st.chat_message("user", avatar="👤"):
             st.markdown(user_input)
@@ -60,74 +55,52 @@ def grounded_chat_mode(db, selected_files):
             placeholder = st.empty()
             
             with render_process_status("Consultando base de conocimientos...", expanded=True) as status:
-                # 1. Búsqueda
                 relevant_info = get_relevant_info(db, user_input, selected_files)
                 if not relevant_info:
-                    status.update(label="No encontré información relevante", state="error")
-                    st.stop()
+                    status.update(label="Sin información relevante", state="error"); st.stop()
                 
-                # 2. Prompt
                 hist_str = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.mode_state["chat_history"][-5:]])
                 prompt = get_grounded_chat_prompt(hist_str, relevant_info)
-                
-                # 3. Stream
                 stream = call_gemini_stream(prompt)
                 
                 if stream:
-                    status.update(label="Generando respuesta...", state="running")
+                    status.update(label="Generando...", state="running")
                     for chunk in stream:
                         full_response += chunk
                         placeholder.markdown(full_response + "▌")
-                    
-                    status.update(label="Respuesta completada", state="complete", expanded=False)
+                    status.update(label="Listo", state="complete", expanded=False)
                 else:
-                    status.update(label="Error de conexión", state="error")
+                    status.update(label="Error", state="error")
             
-            # C. Renderizado Final de la nueva respuesta
+            # C. Render Final + PIN NUEVO
             placeholder.empty()
+            final_html = process_text_with_tooltips(full_response)
+            st.markdown(final_html, unsafe_allow_html=True)
             
-            # Layout Columnas para el mensaje nuevo
-            col_new_txt, col_new_pin = st.columns([9, 1])
-            
-            with col_new_txt:
-                final_html = process_text_with_tooltips(full_response)
-                st.markdown(final_html, unsafe_allow_html=True)
-            
-            with col_new_pin:
-                with st.popover("📌", use_container_width=False, help="Guardar en Bitácora"):
-                    st.markdown("¿Guardar hallazgo?")
-                    if st.button("Confirmar", key="pin_new_resp"):
-                        if save_project_insight(full_response, source_mode="chat"):
-                            st.toast("✅ Guardado en bitácora")
-                            time.sleep(0.5)
-                            st.rerun()
+            # Botón Pin Minimalista para la respuesta nueva
+            col_spacer_new, col_pin_new = st.columns([15, 1])
+            with col_pin_new:
+                if st.button("📌", key="pin_new_resp", help="Guardar en Bitácora"):
+                    if save_project_insight(full_response, source_mode="chat"):
+                        st.toast("✅ Guardado")
+                        time.sleep(1)
+                        st.rerun()
 
-            # Guardar en memoria de sesión
             st.session_state.mode_state["chat_history"].append({"role": "assistant", "content": full_response})
-            
-            # Log
-            try:
-                log_query_event(user_input, mode=c.MODE_CHAT)
+            try: log_query_event(user_input, mode=c.MODE_CHAT)
             except: pass
 
-    # 4. BOTONES DE ACCIÓN (Exportar / Limpiar)
+    # 4. BOTONES EXPORTAR
     if st.session_state.mode_state["chat_history"]:
         st.write("")
         col1, col2 = st.columns(2)
-        
-        # Preparar texto para PDF
-        chat_text = ""
-        for m in st.session_state.mode_state["chat_history"]:
-            role = "Usuario" if m["role"] == "user" else "Asistente"
-            chat_text += f"**{role}:**\n{m['content']}\n\n"
-            
-        pdf_bytes = generate_pdf_html(chat_text, title="Historial de Chat", banner_path=banner_file)
+        # Lógica de PDF igual que antes...
+        chat_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.mode_state["chat_history"]])
+        pdf_bytes = generate_pdf_html(chat_text, title="Historial Chat", banner_path=banner_file)
         
         with col1:
-            if pdf_bytes:
-                st.download_button("📥 Descargar PDF", data=pdf_bytes, file_name="Chat_Export.pdf", mime="application/pdf", use_container_width=True)
-        
+            if pdf_bytes: st.download_button("PDF", data=pdf_bytes, file_name="chat.pdf", mime="application/pdf", use_container_width=True)
         with col2:
-            if st.button("🗑️ Nueva Conversación", type="secondary", use_container_width=True):
+            if st.button("Limpiar", use_container_width=True):
                 st.session_state.mode_state["chat_history"] = []
                 st.rerun()
