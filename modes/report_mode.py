@@ -1,7 +1,8 @@
 import streamlit as st
 import time
 from services.gemini_api import call_gemini_api, call_gemini_stream
-from utils import get_relevant_info, render_process_status, process_text_with_tooltips # <--- IMPORTANTE
+# Aseguramos importar process_text_with_tooltips para los tooltips
+from utils import get_relevant_info, render_process_status, process_text_with_tooltips 
 from prompts import get_report_prompt1, get_report_prompt2
 from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
@@ -9,7 +10,7 @@ from services.supabase_db import log_query_event
 import constants as c
 
 def report_mode(db, selected_files):
-    st.subheader("📝 Generador de Informes de Investigación")
+    st.subheader("Generador de Informes de Investigación")
     
     # 1. Input
     user_question = st.text_input("¿Qué objetivo de investigación deseas abordar?", placeholder="Ej: Analizar la percepción de precios en la categoría...")
@@ -29,7 +30,9 @@ def report_mode(db, selected_files):
             
             # --- FASE 1: BÚSQUEDA Y HALLAZGOS ---
             status.write("🔍 Fase 1: Escaneando documentos y extrayendo evidencia...")
-            relevant_info = get_relevant_info(db, user_question, selected_files, top_k=15)
+            
+            # CORRECCIÓN: Eliminado 'top_k=15'. Tu función usa 'max_chars'.
+            relevant_info = get_relevant_info(db, user_question, selected_files)
             
             if not relevant_info:
                 status.update(label="No se encontró información relevante.", state="error")
@@ -45,30 +48,27 @@ def report_mode(db, selected_files):
             
             final_report_stream = call_gemini_stream(prompt2)
             
-            # Consumir el stream para guardarlo en variable
+            # Consumir el stream
             full_response = ""
             placeholder = st.empty()
             
-            # En modo streaming no podemos procesar tooltips en tiempo real fácilmente sin romper el HTML
-            # Así que mostramos el stream raw, y al final renderizamos el bonito.
             for chunk in final_report_stream:
                 full_response += chunk
                 placeholder.markdown(full_response + "▌")
             
             st.session_state.mode_state["report_final"] = full_response
-            placeholder.empty() # Limpiamos el stream sucio
+            placeholder.empty() 
             
             status.update(label="¡Informe completado!", state="complete", expanded=False)
             
             # Log
             log_query_event(f"Reporte: {user_question}", mode=c.MODE_REPORT)
 
-    # 3. Visualización de Resultados (SIEMPRE PERSISTENTE)
+    # 3. Visualización de Resultados
     if "report_final" in st.session_state.mode_state:
         final_text = st.session_state.mode_state["report_final"]
         
-        # RENDERIZADO CON TOOLTIPS
-        # Procesamos el texto final para convertir las citas en tooltips interactivos
+        # RENDERIZADO CON TOOLTIPS (Usando tu función nueva en utils.py)
         html_content = process_text_with_tooltips(final_text)
         
         st.divider()
@@ -79,7 +79,7 @@ def report_mode(db, selected_files):
         pdf_bytes = generate_pdf_html(final_text, title="Informe de Investigación", banner_path=banner_file)
         if pdf_bytes:
             st.download_button(
-                label="📥 Descargar Informe PDF",
+                label="Descargar Informe PDF",
                 data=pdf_bytes,
                 file_name="Informe_Investigacion.pdf",
                 mime="application/pdf",
