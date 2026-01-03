@@ -19,7 +19,7 @@ def idea_evaluator_mode(db, selected_files):
     if "eval_history" not in st.session_state.mode_state:
         st.session_state.mode_state["eval_history"] = []
 
-    # 2. MOSTRAR HISTORIAL (Conversación hacia arriba)
+    # 2. MOSTRAR HISTORIAL (Las respuestas aparecen aquí)
     for msg in st.session_state.mode_state["eval_history"]:
         with st.chat_message(msg["role"], avatar="✨" if msg["role"]=="assistant" else "👤"):
             if msg["role"] == "assistant":
@@ -27,7 +27,8 @@ def idea_evaluator_mode(db, selected_files):
             else:
                 st.markdown(msg["content"])
 
-    # 3. INPUT FIJO ABAJO (ESTANDARIZADO)
+    # 3. INPUT FIJO ABAJO (ESTILO CHAT)
+    # Al usar st.chat_input, la caja se fija al fondo de la pantalla
     idea_input = st.chat_input("Escribe la idea que quieres evaluar...")
 
     if idea_input:
@@ -51,15 +52,20 @@ def idea_evaluator_mode(db, selected_files):
                     enriched_html = process_text_with_tooltips(response)
                     st.markdown(enriched_html, unsafe_allow_html=True)
                     
-                    log_query_event(f"Evaluación: {idea_input[:30]}", mode=c.MODE_IDEA_EVAL)
+                    # Log
+                    try:
+                        log_query_event(f"Evaluación: {idea_input[:30]}", mode=c.MODE_IDEA_EVAL)
+                    except: pass
                 else:
                     status.update(label="Error en el análisis", state="error")
+                    st.error("No se pudo generar la evaluación.")
 
-    # 4. BOTÓN DESCARGA PDF (De la última evaluación o todo el historial)
+    # 4. BOTONES DE ACCIÓN (SIMÉTRICOS)
+    # Solo mostramos los botones si hay historial para exportar/borrar
     if st.session_state.mode_state["eval_history"]:
         st.divider()
         
-        # Generar PDF de toda la sesión
+        # Generar texto para el PDF
         full_text = ""
         for m in st.session_state.mode_state["eval_history"]:
             role = "Idea" if m["role"] == "user" else "Evaluación"
@@ -67,11 +73,20 @@ def idea_evaluator_mode(db, selected_files):
 
         pdf_bytes = generate_pdf_html(full_text, title="Sesión de Evaluación de Ideas", banner_path=banner_file)
         
-        col1, col2 = st.columns([1, 4])
+        # CAMBIO CLAVE: Columnas iguales [1, 1] para que los botones tengan el mismo ancho
+        col1, col2 = st.columns(2)
+        
         with col1:
             if pdf_bytes:
-                st.download_button("PDF", data=pdf_bytes, file_name="Evaluacion_Ideas.pdf", mime="application/pdf", use_container_width=True)
+                st.download_button(
+                    label="Descargar PDF",
+                    data=pdf_bytes,
+                    file_name="Evaluacion_Ideas.pdf",
+                    mime="application/pdf",
+                    use_container_width=True  # Ocupa todo el ancho de la columna
+                )
+        
         with col2:
-            if st.button("Limpiar", use_container_width=True):
+            if st.button("Limpiar Chat", use_container_width=True): # Ocupa todo el ancho de la columna
                 st.session_state.mode_state["eval_history"] = []
                 st.rerun()
