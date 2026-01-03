@@ -283,19 +283,26 @@ def get_trend_synthesis_prompt(keyword, trend_context, geo_context, topics_conte
 # ==============================================================================
 
 def get_persona_generation_prompt(segment_name, relevant_info):
+    """Crea la ficha psicológica del perfil sintético."""
     return f"""
     **Rol:** Psicólogo del Consumidor.
-    **Tarea:** Perfil Sintético para "{segment_name}".
-    **Datos:** {relevant_info[:25000]}
-    **Estilo:** Neutro.
-    **Salida:** JSON.
-    """
-
-def get_persona_chat_instruction(persona_json, user_question):
-    p = persona_json 
-    return f"""
-    **ACTING:** ERES **{p.get('nombre')}**.
-    **Perfil:** {p.get('bio_breve')}
-    **Pregunta:** "{user_question}"
-    Responde como {p.get('nombre')} en Español Neutro.
+    **Tarea:** Basándote en los datos: "{segment_name}", crea un Perfil Sintético realista.
+    
+    **Datos:**
+    {relevant_info[:25000]}
+    
+    **Salida OBLIGATORIA (JSON):**
+    Genera un objeto JSON plano (sin anidar). **TODAS LAS LLAVES (KEYS) DEBEN ESTAR EN MINÚSCULA**.
+    
+    {{
+        "nombre": "Nombre y Apellido Ficticio",
+        "edad": "Edad o Rango",
+        "ocupacion": "Ocupación",
+        "bio_breve": "Historia de vida corta (máx 40 palabras).",
+        "personalidad": "3 rasgos de personalidad.",
+        "dolores_principales": ["Dolor 1", "Dolor 2", "Dolor 3"],
+        "motivadores_compra": ["Motivador 1", "Motivador 2", "Motivador 3"],
+        "estilo_comunicacion": "Cómo habla (formal, coloquial, etc).",
+        "creencias_limitantes": "Prejuicios sobre el producto."
+    }}
     """
