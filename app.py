@@ -16,6 +16,8 @@ from auth import (
 )
 from admin.dashboard import show_admin_dashboard
 from utils import extract_brand, validate_session_integrity 
+# --- NUEVA IMPORTACIÓN PARA BITÁCORA ---
+from services.memory_service import get_project_memory 
 import constants as c
 
 # --- GESTIÓN DE ESTADO INTELIGENTE (Persistencia entre pestañas) ---
@@ -156,13 +158,38 @@ def run_user_mode(db_full, user_features, footer_html):
              st.sidebar.caption("Filtros no disponibles en este modo.")
 
     # ==============================================================================
-    # 2. ESPACIO RESERVADO PARA BITÁCORA (Justo antes de cerrar sesión)
+    # 2. SECCIÓN DE BITÁCORA / PINES GUARDADOS (Visualización Global)
     # ==============================================================================
-    # Este contenedor vacío se pasa al Chat para que "pinte" la bitácora aquí,
-    # asegurando que quede encima del botón de logout.
-    bitacora_placeholder = st.sidebar.container()
+    st.sidebar.divider()
+    st.sidebar.subheader("📌 Bitácora de Proyecto")
+    
+    # Botón para refrescar la lista manualmente
+    if st.sidebar.button("🔄 Actualizar Bitácora", type="secondary", use_container_width=True, key="refresh_pins"):
+        st.rerun()
+
+    # Traer datos
+    saved_pins = get_project_memory()
+    
+    if saved_pins:
+        with st.sidebar.expander(f"Ver {len(saved_pins)} hallazgos", expanded=False):
+            for pin in saved_pins:
+                # Formato visual de tarjeta pequeña
+                date_str = pin.get('created_at', '')[:10]
+                icon = "🤖" if pin.get('source') == 'auto' else "📌"
+                
+                st.sidebar.markdown(f"**{icon} {date_str}**")
+                # Vista previa corta de 150 caracteres
+                content_preview = pin.get('content', '')
+                if len(content_preview) > 150:
+                    content_preview = content_preview[:150] + "..."
+                
+                st.sidebar.info(content_preview)
+                st.sidebar.caption("---")
+    else:
+        st.sidebar.caption("No hay hallazgos guardados aún.")
 
     # --- LOGOUT ---
+    st.sidebar.write("") # Espaciador
     if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         try:
             if 'user_id' in st.session_state:
@@ -190,8 +217,8 @@ def run_user_mode(db_full, user_features, footer_html):
 
     elif modo == c.MODE_CHAT: 
         from modes.chat_mode import grounded_chat_mode
-        # PASAMOS EL PLACEHOLDER AL CHAT
-        grounded_chat_mode(db_filtered, selected_files, bitacora_placeholder)
+        # Ya no necesitamos pasar placeholder, la bitácora es global en app.py
+        grounded_chat_mode(db_filtered, selected_files)
 
     elif modo == c.MODE_IDEA_EVAL: 
         from modes.idea_eval_mode import idea_evaluator_mode
