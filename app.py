@@ -143,7 +143,7 @@ def run_user_mode(db_full, user_features, footer_html):
             date_str = pin.get('created_at', '')[:10]
             raw_content = pin.get('content', '')
             clean_text = remove_html_tags(raw_content)
-            expander_label = f"📅 {date_str} | {clean_text[:30]}..."
+            expander_label = f"{date_str} | {clean_text[:30]}..."
             
             with st.sidebar.expander(expander_label, expanded=False):
                 st.caption(f"ID: {pin['id']}")
@@ -206,7 +206,7 @@ def run_user_mode(db_full, user_features, footer_html):
                 grounded_chat_mode(db_filtered, selected_files)
 
         elif modo == c.MODE_IDEA_EVAL: 
-            with st.spinner("Cargando Shark Tank AI..."):
+            with st.spinner("Conectando con el Asistente..."):
                 from modes.idea_eval_mode import idea_evaluator_mode
                 idea_evaluator_mode(db_filtered, selected_files)
 
