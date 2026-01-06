@@ -1,4 +1,5 @@
 import streamlit as st
+import os
 
 # ==============================
 # DEFINICIÓN DE PLANES Y PERMISOS
@@ -85,9 +86,31 @@ PLAN_FEATURES = {
 }
 
 # ==============================
-# CONFIGURACIÓN DE LA API DE GEMINI
+# CONFIGURACIÓN DE LA API DE GEMINI (BLINDADA)
 # ==============================
-api_keys = [st.secrets["API_KEY_1"], st.secrets["API_KEY_2"], st.secrets["API_KEY_3"]]
+
+def get_secret(key):
+    """
+    Intenta obtener el secreto de las variables de entorno (Railway).
+    Si no existe, intenta obtenerlo de st.secrets (Local/Streamlit Cloud).
+    """
+    value = os.environ.get(key)
+    if not value:
+        try:
+            value = st.secrets[key]
+        except:
+            return None
+    return value
+
+# Lista de claves segura: usa la función get_secret en lugar de llamar directo a st.secrets
+raw_keys = [
+    get_secret("API_KEY_1"),
+    get_secret("API_KEY_2"),
+    get_secret("API_KEY_3")
+]
+
+# Filtramos para eliminar valores vacíos (None) y evitar errores si falta alguna clave
+api_keys = [k for k in raw_keys if k is not None]
 
 generation_config = {"temperature": 0.5, "top_p": 0.8, "top_k": 32, "max_output_tokens": 8192}
 
