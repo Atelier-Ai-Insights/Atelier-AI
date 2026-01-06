@@ -91,7 +91,7 @@ def get_ideation_prompt(conv_history, relevant):
     )
 
 def get_concept_gen_prompt(product_idea, context_info):
-    """Concepto estructurado con desglose forzado de Insight/What/RTB."""
+    """Concepto estructurado en términos de Insight, What y RTB."""
     return (
         f"**Rol:** Estratega de Producto Senior.\n"
         f"**Tarea:** Desarrolla un concepto GANADOR para la idea: \"{product_idea}\".\n"
@@ -99,16 +99,16 @@ def get_concept_gen_prompt(product_idea, context_info):
         
         f"**Formato de Salida OBLIGATORIO (Markdown):**\n\n"
         
-        f"### 1. Consumer Truth (La Necesidad)\n"
+        f"### 1. Consumer Truth\n"
         f"(Describe la tensión o necesidad oculta del consumidor. Sustenta con citas [x])\n\n"
         
-        f"### 2. La Solución (Product Idea)\n"
+        f"### 2. La Solución\n"
         f"(Descripción enriquecida del producto)\n\n"
         
         f"### 3. Beneficios Clave\n"
         f"(Lista de 3-4 beneficios funcionales y emocionales)\n\n"
         
-        f"### 4. Conceptos Creativos (2 Rutas Diferenciadas)\n"
+        f"### 4. Conceptos Creativos\n"
         f"Debes proponer 2 rutas distintas de posicionamiento. Para cada una usa esta estructura exacta:\n\n"
         
         f"#### Ruta A: [Ponle un Nombre Creativo]\n"
@@ -148,7 +148,7 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
         "**Rol:** Director Audiovisual.",
         f"Target: {target_audience} | Objetivos: {comm_objectives}",
         f"Datos: {relevant_text_context[:8000]}",
-        "Evalúa el video (Ritmo, Mensaje, Branding, CTA).",
+        "Evalúa el video (Impacto, Mensaje, Branding, CTA).",
         INSTRUCCIONES_DE_CITAS
     ]
 
