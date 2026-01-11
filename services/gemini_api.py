@@ -11,7 +11,6 @@ from services.logger import log_error, log_action
 # CONFIGURACIÓN DE MODELO
 # ==========================================
 
-# Usamos 1.5-flash que es el estándar actual rápido y soporta 8k+ tokens de salida
 MODEL_NAME = "gemini-2.5-flash"
 
 def _configure_gemini(key_index):
