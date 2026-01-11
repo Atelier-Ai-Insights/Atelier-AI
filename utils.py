@@ -252,87 +252,95 @@ def process_text_with_tooltips(text):
     """
     if not text: return ""
 
-    # 1. Separar cuerpo y sección de fuentes
-    # Buscamos variaciones comunes de headers de fuentes
-    split_patterns = [r"\n\*\*Fuentes:?\*\*", r"\n## Fuentes", r"\n### Fuentes", r"\nFuentes:", r"\n\*\*Fuentes Verificadas:\*\*"]
-    body = text
-    sources_raw = ""
-    
-    for pattern in split_patterns:
-        parts = re.split(pattern, text, maxsplit=1, flags=re.IGNORECASE)
-        if len(parts) > 1:
-            body = parts[0]
-            sources_raw = parts[1]
-            break
-            
-    # Si no hay fuentes, devolvemos el texto plano (convertido a markdown seguro)
-    if not sources_raw: return body
+    try:
+        # ==================================================================
+        # 1. NORMALIZACIÓN DE CITAS (Fusión de adyacentes)
+        # ==================================================================
+        # Convierte [1] [2] -> [1, 2] para que se vean juntos
+        text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
+        
+        # ==================================================================
 
-    # 2. Mapear IDs a {Archivo, Contexto} usando Regex robusto
-    # Captura: [ID] NombreArchivo ||| Contexto
-    source_map = {}
-    matches = re.findall(r"\[(\d+)\]\s*(.*?)(?:\s*\|\|\|\s*(.*))?$", sources_raw, re.MULTILINE)
-    
-    for num, filename, context in matches:
-        clean_fname = filename.strip()
-        clean_ctx = context.strip() if context else "Evidencia del documento."
+        # 2. Separar cuerpo y sección de fuentes
+        split_patterns = [r"\n\*\*Fuentes:?\*\*", r"\n## Fuentes", r"\n### Fuentes", r"\nFuentes:", r"\n\*\*Fuentes Verificadas:\*\*"]
+        body = text
+        sources_raw = ""
         
-        source_map[num] = {
-            "file": html.escape(clean_fname),  # Escapamos HTML por seguridad
-            "context": html.escape(clean_ctx)
-        }
+        for pattern in split_patterns:
+            parts = re.split(pattern, text, maxsplit=1, flags=re.IGNORECASE)
+            if len(parts) > 1:
+                body = parts[0]
+                sources_raw = parts[1]
+                break
+                
+        # Si no hay fuentes, devolvemos el texto plano
+        if not sources_raw: return body
 
-    # 3. Reemplazar citas en el cuerpo (Maneja [1] y [1, 2, 3])
-    def replace_citation_group(match):
-        # match.group(1) captura lo de adentro: "8, 40" o "1"
-        content_inside = match.group(1)
+        # 3. Mapear IDs a {Archivo, Contexto}
+        source_map = {}
+        matches = re.findall(r"\[(\d+)\]\s*(.*?)(?:\s*\|\|\|\s*(.*))?$", sources_raw, re.MULTILINE)
         
-        # Dividimos por coma
-        ids = [x.strip() for x in content_inside.split(',')]
-        
-        html_parts = []
-        for citation_num in ids:
-            data = source_map.get(citation_num)
+        for num, filename, context in matches:
+            clean_fname = filename.strip()
+            clean_ctx = context.strip() if context else "Evidencia del documento."
             
-            if data:
-                # Estructura HTML que coincide con styles.py (.tooltip-container)
-                tooltip = f'''
-                <span class="tooltip-container">
-                    <span class="citation-number">[{citation_num}]</span>
-                    <span class="tooltip-text">
-                        <strong>📂 {data['file']}</strong><br/>
-                        💬 {data['context']}
+            source_map[num] = {
+                "file": html.escape(clean_fname), 
+                "context": html.escape(clean_ctx)
+            }
+
+        # 4. Reemplazar citas en el cuerpo
+        def replace_citation_group(match):
+            content_inside = match.group(1)
+            # Obtenemos los números de cita individuales
+            ids = [x.strip() for x in content_inside.split(',') if x.strip().isdigit()]
+            
+            html_parts = []
+            for citation_num in ids:
+                data = source_map.get(citation_num)
+                
+                if data:
+                    # Estructura HTML del tooltip
+                    tooltip = f'''
+                    <span class="tooltip-container">
+                        <span class="citation-number">[{citation_num}]</span>
+                        <span class="tooltip-text">
+                            <strong>📂 {data['file']}</strong><br/>
+                            💬 {data['context']}
+                        </span>
                     </span>
-                </span>
-                '''
-                html_parts.append(tooltip)
-            else:
-                # Si la IA alucinó un número que no puso en fuentes
-                html_parts.append(f"[{citation_num}]")
+                    '''
+                    html_parts.append(tooltip)
+                else:
+                    html_parts.append(f"[{citation_num}]")
+            
+            if not html_parts: return match.group(0)
+            
+            # Unimos los spans con un espacio muy pequeño para que parezcan un grupo
+            return f" {' '.join(html_parts)} "
         
-        # Devolvemos los spans unidos por espacios o comas
-        return f" {' '.join(html_parts)} "
-    
-    # Regex: Busca corchetes que contengan dígitos, comas o espacios
-    enriched_body = re.sub(r"\[([\d,\s]+)\]", replace_citation_group, body)
-    
-    # 4. RE-GENERAR PIE DE PÁGINA LIMPIO (Archivos Únicos)
-    clean_footer = "\n\n<br><hr><h6>📚 Fuentes Consultadas:</h6>"
-    
-    # Usamos un Set para eliminar duplicados de nombres de archivo
-    unique_files = set()
-    for info in source_map.values():
-        # Limpieza extra para el nombre del archivo en el footer
-        fname = info['file'].replace('"', '').replace("Documento:", "").strip()
-        unique_files.add(fname)
+        # Regex capaz de leer [1, 2, 3] gracias a la normalización previa
+        enriched_body = re.sub(r"\[([\d,\s]+)\]", replace_citation_group, body)
         
-    # Listamos los archivos únicos ordenados alfabéticamente
-    if unique_files:
-        clean_footer += "<ul style='font-size: 0.8em; color: gray;'>"
-        for fname in sorted(list(unique_files)):
-            clean_footer += f"<li>📄 {fname}</li>"
-        clean_footer += "</ul>"
-    else:
-        clean_footer = ""
+        # 5. RE-GENERAR PIE DE PÁGINA LIMPIO
+        clean_footer = "\n\n<br><hr><h6>Fuentes Consultadas:</h6>"
+        unique_files = set()
+        
+        for info in source_map.values():
+            fname = info['file'].replace('"', '').replace("Documento:", "").strip()
+            unique_files.add(fname)
+            
+        if unique_files:
+            clean_footer += "<ul style='font-size: 0.8em; color: gray;'>"
+            for fname in sorted(list(unique_files)):
+                clean_footer += f"<li>📄 {fname}</li>"
+            clean_footer += "</ul>"
+        else:
+            clean_footer = ""
 
-    return enriched_body + clean_footer
+        return enriched_body + clean_footer
+
+    except Exception as e:
+        # En caso de error, devolvemos el texto original para no romper la app
+        print(f"Error renderizando tooltips: {e}")
+        return text
