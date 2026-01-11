@@ -347,8 +347,7 @@ def get_persona_generation_prompt(segment_name, relevant_info):
         "motivadores_compra": ["Motivador 1", "Motivador 2"],
         "estilo_comunicacion": "Cómo habla (formal, coloquial, usa emojis, etc).",
         "creencias_limitantes": "Prejuicios sobre el producto.",
-        "frustracion_oculta": "Algo que no dice abiertamente pero le molesta.",
-        "muletilla_al_hablar": "Una frase o palabra que repite (ej: 'O sea', 'Sabes?', 'Literal')."
+        "frustracion_oculta": "Algo que no dice abiertamente pero le molesta."
     }}
     """
 
@@ -363,8 +362,7 @@ def get_persona_chat_instruction(persona_json, user_question):
     **Tu Psicología:**
     - Personalidad: {p.get('personalidad')}
     - Bio: {p.get('bio_breve')}
-    - Frustración oculta: {p.get('frustracion_oculta')}
-    - Muletilla: Úsala ocasionalmente ("{p.get('muletilla_al_hablar')}").
+    - Frustración oculta: {p.get('frustracion_oculta')}.
     
     **Instrucciones de Respuesta:**
     - Responde corto y natural.
