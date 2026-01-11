@@ -266,7 +266,7 @@ def process_text_with_tooltips(text):
         enriched_body = re.sub(r"\[([\d,\s]+)\]", replace_citation_group, body)
         
         # 5. Pie de página
-        clean_footer = "\n\n<br><hr><h6>📚 Fuentes Consultadas:</h6>"
+        clean_footer = "\n\n<br><hr><h6>Fuentes Consultadas:</h6>"
         unique_files = set()
         for info in source_map.values():
             fname = info['file'].replace('"', '').replace("Documento:", "").strip()
@@ -275,7 +275,7 @@ def process_text_with_tooltips(text):
         if unique_files:
             clean_footer += "<ul style='font-size: 0.8em; color: gray; margin-bottom: 0;'>"
             for fname in sorted(list(unique_files)):
-                clean_footer += f"<li>📄 {fname}</li>"
+                clean_footer += f"<li> {fname}</li>"
             clean_footer += "</ul>"
         else:
             clean_footer = ""
