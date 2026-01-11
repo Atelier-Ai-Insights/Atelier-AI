@@ -9,13 +9,13 @@ from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 
 def synthetic_users_mode(db, selected_files):
-    st.subheader("👥 Perfil Sintético")
+    st.subheader("Perfil Sintético")
     st.markdown("Simula conversaciones con perfiles de consumidor generados a partir de tus datos reales.")
     
     # 1. CONFIGURACIÓN DEL PERFIL
     show_config = "synthetic_persona_data" not in st.session_state.mode_state
     
-    with st.expander("⚙️ Configurar Perfil Sintético", expanded=show_config):
+    with st.expander("Configurar Perfil Sintético", expanded=show_config):
         segment_name = st.text_input("Nombre del Segmento a simular:", placeholder="Ej: Compradores sensibles al precio, Mamás primerizas...")
         
         if st.button("Generar ADN del Perfil", type="primary", use_container_width=True):
@@ -38,7 +38,7 @@ def synthetic_users_mode(db, selected_files):
                     return
                 
                 # B. Generar Perfil
-                status.write("🧠 Diseñando personalidad...")
+                status.write("Diseñando personalidad...")
                 prompt = get_persona_generation_prompt(segment_name, context)
                 
                 resp = call_gemini_api(prompt, generation_config_override={"response_mime_type": "application/json"})
@@ -105,10 +105,10 @@ def synthetic_users_mode(db, selected_files):
             st.caption(f"{p.get('edad', 'Edad N/A')} | {p.get('ocupacion', 'Ocupación N/A')}")
             st.info(f"**Bio:** {p.get('bio_breve', 'Sin biografía disponible.')}")
             
-        with st.expander("🧠 Ver detalles psicológicos (Dolores y Motivadores)"):
+        with st.expander("Ver detalles psicológicos (Dolores y Motivadores)"):
             c1, c2 = st.columns(2)
             with c1:
-                st.markdown("**😣 Dolores:**")
+                st.markdown("**Dolores:**")
                 # Si falla, mostramos mensaje amigable en vez de []
                 dolores = p.get('dolores_principales', [])
                 if dolores:
@@ -117,7 +117,7 @@ def synthetic_users_mode(db, selected_files):
                     st.write("No identificados.")
                     
             with c2:
-                st.markdown("**🚀 Motivadores:**")
+                st.markdown("**Motivadores:**")
                 motivadores = p.get('motivadores_compra', [])
                 if motivadores:
                     for m in motivadores: st.write(f"- {m}")
@@ -125,7 +125,7 @@ def synthetic_users_mode(db, selected_files):
                     st.write("No identificados.")
             
             st.write("")
-            st.markdown(f"**🗣️ Estilo:** *{p.get('estilo_comunicacion', 'Estándar')}*")
+            st.markdown(f"**Estilo:** *{p.get('estilo_comunicacion', 'Estándar')}*")
 
         # 3. CHAT
         st.divider()
@@ -171,15 +171,15 @@ def synthetic_users_mode(db, selected_files):
                 
                 pdf_bytes = generate_pdf_html(chat_content, title=f"Entrevista - {p.get('nombre')}", banner_path=banner_file)
                 if pdf_bytes:
-                    st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name=f"entrevista_{p.get('nombre')}.pdf", use_container_width=True)
+                    st.download_button("Descargar PDF", data=pdf_bytes, file_name=f"entrevista_{p.get('nombre')}.pdf", use_container_width=True)
 
             with c2:
-                if st.button("🔄 Reiniciar Chat", use_container_width=True):
+                if st.button("Reiniciar Chat", use_container_width=True):
                     st.session_state.mode_state["synthetic_chat_history"] = []
                     st.rerun()
 
             with c3:
-                if st.button("✨ Crear Nuevo Perfil", use_container_width=True, type="secondary"):
+                if st.button("Crear Nuevo Perfil", use_container_width=True, type="secondary"):
                     st.session_state.mode_state.pop("synthetic_persona_data", None)
                     st.session_state.mode_state.pop("synthetic_chat_history", None)
                     st.rerun()
