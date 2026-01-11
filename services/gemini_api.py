@@ -3,6 +3,7 @@ import google.generativeai as genai
 from google.generativeai.types import generation_types
 import html
 import time
+import os
 from config import api_keys, generation_config, safety_settings
 from services.logger import log_error, log_action 
 
@@ -10,12 +11,13 @@ from services.logger import log_error, log_action
 # CONFIGURACIÓN DE MODELO
 # ==========================================
 
-MODEL_NAME = "gemini-2.5-flash"
+# Usamos 1.5-flash que es el estándar actual rápido y soporta 8k+ tokens de salida
+MODEL_NAME = "gemini-1.5-flash"
 
 def _configure_gemini(key_index):
     try:
         if not api_keys: return False
-        # Asegurar índice válido
+        # Asegurar índice válido para rotación de llaves
         idx = key_index % len(api_keys)
         genai.configure(api_key=api_keys[idx])
         return True
@@ -46,21 +48,25 @@ def _execute_gemini_call(prompt, stream=False, gen_config=None, safety=None):
     start_index = st.session_state.get("api_key_index", 0)
     num_keys = len(api_keys)
     
-    final_gen_config = generation_config.copy() 
-    if gen_config: final_gen_config.update(gen_config) 
+    # --- APLICACIÓN DE LA MEJORA DE TOKENS ---
+    # Copiamos la config base y forzamos 8192 tokens para evitar cortes en reportes
+    final_gen_config = generation_config.copy()
+    
+    # Aseguramos que tenga capacidad máxima de escritura
+    final_gen_config["max_output_tokens"] = 8192 
+    
+    if gen_config: 
+        final_gen_config.update(gen_config) 
     
     final_safety = safety if safety is not None else safety_settings 
     
-    # 2. LÓGICA CONSERVADORA (Solo 1 vuelta por las llaves)
-    # Eliminamos el bucle "for attempt in range(3)" que multiplicaba el consumo.
-    
     last_error = None
     
-    # Solo intentamos cada llave UNA vez. Si tienes 3 llaves, máximo 3 intentos totales.
+    # 2. LÓGICA DE INTENTOS (Round Robin por las llaves disponibles)
     for i in range(num_keys):
         current_key_index = (start_index + i) % num_keys
         
-        # Configurar
+        # Configurar la llave actual
         if not _configure_gemini(current_key_index): continue 
 
         try:
@@ -70,24 +76,24 @@ def _execute_gemini_call(prompt, stream=False, gen_config=None, safety=None):
                 safety_settings=final_safety
             )
 
-            # Pausa de seguridad (Rate Limiting propio)
-            # Esperamos 0.5 segundos antes de llamar para no saturar
+            # Pausa de seguridad para evitar Rate Limiting agresivo
             time.sleep(0.5) 
 
-            if isinstance(prompt, list):
-                response = model.generate_content(prompt, stream=stream)
-            else:
-                response = model.generate_content([prompt], stream=stream)
+            # Manejo de prompt (lista o string)
+            content_payload = prompt if isinstance(prompt, list) else [prompt]
+            
+            # Llamada a la API
+            response = model.generate_content(content_payload, stream=stream)
             
             # --- STREAMING ---
             if stream:
-                # Si conecta, retornamos el generador y actualizamos el índice para rotar carga
+                # Si conecta, retornamos el generador y rotamos la llave para la próxima vez
                 st.session_state.api_key_index = (current_key_index + 1) % num_keys
                 return _stream_generator_wrapper(response)
             
             # --- NO STREAMING ---
             if not response.candidates:
-                last_error = "Respuesta vacía o bloqueada."
+                last_error = "Respuesta vacía o bloqueada por filtros de seguridad."
                 continue # Prueba siguiente llave
 
             # ÉXITO
@@ -102,25 +108,26 @@ def _execute_gemini_call(prompt, stream=False, gen_config=None, safety=None):
             error_str = str(e).lower()
             last_error = e
             
-            # Si es error 429 (Cuota), probamos la siguiente llave inmediatamente
-            if "429" in error_str or "quota" in error_str:
-                log_error(f"Key #{current_key_index} llena. Rotando...", module="GeminiAPI", level="WARNING")
+            # Si es error 429 (Cuota Excedida), probamos la siguiente llave inmediatamente
+            if "429" in error_str or "quota" in error_str or "resource exhausted" in error_str:
+                log_error(f"Key #{current_key_index} agotada. Rotando a la siguiente...", module="GeminiAPI", level="WARNING")
                 continue
             
-            # Si es otro error (ej. Prompt inválido), NO reintentamos para no quemar recursos en bucle
+            # Si es otro error (ej. Prompt inválido), NO reintentamos
             log_error(f"Error técnico Key #{current_key_index}: {e}", module="GeminiAPI")
-            break # ROMPEMOS EL BUCLE. Si el prompt está mal, está mal en todas las llaves.
+            break 
 
     # Si salimos del bucle sin éxito:
     if not stream:
-        st.error(f"No se pudo completar la solicitud. Error: {str(last_error)[:100]}...")
+        st.error(f"No se pudo completar la solicitud. Detalle: {str(last_error)[:150]}...")
         return None
 
 def _stream_generator_wrapper(response_stream):
-    """Generador simple sin reintentos internos."""
+    """Generador seguro que captura errores durante el streaming."""
     try:
         for chunk in response_stream:
             if chunk.text:
                 yield chunk.text
     except Exception as e:
-        yield f"\n[Corte de conexión: {str(e)}]"
+        # Si se corta a mitad del stream, enviamos el error visible
+        yield f"\n\n[⚠️ Interrupción de red o API: {str(e)}]"
