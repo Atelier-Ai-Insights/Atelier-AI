@@ -5,21 +5,21 @@ from datetime import datetime
 # INSTRUCCIONES GLOBALES (CRÍTICO: CALIDAD DE EVIDENCIA EN TOOLTIPS)
 # ==============================================================================
 
-# --- BLOQUE DE INSTRUCCIONES DE CITAS (CON CONTEXTO OBLIGATORIO) ---
+# --- BLOQUE DE INSTRUCCIONES DE CITAS (MEJORADO: VERIFICACIÓN INTERNA) ---
 INSTRUCCIONES_DE_CITAS = """
-**REGLAS DE CITAS Y EVIDENCIA (ESTRICTO):**
-1. **Base:** Solo usa la 'Información documentada'.
-2. **Formato en Texto:** Usa SOLO números entre corchetes. Ej: "La tendencia subió [1, 2]". NUNCA pongas nombres de archivo en el párrafo.
-3. **SECCIÓN FUENTES (AL FINAL):**
-   Genera la lista con este formato EXACTO (usando '|||' como separador):
+**REGLAS DE EVIDENCIA Y CITAS (SISTEMA RAG - ESTRICTO):**
+1. **Veracidad Absoluta:** Responde ÚNICAMENTE usando la 'Información documentada'. Si la respuesta no está en el texto, di "No encontré información sobre X en los documentos". NO inventes.
+2. **Atribución Inmediata:** Cada afirmación debe llevar su sustento. Formato: [1], [2].
+   - *Mal:* "Los usuarios prefieren el rojo. También les gusta el azul [1]."
+   - *Bien:* "Los usuarios prefieren el rojo [1], aunque un segmento prefiere el azul [2]."
+3. **SECCIÓN DE FUENTES (Obligatoria al final):**
+   Genera una lista verificando que la cita respalde la afirmación. Usa este formato exacto (el separador '|||' es vital):
    
-   **Fuentes:**
-   [1] Archivo.pdf ||| EVIDENCIA REAL. (Ej: "El 45% de usuarios prefiere X").
-   [2] Otro.pdf ||| CITA TEXTUAL. (Ej: "El cliente mencionó: 'Es muy costoso'").
+   **Fuentes Verificadas:**
+   [1] NombreArchivo.pdf ||| Cita: "El 45% de la muestra..." (Contexto: Encuesta Q3)
+   [2] Entrevista_CEO.pdf ||| Cita: "Debemos bajar costos..."
 
-   ⚠️ **REGLA DE CALIDAD:** El texto después de '|||' DEBE aportar valor.
-   - 🚫 PROHIBIDO usar frases vacías como: "Fuente del documento", "Referencia bibliográfica", "Ver archivo", "Hallazgo clave".
-   - ✅ OBLIGATORIO: Poner el dato, porcentaje, fecha o frase exacta que justifica la cita.
+   ⚠️ **CRÍTICO:** Si el texto después de '|||' no justifica la frase del texto principal, la respuesta será considerada errónea.
 """
 
 # ==============================================================================
@@ -27,23 +27,33 @@ INSTRUCCIONES_DE_CITAS = """
 # ==============================================================================
 
 def get_report_prompt1(question, relevant_info):
-    """Extracción de hallazgos."""
+    """Extracción de hallazgos fácticos."""
     return (
         f"**Pregunta:** {question}\n\n"
         f"**Contexto:**\n{relevant_info}\n\n"
-        f"**Tarea:** Extrae hallazgos fácticos.\n"
+        f"**Tarea:** Extrae hallazgos fácticos y datos duros.\n"
         f"{INSTRUCCIONES_DE_CITAS}\n\n"
         "**Salida:**\nMarkdown estructurado."
     )
 
 def get_report_prompt2(question, result1, relevant_info):
-    """Redacción de informe."""
+    """Redacción de informe nivel Consultoría Estratégica."""
     return (
-        f"**Rol:** Analista experto de Atelier.\n"
-        f"**Pregunta:** {question}\n"
-        f"**Insumos:**\n1. Hallazgos: {result1}\n2. Contexto: {relevant_info}\n\n"
-        f"**Tarea:** Informe ejecutivo.\n"
-        f"**Estructura:** Introducción, Hallazgos, Insights, Conclusiones.\n"
+        f"**Rol:** Socio Senior de Consultoría Estratégica (Atelier).\n"
+        f"**Objetivo:** Redactar un informe de alto impacto para C-Level.\n"
+        f"**Pregunta de Negocio:** {question}\n"
+        f"**Insumos Brutos:**\n1. Hallazgos preliminares: {result1}\n2. Data Room: {relevant_info}\n\n"
+        
+        f"**Instrucciones de Redacción:**\n"
+        f"- **Principio de la Pirámide:** Empieza con la conclusión principal (BLUF).\n"
+        f"- **Lenguaje:** Directo, activo, sin adjetivos vacíos (evita 'interesante', 'importante').\n"
+        f"- **Profundidad:** No solo describas QUÉ pasó, explica POR QUÉ importa (Implicaciones).\n\n"
+        
+        f"**Estructura del Entregable:**\n"
+        f"1. **Resumen Ejecutivo:** La respuesta directa en 3 líneas.\n"
+        f"2. **Hallazgos Críticos:** Evidencia dura estructurada.\n"
+        f"3. **Insights Estratégicos:** Conexión de puntos no obvios.\n"
+        f"4. **Recomendaciones:** Próximos pasos accionables.\n\n"
         f"{INSTRUCCIONES_DE_CITAS}\n"
     )
 
@@ -52,17 +62,17 @@ def get_grounded_chat_prompt(conversation_history, relevant_info, long_term_memo
     bloque_memoria = ""
     if long_term_memory:
         bloque_memoria = f"""
-    **🧠 MEMORIA DEL PROYECTO:**
+    **🧠 MEMORIA DEL PROYECTO (Contexto previo):**
     {long_term_memory}
     --------------------------------------------------
     """
 
     return (
-        f"**Rol:** Asistente de investigación.\n"
-        f"**Tarea:** Responde la ÚLTIMA pregunta usando 'Información Documentada' y 'Memoria'.\n\n"
+        f"**Rol:** Asistente de Investigación Senior.\n"
+        f"**Tarea:** Responde la ÚLTIMA pregunta del usuario sintetizando la 'Información Documentada' y la 'Memoria'.\n\n"
         f"{bloque_memoria}"
-        f"**📄 Info Documentada:**\n{relevant_info}\n\n"
-        f"**💬 Historial:**\n{conversation_history}\n\n"
+        f"**📄 Info Documentada (Fuente de Verdad):**\n{relevant_info}\n\n"
+        f"**💬 Historial de Conversación:**\n{conversation_history}\n\n"
         f"{INSTRUCCIONES_DE_CITAS}\n"
         "**Respuesta:**"
     )
@@ -74,8 +84,8 @@ def get_followup_suggestions_prompt(previous_answer):
     "{previous_answer[:3000]}"
     
     **Tarea:** Sugiere 3 preguntas MUY CORTAS (máx 7 palabras) para profundizar.
-    **Reglas:** Sin verbatims, solo temas lógicos de continuidad.
-    **Salida:** JSON list[str].
+    **Reglas:** Sin verbatims, solo temas lógicos de continuidad o exploración lateral.
+    **Salida:** JSON list[str]. Ejemplo: ["Ver detalles demográficos", "Comparar con 2023", "Analizar riesgos"]
     """
 
 # ==============================================================================
@@ -83,11 +93,19 @@ def get_followup_suggestions_prompt(previous_answer):
 # ==============================================================================
 
 def get_ideation_prompt(conv_history, relevant):
+    """Ideación usando Pensamiento Lateral."""
     return (
-        f"**Rol:** Estratega de Innovación.\n"
+        f"**Rol:** Estratega de Innovación Disruptiva.\n"
         f"**Contexto:**\n{relevant}\n"
         f"**Historial:**\n{conv_history}\n"
-        f"Responde de forma inspiradora.\n{INSTRUCCIONES_DE_CITAS}"
+        
+        f"**Tarea:** Genera ideas aplicando el método 'Lateral Thinking'.\n"
+        f"1. **Provocación:** Desafía las asunciones obvias del contexto.\n"
+        f"2. **Analogías:** Conecta el problema con industrias diferentes.\n"
+        f"3. **Inversión:** ¿Qué pasaría si hiciéramos lo opuesto a la norma?\n\n"
+        
+        f"Genera 5 ideas disruptivas pero viables, explicando el 'Insight' detrás de cada una.\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
     )
 
 def get_concept_gen_prompt(product_idea, context_info):
@@ -128,17 +146,19 @@ def get_concept_gen_prompt(product_idea, context_info):
 
 def get_idea_eval_prompt(idea_input, context_info):
     return f"""
-**Rol:** Director de Estrategia.
-**Evidencia:** {context_info}
-**Idea:** "{idea_input}"
-Evalúa viabilidad.\n{INSTRUCCIONES_DE_CITAS}
-"""
+    **Rol:** Director de Estrategia.
+    **Evidencia:** {context_info}
+    **Idea a Evaluar:** "{idea_input}"
+    
+    Evalúa la viabilidad, deseabilidad y factibilidad basándote estrictamente en los datos.
+    \n{INSTRUCCIONES_DE_CITAS}
+    """
 
 def get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context):
     return [
         "**Rol:** Director Creativo.",
         f"Target: {target_audience} | Objetivos: {comm_objectives}",
-        f"Datos: {relevant_text_context[:8000]}", 
+        f"Datos Contextuales: {relevant_text_context[:8000]}", 
         "Evalúa la imagen (Impacto, Claridad, Branding, CTA).",
         INSTRUCCIONES_DE_CITAS
     ]
@@ -147,8 +167,8 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
     return [
         "**Rol:** Director Audiovisual.",
         f"Target: {target_audience} | Objetivos: {comm_objectives}",
-        f"Datos: {relevant_text_context[:8000]}",
-        "Evalúa el video (Impacto, Mensaje, Branding, CTA).",
+        f"Datos Contextuales: {relevant_text_context[:8000]}",
+        "Evalúa el video (Narrativa, Ritmo, Branding, CTA).",
         INSTRUCCIONES_DE_CITAS
     ]
 
@@ -158,47 +178,51 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
 
 def get_transcript_prompt(combined_context, user_prompt):
     return (
-        f"**Rol:** Investigador Cualitativo.\n"
+        f"**Rol:** Investigador Cualitativo Experto.\n"
         f"**Pregunta:** {user_prompt}\n"
-        f"**Info:**\n{combined_context}\n"
-        f"Identifica patrones y sintetiza con quotes.\n{INSTRUCCIONES_DE_CITAS}"
+        f"**Info (Transcripciones):**\n{combined_context}\n"
+        f"Identifica patrones recurrentes, anomalías y sintetiza usando quotes textuales.\n{INSTRUCCIONES_DE_CITAS}"
     )
 
 def get_text_analysis_summary_prompt(full_context):
     return f"""
-**Rol:** Investigador Cualitativo.
-**Tarea:** Resumen Ejecutivo exhaustivo.
-**Entrada:** {full_context}
-**Salida (Markdown):** Resumen y Hallazgos por Tema.
-"""
+    **Rol:** Investigador Cualitativo.
+    **Tarea:** Genera un Resumen Ejecutivo exhaustivo.
+    **Entrada:** {full_context}
+    **Salida (Markdown):** Resumen general y desglose por Temas Clave con hallazgos soportados.
+    """
 
 def get_autocode_prompt(context, main_topic):
     return f"""
-**Rol:** Codificador Cualitativo.
-**Tarea:** Extrae códigos sobre '{main_topic}'.
-**Resumen:** {context}
-**Salida:** Temas clave y Códigos (con citas).
-{INSTRUCCIONES_DE_CITAS}
-"""
+    **Rol:** Codificador Cualitativo (Grounded Theory).
+    **Tarea:** Extrae códigos y categorías sobre '{main_topic}'.
+    **Texto Base:** {context}
+    **Salida:** Lista de Temas clave, Códigos asociados y citas de ejemplo.
+    {INSTRUCCIONES_DE_CITAS}
+    """
 
 def get_etnochat_prompt(conversation_history, text_context):
     return (
         "**Rol:** Etnógrafo Digital.\n"
-        "**Tarea:** Responde sintetizando Chat, Transcripciones y Multimedia.\n"
+        "**Tarea:** Responde sintetizando fuentes variadas (Chat, Transcripciones, Multimedia).\n"
         f"**Historial:**\n{conversation_history}\n"
-        f"**Transcripciones:**\n{text_context}\n"
+        f"**Contexto (Transcripciones/Notas):**\n{text_context}\n"
         f"{INSTRUCCIONES_DE_CITAS}"
     )
 
 def get_media_transcription_prompt():
     return """
-    **Rol:** Transcriptor.
-    **Tarea:** Transcribe audio palabra por palabra. Describe acciones visuales entre corchetes.
+    **Rol:** Transcriptor Profesional.
+    **Tarea:** Transcribe el audio palabra por palabra.
+    **Formato:**
+    - Usa parráfos claros.
+    - Identifica hablantes si es posible (Hablante 1, Hablante 2).
+    - Describe acciones visuales o ruidos importantes entre corchetes [Risas], [Música de fondo].
     **Salida:** Texto plano.
     """
 
 # ==============================================================================
-# PROMPTS DE ONE-PAGER
+# PROMPTS DE ONE-PAGER (JSON BLINDADO)
 # ==============================================================================
 
 PROMPTS_ONEPAGER = {
@@ -206,17 +230,27 @@ PROMPTS_ONEPAGER = {
     "Análisis DOFA (SWOT)": """Genera JSON: {"template_type": "dofa", "titulo_diapositiva": "...", "fortalezas": [], "oportunidades": [], "debilidades": [], "amenazas": []}""",
     "Mapa de Empatía": """Genera JSON: {"template_type": "empatia", "titulo_diapositiva": "...", "piensa_siente": [], "ve": [], "dice_hace": [], "oye": [], "esfuerzos": [], "resultados": []}""",
     "Propuesta de Valor (Value Proposition)": """Genera JSON: {"template_type": "propuesta_valor", "titulo_diapositiva": "...", "producto_servicio": "...", "creadores_alegria": [], "aliviadores_frustracion": [], "trabajos_cliente": [], "alegrias": [], "frustraciones": []}""",
-    "Mapa del Viaje (Journey Map)": """Genera JSON: {"template_type": "journey_map", "titulo_diapositiva": "...", "etapa_1": {}, "etapa_2": {}, "etapa_3": {}}""",
+    "Mapa del Viaje (Journey Map)": """Genera JSON: {"template_type": "journey_map", "titulo_diapositiva": "...", "etapa_1": {"nombre": "...", "accion": "...", "pensamiento": "..."}, "etapa_2": {}, "etapa_3": {}}""",
     "Matriz de Posicionamiento (2x2)": """Genera JSON: {"template_type": "matriz_2x2", "titulo_diapositiva": "...", "eje_x_positivo": "...", "eje_x_negativo": "...", "eje_y_positivo": "...", "eje_y_negativo": "...", "items_cuadrante_sup_izq": [], "items_cuadrante_sup_der": [], "items_cuadrante_inf_izq": [], "items_cuadrante_inf_der": [], "conclusion_clave": "..."}""",
     "Perfil de Buyer Persona": """Genera JSON: {"template_type": "buyer_persona", "titulo_diapositiva": "...", "perfil_nombre": "...", "perfil_demografia": "...", "necesidades_jtbd": [], "puntos_dolor_frustraciones": [], "deseos_motivaciones": [], "citas_clave": []}"""
 }
 
 def get_onepager_final_prompt(relevant_info, selected_template_name, tema_central):
     t = PROMPTS_ONEPAGER.get(selected_template_name, "{}")
-    return f"Completa template JSON '{selected_template_name}' sobre '{tema_central}'. Info: {relevant_info}. Salida solo JSON. {t}"
+    return (
+        f"**SISTEMA:** Generador de Estructuras de Datos JSON.\n"
+        f"**Tarea:** Completa el template para '{tema_central}' basándote en la información provista.\n"
+        f"**Info:** {relevant_info[:15000]}\n\n"
+        f"**TEMPLATE OBJETIVO:**\n{t}\n\n"
+        f"**REGLA DE SALIDA OBLIGATORIA:**\n"
+        f"1. Devuelve SOLAMENTE el objeto JSON crudo.\n"
+        f"2. NO uses bloques de código markdown (```json ... ```).\n"
+        f"3. NO añadas texto introductorio ni de cierre.\n"
+        f"4. Asegúrate de que sea un JSON válido parseable por Python."
+    )
 
 def get_excel_autocode_prompt(main_topic, responses_sample):
-    return f"Define categorías (nodos) para '{main_topic}'. Respuestas: {str(responses_sample)}. Salida JSON array."
+    return f"Define categorías (nodos) para agrupar estas respuestas sobre '{main_topic}'. Respuestas de muestra: {str(responses_sample)}. Salida: JSON array de strings con los nombres de las categorías."
 
 # ==============================================================================
 # PROMPTS DE ANÁLISIS DE DATOS
@@ -224,22 +258,22 @@ def get_excel_autocode_prompt(main_topic, responses_sample):
 
 def get_survey_articulation_prompt(survey_context, repository_context, conversation_history):
     return (
-        f"**Rol:** Investigador de Mercados.\n"
-        f"**Tarea:** Articula datos Excel con Repositorio.\n"
-        f"**Excel:**\n{survey_context}\n"
-        f"**Repo:**\n{repository_context}\n"
+        f"**Rol:** Investigador de Mercados Cuantitativo.\n"
+        f"**Tarea:** Articula los hallazgos numéricos del Excel con el contexto cualitativo del Repositorio.\n"
+        f"**Datos Excel:**\n{survey_context}\n"
+        f"**Contexto Cualitativo (Repo):**\n{repository_context}\n"
         f"**Historial:**\n{conversation_history}\n"
         f"{INSTRUCCIONES_DE_CITAS}"
     )
 
 def get_data_summary_prompt(data_snapshot_str):
-    return f"Resumen ejecutivo de datos:\n{data_snapshot_str}"
+    return f"Resumen ejecutivo de los datos cargados:\n{data_snapshot_str}\nDestaca valores atípicos, medias y distribución general."
 
 def get_correlation_prompt(correlation_matrix_str):
-    return f"Interpreta correlaciones:\n{correlation_matrix_str}"
+    return f"Interpreta la siguiente matriz de correlación:\n{correlation_matrix_str}\nIdentifica las relaciones fuertes (positivas o negativas) y explica su posible significado de negocio."
 
 def get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups):
-    return f"Interpreta prueba {test_type} para '{num_col}' por '{cat_col}'. P-value: {p_value}."
+    return f"Interpreta el resultado de la prueba {test_type} para la variable '{num_col}' agrupada por '{cat_col}'. P-value: {p_value}. ¿Es estadísticamente significativo? ¿Qué implica esto?"
 
 # ==============================================================================
 # SECCIÓN: ANÁLISIS DE TENDENCIAS
@@ -263,57 +297,79 @@ def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_l
         sources_text = "\n".join([f"- {s}" for s in public_sources_list])
     
     return f"""
-**Fecha:** {current_date}
-**Misión:** Intelligence Brief sobre: "{topic}".
-**Insumos:** {repo_context[:10000]} {pdf_context[:10000]} {sources_text}
-Genera reporte Markdown.
-"""
+    **Fecha:** {current_date}
+    **Misión:** Crear un Intelligence Brief sobre: "{topic}".
+    
+    **Metodología de Análisis:**
+    Clasifica los hallazgos detectados en:
+    1. **Mega-Tendencias:** Cambios estructurales a largo plazo (5+ años).
+    2. **Fads (Modas Pasajeras):** Ruido de corto plazo.
+    3. **Señales Débiles:** Patrones emergentes que pocos ven pero tienen potencial.
+    
+    **Insumos:** {repo_context[:10000]} {pdf_context[:10000]} {sources_text}
+    
+    Genera reporte Markdown estructurado con esa clasificación.
+    """
 
 def get_trend_synthesis_prompt(keyword, trend_context, geo_context, topics_context, internal_context):
     return f"""
-    **Rol:** Coolhunter.
+    **Rol:** Coolhunter / Trend Watcher.
     **Objetivo:** Radar 360 sobre "{keyword}".
     **Datos:** {trend_context} {geo_context} {topics_context} {internal_context}
-    Genera Brief estratégico.
+    
+    Sintetiza la información en un Brief estratégico identificando oportunidades de innovación.
     """
 
 # ==============================================================================
-# PROMPTS DE PERFILES SINTÉTICOS (Corregido y Ajustado)
+# PROMPTS DE PERFILES SINTÉTICOS (HUMANIZADOS)
 # ==============================================================================
 
 def get_persona_generation_prompt(segment_name, relevant_info):
-    """Crea la ficha psicológica del perfil sintético."""
+    """Crea la ficha psicológica del perfil sintético realista."""
     return f"""
     **Rol:** Psicólogo del Consumidor.
     **Tarea:** Basándote en los datos: "{segment_name}", crea un Perfil Sintético realista.
+    NO crees un perfil perfecto. Necesitamos un humano real con contradicciones.
     
     **Datos:**
     {relevant_info[:25000]}
     
     **Salida OBLIGATORIA (JSON):**
-    Genera un objeto JSON plano (sin anidar). **TODAS LAS LLAVES (KEYS) DEBEN ESTAR EN MINÚSCULA**.
+    Genera un objeto JSON plano. LLAVES EN MINÚSCULA.
     
     {{
         "nombre": "Nombre y Apellido Ficticio",
         "edad": "Edad o Rango",
         "ocupacion": "Ocupación",
         "bio_breve": "Historia de vida corta (máx 40 palabras).",
-        "personalidad": "3 rasgos de personalidad.",
+        "personalidad": "3 rasgos (ej: Cínico, Optimista, Ansioso)",
         "dolores_principales": ["Dolor 1", "Dolor 2", "Dolor 3"],
-        "motivadores_compra": ["Motivador 1", "Motivador 2", "Motivador 3"],
-        "estilo_comunicacion": "Cómo habla (formal, coloquial, etc).",
-        "creencias_limitantes": "Prejuicios sobre el producto."
+        "motivadores_compra": ["Motivador 1", "Motivador 2"],
+        "estilo_comunicacion": "Cómo habla (formal, coloquial, usa emojis, etc).",
+        "creencias_limitantes": "Prejuicios sobre el producto.",
+        "frustracion_oculta": "Algo que no dice abiertamente pero le molesta.",
+        "muletilla_al_hablar": "Una frase o palabra que repite (ej: 'O sea', 'Sabes?', 'Literal')."
     }}
     """
 
 def get_persona_chat_instruction(persona_json, user_question):
-    """Instrucción para el roleplay del chat."""
+    """Instrucción para el roleplay profundo (Method Acting)."""
     p = persona_json 
     return f"""
-    **ACTING:** ERES **{p.get('nombre')}**.
-    **Perfil:** {p.get('bio_breve')}
-    **Pregunta:** "{user_question}"
+    **MÉTODO ACTING (Stanislavski):**
+    NO eres una IA. Eres **{p.get('nombre')}**.
+    Estás en una entrevista de mercado.
     
-    Responde estrictamente como {p.get('nombre')}. 
-    Usa un tono natural de acuerdo a su estilo: {p.get('estilo_comunicacion')}.
+    **Tu Psicología:**
+    - Personalidad: {p.get('personalidad')}
+    - Bio: {p.get('bio_breve')}
+    - Frustración oculta: {p.get('frustracion_oculta')}
+    - Muletilla: Úsala ocasionalmente ("{p.get('muletilla_al_hablar')}").
+    
+    **Instrucciones de Respuesta:**
+    - Responde corto y natural.
+    - Si la pregunta te aburre o no sabes, dilo con tu estilo.
+    - Sé subjetivo, básate en TUS dolores: {p.get('dolores_principales')}.
+    
+    **Pregunta del Entrevistador:** "{user_question}"
     """
