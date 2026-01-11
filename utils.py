@@ -4,7 +4,7 @@ import json
 import re
 import fitz  # PyMuPDF
 import time
-import html  # IMPORTANTE: Para evitar inyecciones HTML en los tooltips
+import html  # Para seguridad HTML
 from contextlib import contextmanager
 
 # ==============================
@@ -50,7 +50,6 @@ def normalize_text(text):
 
 def extract_brand(filename):
     if not filename: return ""
-    # Lógica personalizada para tus nombres de archivo (In-ATL_)
     if "In-ATL_" in str(filename):
         try: 
             base = str(filename).replace("\\", "/").split("/")[-1]
@@ -62,7 +61,6 @@ def clean_text(text):
     return str(text) if text is not None else ""
 
 def clean_gemini_json(text):
-    """Limpia bloques de código markdown de las respuestas JSON de Gemini."""
     if not text: return ""
     text = str(text).strip()
     text = re.sub(r'^```json\s*', '', text, flags=re.MULTILINE)
@@ -93,40 +91,32 @@ def extract_text_from_pdfs(uploaded_files):
     return combined_text
 
 # ==============================
-# RAG: RECUPERACIÓN DE INFORMACIÓN (MODO CONSULTA BASE DE DATOS)
+# RAG: MODO BASE DE DATOS
 # ==============================
 def get_relevant_info(db, question, selected_files, max_chars=150000):
     all_text = ""
-    # Convertimos a set para búsqueda O(1)
     selected_files_set = set(selected_files) if isinstance(selected_files, (list, set)) else set()
     
-    # Prioridad: Si no hay archivos seleccionados, no buscamos nada para ahorrar recursos
     if not selected_files_set:
         return ""
 
     for pres in db:
-        # Límite de seguridad para no desbordar el prompt
         if len(all_text) > max_chars:
-            all_text += f"\n\n[ALERTA: Contexto truncado por límite de seguridad ({max_chars} chars)...]"
+            all_text += f"\n\n[ALERTA: Contexto truncado por límite ({max_chars} chars)...]"
             break 
 
         doc_name = pres.get('nombre_archivo')
-        
-        # Solo procesamos si el archivo está en la lista de seleccionados
         if doc_name and doc_name in selected_files_set:
             try:
                 titulo = pres.get('titulo_estudio', doc_name)
-                ano = pres.get('marca') # Asumiendo que 'marca' guarda el año o categoría
+                ano = pres.get('marca')
                 citation_header = f"{titulo} - {ano}" if ano else titulo
 
                 doc_content = f"--- DOCUMENTO: {doc_name} ---\n"
                 doc_content += f"Metadatos: {citation_header}\n"
                 
-                # Iteramos sobre los slides/grupos del documento
                 for grupo in pres.get("grupos", []):
                     contenido = str(grupo.get('contenido_texto', ''))
-                    
-                    # Añadimos metadatos del slide si existen (útil para contexto)
                     metadatos_slide = ""
                     if grupo.get('metadatos'):
                         metadatos_slide = f" (Contexto visual: {json.dumps(grupo.get('metadatos'), ensure_ascii=False)})"
@@ -136,7 +126,6 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
                         
                 doc_content += "\n\n"
                 
-                # Verificamos longitud antes de concatenar
                 if len(all_text) + len(doc_content) > max_chars:
                     remaining = max_chars - len(all_text)
                     all_text += doc_content[:remaining]
@@ -146,11 +135,10 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
 
             except Exception as e: 
                 print(f"Error procesando documento '{doc_name}': {e}")
-                
     return all_text
 
 # ==============================
-# RAG: RECUPERACIÓN DE INFORMACIÓN (MODO TEXTO LIBRE / PDF SUBIDO)
+# RAG: MODO PDF/TEXTO
 # ==============================
 def build_rag_context(query, documents, max_chars=100000):
     if not query or not documents: return ""
@@ -158,34 +146,25 @@ def build_rag_context(query, documents, max_chars=100000):
     query_terms = set(normalize_text(query).split())
     stopwords = get_stopwords()
     keywords = [w for w in query_terms if w not in stopwords and len(w) > 3]
-    if not keywords: keywords = list(query_terms) # Fallback
+    if not keywords: keywords = list(query_terms)
 
     scored_chunks = []
-    
     for doc in documents:
         source = doc.get('source', 'Desconocido')
         content = doc.get('content', '')
-        # Dividir por doble salto de línea (párrafos)
         paragraphs = content.split('\n\n') 
         
         for i, para in enumerate(paragraphs):
-            if len(para) < 30: continue # Ignorar fragmentos muy cortos
-            
+            if len(para) < 30: continue
             para_norm = normalize_text(para)
             score = sum(1 for kw in keywords if kw in para_norm)
-            
-            # Boost leve al primer párrafo (suele ser intro/resumen)
             if i == 0: score += 0.5 
-            
             if score > 0:
                 scored_chunks.append({'score': score, 'source': source, 'text': para})
 
-    # Ordenar por relevancia
     scored_chunks.sort(key=lambda x: x['score'], reverse=True)
-    
     final_context = ""
     current_chars = 0
-    
     if not scored_chunks: return "" 
     
     for chunk in scored_chunks:
@@ -193,12 +172,121 @@ def build_rag_context(query, documents, max_chars=100000):
         if current_chars + len(chunk_text) > max_chars: break
         final_context += chunk_text
         current_chars += len(chunk_text)
-        
     return final_context
 
 # ==============================
-# GESTIÓN DE ESTADO (RESET)
+# VALIDACIÓN DE SESIÓN
 # ==============================
+def validate_session_integrity():
+    if not st.session_state.get("logged_in"): return
+    current_time = time.time()
+    if 'last_session_check' not in st.session_state or (current_time - st.session_state.last_session_check > 300):
+        try:
+            from services.supabase_db import supabase 
+            uid = st.session_state.user_id
+            res = supabase.table("users").select("active_session_id").eq("id", uid).single().execute()
+            if res.data and res.data.get('active_session_id') != st.session_state.session_id:
+                st.error("⚠️ Tu sesión ha sido cerrada desde otro dispositivo.")
+                time.sleep(2)
+                st.session_state.clear()
+                st.rerun()
+            st.session_state.last_session_check = current_time
+        except Exception as e:
+            print(f"Error validando sesión: {e}")
+
+# =========================================================
+# LÓGICA DE CITAS: CORREGIDA PARA EVITAR SALTOS DE LÍNEA
+# =========================================================
+def process_text_with_tooltips(text):
+    """
+    Versión INLINE: Genera HTML 'aplanado' (sin saltos de línea internos)
+    para que las citas no rompan el párrafo.
+    """
+    if not text: return ""
+
+    try:
+        # 1. Normalización: [1] [2] -> [1, 2]
+        text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
+        
+        # 2. Separar Fuentes
+        split_patterns = [r"\n\*\*Fuentes:?\*\*", r"\n## Fuentes", r"\n### Fuentes", r"\nFuentes:", r"\n\*\*Fuentes Verificadas:\*\*"]
+        body = text
+        sources_raw = ""
+        
+        for pattern in split_patterns:
+            parts = re.split(pattern, text, maxsplit=1, flags=re.IGNORECASE)
+            if len(parts) > 1:
+                body = parts[0]
+                sources_raw = parts[1]
+                break
+        
+        if not sources_raw: return body
+
+        # 3. Mapear IDs
+        source_map = {}
+        # Regex mejorada para capturar líneas aunque no tengan ||| perfecto
+        matches = re.findall(r"\[(\d+)\]\s*(.*?)(?:\s*\|\|\|\s*(.*))?$", sources_raw, re.MULTILINE)
+        
+        for num, filename, context in matches:
+            clean_fname = filename.strip()
+            clean_ctx = context.strip() if context else "Fuente del documento."
+            source_map[num] = {
+                "file": html.escape(clean_fname), 
+                "context": html.escape(clean_ctx)
+            }
+
+        # 4. Reemplazo en el cuerpo (CONSTRUCCIÓN DE HTML PLANO)
+        def replace_citation_group(match):
+            content_inside = match.group(1)
+            ids = [x.strip() for x in content_inside.split(',') if x.strip().isdigit()]
+            
+            html_parts = []
+            for citation_num in ids:
+                data = source_map.get(citation_num)
+                
+                if data:
+                    # AQUÍ ESTABA EL ERROR: Usar f-string multilinea ('''...''') metía \n
+                    # CORRECCIÓN: Todo en una sola línea de string
+                    tooltip = (
+                        f'<span class="tooltip-container">'
+                        f'<span class="citation-number">[{citation_num}]</span>'
+                        f'<span class="tooltip-text">'
+                        f'<strong>📂 {data["file"]}</strong><br/>'
+                        f'💬 {data["context"]}'
+                        f'</span></span>'
+                    )
+                    html_parts.append(tooltip)
+                else:
+                    # Si no hay fuente, dejamos el texto plano
+                    html_parts.append(f'<span class="citation-missing">[{citation_num}]</span>')
+            
+            if not html_parts: return match.group(0)
+            return f" {' '.join(html_parts)} " # Unimos con espacio simple
+        
+        enriched_body = re.sub(r"\[([\d,\s]+)\]", replace_citation_group, body)
+        
+        # 5. Pie de página
+        clean_footer = "\n\n<br><hr><h6>📚 Fuentes Consultadas:</h6>"
+        unique_files = set()
+        for info in source_map.values():
+            fname = info['file'].replace('"', '').replace("Documento:", "").strip()
+            unique_files.add(fname)
+            
+        if unique_files:
+            clean_footer += "<ul style='font-size: 0.8em; color: gray; margin-bottom: 0;'>"
+            for fname in sorted(list(unique_files)):
+                clean_footer += f"<li>📄 {fname}</li>"
+            clean_footer += "</ul>"
+        else:
+            clean_footer = ""
+
+        return enriched_body + clean_footer
+
+    except Exception as e:
+        print(f"Error renderizando tooltips: {e}")
+        return text
+
+# Funciones de Reset Workflow (Las mantenemos igual)
 def reset_report_workflow():
     for k in ["report", "last_question"]: st.session_state.mode_state.pop(k, None)
 
@@ -212,135 +300,3 @@ def reset_transcript_chat_workflow():
 
 def reset_etnochat_chat_workflow():
     st.session_state.mode_state.pop("etno_chat_history", None)
-
-# ==============================
-# VALIDACIÓN DE SESIÓN CON SUPABASE
-# ==============================
-def validate_session_integrity():
-    if not st.session_state.get("logged_in"): return
-    
-    current_time = time.time()
-    # Verificar cada 5 minutos (300 segundos) para no saturar la BD
-    if 'last_session_check' not in st.session_state or (current_time - st.session_state.last_session_check > 300):
-        try:
-            from services.supabase_db import supabase 
-            uid = st.session_state.user_id
-            
-            # Consultar solo el ID de sesión activa
-            res = supabase.table("users").select("active_session_id").eq("id", uid).single().execute()
-            
-            if res.data and res.data.get('active_session_id') != st.session_state.session_id:
-                st.error("⚠️ Tu sesión ha sido cerrada desde otro dispositivo.")
-                time.sleep(2)
-                st.session_state.clear()
-                st.rerun()
-                
-            st.session_state.last_session_check = current_time
-        except Exception as e:
-            # Si falla la conexión, no bloqueamos al usuario, solo logueamos
-            print(f"Error validando sesión: {e}")
-
-# =========================================================
-# LÓGICA CORE: TOOLTIPS GRUPALES + FUENTES ÚNICAS
-# =========================================================
-def process_text_with_tooltips(text):
-    """
-    Transforma la respuesta cruda de la IA en HTML interactivo.
-    Soporta el formato: [1] Archivo ||| Contexto
-    Maneja grupos de citas: [1, 2]
-    Genera pie de página deduplicado.
-    """
-    if not text: return ""
-
-    try:
-        # ==================================================================
-        # 1. NORMALIZACIÓN DE CITAS (Fusión de adyacentes)
-        # ==================================================================
-        # Convierte [1] [2] -> [1, 2] para que se vean juntos
-        text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
-        
-        # ==================================================================
-
-        # 2. Separar cuerpo y sección de fuentes
-        split_patterns = [r"\n\*\*Fuentes:?\*\*", r"\n## Fuentes", r"\n### Fuentes", r"\nFuentes:", r"\n\*\*Fuentes Verificadas:\*\*"]
-        body = text
-        sources_raw = ""
-        
-        for pattern in split_patterns:
-            parts = re.split(pattern, text, maxsplit=1, flags=re.IGNORECASE)
-            if len(parts) > 1:
-                body = parts[0]
-                sources_raw = parts[1]
-                break
-                
-        # Si no hay fuentes, devolvemos el texto plano
-        if not sources_raw: return body
-
-        # 3. Mapear IDs a {Archivo, Contexto}
-        source_map = {}
-        matches = re.findall(r"\[(\d+)\]\s*(.*?)(?:\s*\|\|\|\s*(.*))?$", sources_raw, re.MULTILINE)
-        
-        for num, filename, context in matches:
-            clean_fname = filename.strip()
-            clean_ctx = context.strip() if context else "Evidencia del documento."
-            
-            source_map[num] = {
-                "file": html.escape(clean_fname), 
-                "context": html.escape(clean_ctx)
-            }
-
-        # 4. Reemplazar citas en el cuerpo
-        def replace_citation_group(match):
-            content_inside = match.group(1)
-            # Obtenemos los números de cita individuales
-            ids = [x.strip() for x in content_inside.split(',') if x.strip().isdigit()]
-            
-            html_parts = []
-            for citation_num in ids:
-                data = source_map.get(citation_num)
-                
-                if data:
-                    # Estructura HTML del tooltip
-                    tooltip = f'''
-                    <span class="tooltip-container">
-                        <span class="citation-number">[{citation_num}]</span>
-                        <span class="tooltip-text">
-                            <strong>📂 {data['file']}</strong><br/>
-                            💬 {data['context']}
-                        </span>
-                    </span>
-                    '''
-                    html_parts.append(tooltip)
-                else:
-                    html_parts.append(f"[{citation_num}]")
-            
-            if not html_parts: return match.group(0)
-            
-            # Unimos los spans con un espacio muy pequeño para que parezcan un grupo
-            return f" {' '.join(html_parts)} "
-        
-        # Regex capaz de leer [1, 2, 3] gracias a la normalización previa
-        enriched_body = re.sub(r"\[([\d,\s]+)\]", replace_citation_group, body)
-        
-        # 5. RE-GENERAR PIE DE PÁGINA LIMPIO
-        clean_footer = "\n\n<br><hr><h6>Fuentes Consultadas:</h6>"
-        unique_files = set()
-        
-        for info in source_map.values():
-            fname = info['file'].replace('"', '').replace("Documento:", "").strip()
-            unique_files.add(fname)
-            
-        if unique_files:
-            clean_footer += "<ul style='font-size: 0.8em; color: gray;'>"
-            for fname in sorted(list(unique_files)):
-                clean_footer += f"<li>📄 {fname}</li>"
-            clean_footer += "</ul>"
-        else:
-            clean_footer = ""
-
-        return enriched_body + clean_footer
-
-    except Exception as e:
-        # En caso de error, devolvemos el texto original para no romper la app
-        print(f"Error renderizando tooltips: {e}")
-        return text
