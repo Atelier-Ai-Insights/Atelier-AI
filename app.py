@@ -133,7 +133,7 @@ def run_user_mode(db_full, user_features, footer_html):
     # ==============================================================================
     # 2. BITÁCORA DE PROYECTO
     # ==============================================================================
-    st.sidebar.divider()
+    
     st.sidebar.subheader("Conversaciones y Reportes")
     
     saved_pins = get_project_memory()
