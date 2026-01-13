@@ -195,92 +195,60 @@ def validate_session_integrity():
             print(f"Error validando sesión: {e}")
 
 # =========================================================
-# LÓGICA DE CITAS: CORREGIDA PARA EVITAR SALTOS DE LÍNEA
+# LÓGICA DE CITAS: CONVERSIÓN DINÁMICA A NÚMEROS
 # =========================================================
 def process_text_with_tooltips(text):
     """
-    Versión INLINE: Genera HTML 'aplanado' (sin saltos de línea internos)
-    para que las citas no rompan el párrafo.
+    Detecta citas [Fuente: Archivo] y las convierte dinámicamente en números [1], [2]
+    con tooltips, manteniendo el texto fluido.
     """
     if not text: return ""
 
     try:
-        # 1. Normalización: [1] [2] -> [1, 2]
-        text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
+        # 1. Regex para capturar el patrón generado por el prompt
+        pattern = r'\[(?:Fuente|Doc|Archivo):\s*(.*?)\]'
         
-        # 2. Separar Fuentes
-        split_patterns = [r"\n\*\*Fuentes:?\*\*", r"\n## Fuentes", r"\n### Fuentes", r"\nFuentes:", r"\n\*\*Fuentes Verificadas:\*\*"]
-        body = text
-        sources_raw = ""
+        # 2. Identificar fuentes únicas para asignarles un número consistente
+        matches = re.findall(pattern, text)
+        unique_sources = {}
+        counter = 1
         
-        for pattern in split_patterns:
-            parts = re.split(pattern, text, maxsplit=1, flags=re.IGNORECASE)
-            if len(parts) > 1:
-                body = parts[0]
-                sources_raw = parts[1]
-                break
+        for m in matches:
+            source_name = m.strip()
+            if source_name not in unique_sources:
+                unique_sources[source_name] = counter
+                counter += 1
         
-        if not sources_raw: return body
-
-        # 3. Mapear IDs
-        source_map = {}
-        # Regex mejorada para capturar líneas aunque no tengan ||| perfecto
-        matches = re.findall(r"\[(\d+)\]\s*(.*?)(?:\s*\|\|\|\s*(.*))?$", sources_raw, re.MULTILINE)
-        
-        for num, filename, context in matches:
-            clean_fname = filename.strip()
-            clean_ctx = context.strip() if context else "Fuente del documento."
-            source_map[num] = {
-                "file": html.escape(clean_fname), 
-                "context": html.escape(clean_ctx)
-            }
-
-        # 4. Reemplazo en el cuerpo (CONSTRUCCIÓN DE HTML PLANO)
-        def replace_citation_group(match):
-            content_inside = match.group(1)
-            ids = [x.strip() for x in content_inside.split(',') if x.strip().isdigit()]
+        # 3. Función de reemplazo
+        def replace_match(match):
+            source_raw = match.group(1).strip()
+            citation_number = unique_sources.get(source_raw, "?")
+            source_clean = html.escape(source_raw)
             
-            html_parts = []
-            for citation_num in ids:
-                data = source_map.get(citation_num)
-                
-                if data:
-                    # AQUÍ ESTABA EL ERROR: Usar f-string multilinea ('''...''') metía \n
-                    # CORRECCIÓN: Todo en una sola línea de string
-                    tooltip = (
-                        f'<span class="tooltip-container">'
-                        f'<span class="citation-number">[{citation_num}]</span>'
-                        f'<span class="tooltip-text">'
-                        f'<strong>📂 {data["file"]}</strong><br/>'
-                        f'💬 {data["context"]}'
-                        f'</span></span>'
-                    )
-                    html_parts.append(tooltip)
-                else:
-                    # Si no hay fuente, dejamos el texto plano
-                    html_parts.append(f'<span class="citation-missing">[{citation_num}]</span>')
-            
-            if not html_parts: return match.group(0)
-            return f" {' '.join(html_parts)} " # Unimos con espacio simple
+            # Generamos el [N] con tooltip usando span inline
+            return f'''
+            <span class="citation-tooltip" title="{source_clean}" 
+                  style="cursor: help; color: #0056b3; background-color: #eef6fc; 
+                         padding: 0 3px; border-radius: 4px; font-size: 0.85em; 
+                         font-weight: bold; margin: 0 2px; vertical-align: baseline;">
+                [{citation_number}]
+            </span>
+            '''
         
-        enriched_body = re.sub(r"\[([\d,\s]+)\]", replace_citation_group, body)
+        # 4. Reemplazar en el texto
+        enriched_text = re.sub(pattern, replace_match, text)
         
-        # 5. Pie de página
-        clean_footer = "\n\n<br><hr><h6>Fuentes Consultadas:</h6>"
-        unique_files = set()
-        for info in source_map.values():
-            fname = info['file'].replace('"', '').replace("Documento:", "").strip()
-            unique_files.add(fname)
+        # 5. (Opcional) Generar pie de página pequeño
+        if unique_sources:
+            footer = "\n\n<div style='font-size: 0.8em; color: #666; margin-top: 10px; border-top: 1px solid #eee; padding-top: 5px;'><strong>Fuentes:</strong><br>"
+            # Ordenamos por número de cita
+            sorted_sources = sorted(unique_sources.items(), key=lambda x: x[1])
+            for name, num in sorted_sources:
+                footer += f"[{num}] {html.escape(name)}<br>"
+            footer += "</div>"
+            enriched_text += footer
             
-        if unique_files:
-            clean_footer += "<ul style='font-size: 0.8em; color: gray; margin-bottom: 0;'>"
-            for fname in sorted(list(unique_files)):
-                clean_footer += f"<li> {fname}</li>"
-            clean_footer += "</ul>"
-        else:
-            clean_footer = ""
-
-        return enriched_body + clean_footer
+        return enriched_text
 
     except Exception as e:
         print(f"Error renderizando tooltips: {e}")
