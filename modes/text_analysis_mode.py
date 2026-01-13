@@ -7,7 +7,7 @@ from datetime import datetime
 import re 
 from services.gemini_api import call_gemini_api, call_gemini_stream 
 from services.supabase_db import log_query_event, supabase, get_daily_usage
-from prompts import get_transcript_prompt, get_autocode_prompt, get_text_analysis_summary_prompt
+from prompts import get_transcript_prompt, get_text_analysis_summary_prompt
 import constants as c
 from config import banner_file
 from utils import reset_transcript_chat_workflow, render_process_status
@@ -17,7 +17,7 @@ from reporting.pdf_generator import generate_pdf_html
 from reporting.docx_generator import generate_docx
 
 # =====================================================
-# MODO: ANÁLISIS DE TEXTOS (OPTIMIZADO)
+# MODO: ANÁLISIS DE TEXTOS (SIMPLIFICADO)
 # =====================================================
 
 TEXT_PROJECT_BUCKET = "text_project_files"
@@ -105,7 +105,7 @@ def show_text_project_list(user_id):
 # --- Función de Análisis ---
 
 def show_text_project_analyzer(summary_context, project_name, documents_list):
-    st.markdown(f"### Analizando: **{project_name}**")
+    st.markdown(f"### Análisis de Transcripciones: **{project_name}**")
     if st.button("← Volver"): st.session_state.mode_state = {}; st.rerun()
     st.divider()
     
@@ -114,108 +114,71 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
     if len(all_docs_text) > 500000: 
         all_docs_text = all_docs_text[:500000] + "\n...(texto truncado por límite de seguridad)"
     
-    tab_chat, tab_autocode = st.tabs(["Análisis de Notas y Transcripciones", "Auto-Codificación"])
+    # --- CHAT ÚNICO (Sin pestañas) ---
+    if "transcript_chat_history" not in st.session_state.mode_state: 
+        st.session_state.mode_state["transcript_chat_history"] = []
 
-    # --- PESTAÑA 1: CHAT DE SÍNTESIS ---
-    with tab_chat:
-        st.header("Análisis de Notas y Transcripciones")
-        if "transcript_chat_history" not in st.session_state.mode_state: 
-            st.session_state.mode_state["transcript_chat_history"] = []
+    # Mostrar historial
+    for msg in st.session_state.mode_state["transcript_chat_history"]:
+        with st.chat_message(msg["role"], avatar="✨" if msg['role'] == "assistant" else "👤"):
+            st.markdown(msg["content"])
 
-        for msg in st.session_state.mode_state["transcript_chat_history"]:
-            with st.chat_message(msg["role"], avatar="✨" if msg['role'] == "assistant" else "👤"):
-                st.markdown(msg["content"])
+    user_prompt = st.chat_input("Ej: ¿Cuáles son los hallazgos principales?")
 
-        user_prompt = st.chat_input("Ej: ¿Cuáles son los patrones de queja más comunes?")
+    if user_prompt:
+        st.session_state.mode_state["transcript_chat_history"].append({"role": "user", "content": user_prompt})
+        with st.chat_message("user", avatar="👤"): st.markdown(user_prompt)
 
-        if user_prompt:
-            st.session_state.mode_state["transcript_chat_history"].append({"role": "user", "content": user_prompt})
-            with st.chat_message("user", avatar="👤"): st.markdown(user_prompt)
+        limit = st.session_state.plan_features.get('text_analysis_questions_per_day', 5)
+        curr = get_daily_usage(st.session_state.user, c.MODE_TEXT_ANALYSIS) 
 
-            limit = st.session_state.plan_features.get('text_analysis_questions_per_day', 5)
-            curr = get_daily_usage(st.session_state.user, c.MODE_TEXT_ANALYSIS) 
-
-            if curr >= limit and limit != float('inf'):
-                st.error(f"Límite diario alcanzado.")
-            else:
-                with st.chat_message("assistant", avatar="✨"):
-                    
-                    # --- STATUS VISUAL ---
-                    stream = None
-                    with render_process_status("🕵️ Buscando patrones en la evidencia...", expanded=True) as status:
-                        
-                        final_context = f"{all_docs_text}\n\n--- CONTEXTO GENERAL (Resumen) ---\n{summary_context}"
-                        chat_prompt = get_transcript_prompt(final_context, user_prompt)
-                        
-                        # [FIX] Aumentado a 8192 tokens
-                        stream = call_gemini_stream(chat_prompt, generation_config_override={"max_output_tokens": 8192}) 
-                        if stream:
-                             status.update(label="¡Respuesta generada!", state="complete", expanded=False)
-                        else:
-                             status.update(label="Error en respuesta", state="error")
-
-                    if stream:
-                        response_text = st.write_stream(stream)
-                        log_query_event(user_prompt, mode=f"{c.MODE_TEXT_ANALYSIS} (Chat)")
-                        st.session_state.mode_state["transcript_chat_history"].append({"role": "assistant", "content": response_text})
-                    else: st.error("Error al obtener respuesta.")
-
-        # Botones de exportación (Chat)
-        if st.session_state.mode_state["transcript_chat_history"]:
-            st.divider() 
-            c1, c2, c3 = st.columns(3)
-            
-            raw_text = f"# Chat Transcripciones: {project_name}\n\n"
-            raw_text += "\n\n".join(f"**{m['role'].upper()}:** {m['content']}" for m in st.session_state.mode_state["transcript_chat_history"])
-            
-            pdf = generate_pdf_html(raw_text.replace("](#)", "]"), title=f"Chat - {project_name}", banner_path=banner_file)
-            if pdf: c1.download_button("📄 Descargar PDF", data=pdf, file_name="chat.pdf", mime="application/pdf", width='stretch')
-            
-            docx = generate_docx(raw_text, title=f"Chat - {project_name}")
-            if docx: c2.download_button("📝 Descargar Word", data=docx, file_name="chat.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
-            
-            c3.button("🔄 Reiniciar", on_click=reset_transcript_chat_workflow, key="rst_chat", width='stretch')
-
-    # --- PESTAÑA 2: AUTO-CODIFICACIÓN ---
-    with tab_autocode:
-        st.header("Auto-Codificación")
-        st.markdown("Identifica categorías y frecuencias de temas basados en la lectura completa de los documentos.")
-        
-        if "autocode_result" in st.session_state.mode_state:
-            st.markdown(st.session_state.mode_state["autocode_result"])
-            
-            st.divider()
-            c1, c2, c3 = st.columns(3)
-            
-            pdf = generate_pdf_html(st.session_state.mode_state["autocode_result"], title="Temas", banner_path=banner_file)
-            if pdf: c1.download_button("📄 Descargar PDF", data=pdf, file_name="temas.pdf", width='stretch')
-            
-            docx = generate_docx(st.session_state.mode_state["autocode_result"], title="Auto-Codificación")
-            if docx: c2.download_button("📝 Descargar Word", data=docx, file_name="temas.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
-            
-            if c3.button("🔄 Nuevo análisis", width='stretch'): 
-                st.session_state.mode_state.pop("autocode_result", None); st.rerun()
+        if curr >= limit and limit != float('inf'):
+            st.error(f"Límite diario alcanzado.")
         else:
-            topic = st.text_input("Tema principal a codificar:", placeholder="Ej: Barreras de compra, Motivadores, Percepción de precio")
-            if st.button("Generar Códigos y Patrones", type="primary", width='stretch'):
-                if not topic.strip(): st.warning("Describe el tema para orientar a la IA.")
-                else:
-                    # --- STATUS VISUAL ---
-                    stream = None
-                    with render_process_status("🔍 Leyendo documentos y detectando frecuencias...", expanded=True) as status:
-                        prompt = get_autocode_prompt(all_docs_text, topic)
-                        # [FIX] Aumentado a 8192 tokens
-                        stream = call_gemini_stream(prompt, generation_config_override={"max_output_tokens": 8192})
-                        if stream:
-                             status.update(label="¡Análisis completado!", state="complete", expanded=False)
-                        else:
-                             status.update(label="Error en análisis", state="error")
+            with st.chat_message("assistant", avatar="✨"):
+                
+                stream = None
+                with render_process_status("🕵️ Buscando patrones en la evidencia...", expanded=True) as status:
                     
+                    # --- INGENIERÍA DE PROMPT: FORZAR RESUMEN ---
+                    conciseness_instruction = (
+                        "\n\n[INSTRUCCIÓN IMPORTANTE: Tu respuesta debe ser CONCISA, RESUMIDA y EJECUTIVA. "
+                        "No intentes cubrir todos los detalles exhaustivamente. Prioriza los 3-5 hallazgos principales. "
+                        "Si el tema es muy extenso, da un resumen e invita al usuario a profundizar en puntos específicos.]"
+                    )
+                    
+                    final_context = f"{all_docs_text}\n\n--- CONTEXTO GENERAL (Resumen) ---\n{summary_context}{conciseness_instruction}"
+                    chat_prompt = get_transcript_prompt(final_context, user_prompt)
+                    
+                    # Mantenemos 8192 por seguridad técnica, pero el prompt evitará que llegue a ese límite
+                    stream = call_gemini_stream(chat_prompt, generation_config_override={"max_output_tokens": 8192}) 
                     if stream:
-                        res = st.write_stream(stream)
-                        st.session_state.mode_state["autocode_result"] = res
-                        log_query_event(f"Autocode: {topic}", mode=f"{c.MODE_TEXT_ANALYSIS} (Autocode)")
-                        st.rerun()
+                            status.update(label="¡Respuesta generada!", state="complete", expanded=False)
+                    else:
+                            status.update(label="Error en respuesta", state="error")
+
+                if stream:
+                    response_text = st.write_stream(stream)
+                    log_query_event(user_prompt, mode=f"{c.MODE_TEXT_ANALYSIS} (Chat)")
+                    st.session_state.mode_state["transcript_chat_history"].append({"role": "assistant", "content": response_text})
+                else: st.error("Error al obtener respuesta.")
+
+    # Botones de exportación (Chat)
+    if st.session_state.mode_state["transcript_chat_history"]:
+        st.divider() 
+        c1, c2, c3 = st.columns(3)
+        
+        raw_text = f"# Chat Transcripciones: {project_name}\n\n"
+        raw_text += "\n\n".join(f"**{m['role'].upper()}:** {m['content']}" for m in st.session_state.mode_state["transcript_chat_history"])
+        
+        pdf = generate_pdf_html(raw_text.replace("](#)", "]"), title=f"Chat - {project_name}", banner_path=banner_file)
+        if pdf: c1.download_button("📄 Descargar PDF", data=pdf, file_name="chat.pdf", mime="application/pdf", width='stretch')
+        
+        docx = generate_docx(raw_text, title=f"Chat - {project_name}")
+        if docx: c2.download_button("📝 Descargar Word", data=docx, file_name="chat.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
+        
+        c3.button("🔄 Reiniciar", on_click=reset_transcript_chat_workflow, key="rst_chat", width='stretch')
+
 
 def text_analysis_mode():
     st.subheader(c.MODE_TEXT_ANALYSIS); st.divider()
@@ -233,7 +196,7 @@ def text_analysis_mode():
 
     # 2. Generar Resumen Inicial
     if "ta_documents_list" in st.session_state.mode_state and "ta_summary_context" not in st.session_state.mode_state:
-        with render_process_status("Cargando transcripciones...", expanded=True) as status:
+        with render_process_status("Generando resumen ejecutivo inicial...", expanded=True) as status:
             docs = st.session_state.mode_state["ta_documents_list"]
             summ_in = "".join([f"\nDoc: {d['source']}\n{d['content'][:2500]}\n..." for d in docs])
             summ = call_gemini_api(get_text_analysis_summary_prompt(summ_in), generation_config_override={"max_output_tokens": 8192})
