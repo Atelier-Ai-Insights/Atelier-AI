@@ -9,17 +9,15 @@ from datetime import datetime
 INSTRUCCIONES_DE_CITAS = """
 **REGLAS DE EVIDENCIA Y CITAS (SISTEMA RAG - ESTRICTO):**
 1. **Veracidad Absoluta:** Responde ÚNICAMENTE usando la 'Información documentada'. Si la respuesta no está en el texto, di "No encontré información sobre X en los documentos". NO inventes.
-2. **Atribución Inmediata:** Cada afirmación debe llevar su sustento. Formato: [1], [2].
-   - *Mal:* "Los usuarios prefieren el rojo. También les gusta el azul [1]."
-   - *Bien:* "Los usuarios prefieren el rojo [1], aunque un segmento prefiere el azul [2]."
-3. **SECCIÓN DE FUENTES (Obligatoria al final):**
-   Genera una lista verificando que la cita respalde la afirmación. Usa este formato exacto (el separador '|||' es vital):
+2. **Atribución Inmediata (FORMATO OBLIGATORIO):** Cada vez que cites un hecho específico de un documento, DEBES colocar el nombre del archivo al final de la frase usando ESTE FORMATO EXACTO:
+   **[Fuente: NombreDelArchivo.docx]**
    
-   **Fuentes Verificadas:**
-   [1] NombreArchivo.pdf ||| Cita: "El 45% de la muestra..." (Contexto: Encuesta Q3)
-   [2] Entrevista_CEO.pdf ||| Cita: "Debemos bajar costos..."
+   *Ejemplo Correcto:* "El 45% de los usuarios prefiere el rojo [Fuente: Encuesta2024.docx], aunque otros prefieren azul [Fuente: Entrevista1.docx]."
+   *Incorrecto:* (Fuente: Encuesta), [1], o referencias al final del párrafo. La cita debe ser INMEDIATA.
 
-   ⚠️ **CRÍTICO:** Si el texto después de '|||' no justifica la frase del texto principal, la respuesta será considerada errónea.
+3. **SECCIÓN DE FUENTES (Opcional al final):**
+   Si generas una lista final, usa el formato:
+   [Fuente: Archivo] ||| Cita textual...
 """
 
 # ==============================================================================
@@ -177,11 +175,15 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
 # ==============================================================================
 
 def get_transcript_prompt(combined_context, user_prompt):
+    # [MODIFICADO] Instrucción explícita de citas para tooltips
     return (
         f"**Rol:** Investigador Cualitativo Experto.\n"
         f"**Pregunta:** {user_prompt}\n"
         f"**Info (Transcripciones):**\n{combined_context}\n"
-        f"Identifica patrones recurrentes, anomalías y sintetiza usando quotes textuales.\n{INSTRUCCIONES_DE_CITAS}"
+        f"Identifica patrones recurrentes, anomalías y sintetiza usando quotes textuales.\n"
+        f"IMPORTANTE: Cada hallazgo debe citar su origen usando este formato exacto: **[Fuente: NombreArchivo.docx]**. "
+        f"No uses otro estilo de cita.\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
     )
 
 def get_text_analysis_summary_prompt(full_context):
@@ -190,15 +192,6 @@ def get_text_analysis_summary_prompt(full_context):
     **Tarea:** Genera un Resumen Ejecutivo exhaustivo.
     **Entrada:** {full_context}
     **Salida (Markdown):** Resumen general y desglose por Temas Clave con hallazgos soportados.
-    """
-
-def get_autocode_prompt(context, main_topic):
-    return f"""
-    **Rol:** Codificador Cualitativo (Grounded Theory).
-    **Tarea:** Extrae códigos y categorías sobre '{main_topic}'.
-    **Texto Base:** {context}
-    **Salida:** Lista de Temas clave, Códigos asociados y citas de ejemplo.
-    {INSTRUCCIONES_DE_CITAS}
     """
 
 def get_etnochat_prompt(conversation_history, text_context):
