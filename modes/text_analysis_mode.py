@@ -12,12 +12,12 @@ import constants as c
 from config import banner_file
 from utils import reset_transcript_chat_workflow, render_process_status
 
-# --- GENERADORES (Fase 1: Top Level Import) ---
+# --- GENERADORES (Importación de nivel superior) ---
 from reporting.pdf_generator import generate_pdf_html
 from reporting.docx_generator import generate_docx
 
 # =====================================================
-# MODO: ANÁLISIS DE TEXTOS (SIMPLIFICADO)
+# MODO: ANÁLISIS DE TEXTOS (SIMPLIFICADO Y CON TOOLTIPS)
 # =====================================================
 
 TEXT_PROJECT_BUCKET = "text_project_files"
@@ -45,6 +45,29 @@ def load_text_project_data(storage_folder_path: str):
             except Exception as e: st.error(f"Error en '{file_info['name']}': {e}"); continue 
         return documents_list
     except Exception as e: st.error(f"Error carga: {e}"); return []
+
+# --- Función Local para Tooltips (Específica para [Fuente: ...]) ---
+def format_citations_as_tooltips(text):
+    """
+    Convierte patrones como [Fuente: X] o [Doc: X] en tooltips interactivos visuales.
+    """
+    if not text: return ""
+    
+    # Patrón para detectar: [Fuente: NombreArchivo.docx]
+    pattern = r'\[(?:Fuente|Doc|Archivo):\s*(.*?)\]'
+    
+    def replace_match(match):
+        source = match.group(1).strip() # Ej: reporte_2023.docx
+        # Creamos un elemento HTML con tooltip (usando un icono limpio 📍)
+        return f'''
+        <span class="citation-tooltip" title="{source}" style="cursor: help; color: #0056b3; background-color: #eef6fc; padding: 0 5px; border-radius: 4px; font-size: 0.9em; font-weight: bold; margin-left: 2px;">
+            📍
+        </span>
+        '''
+    
+    # Reemplazamos en el texto
+    formatted_text = re.sub(pattern, replace_match, text)
+    return formatted_text
 
 # --- Funciones de UI ---
 
@@ -118,10 +141,15 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
     if "transcript_chat_history" not in st.session_state.mode_state: 
         st.session_state.mode_state["transcript_chat_history"] = []
 
-    # Mostrar historial
+    # Mostrar historial (CON TOOLTIPS APLICADOS)
     for msg in st.session_state.mode_state["transcript_chat_history"]:
         with st.chat_message(msg["role"], avatar="✨" if msg['role'] == "assistant" else "👤"):
-            st.markdown(msg["content"])
+            if msg['role'] == "assistant":
+                # Aplicamos la función local de tooltips
+                formatted_content = format_citations_as_tooltips(msg["content"])
+                st.markdown(formatted_content, unsafe_allow_html=True)
+            else:
+                st.markdown(msg["content"])
 
     user_prompt = st.chat_input("Ej: ¿Cuáles son los hallazgos principales?")
 
@@ -150,7 +178,7 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                     final_context = f"{all_docs_text}\n\n--- CONTEXTO GENERAL (Resumen) ---\n{summary_context}{conciseness_instruction}"
                     chat_prompt = get_transcript_prompt(final_context, user_prompt)
                     
-                    # Mantenemos 8192 por seguridad técnica, pero el prompt evitará que llegue a ese límite
+                    # Token limit 8192
                     stream = call_gemini_stream(chat_prompt, generation_config_override={"max_output_tokens": 8192}) 
                     if stream:
                             status.update(label="¡Respuesta generada!", state="complete", expanded=False)
@@ -158,6 +186,9 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                             status.update(label="Error en respuesta", state="error")
 
                 if stream:
+                    # NOTA: Para streams en tiempo real es complejo aplicar tooltips al vuelo.
+                    # Por simplicidad, mostramos el stream normal y luego guardamos el texto.
+                    # Al recargar (rerun), el historial ya aplicará los tooltips.
                     response_text = st.write_stream(stream)
                     log_query_event(user_prompt, mode=f"{c.MODE_TEXT_ANALYSIS} (Chat)")
                     st.session_state.mode_state["transcript_chat_history"].append({"role": "assistant", "content": response_text})
