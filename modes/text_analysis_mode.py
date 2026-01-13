@@ -147,7 +147,8 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                         final_context = f"{all_docs_text}\n\n--- CONTEXTO GENERAL (Resumen) ---\n{summary_context}"
                         chat_prompt = get_transcript_prompt(final_context, user_prompt)
                         
-                        stream = call_gemini_stream(chat_prompt) 
+                        # [FIX] Aumentado a 8192 tokens
+                        stream = call_gemini_stream(chat_prompt, generation_config_override={"max_output_tokens": 8192}) 
                         if stream:
                              status.update(label="¡Respuesta generada!", state="complete", expanded=False)
                         else:
@@ -203,7 +204,8 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                     stream = None
                     with render_process_status("🔍 Leyendo documentos y detectando frecuencias...", expanded=True) as status:
                         prompt = get_autocode_prompt(all_docs_text, topic)
-                        stream = call_gemini_stream(prompt)
+                        # [FIX] Aumentado a 8192 tokens
+                        stream = call_gemini_stream(prompt, generation_config_override={"max_output_tokens": 8192})
                         if stream:
                              status.update(label="¡Análisis completado!", state="complete", expanded=False)
                         else:
@@ -231,7 +233,7 @@ def text_analysis_mode():
 
     # 2. Generar Resumen Inicial
     if "ta_documents_list" in st.session_state.mode_state and "ta_summary_context" not in st.session_state.mode_state:
-        with render_process_status("🧠 Generando resumen ejecutivo inicial...", expanded=True) as status:
+        with render_process_status("Cargando transcripciones...", expanded=True) as status:
             docs = st.session_state.mode_state["ta_documents_list"]
             summ_in = "".join([f"\nDoc: {d['source']}\n{d['content'][:2500]}\n..." for d in docs])
             summ = call_gemini_api(get_text_analysis_summary_prompt(summ_in), generation_config_override={"max_output_tokens": 8192})
