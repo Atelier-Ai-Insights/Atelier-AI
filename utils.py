@@ -203,7 +203,7 @@ def process_text_with_tooltips(text):
     """
     if not text: return ""
 
-    # CSS sin indentación (para que no salga como código)
+    # CSS mejorado: más ancho (350px) para acomodar más texto
     css_styles = """
 <style>
 .rag-citation {
@@ -218,12 +218,12 @@ def process_text_with_tooltips(text):
 }
 .rag-citation .rag-tooltip-text {
     visibility: hidden;
-    width: 280px;
+    width: 350px; /* MÁS ANCHO PARA CONTENIDO RICO */
     background-color: #333;
     color: #fff;
     text-align: left;
     border-radius: 6px;
-    padding: 10px;
+    padding: 12px;
     position: absolute;
     z-index: 99999;
     bottom: 140%;
@@ -231,10 +231,10 @@ def process_text_with_tooltips(text):
     transform: translateX(-50%);
     opacity: 0;
     transition: opacity 0.2s;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     font-weight: normal;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    line-height: 1.4;
+    line-height: 1.5;
     pointer-events: none;
 }
 .rag-citation .rag-tooltip-text::after {
@@ -255,15 +255,14 @@ def process_text_with_tooltips(text):
 """
 
     try:
-        # 1. Regex actualizada para capturar archivo Y contexto opcional
-        # Captura: [Fuente: Archivo.pdf; Contexto: "cita..."] o [Fuente: Archivo.pdf]
+        # Regex actualizada para capturar archivo Y contexto
         pattern = r'\[(?:Fuente|Doc|Archivo):\s*(.*?)(?:;\s*Contexto:\s*"(.*?)")?\]'
         
         matches = re.findall(pattern, text)
         unique_sources = {}
         counter = 1
         
-        # Mapear fuentes únicas a números
+        # Mapear fuentes únicas
         for fname, fcontext in matches:
             fname = fname.strip()
             if fname not in unique_sources:
@@ -276,11 +275,12 @@ def process_text_with_tooltips(text):
             
             citation_number = unique_sources.get(fname, "?")
             
-            # Preparamos el contenido del tooltip
             safe_fname = html.escape(fname)
-            safe_context = html.escape(fcontext.strip()) if fcontext else "Fuente del documento."
+            # Si no hay contexto, ponemos un mensaje default
+            safe_context = html.escape(fcontext.strip()) if fcontext else "Detalle no disponible."
             
-            tooltip_html = f"<strong>📂 {safe_fname}</strong><hr style='margin:4px 0; border-color:#555;'>💬 <em>{safe_context}</em>"
+            # HTML del tooltip
+            tooltip_html = f"<strong>📂 {safe_fname}</strong><hr style='margin:6px 0; border-color:#555;'>💬 <em>{safe_context}</em>"
             
             return f'''
             <div class="rag-citation">
