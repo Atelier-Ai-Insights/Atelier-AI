@@ -5,6 +5,7 @@ import os
 import uuid
 from datetime import datetime
 import re 
+import time # Importante para la pausa de seguridad
 from services.gemini_api import call_gemini_api, call_gemini_stream 
 from services.supabase_db import log_query_event, supabase, get_daily_usage
 from prompts import get_transcript_prompt, get_text_analysis_summary_prompt
@@ -17,7 +18,7 @@ from reporting.pdf_generator import generate_pdf_html
 from reporting.docx_generator import generate_docx
 
 # =====================================================
-# MODO: ANÁLISIS DE TEXTOS (ESTILO NARRATIVO)
+# MODO: ANÁLISIS DE TEXTOS (AUTO-REPARACIÓN)
 # =====================================================
 
 TEXT_PROJECT_BUCKET = "text_project_files"
@@ -116,7 +117,7 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
     if "transcript_chat_history" not in st.session_state.mode_state: 
         st.session_state.mode_state["transcript_chat_history"] = []
 
-    # Mostrar historial (Texto plano, limpio)
+    # Mostrar historial
     for msg in st.session_state.mode_state["transcript_chat_history"]:
         with st.chat_message(msg["role"], avatar="✨" if msg['role'] == "assistant" else "👤"):
             st.markdown(msg["content"])
@@ -134,32 +135,64 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
             st.error(f"Límite diario alcanzado.")
         else:
             with st.chat_message("assistant", avatar="✨"):
-                stream = None
-                with render_process_status("Analizando evidencia textual...", expanded=True) as status:
+                
+                # --- SISTEMA DE AUTO-REPARACIÓN DE RESPUESTAS ---
+                full_response = ""
+                response_placeholder = st.empty()
+                
+                with render_process_status("🕵️ Analizando evidencia...", expanded=True) as status:
                     
-                    # Prompt que pide brevedad y citas naturales
+                    # 1. Prompt Inicial
+                    # Pedimos narrativa fluida con evidencias en el texto
                     conciseness_instruction = (
-                        "\n\n[INSTRUCCIÓN: Sé conciso y ejecutivo. Usa puntos clave (bullet points). "
-                        "Cuando cites evidencia, intégrala en el texto entre comillas, mencionando el archivo de forma natural. "
-                        "Ejemplo: ...como menciona el archivo X: 'cita textual'.]"
+                        "\n\n[INSTRUCCIÓN: Redacta un análisis fluido. "
+                        "Integra las citas textuales dentro de los párrafos usando comillas para evidenciar los hallazgos. "
+                        "Ejemplo: Los usuarios sienten 'frustración por el precio' (Doc 1). "
+                        "NO uses tooltips complejos, prioriza la lectura natural.]"
                     )
                     
                     final_context = f"{all_docs_text}\n\n--- CONTEXTO GENERAL ---\n{summary_context}{conciseness_instruction}"
                     chat_prompt = get_transcript_prompt(final_context, user_prompt)
                     
-                    # Streaming con límite alto para evitar cortes
-                    stream = call_gemini_stream(chat_prompt, generation_config_override={"max_output_tokens": 8192}) 
+                    # 2. Primera llamada (Streaming)
+                    stream = call_gemini_stream(chat_prompt, generation_config_override={"max_output_tokens": 8192})
                     
                     if stream:
-                        status.update(label="¡Respuesta lista!", state="complete", expanded=False)
+                        for chunk in stream:
+                            full_response += chunk
+                            response_placeholder.markdown(full_response + "▌") # Cursor visual
+                        
+                        # 3. Verificación de Corte
+                        # Si no termina en puntuación de cierre, asumimos corte y reparamos
+                        clean_text = full_response.strip()
+                        if clean_text and not clean_text.endswith(('.', '!', '?', '"', '}', ']')):
+                            
+                            status.update(label="⚠️ Detectado corte de red. Auto-completando...", state="running")
+                            
+                            # 4. Segunda llamada (Continuación Silenciosa)
+                            continuation_prompt = (
+                                f"Tu respuesta anterior se cortó. Esto es lo último que escribiste:\n"
+                                f"...{clean_text[-500:]}\n\n"
+                                "POR FAVOR TERMINA LA FRASE Y LA IDEA COHERENTEMENTE. NO REPITAS LO ANTERIOR."
+                            )
+                            
+                            stream_fix = call_gemini_stream(continuation_prompt, generation_config_override={"max_output_tokens": 4096})
+                            
+                            if stream_fix:
+                                for chunk_fix in stream_fix:
+                                    full_response += chunk_fix
+                                    response_placeholder.markdown(full_response + "▌")
+                        
+                        status.update(label="¡Respuesta completa!", state="complete", expanded=False)
+                        response_placeholder.markdown(full_response) # Render final sin cursor
+                        
+                        # Guardar en historial
+                        log_query_event(user_prompt, mode=f"{c.MODE_TEXT_ANALYSIS} (Chat)")
+                        st.session_state.mode_state["transcript_chat_history"].append({"role": "assistant", "content": full_response})
+                        
                     else:
                         status.update(label="Error en respuesta", state="error")
-
-                if stream:
-                    response_text = st.write_stream(stream)
-                    log_query_event(user_prompt, mode=f"{c.MODE_TEXT_ANALYSIS} (Chat)")
-                    st.session_state.mode_state["transcript_chat_history"].append({"role": "assistant", "content": response_text})
-                else: st.error("Error al obtener respuesta.")
+                        st.error("Error al obtener respuesta.")
 
     # Botones de exportación
     if st.session_state.mode_state["transcript_chat_history"]:
@@ -170,12 +203,12 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
         raw_text += "\n\n".join(f"**{m['role'].upper()}:** {m['content']}" for m in st.session_state.mode_state["transcript_chat_history"])
         
         pdf = generate_pdf_html(raw_text, title=f"Reporte - {project_name}", banner_path=banner_file)
-        if pdf: c1.download_button("PDF", data=pdf, file_name="analisis.pdf", mime="application/pdf", width='stretch')
+        if pdf: c1.download_button("📄 PDF", data=pdf, file_name="analisis.pdf", mime="application/pdf", width='stretch')
         
         docx = generate_docx(raw_text, title=f"Reporte - {project_name}")
-        if docx: c2.download_button("Word", data=docx, file_name="analisis.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
+        if docx: c2.download_button("📝 Word", data=docx, file_name="analisis.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
         
-        c3.button("Reiniciar", on_click=reset_transcript_chat_workflow, key="rst_chat", width='stretch')
+        c3.button("🔄 Reiniciar", on_click=reset_transcript_chat_workflow, key="rst_chat", width='stretch')
 
 
 def text_analysis_mode():
@@ -212,5 +245,5 @@ def text_analysis_mode():
     elif "ta_selected_project_id" in st.session_state.mode_state:
         st.info("Cargando...")
     else:
-        with st.expander("Crear Proyecto", expanded=True): show_text_project_creator(uid, limit)
+        with st.expander("➕ Crear Proyecto", expanded=True): show_text_project_creator(uid, limit)
         st.divider(); show_text_project_list(uid)
