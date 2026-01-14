@@ -195,37 +195,37 @@ def validate_session_integrity():
             print(f"Error validando sesión: {e}")
 
 # =========================================================
-# LÓGICA DE CITAS: CORRECCIÓN DE FLUIDEZ (INLINE)
+# LÓGICA DE CITAS: TOOLTIPS MEJORADOS (TEXTO RICO)
 # =========================================================
 def process_text_with_tooltips(text):
     """
     Convierte [Fuente: Archivo; Contexto: "..."] en números [1] con tooltips CSS.
-    Usa etiquetas SPAN para evitar saltos de línea indeseados.
+    El tooltip ahora es más ancho para acomodar el texto rico.
     """
     if not text: return ""
 
-    # CSS mejorado: más ancho (350px) y asegurando comportamiento inline
+    # CSS mejorado: más ancho (400px) y mejor tipografía para lectura
     css_styles = """
 <style>
 .rag-citation {
     position: relative;
-    display: inline-block; /* Comportamiento de palabra */
+    display: inline-block;
     cursor: pointer;
     color: #0056b3;
     font-weight: bold;
-    font-size: 0.85em;
-    margin: 0 2px;
+    font-size: 0.8em;
+    margin: 0 1px;
     vertical-align: super;
-    line-height: 1; /* Evita afectar la altura de la línea */
+    line-height: 1;
 }
 .rag-citation .rag-tooltip-text {
     visibility: hidden;
-    width: 350px;
-    background-color: #333;
-    color: #fff;
+    width: 400px; /* Ancho aumentado para leer párrafos */
+    background-color: #262730; /* Color oscuro standard de Streamlit */
+    color: #ffffff;
     text-align: left;
-    border-radius: 6px;
-    padding: 12px;
+    border-radius: 8px;
+    padding: 12px 16px;
     position: absolute;
     z-index: 99999;
     bottom: 140%;
@@ -233,21 +233,23 @@ def process_text_with_tooltips(text):
     transform: translateX(-50%);
     opacity: 0;
     transition: opacity 0.2s;
-    font-size: 0.85rem;
+    font-size: 0.9rem; /* Fuente un poco más grande */
     font-weight: normal;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.3);
     line-height: 1.5;
     pointer-events: none;
+    white-space: normal; /* Permitir wrap del texto */
+    border: 1px solid #444;
 }
 .rag-citation .rag-tooltip-text::after {
     content: "";
     position: absolute;
     top: 100%;
     left: 50%;
-    margin-left: -5px;
-    border-width: 5px;
+    margin-left: -6px;
+    border-width: 6px;
     border-style: solid;
-    border-color: #333 transparent transparent transparent;
+    border-color: #262730 transparent transparent transparent;
 }
 .rag-citation:hover .rag-tooltip-text {
     visibility: visible;
@@ -257,9 +259,11 @@ def process_text_with_tooltips(text):
 """
 
     try:
+        # Regex actualizada para capturar archivo Y contexto (incluso si tiene saltos de línea)
         pattern = r'\[(?:Fuente|Doc|Archivo):\s*(.*?)(?:;\s*Contexto:\s*"(.*?)")?\]'
         
-        matches = re.findall(pattern, text)
+        # Usamos re.DOTALL para que el punto capture saltos de línea si los hubiera
+        matches = re.findall(pattern, text, flags=re.DOTALL)
         unique_sources = {}
         counter = 1
         
@@ -276,17 +280,22 @@ def process_text_with_tooltips(text):
             citation_number = unique_sources.get(fname, "?")
             
             safe_fname = html.escape(fname)
-            safe_context = html.escape(fcontext.strip()) if fcontext else "Detalle no disponible."
+            # Limpiamos el contexto para que se vea bien en HTML
+            clean_ctx = fcontext.strip().replace('"', "'") if fcontext else "Ver documento original."
+            safe_context = html.escape(clean_ctx)
             
-            tooltip_html = f"<strong>📂 {safe_fname}</strong><hr style='margin:6px 0; border-color:#555;'>💬 <em>{safe_context}</em>"
+            # HTML del tooltip
+            tooltip_html = (
+                f"<div style='margin-bottom:6px; font-weight:600; color:#bdc6ff;'>📄 {safe_fname}</div>"
+                f"<div style='font-style:italic; color:#e0e0e0;'>“{safe_context}”</div>"
+            )
             
-            # CAMBIO CLAVE: Usamos <span> en lugar de <div>
             return f'''<span class="rag-citation">[{citation_number}]<span class="rag-tooltip-text">{tooltip_html}</span></span>'''
         
-        enriched_text = re.sub(pattern, replace_match, text)
+        enriched_text = re.sub(pattern, replace_match, text, flags=re.DOTALL)
         
         if unique_sources:
-            footer = "\n\n<div style='font-size: 0.8em; color: #666; margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px;'><strong>Referencias:</strong><br>"
+            footer = "\n\n<div style='font-size: 0.8em; color: #666; margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;'><strong>Referencias Consultadas:</strong><br>"
             sorted_sources = sorted(unique_sources.items(), key=lambda x: x[1])
             for name, num in sorted_sources:
                 footer += f"<b>[{num}]</b> {html.escape(name)}<br>"
