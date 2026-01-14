@@ -2,18 +2,18 @@ import streamlit as st
 from datetime import datetime
 
 # ==============================================================================
-# INSTRUCCIONES GLOBALES (CRÍTICO: CALIDAD DE EVIDENCIA EN TOOLTIPS)
+# INSTRUCCIONES GLOBALES (CRÍTICO: TOOLTIPS CON EVIDENCIA RICA)
 # ==============================================================================
 
-# --- BLOQUE DE INSTRUCCIONES DE CITAS (MEJORADO: Cita Textual) ---
+# --- BLOQUE DE INSTRUCCIONES DE CITAS (MEJORADO: EVIDENCIA EXPANDIDA) ---
 INSTRUCCIONES_DE_CITAS = """
 **REGLAS DE EVIDENCIA Y CITAS (SISTEMA RAG - ESTRICTO):**
 1. **Veracidad Absoluta:** Responde ÚNICAMENTE usando la 'Información documentada'.
 2. **Atribución Inmediata (FORMATO OBLIGATORIO):** Cada vez que cites un hecho, DEBES usar este formato exacto al final de la frase:
-   **[Fuente: NombreDelArchivo.docx; Contexto: "Breve cita o resumen de 5 palabras que justifique"]**
+   **[Fuente: NombreDelArchivo.docx; Contexto: "Cita textual relevante o explicación detallada del dato (aprox 20 palabras)"]**
    
-   *Ejemplo Correcto:* "El 45% prefiere rojo [Fuente: Encuesta.pdf; Contexto: "Tabla 4 de preferencias"]"
-   *Incorrecto:* [Fuente: Archivo] (Falta el contexto)
+   *Ejemplo Correcto:* "El 45% prefiere rojo [Fuente: Encuesta_2024.pdf; Contexto: "Según la Tabla 4, el segmento joven prioriza el color rojo por encima del precio."]"
+   *Incorrecto:* [Fuente: Archivo] (Falta el contexto rico)
 
 3. **Sin Lista Final:** No generes lista de fuentes al final, usa solo las citas en línea.
 """
@@ -139,7 +139,7 @@ def get_transcript_prompt(combined_context, user_prompt):
         f"**Pregunta:** {user_prompt}\n"
         f"**Info:**\n{combined_context}\n"
         f"Identifica patrones y sintetiza.\n"
-        f"IMPORTANTE: Cada hallazgo debe citar su origen: **[Fuente: Archivo; Contexto: \"Cita breve\"]**.\n"
+        f"IMPORTANTE: Cada hallazgo debe citar su origen: **[Fuente: Archivo; Contexto: \"Cita textual relevante y detallada\"]**.\n"
         f"{INSTRUCCIONES_DE_CITAS}"
     )
 
@@ -168,9 +168,8 @@ def get_media_transcription_prompt():
     """
 
 # ==============================================================================
-# PROMPTS DE ONE-PAGER y OTROS (Sin cambios mayores)
+# PROMPTS DE ONE-PAGER y OTROS
 # ==============================================================================
-# (Se mantienen igual que antes, solo asegúrate que importen este archivo)
 PROMPTS_ONEPAGER = {
     "Definición de Oportunidades": """Genera JSON: {"template_type": "oportunidades", "titulo_diapositiva": "...", "insight_clave": "...", "hallazgos_principales": [], "oportunidades": [], "recomendacion_estrategica": "..."}""",
     "Análisis DOFA (SWOT)": """Genera JSON: {"template_type": "dofa", "titulo_diapositiva": "...", "fortalezas": [], "oportunidades": [], "debilidades": [], "amenazas": []}""",
