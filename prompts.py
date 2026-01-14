@@ -190,6 +190,7 @@ def get_text_analysis_summary_prompt(full_context):
     **Tarea:** Genera un Resumen Ejecutivo exhaustivo.
     **Entrada:** {full_context}
     **Salida (Markdown):** Resumen general y desglose por Temas Clave con hallazgos soportados.
+    {INSTRUCCIONES_DE_CITAS}
     """
 
 def get_autocode_prompt(context, main_topic):
