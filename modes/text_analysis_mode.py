@@ -149,14 +149,15 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                 with render_process_status("🕵️ Analizando evidencia...", expanded=True) as status:
                     
                     # -----------------------------------------------------------
-                    # AJUSTE DE PROMPT: INSTRUCCIÓN BLINDADA
+                    # AJUSTE DE PROMPT: INSTRUCCIÓN DE BREVEDAD Y FORMATO OBLIGATORIO
                     # -----------------------------------------------------------
                     conciseness_instruction = (
-                        "\n\n[INSTRUCCIÓN CRÍTICA DE VISUALIZACIÓN: "
-                        "1. FORMATO OBLIGATORIO: [Fuente: Archivo.docx; Contexto: 'Verbatim corto aquí']. "
-                        "2. OCULTAMIENTO: Pon la evidencia textual (el verbatim) ÚNICAMENTE dentro del campo 'Contexto'. "
-                        "3. PROHIBIDO: NO escribas la cita o el verbatim en el cuerpo del texto principal. "
-                        "4. BREVEDAD: El 'Contexto' debe ser muy corto (máx 10-15 palabras). Solo lo más impactante.]"
+                        "\n\n[INSTRUCCIÓN CRÍTICA DE FORMATO - NO IGNORES ESTO: "
+                        "1. PARA CITAR: Debes usar OBLIGATORIAMENTE este formato: [Fuente: Archivo.docx; Contexto: '...']. "
+                        "2. PROHIBIDO: No uses números simples como [1] o [2]. El sistema no los reconoce. "
+                        "3. CONTEXTO: Debe ser EXTREMADAMENTE BREVE (máximo 1 o 2 verbatims de 5-10 palabras). "
+                        "   Ejemplo Correcto: [Fuente: doc1.docx; Contexto: 'Sabe muy rico. Es refrescante']. "
+                        "   Ejemplo Incorrecto: [1] ]"
                     )
                     
                     final_context = f"{all_docs_text}\n\n--- CONTEXTO GENERAL ---\n{summary_context}{conciseness_instruction}"
@@ -174,10 +175,12 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                         if clean_text and not clean_text.endswith(('.', '!', '?', '"', '}', ']')):
                             
                             status.update(label="⚠️ Detectado corte de red. Auto-completando...", state="running")
+                            # CORRECCIÓN: Recordamos el formato también en la continuación para que no lo olvide
                             continuation_prompt = (
                                 f"Tu respuesta anterior se cortó. Esto es lo último que escribiste:\n"
                                 f"...{clean_text[-500:]}\n\n"
-                                "POR FAVOR TERMINA LA FRASE Y LA IDEA COHERENTEMENTE."
+                                "POR FAVOR TERMINA LA FRASE Y LA IDEA. "
+                                "IMPORTANTE: Si citas algo, usa el formato: [Fuente: Archivo; Contexto: '...']. NO uses [1]."
                             )
                             stream_fix = call_gemini_stream(continuation_prompt, generation_config_override={"max_output_tokens": 4096})
                             
