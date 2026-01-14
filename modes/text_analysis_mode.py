@@ -112,9 +112,10 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
     if st.button("← Volver"): st.session_state.mode_state = {}; st.rerun()
     st.divider()
     
+    # AJUSTE 1: Reducimos límite a 150k para evitar Timeouts y cortes
     all_docs_text = "\n".join([f"--- DOC: {d['source']} ---\n{d['content']}" for d in documents_list])
-    if len(all_docs_text) > 200000: 
-        all_docs_text = all_docs_text[:200000] + "\n...(texto truncado por seguridad)"
+    if len(all_docs_text) > 150000: 
+        all_docs_text = all_docs_text[:150000] + "\n...(texto truncado por optimización)"
     
     if "transcript_chat_history" not in st.session_state.mode_state: 
         st.session_state.mode_state["transcript_chat_history"] = []
@@ -123,7 +124,7 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
     for msg in st.session_state.mode_state["transcript_chat_history"]:
         with st.chat_message(msg["role"], avatar="✨" if msg['role'] == "assistant" else "👤"):
             if msg['role'] == "assistant":
-                # CORRECCIÓN: Renderizar con tooltips
+                # Renderizar con tooltips
                 formatted_html = process_text_with_tooltips(msg["content"])
                 st.markdown(formatted_html, unsafe_allow_html=True)
             else:
@@ -148,16 +149,15 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                 
                 with render_process_status("🕵️ Analizando evidencia...", expanded=True) as status:
                     
-                    # -----------------------------------------------------------
-                    # AJUSTE DE PROMPT: INSTRUCCIÓN DE BREVEDAD Y FORMATO OBLIGATORIO
-                    # -----------------------------------------------------------
+                    # AJUSTE 2: Prompt reforzado para brevedad extrema en contexto
                     conciseness_instruction = (
-                        "\n\n[INSTRUCCIÓN CRÍTICA DE FORMATO - NO IGNORES ESTO: "
-                        "1. PARA CITAR: Debes usar OBLIGATORIAMENTE este formato: [Fuente: Archivo.docx; Contexto: '...']. "
-                        "2. PROHIBIDO: No uses números simples como [1] o [2]. El sistema no los reconoce. "
-                        "3. CONTEXTO: Debe ser EXTREMADAMENTE BREVE (máximo 1 o 2 verbatims de 5-10 palabras). "
-                        "   Ejemplo Correcto: [Fuente: doc1.docx; Contexto: 'Sabe muy rico. Es refrescante']. "
-                        "   Ejemplo Incorrecto: [1] ]"
+                        "\n\n[INSTRUCCIÓN CRÍTICA DE FORMATO: "
+                        "1. Redacta de forma fluida y ejecutiva. "
+                        "2. Citas: Usa SIEMPRE el formato: [Fuente: Archivo.docx; Contexto: '...']. "
+                        "3. NUNCA uses citas simples como [1]. "
+                        "4. CONTEXTO: Debe ser EXTREMADAMENTE BREVE (máximo 5-10 palabras clave). "
+                        "Ejemplo: Contexto: 'Sabor dulce y textura suave'. "
+                        "5. Evita respuestas excesivamente largas para no cortar la conexión.]"
                     )
                     
                     final_context = f"{all_docs_text}\n\n--- CONTEXTO GENERAL ---\n{summary_context}{conciseness_instruction}"
@@ -172,15 +172,18 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                         
                         # Verificación de Corte
                         clean_text = full_response.strip()
+                        # Si no termina en puntuación final, asumimos corte
                         if clean_text and not clean_text.endswith(('.', '!', '?', '"', '}', ']')):
                             
-                            status.update(label="⚠️ Detectado corte de red. Auto-completando...", state="running")
-                            # CORRECCIÓN: Recordamos el formato también en la continuación para que no lo olvide
+                            status.update(label="⚠️ Detectado corte de red. Completando frase...", state="running")
+                            
+                            # AJUSTE 3: Prompt de recuperación mejorado para no olvidar el formato
                             continuation_prompt = (
                                 f"Tu respuesta anterior se cortó. Esto es lo último que escribiste:\n"
                                 f"...{clean_text[-500:]}\n\n"
-                                "POR FAVOR TERMINA LA FRASE Y LA IDEA. "
-                                "IMPORTANTE: Si citas algo, usa el formato: [Fuente: Archivo; Contexto: '...']. NO uses [1]."
+                                "POR FAVOR TERMINA LA FRASE Y LA IDEA COHERENTEMENTE. "
+                                "NO repitas lo anterior. "
+                                "Recuerda cerrar cualquier cita con el formato: [Fuente: ...; Contexto: '...']."
                             )
                             stream_fix = call_gemini_stream(continuation_prompt, generation_config_override={"max_output_tokens": 4096})
                             
