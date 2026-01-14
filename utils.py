@@ -195,99 +195,100 @@ def validate_session_integrity():
             print(f"Error validando sesión: {e}")
 
 # =========================================================
-# LÓGICA DE CITAS: TOOLTIPS CSS REALES
+# LÓGICA DE CITAS: TOOLTIPS CSS CORREGIDOS
 # =========================================================
 def process_text_with_tooltips(text):
     """
-    Convierte [Fuente: Archivo] en números [1] con tooltips CSS flotantes.
-    Inyecta el CSS necesario directamente en el componente Markdown.
+    Convierte [Fuente: Archivo; Contexto: "..."] en números [1] con tooltips CSS.
     """
     if not text: return ""
 
-    # ESTILOS CSS INYECTADOS PARA EL TOOLTIP
-    # Usamos clases específicas para evitar conflictos
+    # CSS sin indentación (para que no salga como código)
     css_styles = """
-    <style>
-        .rag-citation {
-            position: relative;
-            display: inline-block;
-            cursor: pointer; /* Mano en vez de ? */
-            color: #0056b3;
-            font-weight: bold;
-            font-size: 0.9em;
-            margin: 0 2px;
-            border-bottom: 1px dotted #0056b3;
-        }
-        
-        /* La cajita del tooltip (oculta por defecto) */
-        .rag-citation .rag-tooltip-text {
-            visibility: hidden;
-            width: max-content;
-            max-width: 250px;
-            background-color: #333;
-            color: #fff;
-            text-align: center;
-            border-radius: 6px;
-            padding: 8px;
-            position: absolute;
-            z-index: 9999; /* Asegurar que quede encima de todo */
-            bottom: 125%; /* Aparece ARRIBA del número */
-            left: 50%;
-            transform: translateX(-50%);
-            opacity: 0;
-            transition: opacity 0.3s;
-            font-size: 0.8em;
-            font-weight: normal;
-            box-shadow: 0px 4px 8px rgba(0,0,0,0.2);
-            line-height: 1.4;
-        }
-
-        /* La flechita de abajo del tooltip */
-        .rag-citation .rag-tooltip-text::after {
-            content: "";
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            margin-left: -5px;
-            border-width: 5px;
-            border-style: solid;
-            border-color: #333 transparent transparent transparent;
-        }
-
-        /* Mostrar al pasar el mouse */
-        .rag-citation:hover .rag-tooltip-text {
-            visibility: visible;
-            opacity: 1;
-        }
-    </style>
-    """
+<style>
+.rag-citation {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+    color: #0056b3;
+    font-weight: bold;
+    font-size: 0.85em;
+    margin: 0 2px;
+    vertical-align: super;
+}
+.rag-citation .rag-tooltip-text {
+    visibility: hidden;
+    width: 280px;
+    background-color: #333;
+    color: #fff;
+    text-align: left;
+    border-radius: 6px;
+    padding: 10px;
+    position: absolute;
+    z-index: 99999;
+    bottom: 140%;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    transition: opacity 0.2s;
+    font-size: 0.8rem;
+    font-weight: normal;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    line-height: 1.4;
+    pointer-events: none;
+}
+.rag-citation .rag-tooltip-text::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #333 transparent transparent transparent;
+}
+.rag-citation:hover .rag-tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+</style>
+"""
 
     try:
-        pattern = r'\[(?:Fuente|Doc|Archivo):\s*(.*?)\]'
+        # 1. Regex actualizada para capturar archivo Y contexto opcional
+        # Captura: [Fuente: Archivo.pdf; Contexto: "cita..."] o [Fuente: Archivo.pdf]
+        pattern = r'\[(?:Fuente|Doc|Archivo):\s*(.*?)(?:;\s*Contexto:\s*"(.*?)")?\]'
+        
         matches = re.findall(pattern, text)
         unique_sources = {}
         counter = 1
         
-        for m in matches:
-            source_name = m.strip()
-            if source_name not in unique_sources:
-                unique_sources[source_name] = counter
+        # Mapear fuentes únicas a números
+        for fname, fcontext in matches:
+            fname = fname.strip()
+            if fname not in unique_sources:
+                unique_sources[fname] = counter
                 counter += 1
         
         def replace_match(match):
-            source_raw = match.group(1).strip()
-            citation_number = unique_sources.get(source_raw, "?")
-            source_clean = html.escape(source_raw)
+            fname = match.group(1).strip()
+            fcontext = match.group(2)
             
-            # Estructura HTML para Tooltip CSS puro
+            citation_number = unique_sources.get(fname, "?")
+            
+            # Preparamos el contenido del tooltip
+            safe_fname = html.escape(fname)
+            safe_context = html.escape(fcontext.strip()) if fcontext else "Fuente del documento."
+            
+            tooltip_html = f"<strong>📂 {safe_fname}</strong><hr style='margin:4px 0; border-color:#555;'>💬 <em>{safe_context}</em>"
+            
             return f'''
             <div class="rag-citation">
                 [{citation_number}]
-                <span class="rag-tooltip-text">📄 {source_clean}</span>
+                <span class="rag-tooltip-text">{tooltip_html}</span>
             </div>
             '''
         
-        # Hacemos el reemplazo
         enriched_text = re.sub(pattern, replace_match, text)
         
         # Pie de página opcional
@@ -298,8 +299,7 @@ def process_text_with_tooltips(text):
                 footer += f"<b>[{num}]</b> {html.escape(name)}<br>"
             footer += "</div>"
             enriched_text += footer
-            
-        # Concatenamos los estilos CSS al principio del texto
+
         return css_styles + enriched_text
 
     except Exception as e:
