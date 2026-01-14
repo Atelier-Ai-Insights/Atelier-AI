@@ -148,10 +148,16 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                 
                 with render_process_status("🕵️ Analizando evidencia...", expanded=True) as status:
                     
+                    # -----------------------------------------------------------
+                    # AJUSTE DE PROMPT: INSTRUCCIÓN DE BREVEDAD EXTREMA EN CONTEXTO
+                    # -----------------------------------------------------------
                     conciseness_instruction = (
-                        "\n\n[INSTRUCCIÓN: Redacta un análisis fluido. "
-                        "Usa el formato de citas rico: [Fuente: Archivo; Contexto: 'Breve fragmento...']. "
-                        "Prioriza la brevedad en el contexto (máx 15 palabras).]"
+                        "\n\n[INSTRUCCIÓN DE FORMATO CRÍTICA: "
+                        "1. Redacta de forma fluida y analítica. "
+                        "2. Citas: Usa SIEMPRE el formato: [Fuente: Archivo.docx; Contexto: '...']. "
+                        "3. NUNCA uses citas simples como [1] o [2]. "
+                        "4. CONTEXTO: Debe contener SOLO 1 o 2 verbatims cortos y relevantes. "
+                        "Ejemplo: Contexto: 'Me gusta porque es barato. Sabe a fruta real'. (Máximo 10-15 palabras).]"
                     )
                     
                     final_context = f"{all_docs_text}\n\n--- CONTEXTO GENERAL ---\n{summary_context}{conciseness_instruction}"
