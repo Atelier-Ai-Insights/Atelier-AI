@@ -11,9 +11,7 @@ from services.supabase_db import log_query_event, supabase, get_daily_usage
 from prompts import get_transcript_prompt, get_text_analysis_summary_prompt
 import constants as c
 from config import banner_file
-# ---------------------------------------------------------------------
-# AJUSTE: Ya no importamos process_text_with_tooltips porque queremos texto plano
-# ---------------------------------------------------------------------
+# Nota: Quitamos la importación de process_text_with_tooltips ya que usaremos texto plano
 from utils import reset_transcript_chat_workflow, render_process_status
 
 # --- GENERADORES ---
@@ -21,7 +19,7 @@ from reporting.pdf_generator import generate_pdf_html
 from reporting.docx_generator import generate_docx
 
 # =====================================================
-# MODO: ANÁLISIS DE TEXTOS (REFERENCIAS EN TEXTO PLANO)
+# MODO: ANÁLISIS DE TEXTOS (CONVERSACIONAL Y ROBUSTO)
 # =====================================================
 
 TEXT_PROJECT_BUCKET = "text_project_files"
@@ -112,8 +110,9 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
     if st.button("← Volver"): st.session_state.mode_state = {}; st.rerun()
     st.divider()
     
-    # AJUSTE 1: Enumeramos los documentos (Doc 1, Doc 2...) para que la IA pueda referenciarlos por número
-    all_docs_text = "\n".join([f"--- DOC {i+1}: {d['source']} ---\n{d['content']}" for i, d in enumerate(documents_list)])
+    # 1. OPTIMIZACIÓN: Enumeración clara de documentos para referencias fáciles
+    # Limitamos caracteres para asegurar agilidad
+    all_docs_text = "\n".join([f"--- DOCUMENTO {i+1} (Archivo: {d['source']}) ---\n{d['content']}" for i, d in enumerate(documents_list)])
     
     if len(all_docs_text) > 200000: 
         all_docs_text = all_docs_text[:200000] + "\n...(texto truncado por seguridad)"
@@ -121,15 +120,15 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
     if "transcript_chat_history" not in st.session_state.mode_state: 
         st.session_state.mode_state["transcript_chat_history"] = []
 
-    # Mostrar historial (TEXTO PLANO, SIN TOOLTIPS)
+    # 2. OPTIMIZACIÓN: Renderizado simple y limpio del historial
     for msg in st.session_state.mode_state["transcript_chat_history"]:
         with st.chat_message(msg["role"], avatar="✨" if msg['role'] == "assistant" else "👤"):
-            # AJUSTE 2: Mostramos el contenido directo, sin procesar HTML
             st.markdown(msg["content"])
 
     user_prompt = st.chat_input("Ej: ¿Cuáles son los hallazgos principales?")
 
     if user_prompt:
+        # Añadimos mensaje del usuario al historial
         st.session_state.mode_state["transcript_chat_history"].append({"role": "user", "content": user_prompt})
         with st.chat_message("user", avatar="👤"): st.markdown(user_prompt)
 
@@ -144,20 +143,33 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                 full_response = ""
                 response_placeholder = st.empty()
                 
-                with render_process_status("🕵️ Analizando evidencia...", expanded=True) as status:
+                with render_process_status("🕵️ Analizando evidencia textual...", expanded=True) as status:
                     
-                    # AJUSTE 3: Instrucción para citar VISIBLEMENTE en el texto
-                    conciseness_instruction = (
-                        "\n\n[INSTRUCCIÓN DE FORMATO:"
-                        "1. Redacta de forma fluida."
-                        "2. CITAS: Cuando menciones un hallazgo, indica la fuente entre corchetes al final de la frase."
-                        "   Usa el formato: [Fuente: NombreDelArchivo] o [Doc #]."
-                        "3. NO uses tooltips ocultos ni formatos complejos 'Contexto'. Deja la referencia visible en el texto.]"
+                    # 3. OPTIMIZACIÓN: Prompt Estructurado para Conversación y Evidencia
+                    # Recuperamos los últimos 2 mensajes para dar contexto conversacional (memoria a corto plazo)
+                    recent_history = st.session_state.mode_state["transcript_chat_history"][-3:-1] if len(st.session_state.mode_state["transcript_chat_history"]) > 1 else []
+                    history_context = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in recent_history])
+
+                    format_instruction = (
+                        "\n\n[INSTRUCCIÓN DE FORMATO Y EVIDENCIA:"
+                        "\n1. Actúa como un investigador cualitativo experto."
+                        "\n2. Usa el historial de conversación para entender el contexto."
+                        "\n3. **Citas:** Cada afirmación importante debe tener evidencia visible en el texto."
+                        "\n   Usa este formato: **[Doc #: \"cita textual corta en cursiva\"]**."
+                        "\n   Ejemplo: *El producto es percibido como costoso [Doc 1: \"es demasiado caro para lo que ofrece\"].*"
+                        "\n4. No uses tooltips ocultos. La evidencia debe leerse fluidamente."
+                        "\n5. Estructura la respuesta con viñetas claras.]"
                     )
                     
-                    final_context = f"{all_docs_text}\n\n--- CONTEXTO GENERAL ---\n{summary_context}{conciseness_instruction}"
-                    chat_prompt = get_transcript_prompt(final_context, user_prompt)
+                    final_context = (
+                        f"--- INFORMACIÓN (FUENTES) ---\n{all_docs_text}\n\n"
+                        f"--- HISTORIAL RECIENTE ---\n{history_context}\n\n"
+                        f"--- CONTEXTO DEL PROYECTO ---\n{summary_context}\n"
+                        f"{format_instruction}"
+                    )
                     
+                    # Llamada con el prompt especializado
+                    chat_prompt = get_transcript_prompt(final_context, user_prompt)
                     stream = call_gemini_stream(chat_prompt, generation_config_override={"max_output_tokens": 8192})
                     
                     if stream:
@@ -165,33 +177,37 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                             full_response += chunk
                             response_placeholder.markdown(full_response + "▌")
                         
-                        # Verificación de Corte
+                        # 4. OPTIMIZACIÓN: Verificación y Recuperación de Cortes
                         clean_text = full_response.strip()
+                        # Si no termina en puntuación de cierre, asumimos corte
                         if clean_text and not clean_text.endswith(('.', '!', '?', '"', '}', ']')):
-                            status.update(label="⚠️ Detectado corte de red. Auto-completando...", state="running")
+                            status.update(label="⚠️ La respuesta se cortó. Completando...", state="running")
+                            
+                            # Prompt de rescate inteligente
                             continuation_prompt = (
-                                f"Tu respuesta anterior se cortó. Esto es lo último que escribiste:\n"
+                                f"Tu respuesta anterior se cortó abruptamente. Esto fue lo último que escribiste:\n"
                                 f"...{clean_text[-500:]}\n\n"
-                                "POR FAVOR TERMINA LA FRASE Y LA IDEA COHERENTEMENTE."
+                                "POR FAVOR CONTINÚA LA IDEA Y TERMINA LA FRASE. "
+                                "Mantén el mismo formato de citas: [Doc #: \"cita\"]."
                             )
+                            
                             stream_fix = call_gemini_stream(continuation_prompt, generation_config_override={"max_output_tokens": 4096})
                             if stream_fix:
                                 for chunk_fix in stream_fix:
-                                    full_response += chunk_fix
+                                    full_response += chunk_fix # Concatenamos
                                     response_placeholder.markdown(full_response + "▌")
                         
                         status.update(label="¡Respuesta completa!", state="complete", expanded=False)
-                        
-                        # AJUSTE 4: Renderizado final directo (sin tooltips)
-                        response_placeholder.markdown(full_response) 
+                        response_placeholder.markdown(full_response) # Render final limpio
                         
                         log_query_event(user_prompt, mode=f"{c.MODE_TEXT_ANALYSIS} (Chat)")
                         st.session_state.mode_state["transcript_chat_history"].append({"role": "assistant", "content": full_response})
                         
                     else:
                         status.update(label="Error en respuesta", state="error")
-                        st.error("Error al obtener respuesta.")
+                        st.error("Error al obtener respuesta del servidor.")
 
+    # Botones de exportación
     if st.session_state.mode_state["transcript_chat_history"]:
         st.divider() 
         c1, c2, c3 = st.columns(3)
@@ -213,6 +229,7 @@ def text_analysis_mode():
     uid = st.session_state.user_id
     limit = st.session_state.plan_features.get('transcript_file_limit', 0)
 
+    # 1. Cargar Docs
     if "ta_selected_project_id" in st.session_state.mode_state and "ta_documents_list" not in st.session_state.mode_state:
         with render_process_status("Cargando archivos...", expanded=True) as status:
             docs = load_text_project_data(st.session_state.mode_state["ta_storage_path"]) 
@@ -221,15 +238,18 @@ def text_analysis_mode():
         if docs: st.session_state.mode_state["ta_documents_list"] = docs
         else: st.session_state.mode_state.pop("ta_selected_project_id")
 
+    # 2. Resumen Inicial (Solo si no existe)
     if "ta_documents_list" in st.session_state.mode_state and "ta_summary_context" not in st.session_state.mode_state:
         with render_process_status("Generando visión general...", expanded=True) as status:
             docs = st.session_state.mode_state["ta_documents_list"]
-            summ_in = "".join([f"\nDoc: {d['source']}\n{d['content'][:2500]}\n..." for d in docs])
+            # Tomamos una muestra más grande para el resumen inicial
+            summ_in = "".join([f"\nDoc: {d['source']}\n{d['content'][:3000]}\n..." for d in docs])
             summ = call_gemini_api(get_text_analysis_summary_prompt(summ_in), generation_config_override={"max_output_tokens": 8192})
             status.update(label="Listo", state="complete", expanded=False)
             
         if summ: st.session_state.mode_state["ta_summary_context"] = summ; st.rerun()
 
+    # 3. Vistas
     if "ta_summary_context" in st.session_state.mode_state:
         show_text_project_analyzer(
             st.session_state.mode_state["ta_summary_context"],
