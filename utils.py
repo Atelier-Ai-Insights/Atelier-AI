@@ -195,30 +195,32 @@ def validate_session_integrity():
             print(f"Error validando sesión: {e}")
 
 # =========================================================
-# LÓGICA DE CITAS: TOOLTIPS CSS CORREGIDOS
+# LÓGICA DE CITAS: CORRECCIÓN DE FLUIDEZ (INLINE)
 # =========================================================
 def process_text_with_tooltips(text):
     """
     Convierte [Fuente: Archivo; Contexto: "..."] en números [1] con tooltips CSS.
+    Usa etiquetas SPAN para evitar saltos de línea indeseados.
     """
     if not text: return ""
 
-    # CSS mejorado: más ancho (350px) para acomodar más texto
+    # CSS mejorado: más ancho (350px) y asegurando comportamiento inline
     css_styles = """
 <style>
 .rag-citation {
     position: relative;
-    display: inline-block;
+    display: inline-block; /* Comportamiento de palabra */
     cursor: pointer;
     color: #0056b3;
     font-weight: bold;
     font-size: 0.85em;
     margin: 0 2px;
     vertical-align: super;
+    line-height: 1; /* Evita afectar la altura de la línea */
 }
 .rag-citation .rag-tooltip-text {
     visibility: hidden;
-    width: 350px; /* MÁS ANCHO PARA CONTENIDO RICO */
+    width: 350px;
     background-color: #333;
     color: #fff;
     text-align: left;
@@ -255,14 +257,12 @@ def process_text_with_tooltips(text):
 """
 
     try:
-        # Regex actualizada para capturar archivo Y contexto
         pattern = r'\[(?:Fuente|Doc|Archivo):\s*(.*?)(?:;\s*Contexto:\s*"(.*?)")?\]'
         
         matches = re.findall(pattern, text)
         unique_sources = {}
         counter = 1
         
-        # Mapear fuentes únicas
         for fname, fcontext in matches:
             fname = fname.strip()
             if fname not in unique_sources:
@@ -276,22 +276,15 @@ def process_text_with_tooltips(text):
             citation_number = unique_sources.get(fname, "?")
             
             safe_fname = html.escape(fname)
-            # Si no hay contexto, ponemos un mensaje default
             safe_context = html.escape(fcontext.strip()) if fcontext else "Detalle no disponible."
             
-            # HTML del tooltip
             tooltip_html = f"<strong>📂 {safe_fname}</strong><hr style='margin:6px 0; border-color:#555;'>💬 <em>{safe_context}</em>"
             
-            return f'''
-            <div class="rag-citation">
-                [{citation_number}]
-                <span class="rag-tooltip-text">{tooltip_html}</span>
-            </div>
-            '''
+            # CAMBIO CLAVE: Usamos <span> en lugar de <div>
+            return f'''<span class="rag-citation">[{citation_number}]<span class="rag-tooltip-text">{tooltip_html}</span></span>'''
         
         enriched_text = re.sub(pattern, replace_match, text)
         
-        # Pie de página opcional
         if unique_sources:
             footer = "\n\n<div style='font-size: 0.8em; color: #666; margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px;'><strong>Referencias:</strong><br>"
             sorted_sources = sorted(unique_sources.items(), key=lambda x: x[1])
