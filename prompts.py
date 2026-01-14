@@ -5,7 +5,7 @@ from datetime import datetime
 # INSTRUCCIONES GLOBALES (CRÍTICO: CALIDAD DE EVIDENCIA EN TOOLTIPS)
 # ==============================================================================
 
-# --- BLOQUE DE INSTRUCCIONES DE CITAS (MEJORADO: VERIFICACIÓN INTERNA) ---
+# --- BLOQUE DE INSTRUCCIONES DE CITAS ---
 INSTRUCCIONES_DE_CITAS = """
 **REGLAS DE EVIDENCIA Y CITAS (SISTEMA RAG - ESTRICTO):**
 1. **Veracidad Absoluta:** Responde ÚNICAMENTE usando la 'Información documentada'. Si la respuesta no está en el texto, di "No encontré información sobre X en los documentos". NO inventes.
@@ -159,7 +159,7 @@ def get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
         "**Rol:** Director Creativo.",
         f"Target: {target_audience} | Objetivos: {comm_objectives}",
         f"Datos Contextuales: {relevant_text_context[:8000]}", 
-        "Evalúa la imagen (Impacto, Claridad, Branding, CTA).",
+        "Evalúa la imagen (Impacto, Claridad del Mensaje, Branding, Call To Action).",
         INSTRUCCIONES_DE_CITAS
     ]
 
@@ -168,7 +168,7 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
         "**Rol:** Director Audiovisual.",
         f"Target: {target_audience} | Objetivos: {comm_objectives}",
         f"Datos Contextuales: {relevant_text_context[:8000]}",
-        "Evalúa el video (Narrativa, Ritmo, Branding, CTA).",
+        "Evalúa el video (Impacto, Narrativa, Ritmo, Branding, Call To Action).",
         INSTRUCCIONES_DE_CITAS
     ]
 
@@ -197,7 +197,7 @@ def get_autocode_prompt(context, main_topic):
     **Rol:** Codificador Cualitativo (Grounded Theory).
     **Tarea:** Extrae códigos y categorías sobre '{main_topic}'.
     **Texto Base:** {context}
-    **Salida:** Lista de Temas clave, Códigos asociados y citas de ejemplo.
+    **Salida:** Lista de Temas clave (Categorías de Análisis), Códigos asociados y citas de ejemplo.
     {INSTRUCCIONES_DE_CITAS}
     """
 
