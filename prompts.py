@@ -2,29 +2,24 @@ import streamlit as st
 from datetime import datetime
 
 # ==============================================================================
-# INSTRUCCIONES GLOBALES (CRÍTICO: TOOLTIPS RICOS Y TEXTO LIMPIO)
+# INSTRUCCIONES GLOBALES (CRÍTICO: CALIDAD DE EVIDENCIA EN TOOLTIPS)
 # ==============================================================================
 
-# --- BLOQUE DE INSTRUCCIONES DE CITAS (MEJORADO: OBLIGA A OCULTAR EVIDENCIA) ---
+# --- BLOQUE DE INSTRUCCIONES DE CITAS (MEJORADO: VERIFICACIÓN INTERNA) ---
 INSTRUCCIONES_DE_CITAS = """
-**REGLAS DE EVIDENCIA Y VISUALIZACIÓN (ESTRICTO):**
-
-1. **LIMPIEZA VISUAL (PROHIBIDO ENSUCIAR):**
-   - Tu respuesta final debe ser limpia y directa.
-   - **PROHIBIDO** escribir citas textuales, frases en cursiva, explicaciones entre paréntesis o "evidencias" debajo de los párrafos.
-   - **PROHIBIDO** usar íconos de comentarios (💬) en el cuerpo del texto.
-
-2. **ATRIBUCIÓN "ESCONDIDA" (OBLIGATORIO):**
-   - Toda la evidencia, citas textuales, o explicaciones de soporte que antes ponías en cursiva, ahora deben ir **DENTRO** de la etiqueta de fuente, en el campo 'Contexto'.
-   - Usa este formato EXACTO al final de la afirmación:
+**REGLAS DE EVIDENCIA Y CITAS (SISTEMA RAG - ESTRICTO):**
+1. **Veracidad Absoluta:** Responde ÚNICAMENTE usando la 'Información documentada'. Si la respuesta no está en el texto, di "No encontré información sobre X en los documentos". NO inventes.
+2. **Atribución Inmediata:** Cada afirmación debe llevar su sustento. Formato: [1], [2].
+   - *Mal:* "Los usuarios prefieren el rojo. También les gusta el azul [1]."
+   - *Bien:* "Los usuarios prefieren el rojo [1], aunque un segmento prefiere el azul [2]."
+3. **SECCIÓN DE FUENTES (Obligatoria al final):**
+   Genera una lista verificando que la cita respalde la afirmación. Usa este formato exacto (el separador '|||' es vital):
    
-   **[Fuente: NombreArchivo.docx; Contexto: "Aquí pegas la cita textual o la explicación detallada (15-30 palabras) que justifica la afirmación."]**
+   **Fuentes Verificadas:**
+   [1] NombreArchivo.pdf ||| Cita: "El 45% de la muestra..." (Contexto: Encuesta Q3)
+   [2] Entrevista_CEO.pdf ||| Cita: "Debemos bajar costos..."
 
-   *Ejemplo CORRECTO:* "Los usuarios prefieren sabores cítricos [Fuente: Reporte_2024.pdf; Contexto: "El 60% de los encuestados mencionó limón y mandarina como favoritos por su frescura y sabor natural."]"
-
-   *Ejemplo INCORRECTO:* "Los usuarios prefieren sabores cítricos [1]. *El 60% mencionó limón...*" (ESTO ESTÁ MAL PORQUE EL TEXTO EN CURSIVA ENSUCIA LA LECTURA).
-
-3. **Contexto Rico:** El texto dentro de `Contexto: "..."` es lo que el usuario leerá al pasar el mouse. Asegúrate de que aporte valor y detalle.
+   ⚠️ **CRÍTICO:** Si el texto después de '|||' no justifica la frase del texto principal, la respuesta será considerada errónea.
 """
 
 # ==============================================================================
@@ -51,8 +46,8 @@ def get_report_prompt2(question, result1, relevant_info):
         
         f"**Instrucciones de Redacción:**\n"
         f"- **Principio de la Pirámide:** Empieza con la conclusión principal (BLUF).\n"
-        f"- **Lenguaje:** Directo, activo, sin adjetivos vacíos.\n"
-        f"- **Profundidad:** Explica POR QUÉ importa (Implicaciones).\n\n"
+        f"- **Lenguaje:** Directo, activo, sin adjetivos vacíos (evita 'interesante', 'importante').\n"
+        f"- **Profundidad:** No solo describas QUÉ pasó, explica POR QUÉ importa (Implicaciones).\n\n"
         
         f"**Estructura del Entregable:**\n"
         f"1. **Resumen Ejecutivo:** La respuesta directa en 3 líneas.\n"
@@ -74,11 +69,10 @@ def get_grounded_chat_prompt(conversation_history, relevant_info, long_term_memo
 
     return (
         f"**Rol:** Asistente de Investigación Senior.\n"
-        f"**Tarea:** Responde la ÚLTIMA pregunta del usuario sintetizando la 'Información Documentada'.\n\n"
+        f"**Tarea:** Responde la ÚLTIMA pregunta del usuario sintetizando la 'Información Documentada' y la 'Memoria'.\n\n"
         f"{bloque_memoria}"
         f"**📄 Info Documentada (Fuente de Verdad):**\n{relevant_info}\n\n"
         f"**💬 Historial de Conversación:**\n{conversation_history}\n\n"
-        f"**REGLA DE ORO:** No ensucies la respuesta con citas en el texto visible. Mueve toda explicación detallada al campo 'Contexto' dentro del corchete.\n"
         f"{INSTRUCCIONES_DE_CITAS}\n"
         "**Respuesta:**"
     )
@@ -138,7 +132,7 @@ def get_concept_gen_prompt(product_idea, context_info):
         f"#### Ruta A: [Ponle un Nombre Creativo]\n"
         f"* **Insight:** (La verdad humana profunda que detona la compra).\n"
         f"* **What:** (La promesa principal: qué gano yo).\n"
-        f"* **Reason to Believe:** (La evidencia técnica o de mercado que lo hace creíble. Usa citas con Contexto).\n"
+        f"* **Reason to Believe:** (La evidencia técnica o de mercado que lo hace creíble. Usa citas [x]).\n"
         f"* **Claim/Slogan:** (Frase de cierre memorable).\n\n"
         
         f"#### Ruta B: [Ponle un Nombre Alternativo]\n"
@@ -187,9 +181,7 @@ def get_transcript_prompt(combined_context, user_prompt):
         f"**Rol:** Investigador Cualitativo Experto.\n"
         f"**Pregunta:** {user_prompt}\n"
         f"**Info (Transcripciones):**\n{combined_context}\n"
-        f"Identifica patrones recurrentes, anomalías y sintetiza.\n"
-        f"IMPORTANTE: Usa el formato de citas rico: **[Fuente: Archivo; Contexto: \"Cita textual...\"]**.\n"
-        f"{INSTRUCCIONES_DE_CITAS}"
+        f"Identifica patrones recurrentes, anomalías y sintetiza usando quotes textuales.\n{INSTRUCCIONES_DE_CITAS}"
     )
 
 def get_text_analysis_summary_prompt(full_context):
@@ -201,12 +193,11 @@ def get_text_analysis_summary_prompt(full_context):
     """
 
 def get_autocode_prompt(context, main_topic):
-    # Aunque no se use en UI, se mantiene por referencia
     return f"""
-    **Rol:** Codificador Cualitativo.
+    **Rol:** Codificador Cualitativo (Grounded Theory).
     **Tarea:** Extrae códigos y categorías sobre '{main_topic}'.
     **Texto Base:** {context}
-    **Salida:** Lista de Temas clave.
+    **Salida:** Lista de Temas clave, Códigos asociados y citas de ejemplo.
     {INSTRUCCIONES_DE_CITAS}
     """
 
@@ -223,7 +214,11 @@ def get_media_transcription_prompt():
     return """
     **Rol:** Transcriptor Profesional.
     **Tarea:** Transcribe el audio palabra por palabra.
-    **Formato:** Texto plano con hablantes identificados.
+    **Formato:**
+    - Usa parráfos claros.
+    - Identifica hablantes si es posible (Hablante 1, Hablante 2).
+    - Describe acciones visuales o ruidos importantes entre corchetes [Risas], [Música de fondo].
+    **Salida:** Texto plano.
     """
 
 # ==============================================================================
@@ -283,6 +278,17 @@ def get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups):
 # ==============================================================================
 # SECCIÓN: ANÁLISIS DE TENDENCIAS
 # ==============================================================================
+
+SOURCE_LENSES = {
+    "DANE": "Indicadores duros: IPC, Desempleo.",
+    "Banco de la República": "Macroeconomía, tasas.",
+    "Fenalco": "Comercio y Retail.",
+    "Camacol": "Vivienda y Construcción.",
+    "Euromonitor": "Megatendencias.",
+    "Google Trends": "Intención Digital.",
+    "McKinsey/Deloitte": "Futuro del Consumidor.",
+    "SIC": "Regulación."
+}
 
 def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_list):
     current_date = datetime.now().strftime("%d de %B de %Y")
