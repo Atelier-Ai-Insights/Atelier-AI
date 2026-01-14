@@ -5,23 +5,23 @@ import os
 import uuid
 from datetime import datetime
 import re 
-import time # Importante para la pausa de seguridad
+import time 
 from services.gemini_api import call_gemini_api, call_gemini_stream 
 from services.supabase_db import log_query_event, supabase, get_daily_usage
 from prompts import get_transcript_prompt, get_text_analysis_summary_prompt
 import constants as c
 from config import banner_file
 # ---------------------------------------------------------------------
-# CORRECCIÓN: Importamos process_text_with_tooltips explícitamente
+# AJUSTE: Ya no importamos process_text_with_tooltips porque queremos texto plano
 # ---------------------------------------------------------------------
-from utils import reset_transcript_chat_workflow, render_process_status, process_text_with_tooltips
+from utils import reset_transcript_chat_workflow, render_process_status
 
 # --- GENERADORES ---
 from reporting.pdf_generator import generate_pdf_html
 from reporting.docx_generator import generate_docx
 
 # =====================================================
-# MODO: ANÁLISIS DE TEXTOS (AUTO-REPARACIÓN + TOOLTIPS)
+# MODO: ANÁLISIS DE TEXTOS (REFERENCIAS EN TEXTO PLANO)
 # =====================================================
 
 TEXT_PROJECT_BUCKET = "text_project_files"
@@ -112,23 +112,20 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
     if st.button("← Volver"): st.session_state.mode_state = {}; st.rerun()
     st.divider()
     
-    # AJUSTE 1: Reducimos límite a 150k para evitar Timeouts y cortes
-    all_docs_text = "\n".join([f"--- DOC: {d['source']} ---\n{d['content']}" for d in documents_list])
-    if len(all_docs_text) > 150000: 
-        all_docs_text = all_docs_text[:150000] + "\n...(texto truncado por optimización)"
+    # AJUSTE 1: Enumeramos los documentos (Doc 1, Doc 2...) para que la IA pueda referenciarlos por número
+    all_docs_text = "\n".join([f"--- DOC {i+1}: {d['source']} ---\n{d['content']}" for i, d in enumerate(documents_list)])
+    
+    if len(all_docs_text) > 200000: 
+        all_docs_text = all_docs_text[:200000] + "\n...(texto truncado por seguridad)"
     
     if "transcript_chat_history" not in st.session_state.mode_state: 
         st.session_state.mode_state["transcript_chat_history"] = []
 
-    # Mostrar historial (APLICANDO TOOLTIPS)
+    # Mostrar historial (TEXTO PLANO, SIN TOOLTIPS)
     for msg in st.session_state.mode_state["transcript_chat_history"]:
         with st.chat_message(msg["role"], avatar="✨" if msg['role'] == "assistant" else "👤"):
-            if msg['role'] == "assistant":
-                # Renderizar con tooltips
-                formatted_html = process_text_with_tooltips(msg["content"])
-                st.markdown(formatted_html, unsafe_allow_html=True)
-            else:
-                st.markdown(msg["content"])
+            # AJUSTE 2: Mostramos el contenido directo, sin procesar HTML
+            st.markdown(msg["content"])
 
     user_prompt = st.chat_input("Ej: ¿Cuáles son los hallazgos principales?")
 
@@ -149,15 +146,13 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                 
                 with render_process_status("🕵️ Analizando evidencia...", expanded=True) as status:
                     
-                    # AJUSTE 2: Prompt reforzado para brevedad extrema en contexto
+                    # AJUSTE 3: Instrucción para citar VISIBLEMENTE en el texto
                     conciseness_instruction = (
-                        "\n\n[INSTRUCCIÓN CRÍTICA DE FORMATO: "
-                        "1. Redacta de forma fluida y ejecutiva. "
-                        "2. Citas: Usa SIEMPRE el formato: [Fuente: Archivo.docx; Contexto: '...']. "
-                        "3. NUNCA uses citas simples como [1]. "
-                        "4. CONTEXTO: Debe ser EXTREMADAMENTE BREVE (máximo 5-10 palabras clave). "
-                        "Ejemplo: Contexto: 'Sabor dulce y textura suave'. "
-                        "5. Evita respuestas excesivamente largas para no cortar la conexión.]"
+                        "\n\n[INSTRUCCIÓN DE FORMATO:"
+                        "1. Redacta de forma fluida."
+                        "2. CITAS: Cuando menciones un hallazgo, indica la fuente entre corchetes al final de la frase."
+                        "   Usa el formato: [Fuente: NombreDelArchivo] o [Doc #]."
+                        "3. NO uses tooltips ocultos ni formatos complejos 'Contexto'. Deja la referencia visible en el texto.]"
                     )
                     
                     final_context = f"{all_docs_text}\n\n--- CONTEXTO GENERAL ---\n{summary_context}{conciseness_instruction}"
@@ -172,21 +167,14 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                         
                         # Verificación de Corte
                         clean_text = full_response.strip()
-                        # Si no termina en puntuación final, asumimos corte
                         if clean_text and not clean_text.endswith(('.', '!', '?', '"', '}', ']')):
-                            
-                            status.update(label="⚠️ Detectado corte de red. Completando frase...", state="running")
-                            
-                            # AJUSTE 3: Prompt de recuperación mejorado para no olvidar el formato
+                            status.update(label="⚠️ Detectado corte de red. Auto-completando...", state="running")
                             continuation_prompt = (
                                 f"Tu respuesta anterior se cortó. Esto es lo último que escribiste:\n"
                                 f"...{clean_text[-500:]}\n\n"
-                                "POR FAVOR TERMINA LA FRASE Y LA IDEA COHERENTEMENTE. "
-                                "NO repitas lo anterior. "
-                                "Recuerda cerrar cualquier cita con el formato: [Fuente: ...; Contexto: '...']."
+                                "POR FAVOR TERMINA LA FRASE Y LA IDEA COHERENTEMENTE."
                             )
                             stream_fix = call_gemini_stream(continuation_prompt, generation_config_override={"max_output_tokens": 4096})
-                            
                             if stream_fix:
                                 for chunk_fix in stream_fix:
                                     full_response += chunk_fix
@@ -194,9 +182,8 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                         
                         status.update(label="¡Respuesta completa!", state="complete", expanded=False)
                         
-                        # RENDERIZADO FINAL CON TOOLTIPS
-                        final_html = process_text_with_tooltips(full_response)
-                        response_placeholder.markdown(final_html, unsafe_allow_html=True) 
+                        # AJUSTE 4: Renderizado final directo (sin tooltips)
+                        response_placeholder.markdown(full_response) 
                         
                         log_query_event(user_prompt, mode=f"{c.MODE_TEXT_ANALYSIS} (Chat)")
                         st.session_state.mode_state["transcript_chat_history"].append({"role": "assistant", "content": full_response})
