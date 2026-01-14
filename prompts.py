@@ -181,7 +181,7 @@ def get_transcript_prompt(combined_context, user_prompt):
         f"**Rol:** Investigador Cualitativo Experto.\n"
         f"**Pregunta:** {user_prompt}\n"
         f"**Info (Transcripciones):**\n{combined_context}\n"
-        f"Identifica patrones recurrentes, anomalías y sintetiza usando quotes textuales.\n{INSTRUCCIONES_DE_CITAS}"
+        f"Identifica patrones recurrentes, anomalías y sintetiza usando quotes textuales.\n"
     )
 
 def get_text_analysis_summary_prompt(full_context):
@@ -190,7 +190,6 @@ def get_text_analysis_summary_prompt(full_context):
     **Tarea:** Genera un Resumen Ejecutivo exhaustivo.
     **Entrada:** {full_context}
     **Salida (Markdown):** Resumen general y desglose por Temas Clave con hallazgos soportados.
-    {INSTRUCCIONES_DE_CITAS}
     """
 
 def get_autocode_prompt(context, main_topic):
