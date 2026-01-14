@@ -11,14 +11,14 @@ from services.supabase_db import log_query_event, supabase, get_daily_usage
 from prompts import get_transcript_prompt, get_text_analysis_summary_prompt
 import constants as c
 from config import banner_file
-from utils import reset_transcript_chat_workflow, render_process_status
+from utils import reset_transcript_chat_workflow, render_process_status, process_text_with_tooltips
 
 # --- GENERADORES ---
 from reporting.pdf_generator import generate_pdf_html
 from reporting.docx_generator import generate_docx
 
 # =====================================================
-# MODO: ANÁLISIS DE TEXTOS (AUTO-REPARACIÓN)
+# MODO: ANÁLISIS DE TEXTOS (AUTO-REPARACIÓN + TOOLTIPS)
 # =====================================================
 
 TEXT_PROJECT_BUCKET = "text_project_files"
@@ -117,10 +117,15 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
     if "transcript_chat_history" not in st.session_state.mode_state: 
         st.session_state.mode_state["transcript_chat_history"] = []
 
-    # Mostrar historial
+    # Mostrar historial (APLICANDO TOOLTIPS)
     for msg in st.session_state.mode_state["transcript_chat_history"]:
         with st.chat_message(msg["role"], avatar="✨" if msg['role'] == "assistant" else "👤"):
-            st.markdown(msg["content"])
+            if msg['role'] == "assistant":
+                # AQUÍ ESTÁ EL CAMBIO CLAVE: Usamos process_text_with_tooltips
+                formatted_html = process_text_with_tooltips(msg["content"])
+                st.markdown(formatted_html, unsafe_allow_html=True)
+            else:
+                st.markdown(msg["content"])
 
     user_prompt = st.chat_input("Ej: ¿Cuáles son los hallazgos principales?")
 
@@ -143,12 +148,10 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                 with render_process_status("🕵️ Analizando evidencia...", expanded=True) as status:
                     
                     # 1. Prompt Inicial
-                    # Pedimos narrativa fluida con evidencias en el texto
                     conciseness_instruction = (
                         "\n\n[INSTRUCCIÓN: Redacta un análisis fluido. "
-                        "Integra las citas textuales dentro de los párrafos usando comillas para evidenciar los hallazgos. "
-                        "Ejemplo: Los usuarios sienten 'frustración por el precio' (Doc 1). "
-                        "NO uses tooltips complejos, prioriza la lectura natural.]"
+                        "Usa el formato de citas rico: [Fuente: Archivo; Contexto: 'Cita textual...']. "
+                        "NO uses tooltips complejos HTML, solo el formato texto plano.]"
                     )
                     
                     final_context = f"{all_docs_text}\n\n--- CONTEXTO GENERAL ---\n{summary_context}{conciseness_instruction}"
@@ -163,7 +166,6 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                             response_placeholder.markdown(full_response + "▌") # Cursor visual
                         
                         # 3. Verificación de Corte
-                        # Si no termina en puntuación de cierre, asumimos corte y reparamos
                         clean_text = full_response.strip()
                         if clean_text and not clean_text.endswith(('.', '!', '?', '"', '}', ']')):
                             
@@ -184,9 +186,13 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                                     response_placeholder.markdown(full_response + "▌")
                         
                         status.update(label="¡Respuesta completa!", state="complete", expanded=False)
-                        response_placeholder.markdown(full_response) # Render final sin cursor
                         
-                        # Guardar en historial
+                        # RENDERIZADO FINAL CON TOOLTIPS
+                        # Convertimos el texto plano con formato [Fuente...] a HTML bonito
+                        final_html = process_text_with_tooltips(full_response)
+                        response_placeholder.markdown(final_html, unsafe_allow_html=True) 
+                        
+                        # Guardar en historial (Guardamos el texto original para re-procesarlo luego)
                         log_query_event(user_prompt, mode=f"{c.MODE_TEXT_ANALYSIS} (Chat)")
                         st.session_state.mode_state["transcript_chat_history"].append({"role": "assistant", "content": full_response})
                         
@@ -203,12 +209,12 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
         raw_text += "\n\n".join(f"**{m['role'].upper()}:** {m['content']}" for m in st.session_state.mode_state["transcript_chat_history"])
         
         pdf = generate_pdf_html(raw_text, title=f"Reporte - {project_name}", banner_path=banner_file)
-        if pdf: c1.download_button("📄 PDF", data=pdf, file_name="analisis.pdf", mime="application/pdf", width='stretch')
+        if pdf: c1.download_button("PDF", data=pdf, file_name="analisis.pdf", mime="application/pdf", width='stretch')
         
         docx = generate_docx(raw_text, title=f"Reporte - {project_name}")
-        if docx: c2.download_button("📝 Word", data=docx, file_name="analisis.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
+        if docx: c2.download_button("Word", data=docx, file_name="analisis.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
         
-        c3.button("🔄 Reiniciar", on_click=reset_transcript_chat_workflow, key="rst_chat", width='stretch')
+        c3.button("Reiniciar", on_click=reset_transcript_chat_workflow, key="rst_chat", width='stretch')
 
 
 def text_analysis_mode():
@@ -245,5 +251,5 @@ def text_analysis_mode():
     elif "ta_selected_project_id" in st.session_state.mode_state:
         st.info("Cargando...")
     else:
-        with st.expander("➕ Crear Proyecto", expanded=True): show_text_project_creator(uid, limit)
+        with st.expander("Crear Proyecto", expanded=True): show_text_project_creator(uid, limit)
         st.divider(); show_text_project_list(uid)
