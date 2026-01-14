@@ -60,7 +60,7 @@ def show_text_project_creator(user_id, plan_limit):
 
     with st.form("new_text_project_form"):
         p_name = st.text_input("Nombre del Proyecto*")
-        p_brand = st.text_input("Marca*")
+        p_brand = st.text_input("Cliente*")
         p_year = st.number_input("Año*", min_value=2020, value=datetime.now().year)
         u_files = st.file_uploader("Archivos .docx*", type=["docx"], accept_multiple_files=True)
         if st.form_submit_button("Crear Proyecto"):
@@ -141,7 +141,7 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                 full_response = ""
                 response_placeholder = st.empty()
                 
-                with render_process_status("🕵️ Analizando evidencia textual...", expanded=True) as status:
+                with render_process_status("Analizando evidencia textual...", expanded=True) as status:
                     
                     # Recuperamos historial reciente para contexto
                     recent_history = st.session_state.mode_state["transcript_chat_history"][-3:-1] if len(st.session_state.mode_state["transcript_chat_history"]) > 1 else []
@@ -155,9 +155,9 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                         "\n1. **Redacción:** Integra las citas textuales ('verbatims') fluidamente en tu redacción, usando comillas y cursiva."
                         "\n   Ejemplo: Los usuarios perciben que *\"el sabor es muy dulce\"*."
                         "\n2. **Referencia:** Inmediatamente después de la cita, coloca SOLAMENTE el identificador del documento entre corchetes."
-                        "\n   Ejemplo correcto: ...*\"el sabor es muy dulce\"* [Doc 1]."
-                        "\n3. **PROHIBIDO:** NO repitas el texto de la cita dentro de los corchetes. NO pongas [Doc 1: \"el sabor es...\"]."
-                        "\n   El corchete debe contener SOLO el número del documento o nombre del archivo.]"
+                        "\n   Ejemplo correcto: ...*\"el sabor es muy dulce\"* [1]."
+                        "\n3. **PROHIBIDO:** NO repitas el texto de la cita dentro de los corchetes. NO pongas [1: \"el sabor es...\"]."
+                        "\n   El corchete debe contener SOLO el número del documento.]"
                     )
                     
                     final_context = (
@@ -212,12 +212,12 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
         raw_text += "\n\n".join(f"**{m['role'].upper()}:** {m['content']}" for m in st.session_state.mode_state["transcript_chat_history"])
         
         pdf = generate_pdf_html(raw_text, title=f"Reporte - {project_name}", banner_path=banner_file)
-        if pdf: c1.download_button("📄 PDF", data=pdf, file_name="analisis.pdf", mime="application/pdf", width='stretch')
+        if pdf: c1.download_button("Descargar PDF", data=pdf, file_name="analisis.pdf", mime="application/pdf", width='stretch')
         
         docx = generate_docx(raw_text, title=f"Reporte - {project_name}")
-        if docx: c2.download_button("📝 Word", data=docx, file_name="analisis.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
+        if docx: c2.download_button("Descargar Word", data=docx, file_name="analisis.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
         
-        c3.button("🔄 Reiniciar", on_click=reset_transcript_chat_workflow, key="rst_chat", width='stretch')
+        c3.button("Reiniciar", on_click=reset_transcript_chat_workflow, key="rst_chat", width='stretch')
 
 
 def text_analysis_mode():
