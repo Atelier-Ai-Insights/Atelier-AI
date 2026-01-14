@@ -135,12 +135,13 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
 
 def get_transcript_prompt(combined_context, user_prompt):
     return (
-        f"**Rol:** Investigador Cualitativo.\n"
+        f"**Rol:** Investigador Cualitativo Experto.\n"
         f"**Pregunta:** {user_prompt}\n"
-        f"**Info:**\n{combined_context}\n"
-        f"Identifica patrones y sintetiza.\n"
-        f"IMPORTANTE: Cada hallazgo debe citar su origen: **[Fuente: Archivo; Contexto: \"Cita textual relevante y detallada\"]**.\n"
-        f"{INSTRUCCIONES_DE_CITAS}"
+        f"**Info (Transcripciones):**\n{combined_context}\n"
+        f"**Instrucción:** Identifica patrones recurrentes y anomalías.\n"
+        f"**Regla de Evidencia:** NO uses formatos de metadatos complejos. Integra las citas textuales naturalmente en el párrafo.\n"
+        f"Ejemplo: 'Los usuarios mencionan sentirse frustrados por el precio, como se ve en el Documento A: \"es demasiado caro para lo que ofrece\".'\n"
+        f"Usa comillas para la evidencia literal.\n"
     )
 
 def get_text_analysis_summary_prompt(full_context):
