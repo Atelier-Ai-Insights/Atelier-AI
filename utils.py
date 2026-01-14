@@ -195,20 +195,75 @@ def validate_session_integrity():
             print(f"Error validando sesión: {e}")
 
 # =========================================================
-# LÓGICA DE CITAS: CONVERSIÓN DINÁMICA A NÚMEROS
+# LÓGICA DE CITAS: TOOLTIPS CSS REALES
 # =========================================================
 def process_text_with_tooltips(text):
     """
-    Detecta citas [Fuente: Archivo] y las convierte dinámicamente en números [1], [2]
-    con tooltips, manteniendo el texto fluido.
+    Convierte [Fuente: Archivo] en números [1] con tooltips CSS flotantes.
+    Inyecta el CSS necesario directamente en el componente Markdown.
     """
     if not text: return ""
 
-    try:
-        # 1. Regex para capturar el patrón generado por el prompt
-        pattern = r'\[(?:Fuente|Doc|Archivo):\s*(.*?)\]'
+    # ESTILOS CSS INYECTADOS PARA EL TOOLTIP
+    # Usamos clases específicas para evitar conflictos
+    css_styles = """
+    <style>
+        .rag-citation {
+            position: relative;
+            display: inline-block;
+            cursor: pointer; /* Mano en vez de ? */
+            color: #0056b3;
+            font-weight: bold;
+            font-size: 0.9em;
+            margin: 0 2px;
+            border-bottom: 1px dotted #0056b3;
+        }
         
-        # 2. Identificar fuentes únicas para asignarles un número consistente
+        /* La cajita del tooltip (oculta por defecto) */
+        .rag-citation .rag-tooltip-text {
+            visibility: hidden;
+            width: max-content;
+            max-width: 250px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 9999; /* Asegurar que quede encima de todo */
+            bottom: 125%; /* Aparece ARRIBA del número */
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.8em;
+            font-weight: normal;
+            box-shadow: 0px 4px 8px rgba(0,0,0,0.2);
+            line-height: 1.4;
+        }
+
+        /* La flechita de abajo del tooltip */
+        .rag-citation .rag-tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        }
+
+        /* Mostrar al pasar el mouse */
+        .rag-citation:hover .rag-tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+    """
+
+    try:
+        pattern = r'\[(?:Fuente|Doc|Archivo):\s*(.*?)\]'
         matches = re.findall(pattern, text)
         unique_sources = {}
         counter = 1
@@ -219,42 +274,39 @@ def process_text_with_tooltips(text):
                 unique_sources[source_name] = counter
                 counter += 1
         
-        # 3. Función de reemplazo
         def replace_match(match):
             source_raw = match.group(1).strip()
             citation_number = unique_sources.get(source_raw, "?")
             source_clean = html.escape(source_raw)
             
-            # Generamos el [N] con tooltip usando span inline
+            # Estructura HTML para Tooltip CSS puro
             return f'''
-            <span class="citation-tooltip" title="{source_clean}" 
-                  style="cursor: help; color: #0056b3; background-color: #eef6fc; 
-                         padding: 0 3px; border-radius: 4px; font-size: 0.85em; 
-                         font-weight: bold; margin: 0 2px; vertical-align: baseline;">
+            <div class="rag-citation">
                 [{citation_number}]
-            </span>
+                <span class="rag-tooltip-text">📄 {source_clean}</span>
+            </div>
             '''
         
-        # 4. Reemplazar en el texto
+        # Hacemos el reemplazo
         enriched_text = re.sub(pattern, replace_match, text)
         
-        # 5. (Opcional) Generar pie de página pequeño
+        # Pie de página opcional
         if unique_sources:
-            footer = "\n\n<div style='font-size: 0.8em; color: #666; margin-top: 10px; border-top: 1px solid #eee; padding-top: 5px;'><strong>Fuentes:</strong><br>"
-            # Ordenamos por número de cita
+            footer = "\n\n<div style='font-size: 0.8em; color: #666; margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px;'><strong>Referencias:</strong><br>"
             sorted_sources = sorted(unique_sources.items(), key=lambda x: x[1])
             for name, num in sorted_sources:
-                footer += f"[{num}] {html.escape(name)}<br>"
+                footer += f"<b>[{num}]</b> {html.escape(name)}<br>"
             footer += "</div>"
             enriched_text += footer
             
-        return enriched_text
+        # Concatenamos los estilos CSS al principio del texto
+        return css_styles + enriched_text
 
     except Exception as e:
         print(f"Error renderizando tooltips: {e}")
         return text
 
-# Funciones de Reset Workflow (Las mantenemos igual)
+# Funciones de Reset Workflow
 def reset_report_workflow():
     for k in ["report", "last_question"]: st.session_state.mode_state.pop(k, None)
 
