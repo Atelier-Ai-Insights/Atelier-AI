@@ -3,7 +3,7 @@ pandas
 numpy
 scipy
 supabase
-google-generativeai
+google-genai
 boto3
 reportlab
 python-docx
