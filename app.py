@@ -7,12 +7,12 @@ import re
 from datetime import datetime, timezone
 
 # --- PARCHE ANTI-PANTALLA BLANCA (MATPLOTLIB) ---
-# Esto debe ir antes de importar pyplot
+# Debe ir antes de importar pyplot para evitar conflictos de hilos
 matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 
 # ==============================
-# 1. IMPORTAR MÓDULOS (Sin ejecutar nada de Streamlit aún)
+# 1. IMPORTAR MÓDULOS 
 # ==============================
 try:
     from styles import apply_styles, apply_login_styles 
@@ -27,7 +27,6 @@ try:
     # Importación segura de la IA
     import google.generativeai as genai
 except ImportError as e:
-    # Si falla una importación, no podemos usar st.error todavía porque no hay page_config
     print(f"Error crítico de importación: {e}")
 
 # --- FUNCIÓN AUXILIAR PARA LIMPIAR HTML ---
