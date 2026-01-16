@@ -1,35 +1,19 @@
 import streamlit as st
 import sys
 import traceback
-
-# ==========================================
-# 1. BLOQUE DE DIAGNÓSTICO DE ARRANQUE
-# ==========================================
-try:
-    # Intenta importar la librería problemática primero para ver si explota
-    import google.generativeai as genai
-    # st.toast("Librería Google cargada correctamente", icon="✅") # Comentado para no molestar si ya funciona
-except Exception as e:
-    st.error("🚨 ERROR CRÍTICO AL IMPORTAR GOOGLE AI")
-    st.warning("El servidor no tiene la librería correcta instalada. Revisa requirements.txt")
-    st.code(traceback.format_exc())
-    st.stop()
-
-# ==========================================
-# 2. PARCHE ANTI-PANTALLA BLANCA (MATPLOTLIB)
-# ==========================================
 import matplotlib
-# Forzamos el backend "Agg" que es seguro para servidores sin pantalla
-matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
-
-# ==========================================
-# 3. IMPORTAR MÓDULOS GLOBALES
-# ==========================================
 import time 
 import re 
 from datetime import datetime, timezone
 
+# --- 1. PARCHE ANTI-PANTALLA BLANCA (MATPLOTLIB) ---
+# Debe ir antes de importar cualquier otra cosa gráfica
+matplotlib.use('Agg') 
+
+# ==============================
+# 2. IMPORTAR MÓDULOS GLOBALES
+# ==============================
 from styles import apply_styles, apply_login_styles 
 from config import PLAN_FEATURES, banner_file
 from services.storage import load_database 
@@ -202,10 +186,8 @@ def run_user_mode(db_full, user_features, footer_html):
     # --- EJECUCIÓN DEL MODO SELECCIONADO (CON TÉCNICA DE CONTENEDOR MAESTRO) ---
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
     
-    # 1. Creamos un "Placeholder" MAESTRO que ocupa toda la zona principal.
     main_placeholder = st.empty()
     
-    # 2. Ejecutamos el modo DENTRO de este contenedor.
     with main_placeholder.container():
         
         if modo == c.MODE_REPORT: 
@@ -277,12 +259,23 @@ def run_user_mode(db_full, user_features, footer_html):
 # FUNCIÓN PRINCIPAL DE LA APLICACIÓN
 # =====================================================
 def main():
+    # --- 1. CONFIGURACIÓN DE PÁGINA (¡SIEMPRE PRIMERO!) ---
     st.set_page_config(
         page_title="Atelier Data Studio", 
         page_icon="Logo_Casa.png", 
         layout="wide",
         initial_sidebar_state="expanded"
     )
+
+    # --- 2. DIAGNÓSTICO DE ARRANQUE (AHORA SEGURO) ---
+    try:
+        import google.generativeai as genai
+        # st.toast("Librería Google cargada correctamente", icon="✅")
+    except Exception as e:
+        st.error("🚨 ERROR CRÍTICO AL IMPORTAR GOOGLE AI")
+        st.code(traceback.format_exc())
+        st.stop()
+
     apply_styles()
 
     # --- CSS AGRESIVO ANTI-GHOSTING Y TRANSICIONES ---
