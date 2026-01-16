@@ -2,18 +2,13 @@ streamlit
 pandas
 matplotlib
 plotly
-# CRÍTICO: Esta es la librería correcta para Word (no pongas solo 'docx')
 python-docx
-# CRÍTICO: Esta es la versión compatible con tu código de IA actual
 google-generativeai>=0.8.3
 google-ai-generativelanguage==0.6.10
-
-# Base de datos y utilidades
 supabase
 gotrue
 httpx
 python-dotenv
 watchdog
-
-# Para el modo de Tendencias
 pytrends
+boto3
