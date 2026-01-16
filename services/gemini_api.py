@@ -1,22 +1,30 @@
 import streamlit as st
-import google.generativeai as genai
-from google.generativeai.types import generation_types
-import html
-import time
+# --- BLOQUEO DE ADVERTENCIAS PARA EVITAR PANTALLA BLANCA ---
+import warnings
 import os
+# Silenciamos la advertencia de deprecación que cuelga la app
+os.environ["GRPC_VERBOSITY"] = "ERROR" # Silencia logs de bajo nivel de Google
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", module="google.generativeai")
+# -----------------------------------------------------------
+
+import google.generativeai as genai
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
+import time
 from config import api_keys, generation_config, safety_settings
-from services.logger import log_error, log_action 
+from services.logger import log_error
 
 # ==========================================
 # CONFIGURACIÓN DE MODELO
 # ==========================================
 
-MODEL_NAME = "gemini-2.5-flash"
+# Usamos el modelo estable actual
+MODEL_NAME = "gemini-1.5-flash"
 
 def _configure_gemini(key_index):
     try:
         if not api_keys: return False
-        # Asegurar índice válido para rotación de llaves
+        # Asegurar índice válido
         idx = key_index % len(api_keys)
         genai.configure(api_key=api_keys[idx])
         return True
@@ -25,7 +33,6 @@ def _configure_gemini(key_index):
         return False
 
 def _save_token_usage(response_obj):
-    # Guardamos tokens solo para estadística, no afecta facturación
     try:
         if hasattr(response_obj, 'usage_metadata'):
             usage = response_obj.usage_metadata
@@ -43,29 +50,27 @@ def call_gemini_stream(prompt, generation_config_override=None, safety_settings_
     return _execute_gemini_call(prompt, stream=True, gen_config=generation_config_override, safety=safety_settings_override)
 
 def _execute_gemini_call(prompt, stream=False, gen_config=None, safety=None):
-    # 1. PREPARACIÓN
     start_index = st.session_state.get("api_key_index", 0)
     num_keys = len(api_keys)
     
-    # --- APLICACIÓN DE LA MEJORA DE TOKENS ---
-    # Copiamos la config base y forzamos 8192 tokens para evitar cortes en reportes
+    # Configuración base
     final_gen_config = generation_config.copy()
-    
-    # Aseguramos que tenga capacidad máxima de escritura
     final_gen_config["max_output_tokens"] = 8192 
+    if gen_config: final_gen_config.update(gen_config)
     
-    if gen_config: 
-        final_gen_config.update(gen_config) 
-    
-    final_safety = safety if safety is not None else safety_settings 
+    # Filtros de seguridad permisivos para evitar bloqueos silenciosos
+    final_safety = safety if safety is not None else {
+        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+    }
     
     last_error = None
     
-    # 2. LÓGICA DE INTENTOS (Round Robin por las llaves disponibles)
     for i in range(num_keys):
         current_key_index = (start_index + i) % num_keys
         
-        # Configurar la llave actual
         if not _configure_gemini(current_key_index): continue 
 
         try:
@@ -75,58 +80,50 @@ def _execute_gemini_call(prompt, stream=False, gen_config=None, safety=None):
                 safety_settings=final_safety
             )
 
-            # Pausa de seguridad para evitar Rate Limiting agresivo
-            time.sleep(0.5) 
+            time.sleep(0.5) # Evitar rate limit
 
-            # Manejo de prompt (lista o string)
             content_payload = prompt if isinstance(prompt, list) else [prompt]
             
             # Llamada a la API
             response = model.generate_content(content_payload, stream=stream)
             
-            # --- STREAMING ---
             if stream:
-                # Si conecta, retornamos el generador y rotamos la llave para la próxima vez
                 st.session_state.api_key_index = (current_key_index + 1) % num_keys
                 return _stream_generator_wrapper(response)
             
-            # --- NO STREAMING ---
-            if not response.candidates:
-                last_error = "Respuesta vacía o bloqueada por filtros de seguridad."
-                continue # Prueba siguiente llave
+            # Validación de respuesta no streaming
+            try:
+                # Si fue bloqueado, acceder a .text lanza ValueError
+                text_res = response.text
+            except ValueError:
+                last_error = "Respuesta bloqueada por filtros de seguridad."
+                continue 
 
-            # ÉXITO
+            if not text_res:
+                last_error = "Respuesta vacía del servidor."
+                continue
+
             _save_token_usage(response)
             st.session_state.api_key_index = (current_key_index + 1) % num_keys
-            
-            if response.text:
-                return html.unescape(response.text)
-            return ""
+            return text_res
 
         except Exception as e:
             error_str = str(e).lower()
             last_error = e
-            
-            # Si es error 429 (Cuota Excedida), probamos la siguiente llave inmediatamente
-            if "429" in error_str or "quota" in error_str or "resource exhausted" in error_str:
-                log_error(f"Key #{current_key_index} agotada. Rotando a la siguiente...", module="GeminiAPI", level="WARNING")
+            # Reintentar solo si es error de servidor o cuota
+            if any(x in error_str for x in ["429", "500", "503", "quota", "overloaded"]):
                 continue
-            
-            # Si es otro error (ej. Prompt inválido), NO reintentamos
-            log_error(f"Error técnico Key #{current_key_index}: {e}", module="GeminiAPI")
-            break 
+            break # Si es otro error, paramos
 
-    # Si salimos del bucle sin éxito:
     if not stream:
-        st.error(f"No se pudo completar la solicitud. Detalle: {str(last_error)[:150]}...")
+        st.error(f"Error de conexión IA: {str(last_error)[:150]}")
         return None
 
 def _stream_generator_wrapper(response_stream):
-    """Generador seguro que captura errores durante el streaming."""
     try:
         for chunk in response_stream:
-            if chunk.text:
-                yield chunk.text
+            try:
+                if chunk.text: yield chunk.text
+            except ValueError: continue
     except Exception as e:
-        # Si se corta a mitad del stream, enviamos el error visible
-        yield f"\n\n[⚠️ Interrupción de red o API: {str(e)}]"
+        yield f"\n[Error de red: {str(e)}]"
