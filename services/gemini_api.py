@@ -19,7 +19,7 @@ from services.logger import log_error
 # ==========================================
 
 # Usamos el modelo estable actual
-MODEL_NAME = "gemini-1.5-flash"
+MODEL_NAME = "gemini-2.5-flash"
 
 def _configure_gemini(key_index):
     try:
