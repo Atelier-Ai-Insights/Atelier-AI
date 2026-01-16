@@ -2,27 +2,33 @@ import streamlit as st
 import sys
 import traceback
 import matplotlib
-import matplotlib.pyplot as plt
 import time 
 import re 
 from datetime import datetime, timezone
 
-# --- 1. PARCHE ANTI-PANTALLA BLANCA (MATPLOTLIB) ---
-# Debe ir antes de importar cualquier otra cosa gráfica
+# --- PARCHE ANTI-PANTALLA BLANCA (MATPLOTLIB) ---
+# Esto debe ir antes de importar pyplot
 matplotlib.use('Agg') 
+import matplotlib.pyplot as plt
 
 # ==============================
-# 2. IMPORTAR MÓDULOS GLOBALES
+# 1. IMPORTAR MÓDULOS (Sin ejecutar nada de Streamlit aún)
 # ==============================
-from styles import apply_styles, apply_login_styles 
-from config import PLAN_FEATURES, banner_file
-from services.storage import load_database 
-from services.supabase_db import supabase
-from auth import show_login_page, show_reset_password_page, show_activation_flow 
-from admin.dashboard import show_admin_dashboard
-from utils import extract_brand, validate_session_integrity 
-from services.memory_service import get_project_memory, delete_project_memory 
-import constants as c
+try:
+    from styles import apply_styles, apply_login_styles 
+    from config import PLAN_FEATURES, banner_file
+    from services.storage import load_database 
+    from services.supabase_db import supabase
+    from auth import show_login_page, show_reset_password_page, show_activation_flow 
+    from admin.dashboard import show_admin_dashboard
+    from utils import extract_brand, validate_session_integrity 
+    from services.memory_service import get_project_memory, delete_project_memory 
+    import constants as c
+    # Importación segura de la IA
+    import google.generativeai as genai
+except ImportError as e:
+    # Si falla una importación, no podemos usar st.error todavía porque no hay page_config
+    print(f"Error crítico de importación: {e}")
 
 # --- FUNCIÓN AUXILIAR PARA LIMPIAR HTML ---
 def remove_html_tags(text):
@@ -49,7 +55,6 @@ def set_mode_and_reset(new_mode):
 # FUNCIÓN PARA EL MODO USUARIO 
 # =====================================================
 def run_user_mode(db_full, user_features, footer_html):
-    
     # --- LOGO SIDEBAR ---
     st.sidebar.image("LogoDataStudio.png", width=220)
     
@@ -138,21 +143,15 @@ def run_user_mode(db_full, user_features, footer_html):
         db_filtered = db_full
         if run_filters is False: st.sidebar.caption("Filtros no disponibles en este modo.")
 
-    # ==============================================================================
     # 2. BITÁCORA DE PROYECTO
-    # ==============================================================================
-    
     st.sidebar.subheader("Conversaciones y Reportes")
-    
     saved_pins = get_project_memory()
-    
     if saved_pins:
         for pin in saved_pins:
             date_str = pin.get('created_at', '')[:10]
             raw_content = pin.get('content', '')
             clean_text = remove_html_tags(raw_content)
             expander_label = f"{date_str} | {clean_text[:30]}..."
-            
             with st.sidebar.expander(expander_label, expanded=False):
                 st.caption(f"ID: {pin['id']}")
                 st.info(clean_text[:120] + "...") 
@@ -183,73 +182,60 @@ def run_user_mode(db_full, user_features, footer_html):
     st.sidebar.divider()
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
     
-    # --- EJECUCIÓN DEL MODO SELECCIONADO (CON TÉCNICA DE CONTENEDOR MAESTRO) ---
+    # --- EJECUCIÓN DEL MODO ---
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
-    
     main_placeholder = st.empty()
     
     with main_placeholder.container():
-        
+        # Lógica de carga de módulos (sin cambios, solo indentada correctamente)
         if modo == c.MODE_REPORT: 
             with st.spinner("Preparando Generador de Reportes..."):
                 from modes.report_mode import report_mode
                 report_mode(db_filtered, selected_files)
-
         elif modo == c.MODE_IDEATION: 
             with st.spinner("Iniciando Ideación Creativa..."):
                 from modes.ideation_mode import ideacion_mode
                 ideacion_mode(db_filtered, selected_files)
-
         elif modo == c.MODE_CONCEPT: 
             with st.spinner("Preparando Generador de Conceptos..."):
                 from modes.concept_mode import concept_generation_mode
                 concept_generation_mode(db_filtered, selected_files)
-
         elif modo == c.MODE_CHAT: 
             with st.spinner("Conectando con el Asistente..."):
                 from modes.chat_mode import grounded_chat_mode
                 grounded_chat_mode(db_filtered, selected_files)
-
         elif modo == c.MODE_IDEA_EVAL: 
             with st.spinner("Conectando con el Asistente..."):
                 from modes.idea_eval_mode import idea_evaluator_mode
                 idea_evaluator_mode(db_filtered, selected_files)
-
         elif modo == c.MODE_IMAGE_EVAL: 
             with st.spinner("Preparando análisis visual..."):
                 from modes.image_eval_mode import image_evaluation_mode
                 image_evaluation_mode(db_filtered, selected_files)
-
         elif modo == c.MODE_VIDEO_EVAL: 
             with st.spinner("Preparando análisis de video..."):
                 from modes.video_eval_mode import video_evaluation_mode
                 video_evaluation_mode(db_filtered, selected_files)
-
         elif modo == c.MODE_TEXT_ANALYSIS: 
             with st.spinner("Cargando herramientas de texto..."):
                 from modes.text_analysis_mode import text_analysis_mode
                 text_analysis_mode()
-
         elif modo == c.MODE_ONEPAGER: 
             with st.spinner("Preparando One-Pager..."):
                 from modes.onepager_mode import one_pager_ppt_mode
                 one_pager_ppt_mode(db_filtered, selected_files)
-
         elif modo == c.MODE_DATA_ANALYSIS: 
             with st.spinner("Cargando analista de datos..."):
                 from modes.data_analysis_mode import data_analysis_mode
                 data_analysis_mode(db_filtered, selected_files)
-
         elif modo == c.MODE_ETNOCHAT: 
             with st.spinner("Iniciando EtnoChat..."):
                 from modes.etnochat_mode import etnochat_mode
                 etnochat_mode()
-            
         elif modo == c.MODE_SYNTHETIC: 
             with st.spinner("Simulando perfiles..."):
                 from modes.synthetic_mode import synthetic_users_mode
                 synthetic_users_mode(db_filtered, selected_files)
-            
         elif modo == c.MODE_TREND_ANALYSIS:
             with st.spinner("Analizando tendencias..."):
                 from modes.trend_analysis_mode import google_trends_mode
@@ -267,7 +253,17 @@ def main():
         initial_sidebar_state="expanded"
     )
 
-    # --- 2. DIAGNÓSTICO DE ARRANQUE (AHORA SEGURO) ---
+    # --- 2. CSS ---
+    # Eliminé el bloqueo de 'stSkeleton' para que veas si está cargando
+    st.markdown("""
+        <style>
+            .stAppViewBlockContainer { transition: none !important; animation: none !important; }
+            .element-container { transition: none !important; opacity: 1 !important; }
+            .block-container { padding-top: 2rem !important; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- 3. DIAGNÓSTICO DE ARRANQUE (DENTRO DE MAIN) ---
     try:
         import google.generativeai as genai
         # st.toast("Librería Google cargada correctamente", icon="✅")
@@ -277,16 +273,6 @@ def main():
         st.stop()
 
     apply_styles()
-
-    # --- CSS AGRESIVO ANTI-GHOSTING Y TRANSICIONES ---
-    st.markdown("""
-        <style>
-            .stAppViewBlockContainer { transition: none !important; animation: none !important; }
-            .element-container { transition: none !important; opacity: 1 !important; }
-            .stSkeleton { display: none !important; }
-            .block-container { padding-top: 2rem !important; }
-        </style>
-    """, unsafe_allow_html=True)
 
     if 'page' not in st.session_state: st.session_state.page = "login"
     if "mode_state" not in st.session_state: st.session_state.mode_state = {}
@@ -321,6 +307,8 @@ def main():
 
     # --- RUTA DE SESIÓN ACTIVA ---
     if st.session_state.get("logged_in"):
+        # Depuración: Verificando pasos
+        # st.write("Validando sesión...") # Descomenta si se traba aquí
         validate_session_integrity()
         
         if "user" not in st.session_state:
@@ -333,9 +321,14 @@ def main():
         
         if not hasattr(st.session_state, 'db_full'):
             try: 
-                with st.spinner("Cargando repositorio de conocimientos..."):
+                # Indicador de carga explícito
+                with st.spinner("Cargando repositorio de conocimientos... (Esto puede tardar unos segundos)"):
                     st.session_state.db_full = load_database(st.session_state.cliente)
-            except: st.session_state.clear(); st.rerun()
+            except Exception as e:
+                st.error(f"Error cargando base de datos: {e}")
+                st.stop()
+        
+        # st.write("Iniciando interfaz...") # Descomenta si se traba aquí
         
         if st.session_state.get("is_admin", False):
             t1, t2 = st.tabs(["Modo Usuario", "Modo Administrador"])
@@ -363,7 +356,6 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        # Si ocurre un error fatal no capturado, se muestra aquí
         st.error("🔥 CRASH FATAL EN LA APLICACIÓN")
         st.warning("Ha ocurrido un error inesperado que detuvo la ejecución.")
         with st.expander("Ver detalles técnicos (para soporte)", expanded=True):
