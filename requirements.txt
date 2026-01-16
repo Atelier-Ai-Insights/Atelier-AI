@@ -14,3 +14,4 @@ pytrends
 boto3
 PyMuPDF
 markdown2
+beautifulsoup4
