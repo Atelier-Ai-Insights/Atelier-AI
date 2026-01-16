@@ -9,8 +9,12 @@ import re
 matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 
-# --- 2. GESTIÓN DE IMPORTACIONES SEGURA ---
+# ==========================================
+# 2. IMPORTACIONES LOCALES (SEGURAS)
+# ==========================================
+# Las sacamos del try/except para asegurar que 'c' siempre exista
 try:
+    import constants as c
     from styles import apply_styles, apply_login_styles 
     from config import PLAN_FEATURES, banner_file
     from services.storage import load_database 
@@ -19,11 +23,19 @@ try:
     from admin.dashboard import show_admin_dashboard
     from utils import extract_brand, validate_session_integrity 
     from services.memory_service import get_project_memory, delete_project_memory 
-    import constants as c
-    import google.generativeai as genai
 except ImportError as e:
-    # Si esto falla, no hay nada que hacer, pero evitamos pantalla blanca muda
-    print(f"Error fatal importando módulos: {e}")
+    # Si fallan tus propios archivos, es un error grave de estructura
+    st.error(f"Error cargando módulos internos: {e}")
+    st.stop()
+
+# ==========================================
+# 3. IMPORTACIÓN EXTERNA (RIESGOSA)
+# ==========================================
+try:
+    import google.generativeai as genai
+except ImportError:
+    # Si falla Google, seguimos pero sin IA, no rompemos la app completa
+    print("Advertencia: Librería de Google AI no encontrada o incompatible.")
 
 # --- HELPER FUNCTIONS ---
 def remove_html_tags(text):
@@ -46,7 +58,7 @@ def set_mode_and_reset(new_mode):
         st.session_state.mode_state = {}
 
 # =====================================================
-# FUNCIÓN DE UI - SOLO SE LLAMA SI TODO ESTÁ LISTO
+# FUNCIÓN DE UI
 # =====================================================
 def run_user_interface(db_full, user_features, footer_html):
     # Sidebar
@@ -60,7 +72,6 @@ def run_user_interface(db_full, user_features, footer_html):
     st.sidebar.header("Seleccione el modo de uso")
     modo = st.session_state.current_mode
     
-    # Definición de categorías (simplificada para legibilidad)
     all_categories = {
         "Análisis": {
             c.MODE_CHAT: True,
@@ -85,7 +96,6 @@ def run_user_interface(db_full, user_features, footer_html):
         }
     }
     
-    # Lógica de expansión de sidebar
     default_expanded = ""
     for category, modes in all_categories.items():
         if modo in modes:
@@ -109,7 +119,6 @@ def run_user_interface(db_full, user_features, footer_html):
         db_base = [doc for doc in db_full if doc.get("cliente") and "atelier" in str(doc.get("cliente")).lower()]
 
     if run_filters:
-        # Lógica de filtros segura
         marcas_options = sorted({doc.get("filtro", "") for doc in db_base if doc.get("filtro")})
         selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas")
         db_step_1 = [d for d in db_base if d.get("filtro") in selected_marcas] if selected_marcas else db_base
@@ -151,7 +160,7 @@ def run_user_interface(db_full, user_features, footer_html):
     # --- ÁREA PRINCIPAL ---
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
     
-    # Carga de módulos bajo demanda (Lazy Loading) para evitar bloqueos iniciales
+    # Carga de módulos bajo demanda
     if modo == c.MODE_REPORT: 
         from modes.report_mode import report_mode; report_mode(db_filtered, selected_files)
     elif modo == c.MODE_IDEATION: 
@@ -180,22 +189,20 @@ def run_user_interface(db_full, user_features, footer_html):
         from modes.trend_analysis_mode import google_trends_mode; google_trends_mode()
 
 # =====================================================
-# MAIN - PUNTO DE ENTRADA ÚNICO
+# MAIN
 # =====================================================
 def main():
-    # 1. Configuración de página (SIEMPRE PRIMERO)
     st.set_page_config(page_title="Atelier Data Studio", page_icon="Logo_Casa.png", layout="wide", initial_sidebar_state="expanded")
     
-    # 2. Diagnóstico visual de carga (Esto te dirá si se cuelga)
     status_placeholder = st.empty()
     
     try:
         status_placeholder.info("🚀 Iniciando sistema...")
         apply_styles()
         
-        # 3. Inicialización de Estado
         if 'page' not in st.session_state: st.session_state.page = "login"
         if "mode_state" not in st.session_state: st.session_state.mode_state = {}
+        # AQUÍ ESTABA EL ERROR: Ahora 'c' existe seguro
         if 'current_mode' not in st.session_state: st.session_state.current_mode = c.MODE_CHAT
         init_app_memory()
         
@@ -203,44 +210,40 @@ def main():
         footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
         footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
-        # 4. Rutas de Login/Recuperación
+        # Rutas de Login
         if st.session_state.get('flow_email_verified') or (params.get("type") in ["recovery", "invite"]):
             status_placeholder.empty()
             apply_login_styles()
             c1, c2, c3 = st.columns([3, 2, 3])
             with c2:
                 st.image("LogoDataStudio.png", use_container_width=True)
-                # Lógica de flujo (simplificada para el ejemplo)
                 auth_type = params.get("type", "recovery")
                 token = params.get("access_token")
                 if isinstance(token, list): token = token[0]
                 show_activation_flow(token, auth_type)
             st.stop()
 
-        # 5. Sesión Activa (Aquí es donde solía fallar)
+        # Sesión Activa
         if st.session_state.get("logged_in"):
             status_placeholder.info("🔐 Verificando credenciales...")
             validate_session_integrity()
             
-            if "user" not in st.session_state:
-                st.session_state.clear(); st.rerun()
+            if "user" not in st.session_state: st.session_state.clear(); st.rerun()
 
-            # Refresh token si es necesario
             if st.session_state.get("access_token"):
                 try: supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
                 except: supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
             
-            # 6. CARGA DE DATOS (Punto Crítico)
+            # Carga de Base de Datos
             if not hasattr(st.session_state, 'db_full'):
-                status_placeholder.info("📂 Cargando base de datos del cliente... (Esto puede tardar)")
+                status_placeholder.info("📂 Cargando base de datos del cliente...")
                 try: 
                     st.session_state.db_full = load_database(st.session_state.cliente)
                 except Exception as e:
                     st.error(f"Error cargando datos: {e}")
                     st.stop()
             
-            # 7. Renderizado de Interfaz (Solo si llegamos aquí)
-            status_placeholder.empty() # Borramos el mensaje de carga
+            status_placeholder.empty()
             
             if st.session_state.get("is_admin", False):
                 t1, t2 = st.tabs(["Modo Usuario", "Modo Administrador"])
@@ -248,10 +251,9 @@ def main():
                 with t2: show_admin_dashboard(st.session_state.db_full)
             else:
                 run_user_interface(st.session_state.db_full, st.session_state.plan_features, footer_html)
-            
             st.stop() 
 
-        # 8. Pantalla de Login (Default)
+        # Login por defecto
         status_placeholder.empty()
         apply_login_styles()
         c1, c2, c3 = st.columns([3, 2, 3])
