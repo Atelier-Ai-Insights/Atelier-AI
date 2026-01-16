@@ -18,3 +18,4 @@ markdown2
 beautifulsoup4
 reportlab
 streamlit-chat
+python-pptx
