@@ -2,24 +2,34 @@ import streamlit as st
 import sys
 import traceback
 
-# --- BLOQUE DE DIAGNÓSTICO DE ARRANQUE ---
+# ==========================================
+# 1. BLOQUE DE DIAGNÓSTICO DE ARRANQUE
+# ==========================================
 try:
     # Intenta importar la librería problemática primero para ver si explota
     import google.generativeai as genai
-    st.toast("Librería Google cargada correctamente", icon="✅")
+    # st.toast("Librería Google cargada correctamente", icon="✅") # Comentado para no molestar si ya funciona
 except Exception as e:
     st.error("🚨 ERROR CRÍTICO AL IMPORTAR GOOGLE AI")
+    st.warning("El servidor no tiene la librería correcta instalada. Revisa requirements.txt")
     st.code(traceback.format_exc())
     st.stop()
-# -----------------------------------------
 
+# ==========================================
+# 2. PARCHE ANTI-PANTALLA BLANCA (MATPLOTLIB)
+# ==========================================
+import matplotlib
+# Forzamos el backend "Agg" que es seguro para servidores sin pantalla
+matplotlib.use('Agg') 
+import matplotlib.pyplot as plt
+
+# ==========================================
+# 3. IMPORTAR MÓDULOS GLOBALES
+# ==========================================
 import time 
 import re 
 from datetime import datetime, timezone
 
-# ==============================
-# 1. IMPORTAR MÓDULOS GLOBALES
-# ==============================
 from styles import apply_styles, apply_login_styles 
 from config import PLAN_FEATURES, banner_file
 from services.storage import load_database 
@@ -193,7 +203,6 @@ def run_user_mode(db_full, user_features, footer_html):
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
     
     # 1. Creamos un "Placeholder" MAESTRO que ocupa toda la zona principal.
-    #    Al hacer esto, reservamos el espacio y forzamos a Streamlit a refrescar esta zona.
     main_placeholder = st.empty()
     
     # 2. Ejecutamos el modo DENTRO de este contenedor.
@@ -277,27 +286,12 @@ def main():
     apply_styles()
 
     # --- CSS AGRESIVO ANTI-GHOSTING Y TRANSICIONES ---
-    # Forzamos que el contenedor principal no tenga animación de opacidad
     st.markdown("""
         <style>
-            /* Elimina animaciones de carga */
-            .stAppViewBlockContainer {
-                transition: none !important;
-                animation: none !important;
-            }
-            /* Asegura que los elementos nuevos aparezcan de golpe */
-            .element-container {
-                transition: none !important;
-                opacity: 1 !important;
-            }
-            /* Oculta los 'skeletons' de carga que parpadean */
-            .stSkeleton {
-                display: none !important;
-            }
-            /* Reduce el padding superior para evitar saltos */
-            .block-container {
-                padding-top: 2rem !important;
-            }
+            .stAppViewBlockContainer { transition: none !important; animation: none !important; }
+            .element-container { transition: none !important; opacity: 1 !important; }
+            .stSkeleton { display: none !important; }
+            .block-container { padding-top: 2rem !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -369,5 +363,15 @@ def main():
     st.divider()
     st.markdown(footer_html, unsafe_allow_html=True)
 
+# ==========================================
+# 4. RED DE SEGURIDAD GLOBAL (CATCH-ALL)
+# ==========================================
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        # Si ocurre un error fatal no capturado, se muestra aquí
+        st.error("🔥 CRASH FATAL EN LA APLICACIÓN")
+        st.warning("Ha ocurrido un error inesperado que detuvo la ejecución.")
+        with st.expander("Ver detalles técnicos (para soporte)", expanded=True):
+            st.code(traceback.format_exc())
