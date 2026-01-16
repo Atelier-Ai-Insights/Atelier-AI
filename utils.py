@@ -2,10 +2,17 @@ import streamlit as st
 import unicodedata
 import json
 import re
-import fitz  # PyMuPDF
 import time
 import html  # Para seguridad HTML
 from contextlib import contextmanager
+
+# --- IMPORTACIÓN SEGURA DE PYMUPDF ---
+# Esto evita que la app muera si la librería de PDFs tiene conflictos de sistema
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    fitz = None
+    print("Advertencia: PyMuPDF (fitz) no encontrado. La lectura de PDFs estará limitada.")
 
 # ==============================
 # GESTIÓN DE STOPWORDS
@@ -30,12 +37,14 @@ def get_stopwords():
 # ==============================
 @contextmanager
 def render_process_status(label="Procesando solicitud...", expanded=True):
-    status_container = st.status(label, expanded=expanded)
+    # Usamos un try-except interno para evitar que st.status rompa el flujo visual
     try:
+        status_container = st.status(label, expanded=expanded)
         yield status_container
     except Exception as e:
-        status_container.update(label="❌ Error en el proceso", state="error", expanded=True)
-        st.error(f"Ocurrió un error inesperado: {str(e)}")
+        # Fallback si st.status falla (versiones viejas de streamlit)
+        st.warning(f"{label}...")
+        yield st.empty()
 
 # ==============================
 # FUNCIONES AUXILIARES
@@ -75,6 +84,9 @@ def extract_text_from_pdfs(uploaded_files):
     combined_text = ""
     if not uploaded_files: return combined_text
     
+    if fitz is None:
+        return "\n[ERROR: Librería de PDF no disponible en el servidor]\n"
+
     for file in uploaded_files:
         try:
             file_bytes = file.getvalue()
@@ -95,6 +107,8 @@ def extract_text_from_pdfs(uploaded_files):
 # ==============================
 def get_relevant_info(db, question, selected_files, max_chars=150000):
     all_text = ""
+    # Validación extra por si selected_files es None
+    if not selected_files: return ""
     selected_files_set = set(selected_files) if isinstance(selected_files, (list, set)) else set()
     
     if not selected_files_set:
@@ -119,7 +133,12 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
                     contenido = str(grupo.get('contenido_texto', ''))
                     metadatos_slide = ""
                     if grupo.get('metadatos'):
-                        metadatos_slide = f" (Contexto visual: {json.dumps(grupo.get('metadatos'), ensure_ascii=False)})"
+                        # Usamos str() en json.dumps para evitar errores de codificación
+                        try:
+                            meta_str = json.dumps(grupo.get('metadatos'), ensure_ascii=False)
+                        except:
+                            meta_str = "{}"
+                        metadatos_slide = f" (Contexto visual: {meta_str})"
                     
                     if contenido: 
                         doc_content += f" - {contenido}{metadatos_slide}\n"
@@ -175,14 +194,16 @@ def build_rag_context(query, documents, max_chars=100000):
     return final_context
 
 # ==============================
-# VALIDACIÓN DE SESIÓN
+# VALIDACIÓN DE SESIÓN (PROTEGIDA)
 # ==============================
 def validate_session_integrity():
     if not st.session_state.get("logged_in"): return
     current_time = time.time()
     if 'last_session_check' not in st.session_state or (current_time - st.session_state.last_session_check > 300):
         try:
+            # Importación LOCAL para evitar conflictos circulares o de carga inicial
             from services.supabase_db import supabase 
+            
             uid = st.session_state.user_id
             res = supabase.table("users").select("active_session_id").eq("id", uid).single().execute()
             if res.data and res.data.get('active_session_id') != st.session_state.session_id:
@@ -192,20 +213,21 @@ def validate_session_integrity():
                 st.rerun()
             st.session_state.last_session_check = current_time
         except Exception as e:
-            print(f"Error validando sesión: {e}")
+            # Si falla la validación (ej. error de red), no bloqueamos la app, solo logueamos
+            print(f"Advertencia validando sesión: {e}")
 
 # =========================================================
-# LÓGICA DE CITAS: CORREGIDA PARA EVITAR SALTOS DE LÍNEA
+# LÓGICA DE CITAS (BLINDADA CONTRA CRASHES)
 # =========================================================
 def process_text_with_tooltips(text):
     """
-    Versión INLINE: Genera HTML 'aplanado' (sin saltos de línea internos)
-    para que las citas no rompan el párrafo.
+    Versión INLINE Protegida: Genera HTML para tooltips.
+    Si falla, devuelve el texto original sin formato para no romper la UI.
     """
     if not text: return ""
 
     try:
-        # 1. Normalización: [1] [2] -> [1, 2]
+        # 1. Normalización
         text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
         
         # 2. Separar Fuentes
@@ -224,7 +246,6 @@ def process_text_with_tooltips(text):
 
         # 3. Mapear IDs
         source_map = {}
-        # Regex mejorada para capturar líneas aunque no tengan ||| perfecto
         matches = re.findall(r"\[(\d+)\]\s*(.*?)(?:\s*\|\|\|\s*(.*))?$", sources_raw, re.MULTILINE)
         
         for num, filename, context in matches:
@@ -235,7 +256,7 @@ def process_text_with_tooltips(text):
                 "context": html.escape(clean_ctx)
             }
 
-        # 4. Reemplazo en el cuerpo (CONSTRUCCIÓN DE HTML PLANO)
+        # 4. Reemplazo en el cuerpo
         def replace_citation_group(match):
             content_inside = match.group(1)
             ids = [x.strip() for x in content_inside.split(',') if x.strip().isdigit()]
@@ -245,8 +266,6 @@ def process_text_with_tooltips(text):
                 data = source_map.get(citation_num)
                 
                 if data:
-                    # AQUÍ ESTABA EL ERROR: Usar f-string multilinea ('''...''') metía \n
-                    # CORRECCIÓN: Todo en una sola línea de string
                     tooltip = (
                         f'<span class="tooltip-container">'
                         f'<span class="citation-number">[{citation_num}]</span>'
@@ -257,11 +276,10 @@ def process_text_with_tooltips(text):
                     )
                     html_parts.append(tooltip)
                 else:
-                    # Si no hay fuente, dejamos el texto plano
                     html_parts.append(f'<span class="citation-missing">[{citation_num}]</span>')
             
             if not html_parts: return match.group(0)
-            return f" {' '.join(html_parts)} " # Unimos con espacio simple
+            return f" {' '.join(html_parts)} "
         
         enriched_body = re.sub(r"\[([\d,\s]+)\]", replace_citation_group, body)
         
@@ -283,10 +301,11 @@ def process_text_with_tooltips(text):
         return enriched_body + clean_footer
 
     except Exception as e:
+        # FAILSAFE CRÍTICO: Si algo falla generando HTML, devolvemos el texto plano
         print(f"Error renderizando tooltips: {e}")
         return text
 
-# Funciones de Reset Workflow (Las mantenemos igual)
+# Funciones de Reset Workflow
 def reset_report_workflow():
     for k in ["report", "last_question"]: st.session_state.mode_state.pop(k, None)
 
