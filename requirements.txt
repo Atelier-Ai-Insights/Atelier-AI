@@ -12,3 +12,4 @@ python-dotenv
 watchdog
 pytrends
 boto3
+PyMuPDF
