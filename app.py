@@ -1,4 +1,18 @@
 import streamlit as st
+import sys
+import traceback
+
+# --- BLOQUE DE DIAGNÓSTICO DE ARRANQUE ---
+try:
+    # Intenta importar la librería problemática primero para ver si explota
+    import google.generativeai as genai
+    st.toast("Librería Google cargada correctamente", icon="✅")
+except Exception as e:
+    st.error("🚨 ERROR CRÍTICO AL IMPORTAR GOOGLE AI")
+    st.code(traceback.format_exc())
+    st.stop()
+# -----------------------------------------
+
 import time 
 import re 
 from datetime import datetime, timezone
