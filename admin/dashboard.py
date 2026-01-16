@@ -17,7 +17,7 @@ def show_admin_dashboard(db_full):
         return
 
     st.title("Panel de Control")
-    tab_stats, tab_users = st.tabs(["📊 Registro de Consultas", "👥 Gestión de Usuarios"])
+    tab_stats, tab_users = st.tabs(["Registro de Consultas", "Gestión de Usuarios"])
 
     # --- PESTAÑA 1: TABLA MAESTRA DE CONSULTAS ---
     with tab_stats:
