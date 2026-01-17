@@ -131,11 +131,9 @@ def run_user_interface(db_full, user_features, footer_html):
                     if has_access:
                         st.button(mode_key, on_click=set_mode_and_reset, args=(mode_key,), use_container_width=True, type="primary" if modo == mode_key else "secondary")
 
-    st.sidebar.divider()
-
     # 2. BITÁCORA / PINES (AHORA ARRIBA DE LOS FILTROS)
     # Al mover esto antes de los filtros, siempre estará visible y accesible.
-    st.sidebar.subheader("📌 Conversaciones y Reportes")
+    st.sidebar.subheader("Conversaciones y Reportes")
     saved_pins = get_project_memory()
     
     if saved_pins:
@@ -147,11 +145,11 @@ def run_user_interface(db_full, user_features, footer_html):
                 st.caption(clean_text[:100] + "...") 
                 c1, c2 = st.columns(2)
                 with c1:
-                    if st.button("👁️ Ver", key=f"view_{pin['id']}", use_container_width=True):
+                    if st.button("Ver", key=f"view_{pin['id']}", use_container_width=True):
                         st.session_state.pin_to_view = pin
                         st.rerun()
                 with c2:
-                    if st.button("🗑️ Borrar", key=f"del_{pin['id']}", use_container_width=True):
+                    if st.button("Borrar", key=f"del_{pin['id']}", use_container_width=True):
                         delete_project_memory(pin['id']); st.rerun()
     else:
         st.sidebar.caption("No hay hallazgos guardados.")
