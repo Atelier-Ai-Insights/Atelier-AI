@@ -7,7 +7,6 @@ import html  # Para seguridad HTML
 from contextlib import contextmanager
 
 # --- IMPORTACIÓN SEGURA DE PYMUPDF ---
-# Esto evita que la app muera si la librería de PDFs tiene conflictos de sistema
 try:
     import fitz  # PyMuPDF
 except ImportError:
@@ -37,12 +36,10 @@ def get_stopwords():
 # ==============================
 @contextmanager
 def render_process_status(label="Procesando solicitud...", expanded=True):
-    # Usamos un try-except interno para evitar que st.status rompa el flujo visual
     try:
         status_container = st.status(label, expanded=expanded)
         yield status_container
     except Exception as e:
-        # Fallback si st.status falla (versiones viejas de streamlit)
         st.warning(f"{label}...")
         yield st.empty()
 
@@ -107,7 +104,6 @@ def extract_text_from_pdfs(uploaded_files):
 # ==============================
 def get_relevant_info(db, question, selected_files, max_chars=150000):
     all_text = ""
-    # Validación extra por si selected_files es None
     if not selected_files: return ""
     selected_files_set = set(selected_files) if isinstance(selected_files, (list, set)) else set()
     
@@ -133,7 +129,6 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
                     contenido = str(grupo.get('contenido_texto', ''))
                     metadatos_slide = ""
                     if grupo.get('metadatos'):
-                        # Usamos str() en json.dumps para evitar errores de codificación
                         try:
                             meta_str = json.dumps(grupo.get('metadatos'), ensure_ascii=False)
                         except:
@@ -194,14 +189,13 @@ def build_rag_context(query, documents, max_chars=100000):
     return final_context
 
 # ==============================
-# VALIDACIÓN DE SESIÓN (PROTEGIDA)
+# VALIDACIÓN DE SESIÓN
 # ==============================
 def validate_session_integrity():
     if not st.session_state.get("logged_in"): return
     current_time = time.time()
     if 'last_session_check' not in st.session_state or (current_time - st.session_state.last_session_check > 300):
         try:
-            # Importación LOCAL para evitar conflictos circulares o de carga inicial
             from services.supabase_db import supabase 
             
             uid = st.session_state.user_id
@@ -213,22 +207,25 @@ def validate_session_integrity():
                 st.rerun()
             st.session_state.last_session_check = current_time
         except Exception as e:
-            # Si falla la validación (ej. error de red), no bloqueamos la app, solo logueamos
             print(f"Advertencia validando sesión: {e}")
 
 # =========================================================
-# LÓGICA DE CITAS (MEJORADA PARA COMILLAS Y ESPACIOS)
+# LÓGICA DE CITAS (CORREGIDA PARA PAGE Y COMILLAS)
 # =========================================================
 def process_text_with_tooltips(text):
     """
-    Versión INLINE Protegida + Normalización de Comillas
+    Versión INLINE Protegida + Normalización de Comillas + Normalización de [PAGE X]
     """
     if not text: return ""
 
     try:
-        # 0. Normalización de Comillas: Convierte comillas curvas en rectas
-        # Esto soluciona que la regex falle si la cita está pegada a ”
+        # 0. Normalización de Comillas
         text = text.replace('“', '"').replace('”', '"')
+
+        # 0.5. CORRECCIÓN CRÍTICA: Normalizar 'PAGE X' a '[X]'
+        # Detecta [PAGE 27], [Page 8], [p. 10] y lo convierte a [27], [8], [10]
+        # Así el resto del código lo entiende como un ID válido.
+        text = re.sub(r'\[\s*(?:Page|PAGE|Pag|Pág|p\.|P\.)\s*(\d+)\s*\]', r'[\1]', text, flags=re.IGNORECASE)
 
         # 1. Normalización de citas [1][2] -> [1, 2]
         text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
@@ -269,7 +266,6 @@ def process_text_with_tooltips(text):
                 data = source_map.get(citation_num)
                 
                 if data:
-                    # Agregamos style inline position:relative para asegurar que el z-index del tooltip funcione
                     tooltip = (
                         f'<span class="tooltip-container" style="position: relative; display: inline-block;">'
                         f'<span class="citation-number">[{citation_num}]</span>'
@@ -285,7 +281,7 @@ def process_text_with_tooltips(text):
             if not html_parts: return match.group(0)
             return f" {' '.join(html_parts)} "
         
-        # Regex mejorada: Permite espacios dentro de los corchetes y es inmune a las comillas
+        # Regex mejorada
         enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, body)
         
         # 5. Pie de página
@@ -306,7 +302,6 @@ def process_text_with_tooltips(text):
         return enriched_body + clean_footer
 
     except Exception as e:
-        # FAILSAFE CRÍTICO: Si algo falla generando HTML, devolvemos el texto plano
         print(f"Error renderizando tooltips: {e}")
         return text
 
