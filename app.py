@@ -4,15 +4,15 @@ import traceback
 import matplotlib
 import time 
 import re 
+import os # NECESARIO para verificar si existe el logo
 
 # --- 1. PARCHE CRÍTICO DE MATPLOTLIB ---
 matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 
 # ==========================================
-# 2. IMPORTACIONES LOCALES (SEGURAS)
+# 2. IMPORTACIONES
 # ==========================================
-# Las sacamos del try/except para asegurar que 'c' siempre exista
 try:
     import constants as c
     from styles import apply_styles, apply_login_styles 
@@ -21,10 +21,9 @@ try:
     from services.supabase_db import supabase
     from auth import show_login_page, show_reset_password_page, show_activation_flow 
     from admin.dashboard import show_admin_dashboard
-    from utils import extract_brand, validate_session_integrity 
+    from utils import extract_brand, validate_session_integrity, process_text_with_tooltips # Importamos tooltips
     from services.memory_service import get_project_memory, delete_project_memory 
 except ImportError as e:
-    # Si fallan tus propios archivos, es un error grave de estructura
     st.error(f"Error cargando módulos internos: {e}")
     st.stop()
 
@@ -34,7 +33,6 @@ except ImportError as e:
 try:
     import google.generativeai as genai
 except ImportError:
-    # Si falla Google, seguimos pero sin IA, no rompemos la app completa
     print("Advertencia: Librería de Google AI no encontrada o incompatible.")
 
 # --- HELPER FUNCTIONS ---
@@ -57,12 +55,37 @@ def set_mode_and_reset(new_mode):
     else:
         st.session_state.mode_state = {}
 
+# --- FUNCIÓN SEGURA PARA LOGO ---
+def render_logo(width=220):
+    logo_file = "LogoDataStudio.png"
+    if os.path.exists(logo_file):
+        try:
+            st.image(logo_file, width=width)
+        except:
+            st.markdown("### 🎨 Atelier AI")
+    else:
+        st.markdown("### 🎨 Atelier AI")
+
+# --- VISOR DE NOTAS (POP-UP) ---
+@st.dialog("Nota Guardada")
+def show_saved_insight(content, date_str):
+    st.caption(f"📅 Guardado el: {date_str}")
+    st.divider()
+    # Usamos tooltips para que se vea limpio
+    html_content = process_text_with_tooltips(content)
+    st.markdown(html_content, unsafe_allow_html=True)
+    
+    if st.button("Cerrar", use_container_width=True):
+        st.rerun()
+
 # =====================================================
 # FUNCIÓN DE UI
 # =====================================================
 def run_user_interface(db_full, user_features, footer_html):
     # Sidebar
-    st.sidebar.image("LogoDataStudio.png", width=220)
+    with st.sidebar:
+        render_logo(width=220)
+    
     usuario_actual = st.session_state.get("user", "Usuario")
     st.sidebar.write(f"Usuario: {usuario_actual}")
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador")
@@ -134,17 +157,27 @@ def run_user_interface(db_full, user_features, footer_html):
         db_filtered = db_full
         if run_filters is False: st.sidebar.caption("Filtros no disponibles en este modo.")
 
-    # Bitácora
+    # --- BITÁCORA (RESTORED VIEW BUTTON) ---
     st.sidebar.subheader("Conversaciones y Reportes")
     saved_pins = get_project_memory()
+    
     if saved_pins:
         for pin in saved_pins:
             date_str = pin.get('created_at', '')[:10]
             clean_text = remove_html_tags(pin.get('content', ''))
-            with st.sidebar.expander(f"{date_str} | {clean_text[:30]}...", expanded=False):
-                st.info(clean_text[:120] + "...") 
-                if st.button("Borrar", key=f"del_{pin['id']}", use_container_width=True):
-                    delete_project_memory(pin['id']); st.rerun()
+            
+            with st.sidebar.expander(f"{date_str} | {clean_text[:25]}...", expanded=False):
+                st.caption(clean_text[:100] + "...") 
+                
+                # BOTONES: VER y BORRAR
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("👁️ Ver", key=f"view_{pin['id']}", use_container_width=True):
+                        st.session_state.pin_to_view = pin
+                        st.rerun()
+                with c2:
+                    if st.button("🗑️ Borrar", key=f"del_{pin['id']}", use_container_width=True):
+                        delete_project_memory(pin['id']); st.rerun()
     else:
         st.sidebar.caption("No hay hallazgos guardados.")
 
@@ -158,9 +191,16 @@ def run_user_interface(db_full, user_features, footer_html):
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
     
     # --- ÁREA PRINCIPAL ---
+    
+    # Lógica del Modal (Pop-up)
+    if "pin_to_view" in st.session_state:
+        pin = st.session_state.pin_to_view
+        show_saved_insight(pin['content'], pin.get('created_at', '')[:10])
+        del st.session_state.pin_to_view
+
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
     
-    # Carga de módulos bajo demanda
+    # Carga de módulos
     if modo == c.MODE_REPORT: 
         from modes.report_mode import report_mode; report_mode(db_filtered, selected_files)
     elif modo == c.MODE_IDEATION: 
@@ -202,7 +242,6 @@ def main():
         
         if 'page' not in st.session_state: st.session_state.page = "login"
         if "mode_state" not in st.session_state: st.session_state.mode_state = {}
-        # AQUÍ ESTABA EL ERROR: Ahora 'c' existe seguro
         if 'current_mode' not in st.session_state: st.session_state.current_mode = c.MODE_CHAT
         init_app_memory()
         
@@ -216,7 +255,7 @@ def main():
             apply_login_styles()
             c1, c2, c3 = st.columns([3, 2, 3])
             with c2:
-                st.image("LogoDataStudio.png", use_container_width=True)
+                render_logo(width=None)
                 auth_type = params.get("type", "recovery")
                 token = params.get("access_token")
                 if isinstance(token, list): token = token[0]
@@ -234,7 +273,6 @@ def main():
                 try: supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
                 except: supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
             
-            # Carga de Base de Datos
             if not hasattr(st.session_state, 'db_full'):
                 status_placeholder.info("📂 Cargando base de datos del cliente...")
                 try: 
@@ -258,7 +296,7 @@ def main():
         apply_login_styles()
         c1, c2, c3 = st.columns([3, 2, 3])
         with c2:
-            st.image("LogoDataStudio.png", use_container_width=True)
+            render_logo(width=None)
             if st.session_state.page == "reset_password": show_reset_password_page()
             else: show_login_page() 
         st.divider()
