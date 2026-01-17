@@ -78,7 +78,7 @@ def show_saved_insight(content, date_str):
         st.rerun()
 
 # =====================================================
-# FUNCIÓN DE UI (REORDENADA)
+# FUNCIÓN DE UI (REORDENADA: FILTROS -> MODOS -> PINES)
 # =====================================================
 def run_user_interface(db_full, user_features, footer_html):
     # Sidebar
@@ -90,9 +90,42 @@ def run_user_interface(db_full, user_features, footer_html):
     if st.session_state.get("is_admin", False): st.sidebar.caption("Rol: Administrador")
     st.sidebar.divider()
     
-    # 1. SELECTOR DE MODOS
-    st.sidebar.header("Seleccione el modo de uso")
+    # ---------------------------------------------------------
+    # 1. FILTROS DE BÚSQUEDA (AHORA EN PRIMER LUGAR)
+    # ---------------------------------------------------------
+    st.sidebar.header("Filtros de Búsqueda")
+    
+    # Determinamos si el modo actual permite filtros
     modo = st.session_state.current_mode
+    run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT, c.MODE_TREND_ANALYSIS] 
+    
+    user_client_name = st.session_state.get("cliente", "")
+    db_base = db_full
+    if user_client_name == "atelier demo":
+        db_base = [doc for doc in db_full if doc.get("cliente") and "atelier" in str(doc.get("cliente")).lower()]
+
+    if run_filters:
+        marcas_options = sorted({doc.get("filtro", "") for doc in db_base if doc.get("filtro")})
+        selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas")
+        db_step_1 = [d for d in db_base if d.get("filtro") in selected_marcas] if selected_marcas else db_base
+
+        years_options = sorted({doc.get("marca", "") for doc in db_step_1 if doc.get("marca")})
+        selected_years = st.sidebar.multiselect("Año(s):", years_options, key="filter_years")
+        db_step_2 = [d for d in db_step_1 if d.get("marca") in selected_years] if selected_years else db_step_1
+
+        brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_step_2 if extract_brand(d.get("nombre_archivo", ""))})
+        selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects")
+        db_filtered = [d for d in db_step_2 if extract_brand(d.get("nombre_archivo", "")) in selected_brands] if selected_brands else db_step_2
+    else:
+        db_filtered = db_full
+        if run_filters is False: st.sidebar.caption("Filtros no disponibles en este modo.")
+
+    st.sidebar.divider()
+
+    # ---------------------------------------------------------
+    # 2. SELECTOR DE MODOS (EN SEGUNDO LUGAR)
+    # ---------------------------------------------------------
+    st.sidebar.header("Seleccione el modo de uso")
     
     all_categories = {
         "Análisis": {
@@ -130,11 +163,12 @@ def run_user_interface(db_full, user_features, footer_html):
                 for mode_key, has_access in modes_dict.items():
                     if has_access:
                         st.button(mode_key, on_click=set_mode_and_reset, args=(mode_key,), use_container_width=True, type="primary" if modo == mode_key else "secondary")
-    
+
     st.sidebar.divider()
-    
-    # 2. BITÁCORA / PINES (AHORA ARRIBA DE LOS FILTROS)
-    # Al mover esto antes de los filtros, siempre estará visible y accesible.
+
+    # ---------------------------------------------------------
+    # 3. BITÁCORA / PINES (AL FINAL)
+    # ---------------------------------------------------------
     st.sidebar.subheader("Conversaciones y Reportes")
     saved_pins = get_project_memory()
     
@@ -147,41 +181,14 @@ def run_user_interface(db_full, user_features, footer_html):
                 st.caption(clean_text[:100] + "...") 
                 c1, c2 = st.columns(2)
                 with c1:
-                    if st.button("Ver", key=f"view_{pin['id']}", use_container_width=True):
+                    if st.button("👁️ Ver", key=f"view_{pin['id']}", use_container_width=True):
                         st.session_state.pin_to_view = pin
                         st.rerun()
                 with c2:
-                    if st.button("Borrar", key=f"del_{pin['id']}", use_container_width=True):
+                    if st.button("🗑️ Borrar", key=f"del_{pin['id']}", use_container_width=True):
                         delete_project_memory(pin['id']); st.rerun()
     else:
         st.sidebar.caption("No hay hallazgos guardados.")
-
-    st.sidebar.divider()
-
-    # 3. FILTROS DE BÚSQUEDA (AHORA AL FINAL)
-    st.sidebar.header("Filtros de Búsqueda")
-    run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT, c.MODE_TREND_ANALYSIS] 
-    
-    user_client_name = st.session_state.get("cliente", "")
-    db_base = db_full
-    if user_client_name == "atelier demo":
-        db_base = [doc for doc in db_full if doc.get("cliente") and "atelier" in str(doc.get("cliente")).lower()]
-
-    if run_filters:
-        marcas_options = sorted({doc.get("filtro", "") for doc in db_base if doc.get("filtro")})
-        selected_marcas = st.sidebar.multiselect("Marca(s):", marcas_options, key="filter_marcas")
-        db_step_1 = [d for d in db_base if d.get("filtro") in selected_marcas] if selected_marcas else db_base
-
-        years_options = sorted({doc.get("marca", "") for doc in db_step_1 if doc.get("marca")})
-        selected_years = st.sidebar.multiselect("Año(s):", years_options, key="filter_years")
-        db_step_2 = [d for d in db_step_1 if d.get("marca") in selected_years] if selected_years else db_step_1
-
-        brands_options = sorted({extract_brand(d.get("nombre_archivo", "")) for d in db_step_2 if extract_brand(d.get("nombre_archivo", ""))})
-        selected_brands = st.sidebar.multiselect("Proyecto(s):", brands_options, key="filter_projects")
-        db_filtered = [d for d in db_step_2 if extract_brand(d.get("nombre_archivo", "")) in selected_brands] if selected_brands else db_step_2
-    else:
-        db_filtered = db_full
-        if run_filters is False: st.sidebar.caption("Filtros no disponibles en este modo.")
 
     # Logout
     st.sidebar.divider()
