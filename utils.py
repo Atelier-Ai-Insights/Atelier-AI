@@ -11,6 +11,9 @@ try:
 except ImportError:
     fitz = None
 
+# ==============================
+# CONFIGURACIÓN BÁSICA
+# ==============================
 @st.cache_resource
 def get_stopwords():
     return {
@@ -44,6 +47,9 @@ def extract_brand(filename):
 
 def clean_text(text): return str(text) if text else ""
 
+# ==============================
+# LECTURA DE PDFS
+# ==============================
 def extract_text_from_pdfs(uploaded_files):
     combined_text = ""
     if not uploaded_files or fitz is None: return combined_text
@@ -55,6 +61,9 @@ def extract_text_from_pdfs(uploaded_files):
         except: pass
     return combined_text
 
+# ==============================
+# RAG SIMPLIFICADO
+# ==============================
 def get_relevant_info(db, question, selected_files, max_chars=150000):
     all_text = ""
     if not selected_files: return ""
@@ -77,76 +86,81 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
     return all_text
 
 def validate_session_integrity():
-    pass # Simplificado para evitar bloqueos innecesarios en debug
+    pass 
 
 # =========================================================
-# LÓGICA DE CITAS: "MULTI-PASS CLEANER"
+# LÓGICA DE CITAS V3 (EXTRACCIÓN PROFUNDA)
 # =========================================================
 def process_text_with_tooltips(text):
     if not text: return ""
 
     try:
-        # 1. Normalización Inicial
+        # 1. LIMPIEZA PREVIA (Markdown y Caracteres)
         text = text.replace('“', '"').replace('”', '"')
+        # Eliminar negritas alrededor de citas: **[1]** -> [1]
+        text = re.sub(r'\*\*\[(\d+)\]\*\*', r'[\1]', text)
+        # Normalizar Page: [PAGE 8] -> [8]
         text = re.sub(r'\[\s*(?:Page|PAGE|Pag|Pág|p\.?)\s*(\d+)\s*\]', r'[\1]', text, flags=re.IGNORECASE)
-        # Unir [1][2] -> [1, 2] y [1], [2] -> [1, 2]
+        # Fusionar: [1][2] -> [1, 2] y [1], [2] -> [1, 2]
         text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
         text = re.sub(r'\]\s*[,;]\s*\[', ', ', text)
 
         source_map = {}
 
         # ---------------------------------------------------------
-        # PASADA A: Capturar metadata estándar al final del texto
-        # Patrón: [1] Archivo ||| Contexto
+        # FASE 1: COSECHA (HARVEST)
+        # Buscamos cualquier bloque que parezca una definición de fuente:
+        # [ID] ... ||| ... (hasta el siguiente [ID] o fin de texto)
         # ---------------------------------------------------------
-        def extract_standard_meta(match):
-            cid = match.group(1)
-            fname = match.group(2).strip()
-            ctx = match.group(3).strip()
-            # Limpiar contexto
-            ctx = re.sub(r'^(?:Cita:|Contexto:)\s*', '', ctx, flags=re.IGNORECASE)
-            source_map[cid] = {"file": html.escape(fname), "context": html.escape(ctx)}
-            return "" # Borrar del texto visible
-
-        # Regex busca [ID] algo ||| algo (con soporte multilinea)
-        text = re.sub(r'\[(\d+)\]\s*([^\[\]\n\|]+?)\s*\|\|\|\s*([^\n]+)', extract_standard_meta, text)
-
-        # ---------------------------------------------------------
-        # PASADA B: Capturar "Cita inline" pegada al número (Tus capturas)
-        # Patrón: [1] . Cita: "..." (Contexto: ...)
-        # ---------------------------------------------------------
-        def extract_inline_garbage(match):
-            full_str = match.group(0) # Todo el string encontrado
-            cid = match.group(1)      # El ID (ej: 8)
-            garbage = match.group(2)  # El texto sucio (Cita: "...")
-
-            # Si ya tenemos info para este ID, solo borramos la basura
-            # Si no tenemos, usamos esta basura como contexto
-            if cid not in source_map:
-                clean_garbage = re.sub(r'^(?:Cita:|Contexto:)\s*', '', garbage, flags=re.IGNORECASE).strip()
-                source_map[cid] = {
-                    "file": "Referencia en texto", 
-                    "context": html.escape(clean_garbage[:300] + "...") # Limitamos largo
-                }
+        
+        # Regex explicada:
+        # \[(\d+)\]      -> Captura el ID [1]
+        # \s* -> Espacios
+        # ([^\[\]\|]+?)  -> Captura el nombre del archivo (todo lo que no sea corchetes o pipe)
+        # \s*\|\|\|\s* -> El separador |||
+        # (.+?)          -> El contexto/cita (multilínea gracias a re.DOTALL)
+        # (?=\n\[\d+\]|$) -> Lookahead: Detente antes del siguiente [N] o el fin del texto
+        definitions_pattern = r'\[(\d+)\]\s*([^\[\]\|]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$)'
+        
+        matches = re.findall(definitions_pattern, text, flags=re.DOTALL)
+        
+        for cid, fname, ctx in matches:
+            # Limpiamos prefijos basura del contexto
+            clean_ctx = re.sub(r'^(?:Cita:|Contexto:|Quote:)\s*', '', ctx.strip(), flags=re.IGNORECASE)
+            # Quitamos comillas externas si existen
+            clean_ctx = clean_ctx.strip('"').strip("'")
             
-            # Devolvemos solo el número [1] y borramos el resto
-            return f"[{cid}]"
-
-        # Regex: Busca [ID] seguido opcionalmente de punto/espacio y luego "Cita:" o "Quote:"
-        text = re.sub(r'\[(\d+)\][\.\s]*(Cita:.*?\)(?=\s|\[|$))', extract_inline_garbage, text, flags=re.DOTALL | re.IGNORECASE)
-
-        # ---------------------------------------------------------
-        # PASADA C: Escoba Final (Borrar residuos huérfanos)
-        # ---------------------------------------------------------
-        # Borrar líneas sueltas que digan Cita: "..."
-        text = re.sub(r'(?:\n|^)\s*(?:Cita:|Quote:)\s*".*?"\s*\(.*?\)', '', text, flags=re.DOTALL | re.IGNORECASE)
-        # Borrar (Contexto: ...) sueltos
-        text = re.sub(r'\(Contexto:.*?\)', '', text, flags=re.IGNORECASE)
-        # Borrar título de fuentes si quedó vacío
-        text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas)?\s*:?\s*(?:\*\*|##)?\s*(?=\n|$)', '', text, flags=re.IGNORECASE)
+            source_map[cid] = {
+                "file": html.escape(fname.strip()),
+                "context": html.escape(clean_ctx)
+            }
 
         # ---------------------------------------------------------
-        # RENDERIZADO
+        # FASE 2: BORRADO (PURGE)
+        # Eliminamos del texto visible las definiciones que ya capturamos
+        # ---------------------------------------------------------
+        text = re.sub(definitions_pattern, '', text, flags=re.DOTALL)
+
+        # ---------------------------------------------------------
+        # FASE 3: ESCOBA INDUSTRIAL (SWEEP)
+        # Borramos residuos que la IA haya dejado "inline" (pegados al párrafo)
+        # ---------------------------------------------------------
+        
+        # A. Borrar frases tipo: Cita: "..." (Contexto: ...)
+        # Usamos re.DOTALL para que se coma saltos de línea dentro de la cita
+        garbage_a = r'(?:Cita:|Quote:)\s*["“].*?["”]\s*(?:\(Contexto:.*?\))?'
+        text = re.sub(garbage_a, '', text, flags=re.DOTALL | re.IGNORECASE)
+
+        # B. Borrar bloques sueltos (Contexto: ...)
+        garbage_b = r'\(Contexto:.*?\)'
+        text = re.sub(garbage_b, '', text, flags=re.DOTALL | re.IGNORECASE)
+        
+        # C. Borrar títulos de sección de fuentes vacíos
+        garbage_c = r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas)?\s*:?\s*(?:\*\*|##)?\s*(?=\n|$)'
+        text = re.sub(garbage_c, '', text, flags=re.IGNORECASE)
+
+        # ---------------------------------------------------------
+        # FASE 4: INYECCIÓN DE HTML (RENDER)
         # ---------------------------------------------------------
         def replace_citation_group(match):
             content = match.group(1)
@@ -167,18 +181,23 @@ def process_text_with_tooltips(text):
                     )
                     html_out.append(tooltip)
                 else:
-                    # Si no hay data, mostramos el número simple pero con clase "missing"
-                    html_out.append(f'<span class="citation-missing" title="Fuente no detectada">[{cid}]</span>')
+                    # Si el ID existe en el texto pero la IA no generó definición (source_map),
+                    # mostramos solo el número para no romper el texto, pero sin tooltip.
+                    html_out.append(f'<span class="citation-simple">[{cid}]</span>')
             
             if not html_out: return match.group(0)
             return f" {' '.join(html_out)} "
 
+        # Buscamos [1], [1, 2], etc.
         enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, text)
         
-        # Footer
+        # ---------------------------------------------------------
+        # FASE 5: FOOTER (OPCIONAL)
+        # Lista simple de archivos usados al final
+        # ---------------------------------------------------------
         footer = ""
         if source_map:
-            files = sorted(list(set(v['file'] for v in source_map.values() if v['file'] != "Referencia en texto")))
+            files = sorted(list(set(v['file'] for v in source_map.values())))
             if files:
                 footer = "\n\n<br><hr><h6 style='margin-bottom:5px; color:#666;'>Fuentes:</h6>"
                 footer += "<ul style='font-size:0.8em; color:#666; margin-top:0; padding-left:20px;'>"
@@ -191,7 +210,7 @@ def process_text_with_tooltips(text):
         print(f"Error Tooltips: {e}")
         return text
 
-# Dummies para resets
+# Dummies para resets (para evitar errores de import)
 def reset_report_workflow(): pass
 def reset_chat_workflow(): pass
 def reset_transcript_chat_workflow(): pass
