@@ -89,7 +89,7 @@ def validate_session_integrity():
     pass 
 
 # =========================================================
-# LÓGICA DE CITAS V4 (ANTI-LISTAS SUCIAS)
+# LÓGICA DE CITAS V5 (DEDUPLICACIÓN Y LIMPIEZA PROFUNDA)
 # =========================================================
 def process_text_with_tooltips(text):
     if not text: return ""
@@ -97,63 +97,62 @@ def process_text_with_tooltips(text):
     try:
         source_map = {}
         
-        # 1. NORMALIZACIÓN PREVIA
+        # 1. PRE-LIMPIEZA DE FORMATO
         text = text.replace('“', '"').replace('”', '"')
         text = re.sub(r'\*\*\[(\d+)\]\*\*', r'[\1]', text) # Quitar negritas de [1]
         
-        # ---------------------------------------------------------
-        # FASE 0: TRITURADORA DE LISTAS SUCIAS (NUEVO)
-        # Detecta bloques tipo: [ArchivoA.pdf] ||| [ArchivoB.pdf] ||| ...
-        # Los captura para el footer y los BORRA del texto visible.
-        # ---------------------------------------------------------
-        def harvest_raw_files(match):
-            block = match.group(0)
-            # Extraemos todos los .pdf que haya en el bloque
-            raw_files = re.findall(r'\[([^\]]+\.pdf)\]', block, flags=re.IGNORECASE)
-            for f in raw_files:
-                # Usamos el nombre del archivo como clave temporal para que salga en el footer
-                source_map[f] = {"file": html.escape(f), "context": "Referencia general"}
-            return "" # BORRAMOS EL BLOQUE SUCIO
-            
-        # Regex: Busca [Algo.pdf] seguido de ||| y más cosas, repetido
-        raw_list_pattern = r'(\[[^\]]+\.pdf\]\s*\|\|\|\s*)+\[[^\]]+\.pdf\]'
-        text = re.sub(raw_list_pattern, harvest_raw_files, text, flags=re.IGNORECASE)
-        
-        # También limpiamos archivos sueltos que quedaron con |||
-        text = re.sub(r'\|\|\|\s*\[([^\]]+\.pdf)\]', '', text) # Borra "||| [File.pdf]"
-        text = re.sub(r'\[([^\]]+\.pdf)\]\s*\|\|\|', '', text) # Borra "[File.pdf] |||"
-
-        # ---------------------------------------------------------
-        # FASE 1: COSECHA ESTÁNDAR
-        # Captura [1] Archivo ||| Contexto
-        # ---------------------------------------------------------
-        def extract_standard_meta(match):
+        # 2. COSECHA DE METADATA (Harvest)
+        # Buscamos [N] Archivo ||| Contexto
+        # Guardamos la info y ELIMINAMOS ese bloque técnico del texto.
+        def harvest_metadata(match):
             cid = match.group(1)
             fname = match.group(2).strip()
-            ctx = match.group(3).strip()
-            ctx = re.sub(r'^(?:Cita:|Contexto:|Quote:)\s*', '', ctx, flags=re.IGNORECASE).strip('"').strip("'")
-            source_map[cid] = {"file": html.escape(fname), "context": html.escape(ctx)}
-            return ""
+            raw_context = match.group(3).strip()
+            
+            # Limpiamos el contexto para el tooltip
+            clean_context = re.sub(r'^(?:Cita:|Contexto:|Quote:)\s*', '', raw_context, flags=re.IGNORECASE).strip('"').strip("'")
+            
+            # Guardamos en el mapa
+            source_map[cid] = {
+                "file": html.escape(fname),
+                "context": html.escape(clean_context),
+                "raw_snippet": raw_context # Guardamos el crudo para buscar duplicados
+            }
+            return "" # Borramos la definición del texto visible
 
-        text = re.sub(r'\[(\d+)\]\s*([^\[\]\|]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$)', extract_standard_meta, text, flags=re.DOTALL)
+        # Regex Multilínea para capturar definiciones
+        text = re.sub(r'\[(\d+)\]\s*([^\[\]\|]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$)', harvest_metadata, text, flags=re.DOTALL)
 
-        # ---------------------------------------------------------
-        # FASE 2: LIMPIEZA DE BASURA
-        # ---------------------------------------------------------
-        # Citas inline pegadas al texto
-        text = re.sub(r'(?:Cita:|Quote:)\s*["“].*?["”]\s*(?:\(Contexto:.*?\))?', '', text, flags=re.DOTALL | re.IGNORECASE)
+        # 3. DEDUPLICACIÓN DE CONTEXTO (LA SOLUCIÓN A CAPTURA 6)
+        # Si la IA puso el contexto en la metadata Y TAMBIÉN en el texto, lo borramos del texto.
+        for cid, data in source_map.items():
+            snippet = data["raw_snippet"]
+            if len(snippet) > 15: # Solo si es un texto considerable
+                # Buscamos si este snippet aparece flotando en el texto y lo borramos
+                # Usamos replace simple para ser rápidos y seguros
+                text = text.replace(snippet, "")
+                
+                # A veces la IA pone el snippet entre comillas o paréntesis en el texto
+                text = text.replace(f'"{snippet}"', "")
+                text = text.replace(f'({snippet})', "")
+
+        # 4. TRITURADORA DE BASURA Y LISTAS (SOLUCIÓN A CAPTURA 7)
+        # Borrar bloques de "Cita: ..." que hayan quedado
+        text = re.sub(r'(?:Cita:|Contexto:|Quote:)\s*["“].*?["”]', '', text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r'\(Contexto:.*?\)', '', text, flags=re.DOTALL | re.IGNORECASE)
         
-        # Títulos vacíos
-        text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas)?\s*:?\s*(?:\*\*|##)?\s*(?=\n|$)', '', text, flags=re.IGNORECASE)
+        # Borrar la lista masiva de archivos al final: [File.pdf] ||| [File.pdf]
+        # Esta regex busca secuencias repetidas de corchetes y pipes
+        text = re.sub(r'(?:\[[^\]]+\.pdf\]\s*(?:\|\|\|)?\s*){2,}', '', text, flags=re.IGNORECASE)
         
-        # Limpieza final de pipes huérfanos
-        text = text.replace('|||', '') 
+        # Borrar pipes huérfanos que hayan sobrevivido
+        text = text.replace('|||', '')
+        
+        # Borrar título "Fuentes Verificadas" si quedó vacío
+        text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas)?\s*:?\s*(?:\*\*|##)?\s*(?=\n|$)', '', text, flags=re.IGNORECASE)
 
-        # ---------------------------------------------------------
-        # FASE 3: RENDERIZADO
-        # ---------------------------------------------------------
-        # Normalizar referencias numéricas
+        # 5. RENDERIZADO DE TOOLTIPS
+        # Normalizar referencias numéricas: [1][2] -> [1, 2]
         text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
         text = re.sub(r'\]\s*[,;]\s*\[', ', ', text)
 
@@ -182,9 +181,7 @@ def process_text_with_tooltips(text):
 
         enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, text)
         
-        # ---------------------------------------------------------
-        # FASE 4: FOOTER
-        # ---------------------------------------------------------
+        # 6. FOOTER
         footer = ""
         if source_map:
             files = sorted(list(set(v['file'] for v in source_map.values())))
