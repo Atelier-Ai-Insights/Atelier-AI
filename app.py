@@ -69,7 +69,7 @@ def render_logo(use_column_width=False, width=220):
 # --- VISOR DE NOTAS (POP-UP) ---
 @st.dialog("Nota Guardada")
 def show_saved_insight(content, date_str):
-    st.caption(f"📅 Guardado el: {date_str}")
+    st.caption(f"Guardado el: {date_str}")
     st.divider()
     html_content = process_text_with_tooltips(content)
     st.markdown(html_content, unsafe_allow_html=True)
@@ -181,11 +181,11 @@ def run_user_interface(db_full, user_features, footer_html):
                 st.caption(clean_text[:100] + "...") 
                 c1, c2 = st.columns(2)
                 with c1:
-                    if st.button("👁️ Ver", key=f"view_{pin['id']}", use_container_width=True):
+                    if st.button("Ver", key=f"view_{pin['id']}", use_container_width=True):
                         st.session_state.pin_to_view = pin
                         st.rerun()
                 with c2:
-                    if st.button("🗑️ Borrar", key=f"del_{pin['id']}", use_container_width=True):
+                    if st.button("Borrar", key=f"del_{pin['id']}", use_container_width=True):
                         delete_project_memory(pin['id']); st.rerun()
     else:
         st.sidebar.caption("No hay hallazgos guardados.")
