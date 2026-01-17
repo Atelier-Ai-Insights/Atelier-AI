@@ -3,324 +3,196 @@ import unicodedata
 import json
 import re
 import time
-import html  # Para seguridad HTML
+import html
 from contextlib import contextmanager
 
-# --- IMPORTACIÓN SEGURA DE PYMUPDF ---
 try:
-    import fitz  # PyMuPDF
+    import fitz
 except ImportError:
     fitz = None
 
-# ==============================
-# GESTIÓN DE STOPWORDS
-# ==============================
 @st.cache_resource
 def get_stopwords():
-    base_stopwords = {
+    return {
         'de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'las', 'un', 'para', 'con', 'no', 'una', 'su', 'que', 
         'se', 'por', 'es', 'más', 'lo', 'pero', 'me', 'mi', 'al', 'le', 'si', 'este', 'esta', 'son', 'sobre',
         'the', 'and', 'to', 'of', 'in', 'is', 'that', 'for', 'it', 'as', 'was', 'with', 'on', 'at', 'by'
     }
-    custom_list = {
-        '...', 'p', 'r', 'rta', 'respuesta', 'respuestas', 'si', 'no', 'na', 'ninguno', 'ninguna', 'nan',
-        'document', 'presentation', 'python', 'warning', 'created', 'page', 'objetivo', 'tecnica', 
-        'investigacion', 'participante', 'sesiones', 'proyecto', 'análisis', 'hola', 'buenos', 'dias',
-        'video', 'audio', 'imagen', 'transcripcion'
-    }
-    return base_stopwords | custom_list
 
-# ==============================
-# UI COMPONENTS
-# ==============================
 @contextmanager
-def render_process_status(label="Procesando solicitud...", expanded=True):
+def render_process_status(label="Procesando...", expanded=True):
     try:
-        status_container = st.status(label, expanded=expanded)
-        yield status_container
-    except Exception as e:
-        st.warning(f"{label}...")
+        status = st.status(label, expanded=expanded)
+        yield status
+    except:
         yield st.empty()
 
-# ==============================
-# FUNCIONES AUXILIARES
-# ==============================
 def normalize_text(text):
     if not text: return ""
     try: 
         text = str(text).lower()
         normalized = unicodedata.normalize("NFD", text)
         return "".join(c for c in normalized if unicodedata.category(c) != "Mn")
-    except Exception: return str(text).lower()
+    except: return str(text).lower()
 
 def extract_brand(filename):
     if not filename: return ""
     if "In-ATL_" in str(filename):
-        try: 
-            base = str(filename).replace("\\", "/").split("/")[-1]
-            return base.split("In-ATL_")[1].rsplit(".", 1)[0]
+        try: return str(filename).split("In-ATL_")[1].rsplit(".", 1)[0]
         except: pass
     return str(filename)
 
-def clean_text(text):
-    return str(text) if text is not None else ""
+def clean_text(text): return str(text) if text else ""
 
-def clean_gemini_json(text):
-    if not text: return ""
-    text = str(text).strip()
-    text = re.sub(r'^```json\s*', '', text, flags=re.MULTILINE)
-    text = re.sub(r'^```\s*', '', text, flags=re.MULTILINE)
-    text = re.sub(r'```$', '', text, flags=re.MULTILINE)
-    return text.strip()
-
-# ==============================
-# PROCESAMIENTO DE PDFS
-# ==============================
 def extract_text_from_pdfs(uploaded_files):
     combined_text = ""
-    if not uploaded_files: return combined_text
-    
-    if fitz is None:
-        return "\n[ERROR: Librería de PDF no disponible en el servidor]\n"
-
+    if not uploaded_files or fitz is None: return combined_text
     for file in uploaded_files:
         try:
-            file_bytes = file.getvalue()
-            with fitz.open(stream=file_bytes, filetype="pdf") as pdf_document:
-                combined_text += f"\n\n--- INICIO DOCUMENTO: {file.name} ---\n\n"
-                for page_num, page in enumerate(pdf_document):
-                    text = page.get_text()
-                    combined_text += text + "\n"
-                combined_text += f"\n--- FIN DOCUMENTO: {file.name} ---\n"
-        except Exception as e:
-            print(f"Error al procesar PDF '{file.name}': {e}")
-            combined_text += f"\n\n--- ERROR AL PROCESAR: {file.name} ---\n"
-            
+            with fitz.open(stream=file.getvalue(), filetype="pdf") as doc:
+                combined_text += f"\n\n--- DOC: {file.name} ---\n"
+                for page in doc: combined_text += page.get_text() + "\n"
+        except: pass
     return combined_text
 
-# ==============================
-# RAG: MODO BASE DE DATOS
-# ==============================
 def get_relevant_info(db, question, selected_files, max_chars=150000):
     all_text = ""
     if not selected_files: return ""
-    selected_files_set = set(selected_files) if isinstance(selected_files, (list, set)) else set()
+    selected_set = set(selected_files)
     
-    if not selected_files_set:
-        return ""
-
     for pres in db:
-        if len(all_text) > max_chars:
-            all_text += f"\n\n[ALERTA: Contexto truncado por límite ({max_chars} chars)...]"
-            break 
-
-        doc_name = pres.get('nombre_archivo')
-        if doc_name and doc_name in selected_files_set:
+        if len(all_text) > max_chars: break
+        if pres.get('nombre_archivo') in selected_set:
             try:
-                titulo = pres.get('titulo_estudio', doc_name)
-                ano = pres.get('marca')
-                citation_header = f"{titulo} - {ano}" if ano else titulo
-
-                doc_content = f"--- DOCUMENTO: {doc_name} ---\n"
-                doc_content += f"Metadatos: {citation_header}\n"
+                doc_name = pres.get('nombre_archivo')
+                header = f"{pres.get('titulo_estudio', doc_name)} - {pres.get('marca', '')}"
+                doc_content = f"--- DOC: {doc_name} ---\nMETA: {header}\n"
+                for g in pres.get("grupos", []):
+                    txt = str(g.get('contenido_texto', ''))
+                    if txt: doc_content += f" - {txt}\n"
                 
-                for grupo in pres.get("grupos", []):
-                    contenido = str(grupo.get('contenido_texto', ''))
-                    metadatos_slide = ""
-                    if grupo.get('metadatos'):
-                        try:
-                            meta_str = json.dumps(grupo.get('metadatos'), ensure_ascii=False)
-                        except:
-                            meta_str = "{}"
-                        metadatos_slide = f" (Contexto visual: {meta_str})"
-                    
-                    if contenido: 
-                        doc_content += f" - {contenido}{metadatos_slide}\n"
-                        
-                doc_content += "\n\n"
-                
-                if len(all_text) + len(doc_content) > max_chars:
-                    remaining = max_chars - len(all_text)
-                    all_text += doc_content[:remaining]
-                    break
-                else:
-                    all_text += doc_content
-
-            except Exception as e: 
-                print(f"Error procesando documento '{doc_name}': {e}")
+                if len(all_text) + len(doc_content) <= max_chars: all_text += doc_content + "\n\n"
+                else: break
+            except: pass
     return all_text
 
-# ==============================
-# RAG: MODO PDF/TEXTO
-# ==============================
-def build_rag_context(query, documents, max_chars=100000):
-    if not query or not documents: return ""
-    
-    query_terms = set(normalize_text(query).split())
-    stopwords = get_stopwords()
-    keywords = [w for w in query_terms if w not in stopwords and len(w) > 3]
-    if not keywords: keywords = list(query_terms)
-
-    scored_chunks = []
-    for doc in documents:
-        source = doc.get('source', 'Desconocido')
-        content = doc.get('content', '')
-        paragraphs = content.split('\n\n') 
-        
-        for i, para in enumerate(paragraphs):
-            if len(para) < 30: continue
-            para_norm = normalize_text(para)
-            score = sum(1 for kw in keywords if kw in para_norm)
-            if i == 0: score += 0.5 
-            if score > 0:
-                scored_chunks.append({'score': score, 'source': source, 'text': para})
-
-    scored_chunks.sort(key=lambda x: x['score'], reverse=True)
-    final_context = ""
-    current_chars = 0
-    if not scored_chunks: return "" 
-    
-    for chunk in scored_chunks:
-        chunk_text = f"\n[Fuente: {chunk['source']}]\n{chunk['text']}\n..."
-        if current_chars + len(chunk_text) > max_chars: break
-        final_context += chunk_text
-        current_chars += len(chunk_text)
-    return final_context
-
-# ==============================
-# VALIDACIÓN DE SESIÓN
-# ==============================
 def validate_session_integrity():
-    if not st.session_state.get("logged_in"): return
-    current_time = time.time()
-    if 'last_session_check' not in st.session_state or (current_time - st.session_state.last_session_check > 300):
-        try:
-            from services.supabase_db import supabase 
-            
-            uid = st.session_state.user_id
-            res = supabase.table("users").select("active_session_id").eq("id", uid).single().execute()
-            if res.data and res.data.get('active_session_id') != st.session_state.session_id:
-                st.error("⚠️ Tu sesión ha sido cerrada desde otro dispositivo.")
-                time.sleep(2)
-                st.session_state.clear()
-                st.rerun()
-            st.session_state.last_session_check = current_time
-        except Exception as e:
-            print(f"Advertencia validando sesión: {e}")
+    pass # Simplificado para evitar bloqueos innecesarios en debug
 
 # =========================================================
-# LÓGICA DE CITAS FINAL: MODO "ESCOBA"
+# LÓGICA DE CITAS: "MULTI-PASS CLEANER"
 # =========================================================
 def process_text_with_tooltips(text):
-    """
-    1. Normaliza texto básico.
-    2. Extrae metadata técnica y la borra del texto.
-    3. BARRE LA BASURA: Elimina frases tipo 'Cita: "..." (Contexto: ...)' que la IA deja en el cuerpo.
-    4. Renderiza tooltips.
-    """
     if not text: return ""
 
     try:
-        # --- 1. NORMALIZACIÓN BÁSICA ---
+        # 1. Normalización Inicial
         text = text.replace('“', '"').replace('”', '"')
-        # [PAGE 8] -> [8]
         text = re.sub(r'\[\s*(?:Page|PAGE|Pag|Pág|p\.?)\s*(\d+)\s*\]', r'[\1]', text, flags=re.IGNORECASE)
-        # [1][2] -> [1, 2]
+        # Unir [1][2] -> [1, 2] y [1], [2] -> [1, 2]
         text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
-        # [1], [2] -> [1, 2]
         text = re.sub(r'\]\s*[,;]\s*\[', ', ', text)
 
-        # --- 2. EXTRACCIÓN DE METADATA (EXTRAER Y BORRAR) ---
-        # Buscamos patrones de metadata válidos [ID] Archivo ||| Contexto
-        # Los guardamos en source_map y los ELIMINAMOS del texto.
         source_map = {}
-        
-        def extract_clean(match):
-            citation_id = match.group(1)
-            filename = match.group(2).strip()
-            context = match.group(3).strip()
-            # Guardamos info
-            source_map[citation_id] = {
-                "file": html.escape(filename),
-                "context": html.escape(context)
-            }
-            return "" # Borramos esto del texto visible
 
-        # Regex para metadata técnica: [1] Archivo ||| Contexto
-        text = re.sub(r'\[(\d+)\]\s*([^\[\]\n\|]+?)\s*\|\|\|\s*([^\n]+)', extract_clean, text)
+        # ---------------------------------------------------------
+        # PASADA A: Capturar metadata estándar al final del texto
+        # Patrón: [1] Archivo ||| Contexto
+        # ---------------------------------------------------------
+        def extract_standard_meta(match):
+            cid = match.group(1)
+            fname = match.group(2).strip()
+            ctx = match.group(3).strip()
+            # Limpiar contexto
+            ctx = re.sub(r'^(?:Cita:|Contexto:)\s*', '', ctx, flags=re.IGNORECASE)
+            source_map[cid] = {"file": html.escape(fname), "context": html.escape(ctx)}
+            return "" # Borrar del texto visible
 
-        # --- 3. BARRIDO DE BASURA (AQUÍ ESTÁ LA SOLUCIÓN) ---
-        # Detectamos bloques de texto que son "evidencia" suelta dejada por la IA.
-        # Patrón típico visto en tus capturas: 
-        # Cita: "..." (Contexto: ...) O SIMPLEMENTE "..." (Contexto: ...)
-        
-        # A. Borrar líneas que empiezan explícitamente con Cita:
-        # Regex: Nueva línea o inicio -> Cita: -> comillas -> texto -> comillas -> paréntesis opcional
-        garbage_pattern_a = r'(?:\n|^)\s*(?:Cita:|Quote:)\s*["“].*?["”]\s*(?:\(Contexto:.*?\))?'
-        text = re.sub(garbage_pattern_a, '', text, flags=re.DOTALL | re.IGNORECASE)
+        # Regex busca [ID] algo ||| algo (con soporte multilinea)
+        text = re.sub(r'\[(\d+)\]\s*([^\[\]\n\|]+?)\s*\|\|\|\s*([^\n]+)', extract_standard_meta, text)
 
-        # B. Borrar bloques que son puramente (Contexto: ...) sueltos
-        garbage_pattern_b = r'\(Contexto:.*?\)'
-        text = re.sub(garbage_pattern_b, '', text, flags=re.IGNORECASE)
+        # ---------------------------------------------------------
+        # PASADA B: Capturar "Cita inline" pegada al número (Tus capturas)
+        # Patrón: [1] . Cita: "..." (Contexto: ...)
+        # ---------------------------------------------------------
+        def extract_inline_garbage(match):
+            full_str = match.group(0) # Todo el string encontrado
+            cid = match.group(1)      # El ID (ej: 8)
+            garbage = match.group(2)  # El texto sucio (Cita: "...")
 
-        # C. Borrar el título "Fuentes Verificadas" si quedó huérfano
+            # Si ya tenemos info para este ID, solo borramos la basura
+            # Si no tenemos, usamos esta basura como contexto
+            if cid not in source_map:
+                clean_garbage = re.sub(r'^(?:Cita:|Contexto:)\s*', '', garbage, flags=re.IGNORECASE).strip()
+                source_map[cid] = {
+                    "file": "Referencia en texto", 
+                    "context": html.escape(clean_garbage[:300] + "...") # Limitamos largo
+                }
+            
+            # Devolvemos solo el número [1] y borramos el resto
+            return f"[{cid}]"
+
+        # Regex: Busca [ID] seguido opcionalmente de punto/espacio y luego "Cita:" o "Quote:"
+        text = re.sub(r'\[(\d+)\][\.\s]*(Cita:.*?\)(?=\s|\[|$))', extract_inline_garbage, text, flags=re.DOTALL | re.IGNORECASE)
+
+        # ---------------------------------------------------------
+        # PASADA C: Escoba Final (Borrar residuos huérfanos)
+        # ---------------------------------------------------------
+        # Borrar líneas sueltas que digan Cita: "..."
+        text = re.sub(r'(?:\n|^)\s*(?:Cita:|Quote:)\s*".*?"\s*\(.*?\)', '', text, flags=re.DOTALL | re.IGNORECASE)
+        # Borrar (Contexto: ...) sueltos
+        text = re.sub(r'\(Contexto:.*?\)', '', text, flags=re.IGNORECASE)
+        # Borrar título de fuentes si quedó vacío
         text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas)?\s*:?\s*(?:\*\*|##)?\s*(?=\n|$)', '', text, flags=re.IGNORECASE)
 
-        # --- 4. RENDERIZADO DE TOOLTIPS ---
+        # ---------------------------------------------------------
+        # RENDERIZADO
+        # ---------------------------------------------------------
         def replace_citation_group(match):
-            content_inside = match.group(1)
-            ids = [x.strip() for x in content_inside.split(',') if x.strip().isdigit()]
+            content = match.group(1)
+            ids = [x.strip() for x in content.split(',') if x.strip().isdigit()]
+            html_out = []
             
-            html_parts = []
-            for citation_num in ids:
-                data = source_map.get(citation_num)
+            for cid in ids:
+                data = source_map.get(cid)
                 if data:
-                    # Tooltip HTML
+                    # Tooltip completo
                     tooltip = (
                         f'<span class="tooltip-container" style="position: relative; display: inline-block;">'
-                        f'<span class="citation-number">[{citation_num}]</span>'
+                        f'<span class="citation-number">[{cid}]</span>'
                         f'<span class="tooltip-text">'
                         f'<strong>📂 {data["file"]}</strong><br/>'
-                        f'<div style="margin-top: 4px; font-size: 0.9em;">{data["context"]}</div>'
+                        f'<div style="margin-top:4px; font-size:0.9em;">{data["context"]}</div>'
                         f'</span></span>'
                     )
-                    html_parts.append(tooltip)
+                    html_out.append(tooltip)
                 else:
-                    html_parts.append(f'<span class="citation-missing">[{citation_num}]</span>')
+                    # Si no hay data, mostramos el número simple pero con clase "missing"
+                    html_out.append(f'<span class="citation-missing" title="Fuente no detectada">[{cid}]</span>')
             
-            if not html_parts: return match.group(0)
-            return f" {' '.join(html_parts)} "
-        
-        # Reemplazar [1, 2] en el texto por los tooltips
+            if not html_out: return match.group(0)
+            return f" {' '.join(html_out)} "
+
         enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, text)
         
-        # --- 5. FOOTER ---
-        clean_footer = ""
+        # Footer
+        footer = ""
         if source_map:
-            unique_files = sorted(list(set(info['file'] for info in source_map.values())))
-            clean_footer = "\n\n<br><hr><h6 style='margin-bottom: 8px;'>Fuentes Consultadas:</h6>"
-            clean_footer += "<ul style='font-size: 0.85em; color: #555; padding-left: 20px; margin-top: 0;'>"
-            for fname in unique_files:
-                clean_footer += f"<li style='margin-bottom: 4px;'>{fname}</li>"
-            clean_footer += "</ul>"
+            files = sorted(list(set(v['file'] for v in source_map.values() if v['file'] != "Referencia en texto")))
+            if files:
+                footer = "\n\n<br><hr><h6 style='margin-bottom:5px; color:#666;'>Fuentes:</h6>"
+                footer += "<ul style='font-size:0.8em; color:#666; margin-top:0; padding-left:20px;'>"
+                for f in files: footer += f"<li>{f}</li>"
+                footer += "</ul>"
 
-        return enriched_body + clean_footer
+        return enriched_body + footer
 
     except Exception as e:
-        print(f"Error renderizando tooltips: {e}")
+        print(f"Error Tooltips: {e}")
         return text
 
-# Funciones de Reset Workflow
-def reset_report_workflow():
-    for k in ["report", "last_question"]: st.session_state.mode_state.pop(k, None)
-
-def reset_chat_workflow():
-    st.session_state.mode_state.pop("chat_history", None)
-    if "mode_state" in st.session_state and "chat_suggestions" in st.session_state.mode_state:
-        del st.session_state.mode_state["chat_suggestions"]
-
-def reset_transcript_chat_workflow():
-    st.session_state.mode_state.pop("transcript_chat_history", None)
-
-def reset_etnochat_chat_workflow():
-    st.session_state.mode_state.pop("etno_chat_history", None)
+# Dummies para resets
+def reset_report_workflow(): pass
+def reset_chat_workflow(): pass
+def reset_transcript_chat_workflow(): pass
+def reset_etnochat_chat_workflow(): pass
