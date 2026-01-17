@@ -217,17 +217,20 @@ def validate_session_integrity():
             print(f"Advertencia validando sesión: {e}")
 
 # =========================================================
-# LÓGICA DE CITAS (BLINDADA CONTRA CRASHES)
+# LÓGICA DE CITAS (MEJORADA PARA COMILLAS Y ESPACIOS)
 # =========================================================
 def process_text_with_tooltips(text):
     """
-    Versión INLINE Protegida: Genera HTML para tooltips.
-    Si falla, devuelve el texto original sin formato para no romper la UI.
+    Versión INLINE Protegida + Normalización de Comillas
     """
     if not text: return ""
 
     try:
-        # 1. Normalización
+        # 0. Normalización de Comillas: Convierte comillas curvas en rectas
+        # Esto soluciona que la regex falle si la cita está pegada a ”
+        text = text.replace('“', '"').replace('”', '"')
+
+        # 1. Normalización de citas [1][2] -> [1, 2]
         text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
         
         # 2. Separar Fuentes
@@ -266,8 +269,9 @@ def process_text_with_tooltips(text):
                 data = source_map.get(citation_num)
                 
                 if data:
+                    # Agregamos style inline position:relative para asegurar que el z-index del tooltip funcione
                     tooltip = (
-                        f'<span class="tooltip-container">'
+                        f'<span class="tooltip-container" style="position: relative; display: inline-block;">'
                         f'<span class="citation-number">[{citation_num}]</span>'
                         f'<span class="tooltip-text">'
                         f'<strong>📂 {data["file"]}</strong><br/>'
@@ -281,7 +285,8 @@ def process_text_with_tooltips(text):
             if not html_parts: return match.group(0)
             return f" {' '.join(html_parts)} "
         
-        enriched_body = re.sub(r"\[([\d,\s]+)\]", replace_citation_group, body)
+        # Regex mejorada: Permite espacios dentro de los corchetes y es inmune a las comillas
+        enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, body)
         
         # 5. Pie de página
         clean_footer = "\n\n<br><hr><h6>Fuentes Consultadas:</h6>"
