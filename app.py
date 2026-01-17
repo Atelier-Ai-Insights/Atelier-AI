@@ -130,7 +130,9 @@ def run_user_interface(db_full, user_features, footer_html):
                 for mode_key, has_access in modes_dict.items():
                     if has_access:
                         st.button(mode_key, on_click=set_mode_and_reset, args=(mode_key,), use_container_width=True, type="primary" if modo == mode_key else "secondary")
-
+    
+    st.sidebar.divider()
+    
     # 2. BITÁCORA / PINES (AHORA ARRIBA DE LOS FILTROS)
     # Al mover esto antes de los filtros, siempre estará visible y accesible.
     st.sidebar.subheader("Conversaciones y Reportes")
