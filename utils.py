@@ -11,7 +11,7 @@ try:
     import fitz  # PyMuPDF
 except ImportError:
     fitz = None
-    print("Advertencia: PyMuPDF (fitz) no encontrado. La lectura de PDFs estará limitada.")
+    # No imprimimos error para no ensuciar la UI
 
 # ==============================
 # GESTIÓN DE STOPWORDS
@@ -210,55 +210,57 @@ def validate_session_integrity():
             print(f"Advertencia validando sesión: {e}")
 
 # =========================================================
-# LÓGICA DE CITAS (CORREGIDA PARA PAGE Y COMILLAS)
+# LÓGICA DE CITAS (CORREGIDA: PAGE X y FORMATO CHAT DIRECTO)
 # =========================================================
 def process_text_with_tooltips(text):
     """
-    Versión INLINE Protegida + Normalización de Comillas + Normalización de [PAGE X]
+    Genera HTML con tooltips para las citas.
+    Corrige problemas de formato [PAGE X] y parseo de fuentes en chat directo.
     """
     if not text: return ""
 
     try:
-        # 0. Normalización de Comillas
+        # 1. Normalización de Comillas y [PAGE X]
         text = text.replace('“', '"').replace('”', '"')
-
-        # 0.5. CORRECCIÓN CRÍTICA: Normalizar 'PAGE X' a '[X]'
-        # Detecta [PAGE 27], [Page 8], [p. 10] y lo convierte a [27], [8], [10]
-        # Así el resto del código lo entiende como un ID válido.
+        # Convierte [PAGE 27], [Page 8], [p. 10] -> [27], [8], [10]
         text = re.sub(r'\[\s*(?:Page|PAGE|Pag|Pág|p\.|P\.)\s*(\d+)\s*\]', r'[\1]', text, flags=re.IGNORECASE)
 
-        # 1. Normalización de citas [1][2] -> [1, 2]
+        # 2. Normalización de citas múltiples [1][2] -> [1, 2]
         text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
         
-        # 2. Separar Fuentes
-        split_patterns = [r"\n\*\*Fuentes:?\*\*", r"\n## Fuentes", r"\n### Fuentes", r"\nFuentes:", r"\n\*\*Fuentes Verificadas:\*\*"]
-        body = text
-        sources_raw = ""
+        # 3. Separar Cuerpo y Fuentes
+        # Busca el inicio de la sección de fuentes usando varios patrones posibles
+        split_pattern = r"(?:\n(?:[\*\#]*\s*Fuentes(?: Verificadas)?[:\s]*[\*\#]*|\n\s*Fuentes:))"
+        parts = re.split(split_pattern, text, maxsplit=1, flags=re.IGNORECASE | re.DOTALL)
         
-        for pattern in split_patterns:
-            parts = re.split(pattern, text, maxsplit=1, flags=re.IGNORECASE)
-            if len(parts) > 1:
-                body = parts[0]
-                sources_raw = parts[1]
-                break
+        body = parts[0].strip()
+        sources_raw = parts[1].strip() if len(parts) > 1 else ""
         
+        # Si no hay sección de fuentes, devolvemos el texto normalizado
         if not sources_raw: return body
 
-        # 3. Mapear IDs
+        # 4. Mapear IDs de Fuentes
         source_map = {}
-        matches = re.findall(r"\[(\d+)\]\s*(.*?)(?:\s*\|\|\|\s*(.*))?$", sources_raw, re.MULTILINE)
+        # Regex robusta para capturar: [ID] Archivo ||| Metadatos
+        # Maneja saltos de línea y espacios flexibles
+        matches = re.findall(r"\[(\d+)\]\s*(.+?)(?:\s*\|\|\|\s*(.+?))?(?=\n\[|\Z)", sources_raw, re.DOTALL)
         
-        for num, filename, context in matches:
+        for num, filename, context_raw in matches:
             clean_fname = filename.strip()
-            clean_ctx = context.strip() if context else "Fuente del documento."
+            # Limpiar el contexto de prefijos comunes como "Cita:", "(Contexto: ...)"
+            clean_ctx = context_raw.strip() if context_raw else "Fuente del documento."
+            # Opcional: Limpieza extra si el contexto viene muy sucio
+            # clean_ctx = re.sub(r'^(?:Cita:\s*)?"|"(?:\s*\(Contexto:.*?\))?$', '', clean_ctx, flags=re.DOTALL).strip()
+
             source_map[num] = {
                 "file": html.escape(clean_fname), 
                 "context": html.escape(clean_ctx)
             }
 
-        # 4. Reemplazo en el cuerpo
+        # 5. Reemplazar citas en el cuerpo por HTML con tooltips
         def replace_citation_group(match):
             content_inside = match.group(1)
+            # Extraer solo los números válidos
             ids = [x.strip() for x in content_inside.split(',') if x.strip().isdigit()]
             
             html_parts = []
@@ -266,42 +268,42 @@ def process_text_with_tooltips(text):
                 data = source_map.get(citation_num)
                 
                 if data:
+                    # Tooltip interactivo
                     tooltip = (
                         f'<span class="tooltip-container" style="position: relative; display: inline-block;">'
                         f'<span class="citation-number">[{citation_num}]</span>'
                         f'<span class="tooltip-text">'
                         f'<strong>📂 {data["file"]}</strong><br/>'
-                        f'💬 {data["context"]}'
+                        f'<div style="margin-top: 4px; font-size: 0.9em;">{data["context"]}</div>'
                         f'</span></span>'
                     )
                     html_parts.append(tooltip)
                 else:
+                    # Cita sin fuente asociada
                     html_parts.append(f'<span class="citation-missing">[{citation_num}]</span>')
             
+            # Si no se encontraron IDs válidos, devolver el texto original
             if not html_parts: return match.group(0)
+            # Unir con espacios para que no queden pegados
             return f" {' '.join(html_parts)} "
         
-        # Regex mejorada
+        # Regex flexible para encontrar citas en el texto: [ 1, 2 ]
         enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, body)
         
-        # 5. Pie de página
-        clean_footer = "\n\n<br><hr><h6>Fuentes Consultadas:</h6>"
-        unique_files = set()
-        for info in source_map.values():
-            fname = info['file'].replace('"', '').replace("Documento:", "").strip()
-            unique_files.add(fname)
-            
-        if unique_files:
-            clean_footer += "<ul style='font-size: 0.8em; color: gray; margin-bottom: 0;'>"
-            for fname in sorted(list(unique_files)):
-                clean_footer += f"<li> {fname}</li>"
+        # 6. Generar Pie de Página con lista de archivos únicos
+        clean_footer = ""
+        if source_map:
+            unique_files = sorted(list(set(info['file'] for info in source_map.values())))
+            clean_footer = "\n\n<br><hr><h6 style='margin-bottom: 8px;'>Fuentes Consultadas:</h6>"
+            clean_footer += "<ul style='font-size: 0.85em; color: #555; padding-left: 20px; margin-top: 0;'>"
+            for fname in unique_files:
+                clean_footer += f"<li style='margin-bottom: 4px;'>{fname}</li>"
             clean_footer += "</ul>"
-        else:
-            clean_footer = ""
 
         return enriched_body + clean_footer
 
     except Exception as e:
+        # Failsafe: Si algo falla, devolver el texto original para no romper la UI
         print(f"Error renderizando tooltips: {e}")
         return text
 
