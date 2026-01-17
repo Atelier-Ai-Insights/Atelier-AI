@@ -11,7 +11,7 @@ try:
     import fitz  # PyMuPDF
 except ImportError:
     fitz = None
-    # No imprimimos error para no ensuciar la UI
+    # print("Advertencia: PyMuPDF no encontrado.") 
 
 # ==============================
 # GESTIÓN DE STOPWORDS
@@ -210,65 +210,84 @@ def validate_session_integrity():
             print(f"Advertencia validando sesión: {e}")
 
 # =========================================================
-# LÓGICA DE CITAS (CORREGIDA: PAGE X y FORMATO CHAT DIRECTO)
+# LÓGICA DE CITAS REPARADA
 # =========================================================
 def process_text_with_tooltips(text):
     """
-    Genera HTML con tooltips para las citas.
-    Corrige problemas de formato [PAGE X] y parseo de fuentes en chat directo.
+    Procesa el texto para renderizar tooltips y oculta la metadata cruda de fuentes.
+    Arregla: Citas rotas en Chat Directo y etiquetas [PAGE X].
     """
     if not text: return ""
 
     try:
-        # 1. Normalización de Comillas y [PAGE X]
+        # 1. Normalización Previa (Comillas y Pages)
         text = text.replace('“', '"').replace('”', '"')
-        # Convierte [PAGE 27], [Page 8], [p. 10] -> [27], [8], [10]
+        # [PAGE 8] -> [8]
         text = re.sub(r'\[\s*(?:Page|PAGE|Pag|Pág|p\.|P\.)\s*(\d+)\s*\]', r'[\1]', text, flags=re.IGNORECASE)
-
-        # 2. Normalización de citas múltiples [1][2] -> [1, 2]
+        # [1][2] -> [1, 2]
         text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
-        
-        # 3. Separar Cuerpo y Fuentes
-        # Busca el inicio de la sección de fuentes usando varios patrones posibles
-        split_pattern = r"(?:\n(?:[\*\#]*\s*Fuentes(?: Verificadas)?[:\s]*[\*\#]*|\n\s*Fuentes:))"
-        parts = re.split(split_pattern, text, maxsplit=1, flags=re.IGNORECASE | re.DOTALL)
-        
-        body = parts[0].strip()
-        sources_raw = parts[1].strip() if len(parts) > 1 else ""
-        
-        # Si no hay sección de fuentes, devolvemos el texto normalizado
-        if not sources_raw: return body
 
-        # 4. Mapear IDs de Fuentes
+        # 2. ESTRATEGIA DE SEPARACIÓN (FUERZA BRUTA)
+        # Buscamos explícitamente los marcadores que usa Gemini para separar la respuesta de las fuentes.
+        # Probamos en orden de probabilidad.
+        separators = [
+            "**Fuentes Verificadas:**",
+            "**Fuentes Verificadas**:",
+            "Fuentes Verificadas:",
+            "**Fuentes:**",
+            "Fuentes:",
+            "## Fuentes"
+        ]
+        
+        body = text
+        sources_raw = ""
+        
+        # Intentamos dividir por texto exacto primero (más seguro que regex compleja)
+        for sep in separators:
+            # Buscamos el separador (ignorando mayúsculas/minúsculas indirectamente si fuera necesario, 
+            # pero aquí buscamos match exacto o variaciones comunes)
+            if sep in text:
+                parts = text.split(sep, 1) # Dividimos en la primera aparición
+                body = parts[0].strip()
+                sources_raw = parts[1].strip()
+                break
+        
+        # Si falló la separación exacta, intentamos una Regex de respaldo
+        if not sources_raw:
+            split_pattern = r"(?:\n\s*|^)(?:\*\*|##|\#)?\s*(?:Fuentes|Fuentes Verificadas|Sources)(?:\s*Verificadas)?\s*(?:\*\*|##|\#)?\s*:"
+            parts = re.split(split_pattern, text, maxsplit=1, flags=re.IGNORECASE | re.DOTALL)
+            if len(parts) > 1:
+                body = parts[0].strip()
+                sources_raw = parts[1].strip()
+
+        # Si aún no hay fuentes, retornamos el cuerpo limpio
+        if not sources_raw:
+            return body
+
+        # 3. Mapear IDs de Fuentes
+        # Regex diseñada para capturar: [ID] Archivo ||| Contexto
+        # Funciona incluso si el contexto tiene saltos de línea
         source_map = {}
-        # Regex robusta para capturar: [ID] Archivo ||| Metadatos
-        # Maneja saltos de línea y espacios flexibles
         matches = re.findall(r"\[(\d+)\]\s*(.+?)(?:\s*\|\|\|\s*(.+?))?(?=\n\[|\Z)", sources_raw, re.DOTALL)
         
         for num, filename, context_raw in matches:
             clean_fname = filename.strip()
-            # Limpiar el contexto de prefijos comunes como "Cita:", "(Contexto: ...)"
             clean_ctx = context_raw.strip() if context_raw else "Fuente del documento."
-            # Opcional: Limpieza extra si el contexto viene muy sucio
-            # clean_ctx = re.sub(r'^(?:Cita:\s*)?"|"(?:\s*\(Contexto:.*?\))?$', '', clean_ctx, flags=re.DOTALL).strip()
-
             source_map[num] = {
                 "file": html.escape(clean_fname), 
                 "context": html.escape(clean_ctx)
             }
 
-        # 5. Reemplazar citas en el cuerpo por HTML con tooltips
+        # 4. Reemplazar citas en el cuerpo
         def replace_citation_group(match):
             content_inside = match.group(1)
-            # Extraer solo los números válidos
             ids = [x.strip() for x in content_inside.split(',') if x.strip().isdigit()]
             
             html_parts = []
             for citation_num in ids:
                 data = source_map.get(citation_num)
-                
                 if data:
-                    # Tooltip interactivo
+                    # Tooltip HTML
                     tooltip = (
                         f'<span class="tooltip-container" style="position: relative; display: inline-block;">'
                         f'<span class="citation-number">[{citation_num}]</span>'
@@ -279,18 +298,15 @@ def process_text_with_tooltips(text):
                     )
                     html_parts.append(tooltip)
                 else:
-                    # Cita sin fuente asociada
                     html_parts.append(f'<span class="citation-missing">[{citation_num}]</span>')
             
-            # Si no se encontraron IDs válidos, devolver el texto original
             if not html_parts: return match.group(0)
-            # Unir con espacios para que no queden pegados
             return f" {' '.join(html_parts)} "
         
-        # Regex flexible para encontrar citas en el texto: [ 1, 2 ]
+        # Regex que busca [ 1, 2 ]
         enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, body)
         
-        # 6. Generar Pie de Página con lista de archivos únicos
+        # 5. Generar Pie de Página Limpio
         clean_footer = ""
         if source_map:
             unique_files = sorted(list(set(info['file'] for info in source_map.values())))
@@ -303,7 +319,6 @@ def process_text_with_tooltips(text):
         return enriched_body + clean_footer
 
     except Exception as e:
-        # Failsafe: Si algo falla, devolver el texto original para no romper la UI
         print(f"Error renderizando tooltips: {e}")
         return text
 
