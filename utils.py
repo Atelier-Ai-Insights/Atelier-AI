@@ -209,67 +209,58 @@ def validate_session_integrity():
             print(f"Advertencia validando sesión: {e}")
 
 # =========================================================
-# LÓGICA DE CITAS MASTER (CORREGIDA PARA TODOS LOS MODOS)
+# LÓGICA DE CITAS FINAL (EXTRACTION STRATEGY)
 # =========================================================
 def process_text_with_tooltips(text):
     """
-    Procesa texto para tooltips.
-    Mejoras:
-    - Normaliza comillas y [PAGE X].
-    - Normaliza listas de citas [1], [2].
-    - Usa detección por patrón de datos para cortar fuentes (Funciona incluso si no hay título).
+    Estrategia Global: Busca patrones de metadata y limpieza en TODO el texto, 
+    extrae la info, limpia el texto visible y genera los tooltips.
     """
     if not text: return ""
 
     try:
         # --- 1. NORMALIZACIÓN ---
         text = text.replace('“', '"').replace('”', '"')
+        # [PAGE X] -> [X]
         text = re.sub(r'\[\s*(?:Page|PAGE|Pag|Pág|p\.?)\s*(\d+)\s*\]', r'[\1]', text, flags=re.IGNORECASE)
-        # [1][2] -> [1, 2]
+        # Unir citas [1], [2] -> [1, 2]
         text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
-        # [1], [2] -> [1, 2]
         text = re.sub(r'\]\s*[,;]\s*\[', ', ', text)
 
-        # --- 2. ESTRATEGIA DE SEPARACIÓN HÍBRIDA ---
-        body = text
-        sources_raw = ""
-
-        # Intento A: Buscar título explícito (lo más limpio)
-        split_pattern = r"(?:\n\s*|\A\s*)(?:\*\*|##|__)?\s*Fuentes(?:\s+Verificadas)?\s*(?:\*\*|##|__)?\s*:"
-        parts = re.split(split_pattern, text, maxsplit=1, flags=re.IGNORECASE)
-        
-        if len(parts) > 1:
-            body = parts[0].strip()
-            sources_raw = parts[1].strip()
-        else:
-            # Intento B (FAILSAFE): Buscar dónde empiezan los datos [1] ... |||
-            # Esto arregla el chat directo cuando el título falla
-            # Buscamos la primera ocurrencia de un patrón de cita con metadata
-            match = re.search(r"(?:\n|^)\[\d+\]\s*.+?\|\|\|", text)
-            if match:
-                cut_index = match.start()
-                body = text[:cut_index].strip()
-                sources_raw = text[cut_index:].strip()
-
-        # Si no encontramos fuentes ni por A ni por B, devolvemos limpio
-        if not sources_raw: return body
-
-        # --- 3. PARSEO DE DATOS ---
+        # --- 2. EXTRACCIÓN GLOBAL DE METADATA ---
+        # Buscamos patrones [ID] Archivo ||| Contexto en CUALQUIER lugar del texto
+        # y los sacamos a un diccionario, borrándolos del texto original.
         source_map = {}
-        matches = re.findall(r"\[(\d+)\]\s*(.+?)(?:\s*\|\|\|\s*(.+?))?(?=\n\[|\Z)", sources_raw, re.DOTALL)
         
-        for num, filename, context_raw in matches:
-            clean_fname = filename.strip()
-            # Limpiamos prefijos comunes en el contexto
-            clean_ctx = context_raw.strip() if context_raw else "Fuente del documento."
-            clean_ctx = re.sub(r'^(?:Cita:|Contexto:)\s*', '', clean_ctx, flags=re.IGNORECASE)
+        def extract_metadata_and_clean(match):
+            citation_id = match.group(1)
+            filename = match.group(2).strip()
+            context = match.group(3).strip()
             
-            source_map[num] = {
-                "file": html.escape(clean_fname), 
-                "context": html.escape(clean_ctx)
+            # Limpieza del contexto
+            context = re.sub(r'^(?:Cita:|Contexto:)\s*', '', context, flags=re.IGNORECASE)
+            
+            source_map[citation_id] = {
+                "file": html.escape(filename),
+                "context": html.escape(context)
             }
+            return "" # Borramos la línea de metadata del texto visible
 
-        # --- 4. REEMPLAZO EN EL TEXTO ---
+        # Regex: [ID] (no corchetes ni pipes) ||| (resto de linea)
+        # Esta regex barre todo el texto buscando definiciones de fuentes
+        metadata_pattern = r"\[(\d+)\]\s*([^\[\]\n\|]+?)\s*\|\|\|\s*([^\n]+)"
+        text = re.sub(metadata_pattern, extract_metadata_and_clean, text)
+
+        # --- 3. LIMPIEZA DE BASURA ("Cita: ...") ---
+        # A veces la IA deja residuos tipo: Cita: "Texto..." (Contexto: ...) en el cuerpo
+        # Eliminamos líneas que parecen citas crudas que no pudimos parsear como metadata
+        garbage_pattern = r'(?:Cita:|Contexto:)\s*".*?"\s*\(.*?\)'
+        text = re.sub(garbage_pattern, '', text, flags=re.IGNORECASE)
+        
+        # Limpieza del título "Fuentes Verificadas" si quedó colgado solo
+        text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas)?\s*:?\s*(?:\*\*|##)?\s*(?=\n|$)', '', text, flags=re.IGNORECASE)
+
+        # --- 4. RENDERIZADO DE TOOLTIPS ---
         def replace_citation_group(match):
             content_inside = match.group(1)
             ids = [x.strip() for x in content_inside.split(',') if x.strip().isdigit()]
@@ -293,7 +284,8 @@ def process_text_with_tooltips(text):
             if not html_parts: return match.group(0)
             return f" {' '.join(html_parts)} "
         
-        enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, body)
+        # Reemplazar [1, 2] por tooltips en el cuerpo limpio
+        enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, text)
         
         # --- 5. FOOTER ---
         clean_footer = ""
