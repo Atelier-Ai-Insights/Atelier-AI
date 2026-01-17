@@ -1,4 +1,5 @@
 import streamlit as st
+import time  # Necesario para la espera
 import constants as c
 
 # --- BLOQUE DE SEGURIDAD (SAFE IMPORTS) ---
@@ -43,16 +44,28 @@ except ImportError:
     banner_file = None
 
 # ==========================================
-# CALLBACKS (LA SOLUCIÓN AL DOBLE CLIC)
+# CALLBACKS (SOLUCIÓN DE TIMING)
 # ==========================================
 def handle_save_concept(content):
     """
-    Esta función se ejecuta ANTES de que la app se recargue.
-    Garantiza que el dato ya esté en la DB cuando se pinte el sidebar.
+    Guarda el concepto y fuerza una espera para sincronizar la UI.
     """
     try:
+        # 1. Guardar en DB
         save_project_insight(content, source_mode="concept")
+        
+        # 2. Limpiar caché para obligar a leer la lista nueva
+        # (Esto asegura que main.py no traiga la lista vieja de la memoria)
+        st.cache_data.clear()
+        
+        # 3. Feedback visual
         st.toast("✅ Concepto guardado exitosamente")
+        
+        # 4. PAUSA ESTRATÉGICA (La clave del arreglo)
+        # Damos 1 segundo a la DB para que indexe el nuevo registro
+        # antes de que Streamlit recargue la barra lateral.
+        time.sleep(1)
+        
     except Exception as e:
         st.toast(f"❌ Error al guardar: {e}")
 
@@ -80,15 +93,15 @@ def concept_generation_mode(db, selected_files):
                 html_content = process_text_with_tooltips(msg["content"])
                 st.markdown(html_content, unsafe_allow_html=True)
                 
-                # BOTÓN PIN CON CALLBACK (Solución Definitiva)
+                # BOTÓN PIN CON CALLBACK AJUSTADO
                 col_s, col_p = st.columns([15, 1])
                 with col_p:
                     st.button(
                         "📌", 
                         key=f"pin_con_{idx}", 
                         help="Guardar Concepto",
-                        on_click=handle_save_concept,  # <--- MAGIA AQUÍ
-                        args=(msg["content"],)         # Pasamos el contenido como argumento
+                        on_click=handle_save_concept,  
+                        args=(msg["content"],)         
                     )
             else:
                 st.markdown(msg["content"])
@@ -130,14 +143,14 @@ def concept_generation_mode(db, selected_files):
                 
                 st.session_state.mode_state["concept_history"].append({"role": "assistant", "content": response})
                 
-                # Botón PIN para la nueva respuesta (CON CALLBACK)
+                # Botón PIN nuevo
                 col_s, col_p = st.columns([15, 1])
                 with col_p:
                     st.button(
                         "📌", 
                         key="pin_con_new", 
                         help="Guardar Concepto",
-                        on_click=handle_save_concept, # <--- MAGIA AQUÍ TAMBIÉN
+                        on_click=handle_save_concept, 
                         args=(response,)
                     )
                 
