@@ -1,8 +1,8 @@
 import streamlit as st
+import time  # Necesario para el delay del toast antes de recargar
 import constants as c
 
 # --- BLOQUE DE SEGURIDAD (SAFE IMPORTS) ---
-# Definimos funciones dummy por si algo falla en la importación
 def safe_process_text(text): return text
 
 # 1. Servicios IA
@@ -29,7 +29,6 @@ except ImportError:
 try:
     from services.supabase_db import log_query_event
     from services.memory_service import save_project_insight
-    # Usamos el nombre que tenías en tu código original
     from prompts import get_concept_gen_prompt 
 except ImportError:
     def log_query_event(q, m): pass
@@ -65,16 +64,18 @@ def concept_generation_mode(db, selected_files):
         role_avatar = "✨" if msg["role"] == "assistant" else "👤"
         with st.chat_message(msg["role"], avatar=role_avatar):
             if msg["role"] == "assistant":
-                # Renderizar con tooltips limpios (La Escoba V3)
+                # Renderizar con tooltips limpios
                 html_content = process_text_with_tooltips(msg["content"])
                 st.markdown(html_content, unsafe_allow_html=True)
                 
-                # Botón PIN para guardar concepto en historial
+                # Botón PIN (CORREGIDO CON RERUN)
                 col_s, col_p = st.columns([15, 1])
                 with col_p:
                     if st.button("📌", key=f"pin_con_{idx}", help="Guardar Concepto"):
                         save_project_insight(msg["content"], source_mode="concept")
                         st.toast("✅ Concepto guardado")
+                        time.sleep(0.5) # Pequeña pausa para ver el mensaje
+                        st.rerun()      # <--- ESTO SOLUCIONA EL DOBLE CLIC
             else:
                 st.markdown(msg["content"])
 
@@ -98,7 +99,6 @@ def concept_generation_mode(db, selected_files):
                     relevant_info = get_relevant_info(db, concept_input, selected_files)
                     
                     status.write("Estructurando Insight, Beneficio y RTB...")
-                    # Pasamos la info relevante al prompt
                     prompt = get_concept_gen_prompt(concept_input, relevant_info)
                     response = call_gemini_api(prompt)
                     
@@ -109,21 +109,21 @@ def concept_generation_mode(db, selected_files):
                 else:
                     status.update(label="Servicio IA no disponible", state="error")
             
-            # C. Mostrar respuesta final con limpieza
+            # C. Mostrar respuesta final
             if response:
-                # 1. Limpiamos visualmente el texto (Tooltips + Borrado de basura)
                 enriched_html = process_text_with_tooltips(response)
                 placeholder.markdown(enriched_html, unsafe_allow_html=True)
                 
-                # 2. Guardamos en historial
                 st.session_state.mode_state["concept_history"].append({"role": "assistant", "content": response})
                 
-                # 3. Botón PIN para la nueva respuesta
+                # Botón PIN para respuesta nueva (CORREGIDO CON RERUN)
                 col_s, col_p = st.columns([15, 1])
                 with col_p:
                     if st.button("📌", key="pin_con_new", help="Guardar Concepto"):
                         save_project_insight(response, source_mode="concept")
                         st.toast("✅ Concepto guardado")
+                        time.sleep(0.5)
+                        st.rerun()      # <--- ESTO SOLUCIONA EL DOBLE CLIC
                 
                 try:
                     log_query_event(f"Concepto: {concept_input[:30]}", mode=c.MODE_CONCEPT)
@@ -133,7 +133,6 @@ def concept_generation_mode(db, selected_files):
     if st.session_state.mode_state["concept_history"]:
         st.write("") 
         
-        # Ajustamos a 2 columnas iguales para mantener consistencia con otros modos
         col1, col2 = st.columns(2)
         
         with col1:
