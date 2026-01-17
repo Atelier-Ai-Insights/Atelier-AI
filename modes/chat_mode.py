@@ -3,14 +3,10 @@ import time
 import constants as c
 
 # --- BLOQUE DE SEGURIDAD MÁXIMA ---
-# En lugar de importar todo de golpe, vamos a definir versiones "dummy" (vacías)
-# para las funciones que suelen romper la app. Si la importación real falla,
-# usamos la versión vacía y la app NO se pone en blanco.
-
 def safe_process_text(text):
-    return text  # Versión simple que no usa HTML/NLP complejo
+    return text  # Versión simple sin HTML
 
-# Intentamos importar Gemini (La IA)
+# Intentamos importar Gemini
 try:
     from services.gemini_api import call_gemini_stream
     gemini_available = True
@@ -22,13 +18,12 @@ except Exception as e:
 # Intentamos importar Utilidades básicas
 try:
     from utils import get_relevant_info, render_process_status
-    # Intentamos importar la función de tooltips, si falla usamos la segura
+    # Importamos la función de tooltips que arreglamos
     try:
         from utils import process_text_with_tooltips
     except ImportError:
         process_text_with_tooltips = safe_process_text
 except Exception:
-    # Fallback de emergencia
     def get_relevant_info(db, q, f): return "Info simulada"
     def render_process_status(text, expanded=False): return st.status(text, expanded=expanded)
     process_text_with_tooltips = safe_process_text
@@ -52,7 +47,7 @@ from config import banner_file
 # ==========================================
 def grounded_chat_mode(db, selected_files):
     st.subheader("Chat de Consulta Directa")
-    st.caption("Modo Seguro activado: Respuestas texto plano.")
+    st.caption("Consulta tus documentos con referencias verificadas.")
 
     if not selected_files:
         st.info("👈 Selecciona documentos en el menú lateral para comenzar.")
@@ -66,8 +61,12 @@ def grounded_chat_mode(db, selected_files):
     for idx, msg in enumerate(st.session_state.mode_state["chat_history"]):
         role_avatar = "✨" if msg["role"] == "assistant" else "👤"
         with st.chat_message(msg["role"], avatar=role_avatar):
-            # Usamos markdown simple en lugar de HTML complejo para evitar bloqueos
-            st.markdown(msg["content"])
+            if msg["role"] == "assistant":
+                # AQUÍ ESTÁ LA MAGIA: Procesamos el texto histórico con tooltips
+                formatted_html = process_text_with_tooltips(msg["content"])
+                st.markdown(formatted_html, unsafe_allow_html=True)
+            else:
+                st.markdown(msg["content"])
             
             # Botón PIN simplificado
             if msg["role"] == "assistant":
@@ -93,7 +92,6 @@ def grounded_chat_mode(db, selected_files):
             placeholder = st.empty()
             
             try:
-                # Usamos st.status nativo si render_process_status falla
                 with st.status("Consultando documentos...", expanded=True) as status:
                     
                     if not gemini_available:
@@ -118,6 +116,7 @@ def grounded_chat_mode(db, selected_files):
                                 status.update(label="Escribiendo...", state="running")
                                 for chunk in stream:
                                     full_response += chunk
+                                    # Mientras escribe, mostramos texto plano para velocidad
                                     placeholder.markdown(full_response + "▌")
                                 status.update(label="Listo", state="complete", expanded=False)
                             else:
@@ -128,10 +127,12 @@ def grounded_chat_mode(db, selected_files):
                 full_response = f"Error inesperado: {str(e)}"
                 print(f"Error Chat Loop: {e}")
             
-            # C. Render Final
-            placeholder.markdown(full_response)
+            # C. Render Final (AQUÍ APLICAMOS LA MAGIA)
+            # Procesamos el texto final con la función de tooltips de utils.py
+            final_html = process_text_with_tooltips(full_response)
+            placeholder.markdown(final_html, unsafe_allow_html=True)
             
-            # Guardar en historial
+            # Guardar en historial (Guardamos el texto CRUDO para que la IA tenga contexto limpio, pero mostramos HTML)
             st.session_state.mode_state["chat_history"].append({"role": "assistant", "content": full_response})
             
             # Botón PIN para respuesta nueva
@@ -141,7 +142,7 @@ def grounded_chat_mode(db, selected_files):
                     save_project_insight(full_response, source_mode="chat")
                     st.toast("✅ Guardado")
 
-    # 4. BOTÓN LIMPIAR (PDF Desactivado por ahora)
+    # 4. BOTÓN LIMPIAR
     if st.session_state.mode_state["chat_history"]:
         st.write("")
         if st.button("Limpiar Conversación", use_container_width=True):
