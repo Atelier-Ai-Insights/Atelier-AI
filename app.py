@@ -4,14 +4,14 @@ import traceback
 import matplotlib
 import time 
 import re 
-import os # NECESARIO para verificar si existe el logo
+import os # Necesario para validar que el logo existe
 
 # --- 1. PARCHE CRÍTICO DE MATPLOTLIB ---
 matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 
 # ==========================================
-# 2. IMPORTACIONES
+# 2. IMPORTACIONES LOCALES (SEGURAS)
 # ==========================================
 try:
     import constants as c
@@ -21,7 +21,8 @@ try:
     from services.supabase_db import supabase
     from auth import show_login_page, show_reset_password_page, show_activation_flow 
     from admin.dashboard import show_admin_dashboard
-    from utils import extract_brand, validate_session_integrity, process_text_with_tooltips # Importamos tooltips
+    # IMPORTANTE: Agregamos process_text_with_tooltips para el visor de notas
+    from utils import extract_brand, validate_session_integrity, process_text_with_tooltips 
     from services.memory_service import get_project_memory, delete_project_memory 
 except ImportError as e:
     st.error(f"Error cargando módulos internos: {e}")
@@ -55,23 +56,26 @@ def set_mode_and_reset(new_mode):
     else:
         st.session_state.mode_state = {}
 
-# --- FUNCIÓN SEGURA PARA LOGO ---
-def render_logo(width=220):
+# --- FUNCIÓN SEGURA PARA RENDERIZAR LOGO ---
+def render_logo(use_column_width=False, width=220):
+    """Renderiza el logo LogoDataStudio.png de forma segura"""
     logo_file = "LogoDataStudio.png"
+    
     if os.path.exists(logo_file):
-        try:
+        if use_column_width:
+            st.image(logo_file, use_container_width=True)
+        else:
             st.image(logo_file, width=width)
-        except:
-            st.markdown("### 🎨 Atelier AI")
     else:
-        st.markdown("### 🎨 Atelier AI")
+        # Fallback de texto si la imagen falla
+        st.markdown("### 🎨 **Atelier AI**")
 
 # --- VISOR DE NOTAS (POP-UP) ---
 @st.dialog("Nota Guardada")
 def show_saved_insight(content, date_str):
     st.caption(f"📅 Guardado el: {date_str}")
     st.divider()
-    # Usamos tooltips para que se vea limpio
+    # Usamos la función de tooltips para que se vea limpio y bonito
     html_content = process_text_with_tooltips(content)
     st.markdown(html_content, unsafe_allow_html=True)
     
@@ -84,7 +88,7 @@ def show_saved_insight(content, date_str):
 def run_user_interface(db_full, user_features, footer_html):
     # Sidebar
     with st.sidebar:
-        render_logo(width=220)
+        render_logo(width=220) # Usamos la función segura
     
     usuario_actual = st.session_state.get("user", "Usuario")
     st.sidebar.write(f"Usuario: {usuario_actual}")
@@ -157,7 +161,7 @@ def run_user_interface(db_full, user_features, footer_html):
         db_filtered = db_full
         if run_filters is False: st.sidebar.caption("Filtros no disponibles en este modo.")
 
-    # --- BITÁCORA (RESTORED VIEW BUTTON) ---
+    # --- BITÁCORA CON BOTÓN VER (RESTAURADO) ---
     st.sidebar.subheader("Conversaciones y Reportes")
     saved_pins = get_project_memory()
     
@@ -169,13 +173,15 @@ def run_user_interface(db_full, user_features, footer_html):
             with st.sidebar.expander(f"{date_str} | {clean_text[:25]}...", expanded=False):
                 st.caption(clean_text[:100] + "...") 
                 
-                # BOTONES: VER y BORRAR
+                # Columnas para los botones
                 c1, c2 = st.columns(2)
                 with c1:
+                    # BOTÓN VER
                     if st.button("👁️ Ver", key=f"view_{pin['id']}", use_container_width=True):
                         st.session_state.pin_to_view = pin
                         st.rerun()
                 with c2:
+                    # BOTÓN BORRAR
                     if st.button("🗑️ Borrar", key=f"del_{pin['id']}", use_container_width=True):
                         delete_project_memory(pin['id']); st.rerun()
     else:
@@ -192,15 +198,15 @@ def run_user_interface(db_full, user_features, footer_html):
     
     # --- ÁREA PRINCIPAL ---
     
-    # Lógica del Modal (Pop-up)
+    # Lógica del Modal (Pop-up de visualización)
     if "pin_to_view" in st.session_state:
         pin = st.session_state.pin_to_view
         show_saved_insight(pin['content'], pin.get('created_at', '')[:10])
-        del st.session_state.pin_to_view
+        del st.session_state.pin_to_view # Limpiar estado después de abrir
 
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
     
-    # Carga de módulos
+    # Carga de módulos bajo demanda
     if modo == c.MODE_REPORT: 
         from modes.report_mode import report_mode; report_mode(db_filtered, selected_files)
     elif modo == c.MODE_IDEATION: 
@@ -234,6 +240,10 @@ def run_user_interface(db_full, user_features, footer_html):
 def main():
     st.set_page_config(page_title="Atelier Data Studio", page_icon="Logo_Casa.png", layout="wide", initial_sidebar_state="expanded")
     
+    if 'has_cleared_cache' not in st.session_state:
+        st.cache_resource.clear()
+        st.session_state.has_cleared_cache = True
+
     status_placeholder = st.empty()
     
     try:
@@ -255,7 +265,7 @@ def main():
             apply_login_styles()
             c1, c2, c3 = st.columns([3, 2, 3])
             with c2:
-                render_logo(width=None)
+                render_logo(use_column_width=True) # Logo central
                 auth_type = params.get("type", "recovery")
                 token = params.get("access_token")
                 if isinstance(token, list): token = token[0]
@@ -296,7 +306,7 @@ def main():
         apply_login_styles()
         c1, c2, c3 = st.columns([3, 2, 3])
         with c2:
-            render_logo(width=None)
+            render_logo(use_column_width=True) # Logo central login
             if st.session_state.page == "reset_password": show_reset_password_page()
             else: show_login_page() 
         st.divider()
