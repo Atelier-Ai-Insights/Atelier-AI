@@ -1,5 +1,4 @@
 import streamlit as st
-import time  # Necesario para el delay del toast antes de recargar
 import constants as c
 
 # --- BLOQUE DE SEGURIDAD (SAFE IMPORTS) ---
@@ -43,9 +42,22 @@ except ImportError:
     generate_pdf_html = None
     banner_file = None
 
+# ==========================================
+# CALLBACKS (LA SOLUCIÓN AL DOBLE CLIC)
+# ==========================================
+def handle_save_concept(content):
+    """
+    Esta función se ejecuta ANTES de que la app se recargue.
+    Garantiza que el dato ya esté en la DB cuando se pinte el sidebar.
+    """
+    try:
+        save_project_insight(content, source_mode="concept")
+        st.toast("✅ Concepto guardado exitosamente")
+    except Exception as e:
+        st.toast(f"❌ Error al guardar: {e}")
 
 # ==========================================
-# FUNCIÓN PRINCIPAL: GENERACIÓN DE CONCEPTOS
+# FUNCIÓN PRINCIPAL
 # ==========================================
 def concept_generation_mode(db, selected_files):
     st.subheader("Generador de Conceptos")
@@ -68,14 +80,16 @@ def concept_generation_mode(db, selected_files):
                 html_content = process_text_with_tooltips(msg["content"])
                 st.markdown(html_content, unsafe_allow_html=True)
                 
-                # Botón PIN (CORREGIDO CON RERUN)
+                # BOTÓN PIN CON CALLBACK (Solución Definitiva)
                 col_s, col_p = st.columns([15, 1])
                 with col_p:
-                    if st.button("📌", key=f"pin_con_{idx}", help="Guardar Concepto"):
-                        save_project_insight(msg["content"], source_mode="concept")
-                        st.toast("✅ Concepto guardado")
-                        time.sleep(0.5) # Pequeña pausa para ver el mensaje
-                        st.rerun()      # <--- ESTO SOLUCIONA EL DOBLE CLIC
+                    st.button(
+                        "📌", 
+                        key=f"pin_con_{idx}", 
+                        help="Guardar Concepto",
+                        on_click=handle_save_concept,  # <--- MAGIA AQUÍ
+                        args=(msg["content"],)         # Pasamos el contenido como argumento
+                    )
             else:
                 st.markdown(msg["content"])
 
@@ -116,14 +130,16 @@ def concept_generation_mode(db, selected_files):
                 
                 st.session_state.mode_state["concept_history"].append({"role": "assistant", "content": response})
                 
-                # Botón PIN para respuesta nueva (CORREGIDO CON RERUN)
+                # Botón PIN para la nueva respuesta (CON CALLBACK)
                 col_s, col_p = st.columns([15, 1])
                 with col_p:
-                    if st.button("📌", key="pin_con_new", help="Guardar Concepto"):
-                        save_project_insight(response, source_mode="concept")
-                        st.toast("✅ Concepto guardado")
-                        time.sleep(0.5)
-                        st.rerun()      # <--- ESTO SOLUCIONA EL DOBLE CLIC
+                    st.button(
+                        "📌", 
+                        key="pin_con_new", 
+                        help="Guardar Concepto",
+                        on_click=handle_save_concept, # <--- MAGIA AQUÍ TAMBIÉN
+                        args=(response,)
+                    )
                 
                 try:
                     log_query_event(f"Concepto: {concept_input[:30]}", mode=c.MODE_CONCEPT)
