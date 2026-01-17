@@ -209,55 +209,61 @@ def validate_session_integrity():
             print(f"Advertencia validando sesión: {e}")
 
 # =========================================================
-# LÓGICA DE CITAS FINAL (EXTRACTION STRATEGY)
+# LÓGICA DE CITAS FINAL: MODO "ESCOBA"
 # =========================================================
 def process_text_with_tooltips(text):
     """
-    Estrategia Global: Busca patrones de metadata y limpieza en TODO el texto, 
-    extrae la info, limpia el texto visible y genera los tooltips.
+    1. Normaliza texto básico.
+    2. Extrae metadata técnica y la borra del texto.
+    3. BARRE LA BASURA: Elimina frases tipo 'Cita: "..." (Contexto: ...)' que la IA deja en el cuerpo.
+    4. Renderiza tooltips.
     """
     if not text: return ""
 
     try:
-        # --- 1. NORMALIZACIÓN ---
+        # --- 1. NORMALIZACIÓN BÁSICA ---
         text = text.replace('“', '"').replace('”', '"')
-        # [PAGE X] -> [X]
+        # [PAGE 8] -> [8]
         text = re.sub(r'\[\s*(?:Page|PAGE|Pag|Pág|p\.?)\s*(\d+)\s*\]', r'[\1]', text, flags=re.IGNORECASE)
-        # Unir citas [1], [2] -> [1, 2]
+        # [1][2] -> [1, 2]
         text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
+        # [1], [2] -> [1, 2]
         text = re.sub(r'\]\s*[,;]\s*\[', ', ', text)
 
-        # --- 2. EXTRACCIÓN GLOBAL DE METADATA ---
-        # Buscamos patrones [ID] Archivo ||| Contexto en CUALQUIER lugar del texto
-        # y los sacamos a un diccionario, borrándolos del texto original.
+        # --- 2. EXTRACCIÓN DE METADATA (EXTRAER Y BORRAR) ---
+        # Buscamos patrones de metadata válidos [ID] Archivo ||| Contexto
+        # Los guardamos en source_map y los ELIMINAMOS del texto.
         source_map = {}
         
-        def extract_metadata_and_clean(match):
+        def extract_clean(match):
             citation_id = match.group(1)
             filename = match.group(2).strip()
             context = match.group(3).strip()
-            
-            # Limpieza del contexto
-            context = re.sub(r'^(?:Cita:|Contexto:)\s*', '', context, flags=re.IGNORECASE)
-            
+            # Guardamos info
             source_map[citation_id] = {
                 "file": html.escape(filename),
                 "context": html.escape(context)
             }
-            return "" # Borramos la línea de metadata del texto visible
+            return "" # Borramos esto del texto visible
 
-        # Regex: [ID] (no corchetes ni pipes) ||| (resto de linea)
-        # Esta regex barre todo el texto buscando definiciones de fuentes
-        metadata_pattern = r"\[(\d+)\]\s*([^\[\]\n\|]+?)\s*\|\|\|\s*([^\n]+)"
-        text = re.sub(metadata_pattern, extract_metadata_and_clean, text)
+        # Regex para metadata técnica: [1] Archivo ||| Contexto
+        text = re.sub(r'\[(\d+)\]\s*([^\[\]\n\|]+?)\s*\|\|\|\s*([^\n]+)', extract_clean, text)
 
-        # --- 3. LIMPIEZA DE BASURA ("Cita: ...") ---
-        # A veces la IA deja residuos tipo: Cita: "Texto..." (Contexto: ...) en el cuerpo
-        # Eliminamos líneas que parecen citas crudas que no pudimos parsear como metadata
-        garbage_pattern = r'(?:Cita:|Contexto:)\s*".*?"\s*\(.*?\)'
-        text = re.sub(garbage_pattern, '', text, flags=re.IGNORECASE)
+        # --- 3. BARRIDO DE BASURA (AQUÍ ESTÁ LA SOLUCIÓN) ---
+        # Detectamos bloques de texto que son "evidencia" suelta dejada por la IA.
+        # Patrón típico visto en tus capturas: 
+        # Cita: "..." (Contexto: ...) O SIMPLEMENTE "..." (Contexto: ...)
         
-        # Limpieza del título "Fuentes Verificadas" si quedó colgado solo
+        # A. Borrar líneas que empiezan explícitamente con Cita:
+        # Regex: Nueva línea o inicio -> Cita: -> comillas -> texto -> comillas -> paréntesis opcional
+        garbage_pattern_a = r'(?:\n|^)\s*(?:Cita:|Quote:)\s*["“].*?["”]\s*(?:\(Contexto:.*?\))?'
+        text = re.sub(garbage_pattern_a, '', text, flags=re.DOTALL | re.IGNORECASE)
+
+        # B. Borrar bloques que son puramente (Contexto: ...) sueltos
+        garbage_pattern_b = r'\(Contexto:.*?\)'
+        text = re.sub(garbage_pattern_b, '', text, flags=re.IGNORECASE)
+
+        # C. Borrar el título "Fuentes Verificadas" si quedó huérfano
         text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas)?\s*:?\s*(?:\*\*|##)?\s*(?=\n|$)', '', text, flags=re.IGNORECASE)
 
         # --- 4. RENDERIZADO DE TOOLTIPS ---
@@ -269,6 +275,7 @@ def process_text_with_tooltips(text):
             for citation_num in ids:
                 data = source_map.get(citation_num)
                 if data:
+                    # Tooltip HTML
                     tooltip = (
                         f'<span class="tooltip-container" style="position: relative; display: inline-block;">'
                         f'<span class="citation-number">[{citation_num}]</span>'
@@ -284,7 +291,7 @@ def process_text_with_tooltips(text):
             if not html_parts: return match.group(0)
             return f" {' '.join(html_parts)} "
         
-        # Reemplazar [1, 2] por tooltips en el cuerpo limpio
+        # Reemplazar [1, 2] en el texto por los tooltips
         enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, text)
         
         # --- 5. FOOTER ---
