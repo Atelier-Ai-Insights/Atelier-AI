@@ -46,11 +46,45 @@ def extract_brand(filename):
     return str(filename)
 
 def clean_text(text): return str(text) if text else ""
+
 def clean_gemini_json(text): 
-    # Limpia bloques de código json ```json ... ```
     text = re.sub(r'^```json\s*', '', text, flags=re.MULTILINE)
     text = re.sub(r'^```\s*', '', text, flags=re.MULTILINE)
     return text.strip()
+
+# ==============================
+# MOTOR DE BÚSQUEDA INTELIGENTE (NUEVO)
+# ==============================
+def expand_search_query(query):
+    """
+    Usa IA para encontrar sinónimos y conceptos relacionados.
+    Ej: "Refresco" -> ["Refresco", "Gaseosa", "Bebida Carbonatada", "Soda"]
+    """
+    if not query or len(query.split()) > 10: return [query] # No expandir si es una frase muy larga
+    
+    try:
+        # Importación tardía para evitar ciclos
+        from services.gemini_api import call_gemini_api
+        
+        prompt = (
+            f"Actúa como un motor de búsqueda experto en investigación de mercados. "
+            f"Para el término de búsqueda: '{query}', genera 3 palabras clave alternativas, sinónimos técnicos o conceptos estrechamente relacionados. "
+            f"Devuelve SOLAMENTE las palabras separadas por coma, sin numeración ni explicaciones."
+        )
+        
+        # Llamada rápida (sin stream)
+        response = call_gemini_api(prompt, generation_config_override={"max_output_tokens": 100})
+        
+        if response:
+            # Limpiar respuesta
+            expanded = [w.strip() for w in response.split(',') if w.strip()]
+            # Retornar original + expandidos (únicos)
+            return list(dict.fromkeys([query] + expanded))
+            
+    except Exception as e:
+        print(f"Error expanding query: {e}")
+    
+    return [query]
 
 # ==============================
 # LECTURA DE PDFS
@@ -67,34 +101,96 @@ def extract_text_from_pdfs(uploaded_files):
     return combined_text
 
 # ==============================
-# RAG SIMPLIFICADO
+# RAG: RECUPERACIÓN DE CONTEXTO (OPTIMIZADO V2)
 # ==============================
 def get_relevant_info(db, question, selected_files, max_chars=150000):
-    all_text = ""
+    """
+    Recupera información. Si el contenido total excede max_chars,
+    aplica búsqueda semántica expandida para priorizar los mejores fragmentos.
+    """
     if not selected_files: return ""
     selected_set = set(selected_files)
     
+    # 1. Recolectar todos los fragmentos elegibles
+    candidate_chunks = []
+    total_len = 0
+    
     for pres in db:
-        if len(all_text) > max_chars: break
         if pres.get('nombre_archivo') in selected_set:
             try:
                 doc_name = pres.get('nombre_archivo')
-                header = f"{pres.get('titulo_estudio', doc_name)} - {pres.get('marca', '')}"
-                doc_content = f"--- DOC: {doc_name} ---\nMETA: {header}\n"
-                for g in pres.get("grupos", []):
-                    txt = str(g.get('contenido_texto', ''))
-                    if txt: doc_content += f" - {txt}\n"
+                doc_title = pres.get('titulo_estudio', doc_name)
                 
-                if len(all_text) + len(doc_content) <= max_chars: all_text += doc_content + "\n\n"
-                else: break
+                # Cada grupo/diapositiva es un chunk potencial
+                for i, g in enumerate(pres.get("grupos", [])):
+                    txt = str(g.get('contenido_texto', ''))
+                    if txt and len(txt) > 20: # Ignorar textos vacíos o muy cortos
+                        chunk_meta = f"--- DOC: {doc_name} | SECCIÓN: {i+1} ---\nMETA: {doc_title}\n"
+                        full_chunk = f"{chunk_meta} - {txt}\n\n"
+                        
+                        candidate_chunks.append({
+                            "text": full_chunk,
+                            "raw_content": txt.lower(),
+                            "len": len(full_chunk),
+                            "original_idx": len(candidate_chunks) # Para mantener orden si no filtramos
+                        })
+                        total_len += len(full_chunk)
             except: pass
-    return all_text
+
+    # 2. Decisión de Estrategia
+    # Si todo cabe, devolvemos todo (mejor para resúmenes generales)
+    if total_len <= max_chars:
+        return "".join([c["text"] for c in candidate_chunks])
+
+    # 3. Estrategia "Smart Filter" (Si excede límite)
+    # Expandimos la query para buscar mejor
+    print(f"Content overflow ({total_len} chars). Activating Smart Search for: {question}")
+    search_terms = expand_search_query(question)
+    search_terms = [normalize_text(t) for t in search_terms] # Normalizar para búsqueda
+    
+    # Puntuar chunks
+    for chunk in candidate_chunks:
+        score = 0
+        norm_content = normalize_text(chunk["raw_content"])
+        
+        for term in search_terms:
+            if term in norm_content:
+                # Puntos extra si es el término original, menos si es sinónimo
+                weight = 3 if term == normalize_text(question) else 1
+                score += (norm_content.count(term) * weight)
+        
+        chunk["score"] = score
+
+    # Ordenar por relevancia
+    # Priorizamos los que tienen score > 0, luego rellenamos con el resto si sobra espacio
+    scored_chunks = sorted(candidate_chunks, key=lambda x: x["score"], reverse=True)
+    
+    final_output = ""
+    current_chars = 0
+    
+    # Seleccionar los mejores hasta llenar el cupo
+    chunks_to_include = []
+    for chunk in scored_chunks:
+        if current_chars + chunk["len"] <= max_chars:
+            chunks_to_include.append(chunk)
+            current_chars += chunk["len"]
+        else:
+            # Si ya tenemos buen contenido relevante, paramos.
+            # Si aún tenemos poco texto, seguimos buscando chunks pequeños.
+            if current_chars > max_chars * 0.8: break 
+    
+    # 4. Reordenar cronológicamente (Importante para coherencia)
+    # Volvemos a ordenar por índice original para que el texto tenga sentido narrativo
+    chunks_to_include.sort(key=lambda x: x["original_idx"])
+    
+    return "".join([c["text"] for c in chunks_to_include])
+
 
 def validate_session_integrity():
     pass 
 
 # =========================================================
-# LÓGICA DE CITAS V6 (CORRECCIÓN "FUGA DE CONTEXTO")
+# LÓGICA DE CITAS V6 (MANTENIDA)
 # =========================================================
 def process_text_with_tooltips(text):
     if not text: return ""
@@ -102,61 +198,39 @@ def process_text_with_tooltips(text):
     try:
         source_map = {}
         
-        # 1. LIMPIEZA INICIAL
         text = text.replace('“', '"').replace('”', '"')
         
-        # 2. COSECHA DE METADATA (Harvest)
-        # Buscamos la sección final donde están las definiciones: [N] Archivo ||| Contexto
         def harvest_metadata(match):
             cid = match.group(1)
             fname = match.group(2).strip()
             raw_context = match.group(3).strip()
             
-            # Limpiamos prefijos comunes que la IA agrega
             clean_context = re.sub(r'^(?:Cita:|Contexto:|Quote:)\s*', '', raw_context, flags=re.IGNORECASE).strip('"').strip("'")
             
             source_map[cid] = {
                 "file": html.escape(fname),
                 "context": html.escape(clean_context[:400]) + ("..." if len(clean_context)>400 else "")
             }
-            return "" # Borramos la definición del texto visible
+            return "" 
 
-        # Esta regex busca el bloque de definiciones al final o entre párrafos
-        # Patrón: [Digito] Algo ||| Algo (hasta nueva línea con corchete o fin de string)
         pattern_metadata = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
         text = re.sub(pattern_metadata, harvest_metadata, text, flags=re.DOTALL)
 
-        # 3. TRITURADORA DE FUGAS (LA CORRECCIÓN PARA TU CAPTURA)
-        # Tu captura muestra texto como: "... [1] (Contexto: ...)"
-        # Esto elimina cualquier paréntesis que contenga "Contexto:", "Cita:", etc.
         text = re.sub(r'\(\s*(?:Contexto|Cita|Quote|Evidencia)\s*:.*?\)', '', text, flags=re.IGNORECASE | re.DOTALL)
         
-        # También eliminamos si la IA puso el texto crudo entre comillas justo después de la referencia
-        # Ej: [1] "el texto de la cita"
-        # (Esto es opcional, pero ayuda a limpiar si se ve repetitivo)
-        # text = re.sub(r'\[\d+\]\s*".{10,100}?"', '', text) 
-
-        # 4. LIMPIEZA DE BASURA RESTANTE
-        # Borrar título "Fuentes Verificadas" si quedó flotando
         text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas| Consultadas)?\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
-        
-        # Borrar líneas vacías extra
         text = re.sub(r'\n{3,}', '\n\n', text)
 
-        # 5. RENDERIZADO DE TOOLTIPS (HTML)
-        # Normalizar referencias: [1][2] -> [1, 2]
         text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
         
         def replace_citation_group(match):
             content = match.group(1)
-            # Extraemos solo los números, ignorando comas o espacios
             ids = [x.strip() for x in re.findall(r'\d+', content)]
             
             html_out = []
             for cid in ids:
                 data = source_map.get(cid)
                 if data:
-                    # Tooltip interactivo
                     tooltip = (
                         f'<span class="tooltip-container">'
                         f'<span class="citation-number">[{cid}]</span>'
@@ -167,18 +241,14 @@ def process_text_with_tooltips(text):
                     )
                     html_out.append(tooltip)
                 else:
-                    # Si no hay metadata, solo mostramos el número estático
                     html_out.append(f'<span class="citation-number" style="cursor:default; border:none;">[{cid}]</span>')
             
-            return f" {''.join(html_out)} " # Espacio antes para separar de la palabra
+            return f" {''.join(html_out)} "
 
-        # Reemplazar [1, 2] o [1] por el HTML
         enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, text)
         
-        # 6. FOOTER (Lista de fuentes al final)
         footer = ""
         if source_map:
-            # Obtenemos lista única de archivos
             files = sorted(list(set(v['file'] for v in source_map.values())))
             if files:
                 footer = "\n\n<div style='margin-top:20px; padding-top:10px; border-top:1px solid #eee;'>"
@@ -194,7 +264,6 @@ def process_text_with_tooltips(text):
         print(f"Error Tooltips: {e}")
         return text
 
-# Dummies para evitar errores de importación circular o faltantes
 def reset_report_workflow(): pass
 def reset_chat_workflow(): pass
 def reset_transcript_chat_workflow(): pass
