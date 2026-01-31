@@ -21,3 +21,4 @@ python-pptx
 scipy
 seaborn
 openpyxl
+wordcloud
