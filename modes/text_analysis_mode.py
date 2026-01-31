@@ -5,26 +5,27 @@ import os
 import uuid
 from datetime import datetime
 import re 
-import time 
 from services.gemini_api import call_gemini_api, call_gemini_stream 
 from services.supabase_db import log_query_event, supabase, get_daily_usage
 from prompts import get_transcript_prompt, get_text_analysis_summary_prompt
 import constants as c
 from config import banner_file
-# Nota: No necesitamos process_text_with_tooltips porque será texto plano limpio
 from utils import reset_transcript_chat_workflow, render_process_status
+
+# --- NUEVO: COMPONENTE UNIFICADO ---
+from components.chat_interface import render_chat_history, handle_chat_interaction
 
 # --- GENERADORES ---
 from reporting.pdf_generator import generate_pdf_html
 from reporting.docx_generator import generate_docx
 
 # =====================================================
-# MODO: ANÁLISIS DE TEXTOS (REFERENCIAS LIMPIAS [Doc #])
+# MODO: ANÁLISIS DE TEXTOS (OPTIMIZADO)
 # =====================================================
 
 TEXT_PROJECT_BUCKET = "text_project_files"
 
-# --- Funciones de Carga ---
+# --- Funciones de Carga (Sin cambios mayores) ---
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_text_project_data(storage_folder_path: str):
@@ -48,7 +49,7 @@ def load_text_project_data(storage_folder_path: str):
         return documents_list
     except Exception as e: st.error(f"Error carga: {e}"); return []
 
-# --- Funciones de UI ---
+# --- Funciones de UI (Creación y Listado) ---
 
 def show_text_project_creator(user_id, plan_limit):
     st.subheader("Crear Nuevo Proyecto de Texto")
@@ -103,107 +104,100 @@ def show_text_project_list(user_id):
                     except Exception as e: st.error(f"Error: {e}")
     except Exception as e: st.error(f"Error: {e}")
 
-# --- Función de Análisis ---
+# --- ANALIZADOR (OPTIMIZADO CON COMPONENTE UNIFICADO) ---
 
 def show_text_project_analyzer(summary_context, project_name, documents_list):
     st.markdown(f"### Análisis de Transcripciones: **{project_name}**")
     if st.button("← Volver"): st.session_state.mode_state = {}; st.rerun()
     st.divider()
     
-    # Enumeración clara de documentos para referencias fáciles
+    # Preparar contexto documental
     all_docs_text = "\n".join([f"--- DOCUMENTO {i+1} (Archivo: {d['source']}) ---\n{d['content']}" for i, d in enumerate(documents_list)])
-    
     if len(all_docs_text) > 200000: 
         all_docs_text = all_docs_text[:200000] + "\n...(texto truncado por seguridad)"
     
+    # 1. INICIALIZAR HISTORIAL
     if "transcript_chat_history" not in st.session_state.mode_state: 
         st.session_state.mode_state["transcript_chat_history"] = []
 
-    # Renderizado simple del historial
-    for msg in st.session_state.mode_state["transcript_chat_history"]:
-        with st.chat_message(msg["role"], avatar="✨" if msg['role'] == "assistant" else "👤"):
-            st.markdown(msg["content"])
+    # 2. RENDERIZAR HISTORIAL (Componente Unificado)
+    render_chat_history(st.session_state.mode_state["transcript_chat_history"], source_mode="text_analysis")
 
-    user_prompt = st.chat_input("Ej: ¿Cuáles son los hallazgos principales?")
-
-    if user_prompt:
-        st.session_state.mode_state["transcript_chat_history"].append({"role": "user", "content": user_prompt})
-        with st.chat_message("user", avatar="👤"): st.markdown(user_prompt)
-
+    # 3. INTERACCIÓN USUARIO
+    if user_prompt := st.chat_input("Ej: ¿Cuáles son los hallazgos principales?"):
+        
+        # Validación de cuota
         limit = st.session_state.plan_features.get('text_analysis_questions_per_day', 5)
         curr = get_daily_usage(st.session_state.user, c.MODE_TEXT_ANALYSIS) 
 
         if curr >= limit and limit != float('inf'):
             st.error(f"Límite diario alcanzado.")
-        else:
-            with st.chat_message("assistant", avatar="✨"):
-                
-                full_response = ""
-                response_placeholder = st.empty()
-                
-                with render_process_status("Analizando evidencia textual...", expanded=True) as status:
-                    
-                    # Recuperamos historial reciente para contexto
-                    recent_history = st.session_state.mode_state["transcript_chat_history"][-3:-1] if len(st.session_state.mode_state["transcript_chat_history"]) > 1 else []
-                    history_context = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in recent_history])
+            return
 
-                    # -------------------------------------------------------------
-                    # OPTIMIZACIÓN: Prompt corregido para evitar duplicidad de texto
-                    # -------------------------------------------------------------
-                    format_instruction = (
-                        "\n\n[INSTRUCCIÓN CRÍTICA DE FORMATO DE CITAS:"
-                        "\n1. **Redacción:** Integra las citas textuales ('verbatims') fluidamente en tu redacción, usando comillas y cursiva."
-                        "\n   Ejemplo: Los usuarios perciben que *\"el sabor es muy dulce\"*."
-                        "\n2. **Referencia:** Inmediatamente después de la cita, coloca SOLAMENTE el identificador del documento entre corchetes."
-                        "\n   Ejemplo correcto: ...*\"el sabor es muy dulce\"* [1]."
-                        "\n3. **PROHIBIDO:** NO repitas el texto de la cita dentro de los corchetes. NO pongas [1: \"el sabor es...\"]."
-                        "\n   El corchete debe contener SOLO el número del documento.]"
+        # Generador con Lógica de Auto-Reparación (Smart Continuation)
+        def text_analysis_generator():
+            full_accumulated_text = ""
+            
+            with st.status("Analizando evidencia textual...", expanded=True) as status:
+                # Recuperamos historial reciente
+                recent_history = st.session_state.mode_state["transcript_chat_history"][-3:]
+                history_context = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in recent_history])
+
+                # Instrucción de Formato
+                format_instruction = (
+                    "\n\n[INSTRUCCIÓN CRÍTICA: Usa referencias [1], [2] inmediatamente después de las citas. "
+                    "NO repitas el texto de la cita dentro del corchete.]"
+                )
+                
+                final_context = (
+                    f"--- INFORMACIÓN (FUENTES) ---\n{all_docs_text}\n\n"
+                    f"--- HISTORIAL RECIENTE ---\n{history_context}\n\n"
+                    f"--- CONTEXTO ---\n{summary_context}\n"
+                    f"{format_instruction}"
+                )
+                
+                chat_prompt = get_transcript_prompt(final_context, user_prompt)
+                
+                # Primera llamada
+                stream = call_gemini_stream(chat_prompt, generation_config_override={"max_output_tokens": 8192})
+                
+                if not stream:
+                    status.update(label="Error en respuesta", state="error")
+                    return iter(["Error al conectar con la IA."])
+                
+                # Iteramos y pasamos chunks
+                for chunk in stream:
+                    full_accumulated_text += chunk
+                    yield chunk
+                
+                # --- DETECCIÓN DE CORTE (AUTO-REPARACIÓN) ---
+                clean_text = full_accumulated_text.strip()
+                # Si no termina en puntuación de cierre, asumimos que se cortó
+                if clean_text and not clean_text.endswith(('.', '!', '?', '"', '}', ']', ')')):
+                    status.update(label="⚠️ Detecté un corte. Completando respuesta...", state="running")
+                    
+                    continuation_prompt = (
+                        f"Tu respuesta anterior se cortó. Esto fue lo último:\n...{clean_text[-500:]}\n\n"
+                        "POR FAVOR CONTINÚA LA IDEA EXACTAMENTE DONDE QUEDASTE."
                     )
                     
-                    final_context = (
-                        f"--- INFORMACIÓN (FUENTES) ---\n{all_docs_text}\n\n"
-                        f"--- HISTORIAL RECIENTE ---\n{history_context}\n\n"
-                        f"--- CONTEXTO DEL PROYECTO ---\n{summary_context}\n"
-                        f"{format_instruction}"
-                    )
-                    
-                    chat_prompt = get_transcript_prompt(final_context, user_prompt)
-                    stream = call_gemini_stream(chat_prompt, generation_config_override={"max_output_tokens": 8192})
-                    
-                    if stream:
-                        for chunk in stream:
-                            full_response += chunk
-                            response_placeholder.markdown(full_response + "▌")
-                        
-                        # Recuperación de cortes
-                        clean_text = full_response.strip()
-                        if clean_text and not clean_text.endswith(('.', '!', '?', '"', '}', ']')):
-                            status.update(label="⚠️ La respuesta se cortó. Completando...", state="running")
-                            
-                            continuation_prompt = (
-                                f"Tu respuesta anterior se cortó abruptamente. Esto fue lo último que escribiste:\n"
-                                f"...{clean_text[-500:]}\n\n"
-                                "POR FAVOR CONTINÚA LA IDEA. "
-                                "Recuerda: Las referencias son solo [Doc #], sin texto adentro."
-                            )
-                            
-                            stream_fix = call_gemini_stream(continuation_prompt, generation_config_override={"max_output_tokens": 4096})
-                            if stream_fix:
-                                for chunk_fix in stream_fix:
-                                    full_response += chunk_fix 
-                                    response_placeholder.markdown(full_response + "▌")
-                        
-                        status.update(label="¡Respuesta completa!", state="complete", expanded=False)
-                        response_placeholder.markdown(full_response) 
-                        
-                        log_query_event(user_prompt, mode=f"{c.MODE_TEXT_ANALYSIS} (Chat)")
-                        st.session_state.mode_state["transcript_chat_history"].append({"role": "assistant", "content": full_response})
-                        
-                    else:
-                        status.update(label="Error en respuesta", state="error")
-                        st.error("Error al obtener respuesta del servidor.")
+                    stream_fix = call_gemini_stream(continuation_prompt, generation_config_override={"max_output_tokens": 4096})
+                    if stream_fix:
+                        for chunk_fix in stream_fix:
+                            yield chunk_fix # El componente unificado lo mostrará seguido
+                
+                status.update(label="¡Respuesta completa!", state="complete", expanded=False)
 
-    # Botones de exportación
+        # Delegar al componente visual
+        handle_chat_interaction(
+            prompt=user_prompt,
+            response_generator_func=text_analysis_generator,
+            history_key="transcript_chat_history",
+            source_mode="text_analysis",
+            on_generation_success=lambda r: log_query_event(user_prompt, mode=f"{c.MODE_TEXT_ANALYSIS} (Chat)")
+        )
+
+    # 4. EXPORTACIÓN
     if st.session_state.mode_state["transcript_chat_history"]:
         st.divider() 
         c1, c2, c3 = st.columns(3)
@@ -211,13 +205,16 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
         raw_text = f"# Análisis: {project_name}\n\n"
         raw_text += "\n\n".join(f"**{m['role'].upper()}:** {m['content']}" for m in st.session_state.mode_state["transcript_chat_history"])
         
-        pdf = generate_pdf_html(raw_text, title=f"Reporte - {project_name}", banner_path=banner_file)
-        if pdf: c1.download_button("Descargar PDF", data=pdf, file_name="analisis.pdf", mime="application/pdf", width='stretch')
+        with c1:
+            pdf = generate_pdf_html(raw_text, title=f"Reporte - {project_name}", banner_path=banner_file)
+            if pdf: st.download_button("Descargar PDF", data=pdf, file_name="analisis.pdf", mime="application/pdf", width='stretch')
         
-        docx = generate_docx(raw_text, title=f"Reporte - {project_name}")
-        if docx: c2.download_button("Descargar Word", data=docx, file_name="analisis.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
+        with c2:
+            docx = generate_docx(raw_text, title=f"Reporte - {project_name}")
+            if docx: st.download_button("Descargar Word", data=docx, file_name="analisis.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
         
-        c3.button("Reiniciar", on_click=reset_transcript_chat_workflow, key="rst_chat", width='stretch')
+        with c3:
+            st.button("Reiniciar", on_click=reset_transcript_chat_workflow, key="rst_chat", width='stretch')
 
 
 def text_analysis_mode():
@@ -239,12 +236,15 @@ def text_analysis_mode():
         with render_process_status("Generando visión general...", expanded=True) as status:
             docs = st.session_state.mode_state["ta_documents_list"]
             summ_in = "".join([f"\nDoc: {d['source']}\n{d['content'][:3000]}\n..." for d in docs])
+            
+            # Usamos llamada directa (no stream) para el resumen inicial automático
             summ = call_gemini_api(get_text_analysis_summary_prompt(summ_in), generation_config_override={"max_output_tokens": 8192})
+            
             status.update(label="Listo", state="complete", expanded=False)
             
         if summ: st.session_state.mode_state["ta_summary_context"] = summ; st.rerun()
 
-    # 3. Vistas
+    # 3. Router de Vistas
     if "ta_summary_context" in st.session_state.mode_state:
         show_text_project_analyzer(
             st.session_state.mode_state["ta_summary_context"],
