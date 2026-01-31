@@ -1,37 +1,30 @@
 import streamlit as st
 import constants as c
 
-# --- BLOQUE DE SEGURIDAD (SAFE IMPORTS) ---
-def safe_process_text(text): return text
+# --- NUEVO: IMPORTAMOS EL COMPONENTE UNIFICADO ---
+from components.chat_interface import render_chat_history, handle_chat_interaction
 
 # 1. Servicios IA
 try:
-    from services.gemini_api import call_gemini_api
+    # Cambiamos a STREAM para mejorar la velocidad percibida
+    from services.gemini_api import call_gemini_stream
     gemini_available = True
 except ImportError:
     gemini_available = False
-    def call_gemini_api(prompt): return "Error: Servicio de IA no disponible."
+    def call_gemini_stream(prompt): return None
 
-# 2. Utilidades y Citas
+# 2. Utilidades
 try:
-    from utils import get_relevant_info, render_process_status
-    try:
-        from utils import process_text_with_tooltips
-    except ImportError:
-        process_text_with_tooltips = safe_process_text
+    from utils import get_relevant_info
 except ImportError:
     def get_relevant_info(db, q, f): return ""
-    def render_process_status(l, expanded=True): return st.status(l, expanded=expanded)
-    process_text_with_tooltips = safe_process_text
 
 # 3. Base de Datos y Memoria
 try:
     from services.supabase_db import log_query_event
-    from services.memory_service import save_project_insight
     from prompts import get_ideation_prompt
 except ImportError:
     def log_query_event(q, m): pass
-    def save_project_insight(c, source_mode): pass
     def get_ideation_prompt(h, r): return ""
 
 # 4. PDF Config
@@ -44,7 +37,7 @@ except ImportError:
 
 
 # ==========================================
-# FUNCIÓN PRINCIPAL: IDEACIÓN
+# FUNCIÓN PRINCIPAL: IDEACIÓN (OPTIMIZADA)
 # ==========================================
 def ideacion_mode(db, selected_files):
     st.subheader("Ideación Estratégica")
@@ -54,79 +47,53 @@ def ideacion_mode(db, selected_files):
         st.info("👈 Selecciona documentos en el menú lateral para comenzar.")
         return
 
-    # Inicializar historial
+    # 1. INICIALIZAR HISTORIAL
     if "ideation_history" not in st.session_state.mode_state:
         st.session_state.mode_state["ideation_history"] = []
 
-    # 1. MOSTRAR HISTORIAL
-    for idx, msg in enumerate(st.session_state.mode_state["ideation_history"]):
-        role_avatar = "✨" if msg["role"] == "assistant" else "👤"
-        with st.chat_message(msg["role"], avatar=role_avatar):
-            if msg["role"] == "assistant":
-                # Renderizar con tooltips
-                html_content = process_text_with_tooltips(msg["content"])
-                st.markdown(html_content, unsafe_allow_html=True)
+    # 2. RENDERIZAR HISTORIAL (Automático)
+    render_chat_history(st.session_state.mode_state["ideation_history"], source_mode="ideation")
+
+    # 3. INTERACCIÓN DEL USUARIO
+    if user_input := st.chat_input("Escribe un desafío creativo..."):
+        
+        # Definimos el generador específico para Ideación
+        def ideation_generator():
+            with st.status("Conectando puntos...", expanded=True) as status:
+                if not gemini_available:
+                    status.update(label="IA no disponible", state="error")
+                    return iter(["Error: Servicio de IA no disponible."])
+
+                # Recuperar contexto RAG
+                relevant_info = get_relevant_info(db, user_input, selected_files)
                 
-                # Botón PIN para guardar idea en historial
-                col_s, col_p = st.columns([15, 1])
-                with col_p:
-                    if st.button("📌", key=f"pin_idea_{idx}", help="Guardar en Memoria del Proyecto"):
-                        save_project_insight(msg["content"], source_mode="ideation")
-                        st.toast("✅ Idea guardada")
-            else:
-                st.markdown(msg["content"])
-
-    # 2. INPUT DE USUARIO
-    user_input = st.chat_input("Escribe un desafío creativo...")
-    
-    if user_input:
-        # A. Mostrar mensaje usuario
-        st.session_state.mode_state["ideation_history"].append({"role": "user", "content": user_input})
-        with st.chat_message("user", avatar="👤"):
-            st.markdown(user_input)
-
-        # B. Generar respuesta
-        with st.chat_message("assistant", avatar="✨"):
-            response = None
-            placeholder = st.empty()
-            
-            with render_process_status("Conectando puntos...", expanded=True) as status:
-                if gemini_available:
-                    relevant_info = get_relevant_info(db, user_input, selected_files)
-                    
-                    # Contexto breve de últimos mensajes
-                    hist_str = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.mode_state["ideation_history"][-3:]])
-                    
-                    prompt = get_ideation_prompt(hist_str, relevant_info)
-                    response = call_gemini_api(prompt) # Ideación usa llamada normal (no stream) usualmente
-                    
-                    if response:
-                        status.update(label="¡Ideas generadas!", state="complete", expanded=False)
-                    else:
-                        status.update(label="Error al generar", state="error")
+                # Historial para contexto
+                hist_str = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.mode_state["ideation_history"][-3:]])
+                
+                # Prompt específico de Ideación (Lateral Thinking)
+                prompt = get_ideation_prompt(hist_str, relevant_info)
+                
+                # Llamada streaming (Mejora UX respecto a la versión anterior)
+                stream = call_gemini_stream(prompt)
+                
+                if stream:
+                    status.update(label="¡Ideas generadas!", state="complete", expanded=False)
+                    return stream
                 else:
-                     status.update(label="Servicio IA no disponible", state="error")
+                    status.update(label="Error al generar", state="error")
+                    return iter(["Error al conectar con el motor creativo."])
 
-            # C. Mostrar respuesta final
-            if response:
-                # Procesar Citas y Tooltips
-                enriched_html = process_text_with_tooltips(response)
-                placeholder.markdown(enriched_html, unsafe_allow_html=True)
-                
-                st.session_state.mode_state["ideation_history"].append({"role": "assistant", "content": response})
-                
-                # Botón PIN para la nueva respuesta
-                col_s, col_p = st.columns([15, 1])
-                with col_p:
-                    if st.button("📌", key="pin_idea_new", help="Guardar en Memoria del Proyecto"):
-                        save_project_insight(response, source_mode="ideation")
-                        st.toast("✅ Idea guardada")
-                
-                try:
-                    log_query_event(f"Ideación: {user_input[:50]}", mode=c.MODE_IDEATION)
-                except: pass
+        # Delegamos al componente visual
+        handle_chat_interaction(
+            prompt=user_input,
+            response_generator_func=ideation_generator,
+            history_key="ideation_history",
+            source_mode="ideation",
+            on_generation_success=lambda resp: log_query_event(f"Ideación: {user_input[:50]}", mode=c.MODE_IDEATION)
+        )
 
-    # 3. BOTONES DE ACCIÓN
+    # 4. BOTONES DE ACCIÓN (PDF / Limpiar)
+    # Mantenemos esta lógica aquí porque es específica de este modo
     if st.session_state.mode_state["ideation_history"]:
         st.write("") 
         
@@ -134,7 +101,6 @@ def ideacion_mode(db, selected_files):
         
         with col1:
             if generate_pdf_html:
-                # Generar texto plano para el PDF
                 full_chat_text = ""
                 for m in st.session_state.mode_state["ideation_history"]:
                     role_title = "Usuario" if m["role"] == "user" else "Atelier AI"
@@ -152,7 +118,7 @@ def ideacion_mode(db, selected_files):
                             use_container_width=True
                         )
                 except Exception as e:
-                    st.error(f"No se pudo generar PDF: {e}")
+                    st.error(f"Error PDF: {e}")
 
         with col2:
             if st.button("Nueva Búsqueda", type="secondary", use_container_width=True):
