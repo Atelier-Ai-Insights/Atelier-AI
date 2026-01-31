@@ -1,38 +1,30 @@
 import streamlit as st
-import time  # Necesario para la espera
 import constants as c
 
-# --- BLOQUE DE SEGURIDAD (SAFE IMPORTS) ---
-def safe_process_text(text): return text
+# --- NUEVO: COMPONENTE UNIFICADO ---
+from components.chat_interface import render_chat_history, handle_chat_interaction
 
 # 1. Servicios IA
 try:
-    from services.gemini_api import call_gemini_api
+    # Cambiamos a STREAM para mejor UX
+    from services.gemini_api import call_gemini_stream
     gemini_available = True
 except ImportError:
     gemini_available = False
-    def call_gemini_api(prompt): return "Error: Servicio de IA no disponible."
+    def call_gemini_stream(prompt): return None
 
-# 2. Utilidades y Citas
+# 2. Utilidades
 try:
-    from utils import get_relevant_info, render_process_status
-    try:
-        from utils import process_text_with_tooltips
-    except ImportError:
-        process_text_with_tooltips = safe_process_text
+    from utils import get_relevant_info
 except ImportError:
     def get_relevant_info(db, q, f): return ""
-    def render_process_status(l, expanded=True): return st.status(l, expanded=expanded)
-    process_text_with_tooltips = safe_process_text
 
 # 3. Base de Datos y Memoria
 try:
     from services.supabase_db import log_query_event
-    from services.memory_service import save_project_insight
     from prompts import get_concept_gen_prompt 
 except ImportError:
     def log_query_event(q, m): pass
-    def save_project_insight(c, source_mode): pass
     def get_concept_gen_prompt(h, r): return ""
 
 # 4. PDF Config
@@ -43,34 +35,9 @@ except ImportError:
     generate_pdf_html = None
     banner_file = None
 
-# ==========================================
-# CALLBACKS (SOLUCIÓN DE TIMING)
-# ==========================================
-def handle_save_concept(content):
-    """
-    Guarda el concepto y fuerza una espera para sincronizar la UI.
-    """
-    try:
-        # 1. Guardar en DB
-        save_project_insight(content, source_mode="concept")
-        
-        # 2. Limpiar caché para obligar a leer la lista nueva
-        # (Esto asegura que main.py no traiga la lista vieja de la memoria)
-        st.cache_data.clear()
-        
-        # 3. Feedback visual
-        st.toast("✅ Concepto guardado exitosamente")
-        
-        # 4. PAUSA ESTRATÉGICA (La clave del arreglo)
-        # Damos 1 segundo a la DB para que indexe el nuevo registro
-        # antes de que Streamlit recargue la barra lateral.
-        time.sleep(1)
-        
-    except Exception as e:
-        st.toast(f"❌ Error al guardar: {e}")
 
 # ==========================================
-# FUNCIÓN PRINCIPAL
+# FUNCIÓN PRINCIPAL: CONCEPTOS (OPTIMIZADA)
 # ==========================================
 def concept_generation_mode(db, selected_files):
     st.subheader("Generador de Conceptos")
@@ -84,81 +51,47 @@ def concept_generation_mode(db, selected_files):
     if "concept_history" not in st.session_state.mode_state:
         st.session_state.mode_state["concept_history"] = []
 
-    # 2. MOSTRAR HISTORIAL
-    for idx, msg in enumerate(st.session_state.mode_state["concept_history"]):
-        role_avatar = "✨" if msg["role"] == "assistant" else "👤"
-        with st.chat_message(msg["role"], avatar=role_avatar):
-            if msg["role"] == "assistant":
-                # Renderizar con tooltips limpios
-                html_content = process_text_with_tooltips(msg["content"])
-                st.markdown(html_content, unsafe_allow_html=True)
+    # 2. RENDERIZAR HISTORIAL (Automático)
+    render_chat_history(st.session_state.mode_state["concept_history"], source_mode="concept")
+
+    # 3. INTERACCIÓN DEL USUARIO
+    if concept_input := st.chat_input("Describe la idea base para el concepto..."):
+
+        # Definimos el generador
+        def concept_generator():
+            with st.status("Diseñando concepto ganador...", expanded=True) as status:
+                if not gemini_available:
+                    status.update(label="IA no disponible", state="error")
+                    return iter(["Error: IA no disponible."])
+
+                # Búsqueda RAG
+                status.write("Buscando evidencia de soporte...")
+                relevant_info = get_relevant_info(db, concept_input, selected_files)
                 
-                # BOTÓN PIN CON CALLBACK AJUSTADO
-                col_s, col_p = st.columns([15, 1])
-                with col_p:
-                    st.button(
-                        "📌", 
-                        key=f"pin_con_{idx}", 
-                        help="Guardar Concepto",
-                        on_click=handle_save_concept,  
-                        args=(msg["content"],)         
-                    )
-            else:
-                st.markdown(msg["content"])
-
-    # 3. INPUT DE USUARIO
-    concept_input = st.chat_input("Describe la idea base para el concepto...")
-
-    if concept_input:
-        # A. Mostrar mensaje usuario
-        st.session_state.mode_state["concept_history"].append({"role": "user", "content": concept_input})
-        with st.chat_message("user", avatar="👤"):
-            st.markdown(concept_input)
-
-        # B. Generar Respuesta
-        with st.chat_message("assistant", avatar="✨"):
-            response = None
-            placeholder = st.empty()
-            
-            with render_process_status("Diseñando concepto ganador...", expanded=True) as status:
-                if gemini_available:
-                    status.write("Buscando evidencia de soporte...")
-                    relevant_info = get_relevant_info(db, concept_input, selected_files)
-                    
-                    status.write("Estructurando Insight, Beneficio y RTB...")
-                    prompt = get_concept_gen_prompt(concept_input, relevant_info)
-                    response = call_gemini_api(prompt)
-                    
-                    if response:
-                        status.update(label="Concepto Generado", state="complete", expanded=False)
-                    else:
-                        status.update(label="Error al generar", state="error")
+                # Prompt de Concepto
+                status.write("Estructurando Insight, Beneficio y RTB...")
+                prompt = get_concept_gen_prompt(concept_input, relevant_info)
+                
+                # Llamada Streaming
+                stream = call_gemini_stream(prompt)
+                
+                if stream:
+                    status.update(label="Concepto Generado", state="complete", expanded=False)
+                    return stream
                 else:
-                    status.update(label="Servicio IA no disponible", state="error")
-            
-            # C. Mostrar respuesta final
-            if response:
-                enriched_html = process_text_with_tooltips(response)
-                placeholder.markdown(enriched_html, unsafe_allow_html=True)
-                
-                st.session_state.mode_state["concept_history"].append({"role": "assistant", "content": response})
-                
-                # Botón PIN nuevo
-                col_s, col_p = st.columns([15, 1])
-                with col_p:
-                    st.button(
-                        "📌", 
-                        key="pin_con_new", 
-                        help="Guardar Concepto",
-                        on_click=handle_save_concept, 
-                        args=(response,)
-                    )
-                
-                try:
-                    log_query_event(f"Concepto: {concept_input[:30]}", mode=c.MODE_CONCEPT)
-                except: pass
+                    status.update(label="Error al generar", state="error")
+                    return iter(["Error al generar el concepto."])
 
-    # 4. BOTONES DE ACCIÓN
+        # Delegamos al componente visual
+        handle_chat_interaction(
+            prompt=concept_input,
+            response_generator_func=concept_generator,
+            history_key="concept_history",
+            source_mode="concept",
+            on_generation_success=lambda resp: log_query_event(f"Concepto: {concept_input[:30]}", mode=c.MODE_CONCEPT)
+        )
+
+    # 4. BOTONES DE ACCIÓN (PDF / Nueva Sesión)
     if st.session_state.mode_state["concept_history"]:
         st.write("") 
         
