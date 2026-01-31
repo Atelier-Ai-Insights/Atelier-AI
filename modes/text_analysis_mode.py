@@ -12,7 +12,7 @@ import constants as c
 from config import banner_file
 from utils import reset_transcript_chat_workflow, render_process_status
 
-# --- NUEVO: COMPONENTE UNIFICADO ---
+# --- COMPONENTE UNIFICADO ---
 from components.chat_interface import render_chat_history, handle_chat_interaction
 
 # --- GENERADORES ---
@@ -20,13 +20,12 @@ from reporting.pdf_generator import generate_pdf_html
 from reporting.docx_generator import generate_docx
 
 # =====================================================
-# MODO: ANÁLISIS DE TEXTOS (OPTIMIZADO)
+# MODO: ANÁLISIS DE TEXTOS (VISUALMENTE MEJORADO)
 # =====================================================
 
 TEXT_PROJECT_BUCKET = "text_project_files"
 
-# --- Funciones de Carga (Sin cambios mayores) ---
-
+# --- Funciones de Carga (Sin cambios) ---
 @st.cache_data(ttl=600, show_spinner=False)
 def load_text_project_data(storage_folder_path: str):
     if not storage_folder_path:
@@ -49,8 +48,7 @@ def load_text_project_data(storage_folder_path: str):
         return documents_list
     except Exception as e: st.error(f"Error carga: {e}"); return []
 
-# --- Funciones de UI (Creación y Listado) ---
-
+# --- Funciones de UI ---
 def show_text_project_creator(user_id, plan_limit):
     st.subheader("Crear Nuevo Proyecto de Texto")
     try:
@@ -104,7 +102,7 @@ def show_text_project_list(user_id):
                     except Exception as e: st.error(f"Error: {e}")
     except Exception as e: st.error(f"Error: {e}")
 
-# --- ANALIZADOR (OPTIMIZADO CON COMPONENTE UNIFICADO) ---
+# --- ANALIZADOR (VISUALMENTE MEJORADO) ---
 
 def show_text_project_analyzer(summary_context, project_name, documents_list):
     st.markdown(f"### Análisis de Transcripciones: **{project_name}**")
@@ -116,17 +114,15 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
     if len(all_docs_text) > 200000: 
         all_docs_text = all_docs_text[:200000] + "\n...(texto truncado por seguridad)"
     
-    # 1. INICIALIZAR HISTORIAL
+    # 1. RENDERIZAR HISTORIAL
+    render_chat_history(st.session_state.mode_state.get("transcript_chat_history", []), source_mode="text_analysis")
+
     if "transcript_chat_history" not in st.session_state.mode_state: 
         st.session_state.mode_state["transcript_chat_history"] = []
 
-    # 2. RENDERIZAR HISTORIAL (Componente Unificado)
-    render_chat_history(st.session_state.mode_state["transcript_chat_history"], source_mode="text_analysis")
-
-    # 3. INTERACCIÓN USUARIO
+    # 2. INTERACCIÓN USUARIO
     if user_prompt := st.chat_input("Ej: ¿Cuáles son los hallazgos principales?"):
         
-        # Validación de cuota
         limit = st.session_state.plan_features.get('text_analysis_questions_per_day', 5)
         curr = get_daily_usage(st.session_state.user, c.MODE_TEXT_ANALYSIS) 
 
@@ -134,16 +130,20 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
             st.error(f"Límite diario alcanzado.")
             return
 
-        # Generador con Lógica de Auto-Reparación (Smart Continuation)
+        # Generador con PASOS VISUALES
         def text_analysis_generator():
             full_accumulated_text = ""
             
-            with st.status("Analizando evidencia textual...", expanded=True) as status:
-                # Recuperamos historial reciente
+            # --- INICIO CAJA DE ESTADO ---
+            with st.status("Procesando corpus textual...", expanded=True) as status:
+                
+                # Paso 1: Contexto
+                status.write("Leyendo documentos cargados...")
                 recent_history = st.session_state.mode_state["transcript_chat_history"][-3:]
                 history_context = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in recent_history])
 
-                # Instrucción de Formato
+                # Paso 2: Prompt
+                status.write("Detectando patrones y citas...")
                 format_instruction = (
                     "\n\n[INSTRUCCIÓN CRÍTICA: Usa referencias [1], [2] inmediatamente después de las citas. "
                     "NO repitas el texto de la cita dentro del corchete.]"
@@ -158,23 +158,22 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                 
                 chat_prompt = get_transcript_prompt(final_context, user_prompt)
                 
-                # Primera llamada
+                # Paso 3: Generación
+                status.write("Redactando análisis...")
                 stream = call_gemini_stream(chat_prompt, generation_config_override={"max_output_tokens": 8192})
                 
                 if not stream:
                     status.update(label="Error en respuesta", state="error")
                     return iter(["Error al conectar con la IA."])
                 
-                # Iteramos y pasamos chunks
                 for chunk in stream:
                     full_accumulated_text += chunk
                     yield chunk
                 
-                # --- DETECCIÓN DE CORTE (AUTO-REPARACIÓN) ---
+                # Paso 4: Auto-reparación (si aplica)
                 clean_text = full_accumulated_text.strip()
-                # Si no termina en puntuación de cierre, asumimos que se cortó
                 if clean_text and not clean_text.endswith(('.', '!', '?', '"', '}', ']', ')')):
-                    status.update(label="⚠️ Detecté un corte. Completando respuesta...", state="running")
+                    status.update(label="⚠️ Uniendo fragmentos cortados...", state="running")
                     
                     continuation_prompt = (
                         f"Tu respuesta anterior se cortó. Esto fue lo último:\n...{clean_text[-500:]}\n\n"
@@ -184,11 +183,12 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
                     stream_fix = call_gemini_stream(continuation_prompt, generation_config_override={"max_output_tokens": 4096})
                     if stream_fix:
                         for chunk_fix in stream_fix:
-                            yield chunk_fix # El componente unificado lo mostrará seguido
+                            yield chunk_fix 
                 
-                status.update(label="¡Respuesta completa!", state="complete", expanded=False)
+                # Fin
+                status.update(label="¡Análisis completado!", state="complete", expanded=False)
 
-        # Delegar al componente visual
+        # Delegar al componente
         handle_chat_interaction(
             prompt=user_prompt,
             response_generator_func=text_analysis_generator,
@@ -216,35 +216,29 @@ def show_text_project_analyzer(summary_context, project_name, documents_list):
         with c3:
             st.button("Reiniciar", on_click=reset_transcript_chat_workflow, key="rst_chat", width='stretch')
 
-
 def text_analysis_mode():
     st.subheader(c.MODE_TEXT_ANALYSIS); st.divider()
     uid = st.session_state.user_id
     limit = st.session_state.plan_features.get('transcript_file_limit', 0)
 
-    # 1. Cargar Docs
     if "ta_selected_project_id" in st.session_state.mode_state and "ta_documents_list" not in st.session_state.mode_state:
-        with render_process_status("Cargando archivos...", expanded=True) as status:
+        # Aquí también usamos el status box para la carga
+        with render_process_status("Cargando corpus documental...", expanded=True) as status:
             docs = load_text_project_data(st.session_state.mode_state["ta_storage_path"]) 
-            status.update(label="Carga completa", state="complete", expanded=False)
+            status.update(label="Archivos cargados", state="complete", expanded=False)
             
         if docs: st.session_state.mode_state["ta_documents_list"] = docs
         else: st.session_state.mode_state.pop("ta_selected_project_id")
 
-    # 2. Resumen Inicial
     if "ta_documents_list" in st.session_state.mode_state and "ta_summary_context" not in st.session_state.mode_state:
-        with render_process_status("Generando visión general...", expanded=True) as status:
+        with render_process_status("Generando resumen ejecutivo inicial...", expanded=True) as status:
             docs = st.session_state.mode_state["ta_documents_list"]
             summ_in = "".join([f"\nDoc: {d['source']}\n{d['content'][:3000]}\n..." for d in docs])
-            
-            # Usamos llamada directa (no stream) para el resumen inicial automático
             summ = call_gemini_api(get_text_analysis_summary_prompt(summ_in), generation_config_override={"max_output_tokens": 8192})
-            
-            status.update(label="Listo", state="complete", expanded=False)
+            status.update(label="Resumen listo", state="complete", expanded=False)
             
         if summ: st.session_state.mode_state["ta_summary_context"] = summ; st.rerun()
 
-    # 3. Router de Vistas
     if "ta_summary_context" in st.session_state.mode_state:
         show_text_project_analyzer(
             st.session_state.mode_state["ta_summary_context"],
@@ -252,7 +246,7 @@ def text_analysis_mode():
             st.session_state.mode_state["ta_documents_list"]
         )
     elif "ta_selected_project_id" in st.session_state.mode_state:
-        st.info("Cargando...")
+        st.info("Iniciando...")
     else:
         with st.expander("Crear Proyecto", expanded=True): show_text_project_creator(uid, limit)
         st.divider(); show_text_project_list(uid)
