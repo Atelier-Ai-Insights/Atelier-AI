@@ -46,6 +46,11 @@ def extract_brand(filename):
     return str(filename)
 
 def clean_text(text): return str(text) if text else ""
+def clean_gemini_json(text): 
+    # Limpia bloques de código json ```json ... ```
+    text = re.sub(r'^```json\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^```\s*', '', text, flags=re.MULTILINE)
+    return text.strip()
 
 # ==============================
 # LECTURA DE PDFS
@@ -89,7 +94,7 @@ def validate_session_integrity():
     pass 
 
 # =========================================================
-# LÓGICA DE CITAS V5 (DEDUPLICACIÓN Y LIMPIEZA PROFUNDA)
+# LÓGICA DE CITAS V6 (CORRECCIÓN "FUGA DE CONTEXTO")
 # =========================================================
 def process_text_with_tooltips(text):
     if not text: return ""
@@ -97,99 +102,91 @@ def process_text_with_tooltips(text):
     try:
         source_map = {}
         
-        # 1. PRE-LIMPIEZA DE FORMATO
+        # 1. LIMPIEZA INICIAL
         text = text.replace('“', '"').replace('”', '"')
-        text = re.sub(r'\*\*\[(\d+)\]\*\*', r'[\1]', text) # Quitar negritas de [1]
         
         # 2. COSECHA DE METADATA (Harvest)
-        # Buscamos [N] Archivo ||| Contexto
-        # Guardamos la info y ELIMINAMOS ese bloque técnico del texto.
+        # Buscamos la sección final donde están las definiciones: [N] Archivo ||| Contexto
         def harvest_metadata(match):
             cid = match.group(1)
             fname = match.group(2).strip()
             raw_context = match.group(3).strip()
             
-            # Limpiamos el contexto para el tooltip
+            # Limpiamos prefijos comunes que la IA agrega
             clean_context = re.sub(r'^(?:Cita:|Contexto:|Quote:)\s*', '', raw_context, flags=re.IGNORECASE).strip('"').strip("'")
             
-            # Guardamos en el mapa
             source_map[cid] = {
                 "file": html.escape(fname),
-                "context": html.escape(clean_context),
-                "raw_snippet": raw_context # Guardamos el crudo para buscar duplicados
+                "context": html.escape(clean_context[:400]) + ("..." if len(clean_context)>400 else "")
             }
             return "" # Borramos la definición del texto visible
 
-        # Regex Multilínea para capturar definiciones
-        text = re.sub(r'\[(\d+)\]\s*([^\[\]\|]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$)', harvest_metadata, text, flags=re.DOTALL)
+        # Esta regex busca el bloque de definiciones al final o entre párrafos
+        # Patrón: [Digito] Algo ||| Algo (hasta nueva línea con corchete o fin de string)
+        pattern_metadata = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
+        text = re.sub(pattern_metadata, harvest_metadata, text, flags=re.DOTALL)
 
-        # 3. DEDUPLICACIÓN DE CONTEXTO (LA SOLUCIÓN A CAPTURA 6)
-        # Si la IA puso el contexto en la metadata Y TAMBIÉN en el texto, lo borramos del texto.
-        for cid, data in source_map.items():
-            snippet = data["raw_snippet"]
-            if len(snippet) > 15: # Solo si es un texto considerable
-                # Buscamos si este snippet aparece flotando en el texto y lo borramos
-                # Usamos replace simple para ser rápidos y seguros
-                text = text.replace(snippet, "")
-                
-                # A veces la IA pone el snippet entre comillas o paréntesis en el texto
-                text = text.replace(f'"{snippet}"', "")
-                text = text.replace(f'({snippet})', "")
+        # 3. TRITURADORA DE FUGAS (LA CORRECCIÓN PARA TU CAPTURA)
+        # Tu captura muestra texto como: "... [1] (Contexto: ...)"
+        # Esto elimina cualquier paréntesis que contenga "Contexto:", "Cita:", etc.
+        text = re.sub(r'\(\s*(?:Contexto|Cita|Quote|Evidencia)\s*:.*?\)', '', text, flags=re.IGNORECASE | re.DOTALL)
+        
+        # También eliminamos si la IA puso el texto crudo entre comillas justo después de la referencia
+        # Ej: [1] "el texto de la cita"
+        # (Esto es opcional, pero ayuda a limpiar si se ve repetitivo)
+        # text = re.sub(r'\[\d+\]\s*".{10,100}?"', '', text) 
 
-        # 4. TRITURADORA DE BASURA Y LISTAS (SOLUCIÓN A CAPTURA 7)
-        # Borrar bloques de "Cita: ..." que hayan quedado
-        text = re.sub(r'(?:Cita:|Contexto:|Quote:)\s*["“].*?["”]', '', text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'\(Contexto:.*?\)', '', text, flags=re.DOTALL | re.IGNORECASE)
+        # 4. LIMPIEZA DE BASURA RESTANTE
+        # Borrar título "Fuentes Verificadas" si quedó flotando
+        text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas| Consultadas)?\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
         
-        # Borrar la lista masiva de archivos al final: [File.pdf] ||| [File.pdf]
-        # Esta regex busca secuencias repetidas de corchetes y pipes
-        text = re.sub(r'(?:\[[^\]]+\.pdf\]\s*(?:\|\|\|)?\s*){2,}', '', text, flags=re.IGNORECASE)
-        
-        # Borrar pipes huérfanos que hayan sobrevivido
-        text = text.replace('|||', '')
-        
-        # Borrar título "Fuentes Verificadas" si quedó vacío
-        text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas)?\s*:?\s*(?:\*\*|##)?\s*(?=\n|$)', '', text, flags=re.IGNORECASE)
+        # Borrar líneas vacías extra
+        text = re.sub(r'\n{3,}', '\n\n', text)
 
-        # 5. RENDERIZADO DE TOOLTIPS
-        # Normalizar referencias numéricas: [1][2] -> [1, 2]
+        # 5. RENDERIZADO DE TOOLTIPS (HTML)
+        # Normalizar referencias: [1][2] -> [1, 2]
         text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
-        text = re.sub(r'\]\s*[,;]\s*\[', ', ', text)
-
+        
         def replace_citation_group(match):
             content = match.group(1)
-            ids = [x.strip() for x in content.split(',') if x.strip().isdigit()]
-            html_out = []
+            # Extraemos solo los números, ignorando comas o espacios
+            ids = [x.strip() for x in re.findall(r'\d+', content)]
             
+            html_out = []
             for cid in ids:
                 data = source_map.get(cid)
                 if data:
+                    # Tooltip interactivo
                     tooltip = (
-                        f'<span class="tooltip-container" style="position: relative; display: inline-block;">'
+                        f'<span class="tooltip-container">'
                         f'<span class="citation-number">[{cid}]</span>'
                         f'<span class="tooltip-text">'
                         f'<strong>📂 {data["file"]}</strong><br/>'
-                        f'<div style="margin-top:4px; font-size:0.9em;">{data["context"]}</div>'
+                        f'<span style="font-size:0.9em; opacity:0.9;">"{data["context"]}"</span>'
                         f'</span></span>'
                     )
                     html_out.append(tooltip)
                 else:
-                    html_out.append(f'<span class="citation-simple">[{cid}]</span>')
+                    # Si no hay metadata, solo mostramos el número estático
+                    html_out.append(f'<span class="citation-number" style="cursor:default; border:none;">[{cid}]</span>')
             
-            if not html_out: return match.group(0)
-            return f" {' '.join(html_out)} "
+            return f" {''.join(html_out)} " # Espacio antes para separar de la palabra
 
+        # Reemplazar [1, 2] o [1] por el HTML
         enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, text)
         
-        # 6. FOOTER
+        # 6. FOOTER (Lista de fuentes al final)
         footer = ""
         if source_map:
+            # Obtenemos lista única de archivos
             files = sorted(list(set(v['file'] for v in source_map.values())))
             if files:
-                footer = "\n\n<br><hr><h6 style='margin-bottom:5px; color:#666;'>Fuentes:</h6>"
+                footer = "\n\n<div style='margin-top:20px; padding-top:10px; border-top:1px solid #eee;'>"
+                footer += "<p style='font-size:0.85em; color:#666; font-weight:bold; margin-bottom:5px;'>📚 Fuentes Consultadas:</p>"
                 footer += "<ul style='font-size:0.8em; color:#666; margin-top:0; padding-left:20px;'>"
-                for f in files: footer += f"<li>{f}</li>"
-                footer += "</ul>"
+                for f in files: 
+                    footer += f"<li style='margin-bottom:2px;'>{f}</li>"
+                footer += "</ul></div>"
 
         return enriched_body + footer
 
@@ -197,7 +194,7 @@ def process_text_with_tooltips(text):
         print(f"Error Tooltips: {e}")
         return text
 
-# Dummies
+# Dummies para evitar errores de importación circular o faltantes
 def reset_report_workflow(): pass
 def reset_chat_workflow(): pass
 def reset_transcript_chat_workflow(): pass
