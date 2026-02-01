@@ -7,19 +7,25 @@ import json
 # ==============================================================================
 
 # --- BLOQUE DE INSTRUCCIONES DE CITAS ---
-INSTRUCCIONES_DE_CITAS = """
-### REGLAS DE EVIDENCIA (SISTEMA RAG ESTRICTO)
+INSTRUCCIONES_CITAS_UNIVERSAL = """
+### REGLAS DE EVIDENCIA (SISTEMA DE ETIQUETAS)
 
 1. **EN EL TEXTO (LIMPIO):**
    - Redacta fluido. Usa SOLAMENTE referencias numéricas: `[1]`, `[2]`.
-   - **PROHIBIDO** poner citas textuales, nombres de archivo o explicaciones entre paréntesis dentro del párrafo.
-   - Si vas a citar, pon solo el número. Ej: "El producto es rojo [1]." NO: "El producto es rojo [1] (porque lo dice el pdf)".
+   - **NUNCA** pongas el nombre del archivo o la cita en el párrafo.
    - Video: `[Video: MM:SS-MM:SS]`.
    - Imagen: `[Imagen]`.
 
-2. **AL FINAL (METADATA):**
-   - Crea un bloque final con el separador `|||`.
-   - Formato: `[1] ||| NombreArchivo.pdf ||| "Cita textual..."`
+2. **BLOQUE DE METADATA (AL FINAL):**
+   - Al final de tu respuesta, genera las referencias usando ESTRICTAMENTE este formato de etiquetas cerradas:
+   
+   [[REF:1|NombreDelArchivo.pdf|Pegar aquí la cita textual exacta...]]
+   [[REF:2|OtroArchivo.pdf|Otra cita textual...]]
+   
+   **IMPORTANTE:**
+   - Usa los corchetes dobles `[[` y `]]`.
+   - Usa el separador vertical `|` entre el ID, el Archivo y la Cita.
+   - No pongas nada más en esa sección.
 """
 
 # ==============================================================================
