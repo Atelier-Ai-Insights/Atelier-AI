@@ -8,25 +8,25 @@ import json
 
 # --- BLOQUE DE INSTRUCCIONES DE CITAS ---
 INSTRUCCIONES_DE_CITAS = """
-### REGLAS DE FORMATO Y CITAS (ESTRICTO)
+### REGLAS DE CITAS Y EVIDENCIA (ESTRICTO)
 
-1. **EN EL TEXTO PRINCIPAL:**
-   - Escribe de forma fluida.
-   - Cuando uses información de un documento, marca el punto EXACTO con `[NombreDelArchivo.pdf]`.
-   - **PROHIBIDO** escribir la cita textual, verbatim o fragmento dentro del párrafo. Solo usa la etiqueta entre corchetes.
-   - Para referencias visuales de video usa: `[Video: MM:SS-MM:SS]`.
-   - Para referencias visuales de imagen usa: `[Imagen]`.
+1. **EN EL TEXTO PRINCIPAL (Limpieza):**
+   - Escribe de forma fluida y analítica.
+   - Cuando uses información de un documento, inserta SOLAMENTE la referencia así: `[NombreDelArchivo.pdf]`.
+   - **PROHIBIDO** escribir la cita textual, verbatim o número de página dentro del párrafo narrativo.
+   - Para Video usa: `[Video: MM:SS-MM:SS]`.
+   - Para Imagen usa: `[Imagen]`.
 
-2. **AL FINAL DE LA RESPUESTA (SECCIÓN DE METADATA):**
-   - Debes generar un bloque final separado donde coloques la evidencia para los tooltips.
+2. **BLOQUE DE METADATA (AL FINAL):**
+   - Al final de tu respuesta, genera un bloque oculto con la evidencia textual exacta.
    - Usa EXACTAMENTE este formato con el separador `|||`:
    
-   [NombreDelArchivo.pdf] ||| Cita: "Copiar aquí el texto exacto del PDF..."
-   [NombreDelArchivo2.pdf] ||| Cita: "Otro fragmento..."
+   [NombreDelArchivo.pdf] ||| "Texto exacto tomado del documento que sustenta la afirmación..."
+   [OtroArchivo.pdf] ||| "Otro fragmento relevante..."
    
    **IMPORTANTE:**
-   - Este bloque final es SOLO para documentos (PDFs). No incluyas videos ni imágenes aquí.
-   - El separador `|||` es obligatorio para que el sistema procese el tooltip.
+   - El separador `|||` es VITAL para que el sistema procese el tooltip.
+   - Si citas un archivo en el texto, DEBE tener su entrada correspondiente en este bloque final.
 """
 
 # ==============================================================================
