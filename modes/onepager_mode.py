@@ -1,145 +1,131 @@
 import streamlit as st
+import time
 import json
-import io
-from services.supabase_db import get_monthly_usage, log_query_event
-from config import safety_settings
-from services.gemini_api import call_gemini_api 
-from reporting.ppt_generator import crear_ppt_desde_json
-from utils import get_relevant_info, extract_text_from_pdfs, clean_gemini_json
-from prompts import PROMPTS_ONEPAGER, get_onepager_final_prompt
+from datetime import datetime
+
+# --- IMPORTACIONES ACTUALIZADAS ---
+from services.gemini_api import call_gemini_api, call_gemini_stream
+from utils import get_relevant_info, process_text_with_tooltips
+from prompts import get_onepager_prompt
+from reporting.pptx_generator import create_pptx_from_structure
+from services.supabase_db import get_monthly_usage, log_query_event, log_message_feedback
 import constants as c
 
-# =====================================================
-# MODO: GENERADOR DE ONE-PAGER PPT (EDITABLE / NATIVO)
-# =====================================================
-
-def one_pager_ppt_mode(db_filtered, selected_files):
-    st.subheader("Generador de Diapositivas Estratégicas")
+def one_pager_ppt_mode(db, selected_files):
+    st.subheader("Generador de One Pagers (PPTX)")
+    st.caption("Crea diapositivas estratégicas resumidas listas para descargar.")
     
-    # 1. Verificación de Límites
-    ppt_limit = st.session_state.plan_features.get('ppt_downloads_per_month', 0)
-    is_unlimited = ppt_limit == float('inf')
+    # Validación de Plan (Mensual)
+    limit = st.session_state.plan_features.get('one_pagers_per_month', 5)
+    usage = get_monthly_usage(st.session_state.user, c.MODE_ONE_PAGER)
+    
+    # Barra de progreso de cuota
+    if limit != float('inf'):
+        progress = min(usage / limit, 1.0)
+        st.progress(progress, text=f"Uso mensual: {usage}/{int(limit)} One Pagers")
+        if usage >= limit:
+            st.error("Has alcanzado tu límite mensual de One Pagers.")
+            return
 
-    if is_unlimited:
-        limit_text = "**Tu plan actual te permite generar One-Pagers ilimitados.**"
-    elif ppt_limit > 0:
-        limit_text = f"**Tu plan actual te permite generar {int(ppt_limit)} One-Pagers al mes.**"
-    else:
-        limit_text = "**Tu plan actual no incluye la generación de One-Pagers.**"
-
-    st.markdown(f"""
-        Sintetiza los hallazgos clave en una diapositiva de PowerPoint **totalmente editable**.
-        {limit_text}
-    """)
-
-    # 2. Pantalla de Resultado (Descarga)
-    if "generated_ppt_bytes" in st.session_state.mode_state:
-        st.divider()
-        template_name = st.session_state.mode_state.get('generated_ppt_template_name', 'Estratégica')
-        
-        st.success(f"✅ ¡Tu diapositiva '{template_name}' está lista y es editable!")
-        st.info("ℹ️ Al ser un formato editable, descárgalo para ver el diseño final en PowerPoint.")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button(
-                label="Descargar .pptx",
-                data=st.session_state.mode_state["generated_ppt_bytes"],
-                file_name=f"diapositiva_{template_name.lower().replace(' ','_')}.pptx",
-                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                width='stretch',
-                type="primary"
-            )
-        with col2:
-            if st.button("Generar otra", width='stretch', type="secondary"):
-                # Limpiamos el estado
-                st.session_state.mode_state.pop("generated_ppt_bytes", None)
-                st.session_state.mode_state.pop("generated_ppt_template_name", None)
-                st.rerun()
+    # Input Usuario
+    user_topic = st.text_input("Tema del One Pager:", placeholder="Ej: Resumen de tendencias en snacks saludables...")
+    
+    if not selected_files:
+        st.info("👈 Selecciona documentos para comenzar.")
         return
 
-    # 3. Configuración (Formulario)
-    st.divider()
-    st.markdown("#### 1. Selecciona la Plantilla")
-    template_options = list(PROMPTS_ONEPAGER.keys()) 
-    selected_template_name = st.selectbox("Elige el tipo de diapositiva:", template_options)
+    if st.button("Generar PPTX", type="primary", use_container_width=True):
+        if not user_topic:
+            st.warning("Escribe un tema."); return
 
-    st.markdown("#### 2. Selecciona la Fuente de Datos")
-    col_src1, col_src2 = st.columns(2)
-    with col_src1: use_repo = st.toggle("Usar Repositorio de Estudios", value=True)
-    with col_src2: use_uploads = st.toggle("Usar Archivos PDF Cargados", value=False)
-
-    uploaded_files = None
-    if use_uploads:
-        uploaded_files = st.file_uploader("Carga tus archivos PDF:", type=["pdf"], accept_multiple_files=True, key="onepager_pdf_uploader")
-        if uploaded_files: st.caption(f"📎 {len(uploaded_files)} archivo(s) listo(s).")
-
-    st.markdown(f"#### 3. Define el Tema Central")
-    tema_central = st.text_area("¿Cuál es el enfoque principal?", height=100, placeholder=f"Ej: {selected_template_name} para la marca X...")
-    
-    st.divider()
-
-    # 4. Acción de Generar
-    if st.button(f"Generar Diapositiva '{selected_template_name}'", width='stretch', type="primary"):
+        # --- INICIO PROCESO VISUAL ---
+        status_box = st.empty()
         
-        # --- Validaciones (Guard Clauses) ---
-        current_ppt_usage = get_monthly_usage(st.session_state.user, c.MODE_ONEPAGER)
-        if not is_unlimited and current_ppt_usage >= ppt_limit:
-            st.error(f"⚠️ Has alcanzado tu límite mensual."); return
-        if not tema_central.strip():
-            st.warning("⚠️ Describe el tema central."); return
-        if not use_repo and not use_uploads:
-            st.error("⚠️ Selecciona una fuente de datos."); return
-
-        # --- Proceso ---
-        with st.status("🎨 Diseñando tu One-Pager...", expanded=True) as status:
+        with status_box.status("Diseñando diapositiva estratégica...", expanded=True) as status:
             
-            # A. Contexto
-            status.write("📚 Analizando fuentes...")
-            relevant_info = ""
-            try:
-                if use_repo:
-                    repo_text = get_relevant_info(db_filtered, tema_central, selected_files)
-                    if repo_text: relevant_info += f"--- CONTEXTO REPOSITORIO ---\n{repo_text}\n\n"
-                if use_uploads and uploaded_files:
-                    pdf_text = extract_text_from_pdfs(uploaded_files)
-                    if pdf_text: relevant_info += f"--- CONTEXTO PDFS ---\n{pdf_text}\n\n"
-            except Exception as e:
-                status.update(label="Error leyendo archivos", state="error"); st.error(str(e)); return
-
-            if not relevant_info.strip(): 
-                status.update(label="Falta de contexto", state="error"); st.error("❌ No se encontró información relevante."); return
-
-            # B. IA Estructura
-            status.write(f"🧠 Estructurando contenido para '{selected_template_name}'...")
-            final_prompt_json = get_onepager_final_prompt(relevant_info, selected_template_name, tema_central)
+            # Paso 1: Búsqueda
+            status.write("Escaneando documentos relevantes...")
+            context = get_relevant_info(db, user_topic, selected_files)
             
-            data_json = None
-            try:
-                json_generation_config = {"response_mime_type": "application/json"}
-                response_text = call_gemini_api(final_prompt_json, generation_config_override=json_generation_config)
-                
-                if not response_text: raise Exception("API vacía")
-                
-                cleaned_text = clean_gemini_json(response_text)
-                data_json = json.loads(cleaned_text)
-            except Exception as e:
-                status.update(label="Error en IA", state="error"); st.error(f"Error IA: {e}"); return
+            if not context:
+                status.update(label="Datos insuficientes", state="error")
+                return
 
-            # C. Ensamblaje PPT (Nativo Editable)
-            if data_json:
-                status.write("🛠️ Construyendo formas editables en PowerPoint (.pptx)...")
+            # Paso 2: Generación de Estructura JSON
+            status.write("Estructurando contenido visual (Título, Bullets, Insights)...")
+            prompt = get_onepager_prompt(user_topic, context)
+            
+            # Usamos call_gemini_api directo porque necesitamos JSON estricto, no stream
+            response_json_str = call_gemini_api(prompt, generation_config_override={"response_mime_type": "application/json"})
+            
+            if response_json_str:
                 try:
-                    # Llamamos al generador actualizado (sin imagen)
-                    ppt_bytes = crear_ppt_desde_json(data_json)
+                    # Paso 3: Parseo y Creación de Archivo
+                    status.write("Renderizando archivo PowerPoint...")
+                    data = json.loads(response_json_str)
                     
-                    if ppt_bytes:
-                        log_query_event(f"{selected_template_name}: {tema_central}", mode=c.MODE_ONEPAGER)
-                        st.session_state.mode_state["generated_ppt_bytes"] = ppt_bytes
-                        st.session_state.mode_state["generated_ppt_template_name"] = selected_template_name
-                        status.update(label="¡Diapositiva creada!", state="complete", expanded=False)
-                        st.rerun()
-                    else:
-                        raise Exception("Objeto PPT vacío")
+                    # Soporte para lista o dict
+                    if isinstance(data, list): data = data[0]
+                    
+                    # Generar el PPTX binario
+                    pptx_bytes = create_pptx_from_structure(data)
+                    
+                    # Guardar en estado para persistencia
+                    st.session_state.mode_state["last_onepager_pptx"] = pptx_bytes
+                    st.session_state.mode_state["last_onepager_data"] = data
+                    
+                    # Log de éxito
+                    log_query_event(f"OnePager: {user_topic}", mode=c.MODE_ONE_PAGER)
+                    
+                    status.update(label="¡One Pager Listo!", state="complete", expanded=False)
+                    time.sleep(0.7)
+                    status_box.empty() # Auto-limpieza
+
                 except Exception as e:
-                    status.update(label="Error PPT", state="error"); st.error(str(e))
+                    status.update(label="Error de formato", state="error")
+                    st.error(f"Error procesando la respuesta: {e}")
+            else:
+                status.update(label="Error de IA", state="error")
+
+    # --- RESULTADO Y DESCARGA ---
+    if "last_onepager_pptx" in st.session_state.mode_state:
+        data = st.session_state.mode_state.get("last_onepager_data", {})
+        
+        # 1. Previsualización Rápida (Texto enriquecido)
+        with st.container(border=True):
+            st.markdown(f"### {data.get('titulo', 'Sin Título')}")
+            st.caption(data.get('subtitulo', ''))
+            
+            st.markdown("**Puntos Clave:**")
+            for p in data.get('puntos_clave', []):
+                st.markdown(f"- {p}")
+            
+            if data.get('insight_principal'):
+                st.info(f"💡 **Insight:** {data.get('insight_principal')}")
+
+        # 2. Barra de Acciones (Feedback)
+        # Nota: Aquí no aplica tanto el PIN porque es un archivo, pero el feedback sí.
+        c_up, c_down, c_dl = st.columns([1, 1, 4])
+        
+        # Usamos el título como ID único para el feedback
+        key_id = str(hash(data.get('titulo', 'op')))
+        
+        with c_up:
+            if st.button("👍", key=f"op_up_{key_id}"):
+                log_message_feedback(str(data), "one_pager", "up")
+                st.toast("Feedback guardado")
+        
+        with c_down:
+            if st.button("👎", key=f"op_down_{key_id}"):
+                log_message_feedback(str(data), "one_pager", "down")
+                st.toast("Gracias por el feedback")
+                
+        with c_dl:
+            st.download_button(
+                label="Descargar .PPTX",
+                data=st.session_state.mode_state["last_onepager_pptx"],
+                file_name=f"OnePager_{user_topic.replace(' ','_')}.pptx",
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                use_container_width=True,
+                type="primary"
+            )
