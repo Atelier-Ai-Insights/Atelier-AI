@@ -1,6 +1,8 @@
 import streamlit as st
 import unicodedata
+import json
 import re
+import time
 import html
 from contextlib import contextmanager
 
@@ -14,15 +16,20 @@ except ImportError:
 # ==============================
 @st.cache_resource
 def get_stopwords():
-    return {'de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'las', 'un', 'para', 'con', 'no', 'una', 'su', 'que', 'se', 'por', 'es', 'más', 'lo', 'pero', 'me', 'mi', 'al', 'le', 'si', 'este', 'esta', 'son', 'sobre'}
+    return {
+        'de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'las', 'un', 'para', 'con', 'no', 'una', 'su', 'que', 
+        'se', 'por', 'es', 'más', 'lo', 'pero', 'me', 'mi', 'al', 'le', 'si', 'este', 'esta', 'son', 'sobre',
+        'the', 'and', 'to', 'of', 'in', 'is', 'that', 'for', 'it', 'as', 'was', 'with', 'on', 'at', 'by'
+    }
 
 @contextmanager
 def render_process_status(label="Procesando...", expanded=True):
     status = st.status(label, expanded=expanded)
-    try: yield status
-    except Exception as e: raise e
+    try:
+        yield status
+    except Exception as e:
+        raise e
 
-# --- FUNCIÓN QUE FALTABA ---
 def normalize_text(text):
     if not text: return ""
     try: 
@@ -39,10 +46,34 @@ def extract_brand(filename):
     return str(filename)
 
 def clean_text(text): return str(text) if text else ""
-def clean_gemini_json(text): return re.sub(r'^```json\s*', '', re.sub(r'^```\s*', '', text, flags=re.MULTILINE), flags=re.MULTILINE).strip()
+
+def clean_gemini_json(text): 
+    text = re.sub(r'^```json\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^```\s*', '', text, flags=re.MULTILINE)
+    return text.strip()
 
 # ==============================
-# LECTURA PDF
+# MOTOR DE BÚSQUEDA INTELIGENTE
+# ==============================
+def expand_search_query(query):
+    if not query or len(query.split()) > 10: return [query]
+    try:
+        from services.gemini_api import call_gemini_api
+        prompt = (
+            f"Actúa como un motor de búsqueda experto en investigación de mercados. "
+            f"Para el término de búsqueda: '{query}', genera 3 palabras clave alternativas, sinónimos técnicos o conceptos estrechamente relacionados. "
+            f"Devuelve SOLAMENTE las palabras separadas por coma, sin numeración ni explicaciones."
+        )
+        response = call_gemini_api(prompt, generation_config_override={"max_output_tokens": 100})
+        if response:
+            expanded = [w.strip() for w in response.split(',') if w.strip()]
+            return list(dict.fromkeys([query] + expanded))
+    except Exception as e:
+        print(f"Error expanding query: {e}")
+    return [query]
+
+# ==============================
+# LECTURA DE PDFS
 # ==============================
 def extract_text_from_pdfs(uploaded_files):
     combined_text = ""
@@ -56,108 +87,189 @@ def extract_text_from_pdfs(uploaded_files):
     return combined_text
 
 # ==============================
-# RAG CONTEXT
+# RAG: RECUPERACIÓN DE CONTEXTO
 # ==============================
 def get_relevant_info(db, question, selected_files, max_chars=150000):
     if not selected_files: return ""
     selected_set = set(selected_files)
+    
     candidate_chunks = []
+    total_len = 0
+    
     for pres in db:
         if pres.get('nombre_archivo') in selected_set:
             try:
                 doc_name = pres.get('nombre_archivo')
+                doc_title = pres.get('titulo_estudio', doc_name)
                 for i, g in enumerate(pres.get("grupos", [])):
                     txt = str(g.get('contenido_texto', ''))
                     if txt and len(txt) > 20:
+                        # Simplificamos el META para ahorrar tokens y confundir menos a la IA
                         chunk_meta = f"--- DOC: {doc_name} | SECCIÓN: {i+1} ---\n" 
-                        candidate_chunks.append(f"{chunk_meta}{txt}\n\n")
+                        full_chunk = f"{chunk_meta}{txt}\n\n"
+                        candidate_chunks.append({
+                            "text": full_chunk,
+                            "raw_content": txt.lower(),
+                            "len": len(full_chunk),
+                            "original_idx": len(candidate_chunks)
+                        })
+                        total_len += len(full_chunk)
             except: pass
-    return "".join(candidate_chunks)[:max_chars]
 
-def validate_session_integrity(): pass 
+    if total_len <= max_chars:
+        return "".join([c["text"] for c in candidate_chunks])
+
+    print(f"Content overflow ({total_len} chars). Activating Smart Search for: {question}")
+    search_terms = expand_search_query(question)
+    search_terms = [normalize_text(t) for t in search_terms]
+    
+    for chunk in candidate_chunks:
+        score = 0
+        norm_content = normalize_text(chunk["raw_content"])
+        for term in search_terms:
+            if term in norm_content:
+                weight = 3 if term == normalize_text(question) else 1
+                score += (norm_content.count(term) * weight)
+        chunk["score"] = score
+
+    scored_chunks = sorted(candidate_chunks, key=lambda x: x["score"], reverse=True)
+    
+    chunks_to_include = []
+    current_chars = 0
+    for chunk in scored_chunks:
+        if current_chars + chunk["len"] <= max_chars:
+            chunks_to_include.append(chunk)
+            current_chars += chunk["len"]
+        else:
+            if current_chars > max_chars * 0.8: break 
+    
+    chunks_to_include.sort(key=lambda x: x["original_idx"])
+    return "".join([c["text"] for c in chunks_to_include])
+
+
+def validate_session_integrity():
+    pass 
 
 # =========================================================
-# PROCESADOR DE CITAS: ESTRATEGIA DE ETIQUETAS (TAGS)
+# LÓGICA DE CITAS V8 (FIX FINAL DE FORMATO Y ESTABILIDAD)
 # =========================================================
 def process_text_with_tooltips(text):
     if not text: return ""
 
     try:
         source_map = {}
+        # Normalizar comillas
         text = text.replace('“', '"').replace('”', '"')
         
-        # 1. COSECHA DE ETIQUETAS CERRADAS [[REF:ID|FILE|QUOTE]]
-        # Esta estrategia es inmune a saltos de línea y desorden.
-        def harvest_tags(match):
+        # 1. COSECHA DE METADATA (Estándar [1] File ||| Context)
+        # Usamos una regex más robusta que no se rompa con saltos de línea extraños
+        def harvest_metadata(match):
             try:
-                ref_id = match.group(1).strip()
-                filename = match.group(2).strip()
-                content = match.group(3).strip()
+                cid = match.group(1)
+                fname = match.group(2).strip()
+                raw_context = match.group(3).strip()
+                clean_context = re.sub(r'^(?:Cita:|Contexto:|Quote:)\s*', '', raw_context, flags=re.IGNORECASE).strip('"').strip("'")
                 
-                # Limpieza interna
-                content = re.sub(r'^(?:Cita:|Quote:|Evidencia:)\s*', '', content, flags=re.IGNORECASE).strip('"')
-                
-                source_map[ref_id] = {
-                    "file": html.escape(filename),
-                    "quote": html.escape(content[:500])
+                source_map[cid] = {
+                    "file": html.escape(fname),
+                    "context": html.escape(clean_context[:300]) + "..."
                 }
             except: pass
-            return "" # LA ETIQUETA SE VUELVE INVISIBLE
+            return "" # Borrar del texto visible
 
-        # Regex: [[REF: (Digitos) | (CualquierCosa) | (CualquierCosa) ]]
-        tag_pattern = r'\[\[REF:(\d+)\|(.*?)\|(.*?)\]\]'
-        text = re.sub(tag_pattern, harvest_tags, text, flags=re.DOTALL)
+        # Patrón estándar de footer
+        pattern_metadata = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
+        text = re.sub(pattern_metadata, harvest_metadata, text, flags=re.DOTALL)
+        
+        # 2. LIMPIEZA DE "FUGAS" [DOC:...] 
+        # Esta regex atrapa el formato crudo que está saliendo en tu pantalla
+        # y lo convierte en un bonito icono de carpeta [📂] con tooltip.
+        def clean_raw_doc_leaks(match):
+            try:
+                # Capturamos todo lo que haya dentro de DOC: ... |
+                content_inside = match.group(1) 
+                
+                # Intentamos separar Nombre y Sección si existe el pipe |
+                if "|" in content_inside:
+                    parts = content_inside.split("|")
+                    fname = parts[0].replace("DOC:", "").strip()
+                    section_info = parts[1].strip()
+                else:
+                    fname = content_inside.replace("DOC:", "").strip()
+                    section_info = "Referencia general"
 
-        # 2. LIMPIEZA DE CADÁVERES
-        # Borramos encabezados que la IA pueda dejar sueltos
-        text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Referencias\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
-        text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
+                # Tooltip visual
+                return (
+                    f'&nbsp;<span class="tooltip-container">'
+                    f'<span class="citation-number" style="background-color:#f0f2f6; color:#444; border:1px solid #ccc;">📂</span>'
+                    f'<span class="tooltip-text">'
+                    f'<strong>Fuente:</strong> {html.escape(fname)}<br/>'
+                    f'<span style="font-size:0.9em; opacity:0.9;">{html.escape(section_info)}</span>'
+                    f'</span></span>'
+                )
+            except:
+                return "" # Si falla, borrar la fuga
 
-        # 3. RENDERIZADO VISUAL
-        def create_tooltip(label, title, body, color="background-color:#f0f2f6; color:#444; border:1px solid #ccc;"):
-            if not body: body = "<em>(Referencia contextual)</em>"
-            return (
-                f'&nbsp;<span class="tooltip-container">'
-                f'<span class="citation-number" style="{color} font-weight:bold; cursor:help;">{label}</span>'
-                f'<span class="tooltip-text" style="width:320px; text-align:left; z-index:999;">'
-                f'<div style="color:#FFD700; font-weight:bold; font-size:0.95em; margin-bottom:4px; border-bottom:1px solid #555; padding-bottom:2px;">📂 {title}</div>'
-                f'<div style="max-height:150px; overflow-y:auto; font-size:0.9em; line-height:1.3; color:#eee;">'
-                f'"{body}"'
-                f'</div>'
-                f'</span></span>'
-            )
+        # Regex muy permisiva para atrapar cualquier variante de [DOC: ...]
+        # Busca [DOC: seguido de cualquier cosa que no sea ] hasta encontrar ]
+        text = re.sub(r'\[(DOC:.+?)\]', clean_raw_doc_leaks, text, flags=re.IGNORECASE)
 
-        # A. Numéricas [N]
-        def replace_numeric(match):
-            cid = match.group(1)
-            if cid in source_map:
-                data = source_map[cid]
-                # Acortar nombre de archivo para el título
-                fname = data["file"]
-                if len(fname) > 35: fname = fname[:15] + "..." + fname[-15:]
-                return create_tooltip(f"[{cid}]", fname, data["quote"])
-            else:
-                return create_tooltip(f"[{cid}]", "Fuente del Documento", "")
+        # 3. LIMPIEZA GENERAL
+        # Borrar paréntesis repetitivos tipo (Contexto: ...)
+        text = re.sub(r'\(\s*(?:Contexto|Cita|Quote|Evidencia)\s*:.*?\)', '', text, flags=re.IGNORECASE | re.DOTALL)
+        # Borrar títulos de footer residuales
+        text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas| Consultadas)?\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
+        
+        # 4. RENDERIZADO DE CITAS NUMÉRICAS [1]
+        # (Solo si sobrevivieron al proceso de cosecha)
+        def replace_citation_group(match):
+            content = match.group(1)
+            ids = [x.strip() for x in re.findall(r'\d+', content)]
+            html_out = []
+            for cid in ids:
+                data = source_map.get(cid)
+                if data:
+                    tooltip = (
+                        f'<span class="tooltip-container">'
+                        f'<span class="citation-number">[{cid}]</span>'
+                        f'<span class="tooltip-text">'
+                        f'<strong>📂 {data["file"]}</strong><br/>'
+                        f'<span style="font-size:0.9em; opacity:0.9;">"{data["context"]}"</span>'
+                        f'</span></span>'
+                    )
+                    html_out.append(tooltip)
+                else:
+                    # Si hay un número [1] pero no hay metadata (porque la IA falló al final),
+                    # lo mostramos gris para que no parezca un error
+                    html_out.append(f'<span class="citation-number" style="cursor:default; border:1px solid #eee; color:#aaa;">[{cid}]</span>')
+            return f" {''.join(html_out)} "
 
-        text = re.sub(r'\[(\d+)\]', replace_numeric, text)
+        # Reemplazar [1, 2]
+        enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, text)
+        
+        # 5. FOOTER DE SEGURIDAD
+        # Si logramos extraer fuentes, las mostramos abajo
+        footer = ""
+        unique_files = sorted(list(set(v['file'] for v in source_map.values())))
+        if unique_files:
+            footer = "\n\n<div style='margin-top:20px; padding-top:10px; border-top:1px solid #eee;'>"
+            footer += "<p style='font-size:0.85em; color:#666; font-weight:bold; margin-bottom:5px;'>📚 Fuentes Consultadas:</p>"
+            footer += "<ul style='font-size:0.8em; color:#666; margin-top:0; padding-left:20px;'>"
+            for f in unique_files: footer += f"<li style='margin-bottom:2px;'>{f}</li>"
+            footer += "</ul></div>"
 
-        # B. Video
-        text = re.sub(
-            r'\[Video:\s*([0-9:-]+)\]', 
-            r'&nbsp;<span class="citation-number" style="background-color:#ffebee; color:#c62828; border:1px solid #ffcdd2; font-size:0.85em; font-weight:bold;">🎬 \1</span>', 
-            text, flags=re.IGNORECASE
-        )
-
-        # C. Imagen
-        text = re.sub(
-            r'\[Imagen\]', 
-            r'&nbsp;<span class="citation-number" style="background-color:#e0f7fa; color:#006064; border:1px solid #b2ebf2; font-size:0.85em; font-weight:bold;">🖼️ Visual</span>', 
-            text, flags=re.IGNORECASE
-        )
-
-        text = re.sub(r'\n{3,}', '\n\n', text)
-        return text
+        return enriched_body + footer
 
     except Exception as e:
+        # Si algo falla catastróficamente, devolvemos el texto original
+        # pero intentamos limpiar al menos las etiquetas [DOC] para que sea legible
         print(f"Error Tooltips: {e}")
-        return text
+        try:
+            return re.sub(r'\[DOC:.+?\]', '', text)
+        except:
+            return text
+
+def reset_report_workflow(): pass
+def reset_chat_workflow(): pass
+def reset_transcript_chat_workflow(): pass
+def reset_etnochat_chat_workflow(): pass
