@@ -1,8 +1,6 @@
 import streamlit as st
 import unicodedata
-import json
 import re
-import time
 import html
 from contextlib import contextmanager
 
@@ -78,18 +76,18 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
 def validate_session_integrity(): pass 
 
 # =========================================================
-# PROCESADOR DE CITAS V. CIRUJANO (Limpia fugas)
+# LÓGICA DE CITAS V. FINAL (CIRUGÍA DE FUGAS)
 # =========================================================
 def process_text_with_tooltips(text):
     if not text: return ""
 
     try:
         source_map = {}
-        # Normalizar comillas para que el regex funcione bien
-        text = text.replace('“', '"').replace('”', '"')
+        # Normalizar comillas y limpiar Markdown excesivo que ensucia
+        text = text.replace('“', '"').replace('”', '"').replace("`", "")
         
         # ---------------------------------------------------------
-        # FASE 1: COSECHA DEL BLOQUE FINAL (Metadata Estándar)
+        # 1. COSECHA DEL BLOQUE FINAL (Metadata Estándar)
         # ---------------------------------------------------------
         # Busca: [1] ||| Archivo ||| Cita
         def harvest_bottom_metadata(match):
@@ -102,7 +100,7 @@ def process_text_with_tooltips(text):
                 
                 source_map[ref_id] = {
                     "file": html.escape(filename),
-                    "quote": html.escape(clean_quote[:400])
+                    "quote": html.escape(clean_quote[:500])
                 }
             except: pass
             return "" # Borra este bloque del texto visible
@@ -112,57 +110,68 @@ def process_text_with_tooltips(text):
         text = re.sub(pattern_block, harvest_bottom_metadata, text, flags=re.DOTALL)
 
         # ---------------------------------------------------------
-        # FASE 2: CIRUGÍA DE FUGAS (Citas pegadas en el texto)
+        # 2. CIRUGÍA DE FUGAS (ESTO ARREGLA TUS CAPTURAS)
         # ---------------------------------------------------------
-        # Si la IA escribe: ...conclusión [1] "esto es una cita"...
-        # Detectamos [N] seguido de comillas, robamos el texto y borramos las comillas.
-        def harvest_leak(match):
+        # Detecta cuando la IA escribe: ...texto [1] "Esto es una cita que se fugó"...
+        # O también: ...texto [1] (Contexto: Esto es otra fuga)...
+        
+        def harvest_inline_leaks(match):
             ref_id = match.group(1)
-            leaked_quote = match.group(2).strip()
+            leaked_content = match.group(2).strip()
             
-            # Si no teníamos datos para este ID, o si el dato nuevo parece mejor, lo guardamos
+            # Inicializar si no existe
             if ref_id not in source_map:
                 source_map[ref_id] = {"file": "Fuente del documento", "quote": ""}
             
-            # Agregamos la cita fugada al tooltip
-            separator = "<br/>" if source_map[ref_id]["quote"] else ""
-            source_map[ref_id]["quote"] += f"{separator}{html.escape(leaked_quote[:300])}..."
+            # Agregar la fuga al tooltip
+            clean_leak = leaked_content.strip('"').strip("'").strip('()')
+            if clean_leak:
+                separator = "<br/><br/>" if source_map[ref_id]["quote"] else ""
+                source_map[ref_id]["quote"] += f"{separator}<em>Recuperado del texto:</em><br/>\"{html.escape(clean_leak[:300])}...\""
             
-            # Retornamos SOLO el número [1], borrando la cita del texto visible
+            # Retornamos SOLO el número, ELIMINANDO el texto fugado de la pantalla
             return f"[{ref_id}]"
 
-        # Regex: [N] seguido opcionalmente de : o espacio, y luego "texto"
-        pattern_leak = r'\[(\d+)\]\s*:?\s*\"([^\"]+?)\"'
-        text = re.sub(pattern_leak, harvest_leak, text)
+        # Regex A: Busca [N] seguido de comillas "..." (con o sin saltos de línea)
+        pattern_leak_quotes = r'\[(\d+)\]\s*[\n\r]*\s*\"([^\"]+?)\"'
+        text = re.sub(pattern_leak_quotes, harvest_inline_leaks, text, flags=re.DOTALL)
+
+        # Regex B: Busca [N] seguido de paréntesis (...) (común en tus capturas)
+        pattern_leak_parens = r'\[(\d+)\]\s*[\n\r]*\s*\(([^\)]+?)\)'
+        text = re.sub(pattern_leak_parens, harvest_inline_leaks, text, flags=re.DOTALL)
+
+        # Regex C: Busca [N] seguido de texto itálico *...* (común en Markdown)
+        pattern_leak_italics = r'\[(\d+)\]\s*[\n\r]*\s*\*([^\*]+?)\*'
+        text = re.sub(pattern_leak_italics, harvest_inline_leaks, text, flags=re.DOTALL)
+
 
         # ---------------------------------------------------------
-        # FASE 3: RENDERIZADO (Reemplazo Final)
+        # 3. RENDERIZADO FINAL
         # ---------------------------------------------------------
         
-        # Helper HTML Tooltip
-        def create_tooltip(label_text, tooltip_title, tooltip_body, color_style="background-color:#f0f2f6; color:#444; border:1px solid #ccc;"):
-            if not tooltip_body: tooltip_body = "<em>(Referencia contextual)</em>"
+        def create_tooltip(label, title, body, color="background-color:#f0f2f6; color:#444; border:1px solid #ccc;"):
+            if not body: body = "<em>(Referencia en el documento)</em>"
+            # CSS inline para asegurar que se vea bien en fondo oscuro/claro
             return (
                 f'&nbsp;<span class="tooltip-container">'
-                f'<span class="citation-number" style="{color_style} font-weight:bold; cursor:help;">{label_text}</span>'
-                f'<span class="tooltip-text" style="width:350px;">'
-                f'<strong style="color:#ffd700;">📂 {tooltip_title}</strong><br/>'
-                f'<div style="margin-top:6px; padding-top:6px; border-top:1px solid #555; font-size:0.9em; line-height:1.3; color:#eee;">'
-                f'<em>"{tooltip_body}"</em>'
+                f'<span class="citation-number" style="{color} font-weight:bold; cursor:help;">{label}</span>'
+                f'<span class="tooltip-text" style="width:320px; text-align:left;">'
+                f'<div style="color:#FFD700; font-weight:bold; margin-bottom:4px;">📂 {title}</div>'
+                f'<div style="max-height:150px; overflow-y:auto; padding-right:5px; font-size:0.9em; line-height:1.3; color:#f0f0f0;">'
+                f'{body}'
                 f'</div>'
                 f'</span></span>'
             )
 
-        # A. Citas Numéricas [N]
+        # A. Numéricas [N]
         def replace_numeric(match):
             cid = match.group(1)
             if cid in source_map:
                 data = source_map[cid]
-                # Si el archivo termina en pdf, mostramos el nombre corto, si no "Fuente"
-                display_file = data["file"] if len(data["file"]) < 40 else data["file"][:35]+"..."
+                display_file = data["file"] if len(data["file"]) < 30 else data["file"][:27]+"..."
                 return create_tooltip(f"[{cid}]", display_file, data["quote"])
             else:
-                return create_tooltip(f"[{cid}]", "Fuente Repositorio", "") # Fallback vacío pero visualmente correcto
+                return create_tooltip(f"[{cid}]", "Fuente", "")
 
         text = re.sub(r'\[(\d+)\]', replace_numeric, text)
 
