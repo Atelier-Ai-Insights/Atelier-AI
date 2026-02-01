@@ -32,20 +32,20 @@ def video_evaluation_mode(db, selected_files):
     st.markdown("---")
     
     # ==========================================
-    # 2. RESULTADOS (Con Tooltips y Badges)
+    # 2. MOSTRAR RESULTADOS
     # ==========================================
     if "video_evaluation_result" in st.session_state.mode_state:
         raw_text = st.session_state.mode_state["video_evaluation_result"]
         
         st.markdown("### Resultados Evaluación:")
         
-        # --- PROCESAMIENTO VISUAL (Tooltips) ---
+        # --- A. Renderizado Inteligente ---
         clean_text = raw_text.replace("```markdown", "").replace("```", "")
-        # Esta función ahora maneja [Video:...] y [Archivo.pdf...]
+        # Esta llamada usa el nuevo utils.py que "absorbe" el footer y lo mete en el tooltip
         html_content = process_text_with_tooltips(clean_text)
         st.markdown(html_content, unsafe_allow_html=True)
         
-        # --- BARRA DE ACCIONES ---
+        # --- B. Barra de Acciones ---
         st.write("") 
         col_up, col_down, col_spacer, col_pin = st.columns([1, 1, 10, 1])
         key_suffix = str(hash(raw_text))[:10]
@@ -69,7 +69,7 @@ def video_evaluation_mode(db, selected_files):
 
         st.divider()
         
-        # --- DESCARGAS ---
+        # --- C. Descargas ---
         col1, col2, col3 = st.columns(3)
         with col1:
             pdf_bytes = generate_pdf_html(clean_text, title="Evaluacion Video", banner_path=banner_file)
@@ -82,7 +82,7 @@ def video_evaluation_mode(db, selected_files):
                 st.session_state.mode_state.pop("video_evaluation_result", None); st.rerun()
 
     # ==========================================
-    # 3. GENERACIÓN
+    # 3. PROCESAMIENTO
     # ==========================================
     elif st.button("Evaluar Video", width='stretch', disabled=(uploaded_file is None)):
         if not video_bytes or not target_audience.strip() or not comm_objectives.strip(): 
