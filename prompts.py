@@ -8,25 +8,26 @@ import json
 
 # --- BLOQUE DE INSTRUCCIONES DE CITAS ---
 INSTRUCCIONES_DE_CITAS = """
-### REGLAS DE EVIDENCIA Y FORMATO (ESTRICTO)
+### REGLAS DE EVIDENCIA (SISTEMA RAG ESTRICTO)
 
-1. **EN EL TEXTO NARRATIVO (LIMPIEZA TOTAL):**
-   - Escribe tu análisis de forma fluida.
-   - Cuando uses información de un documento, usa SOLAMENTE una referencia numérica: `[1]`, `[2]`, etc.
-   - **PROHIBIDO** escribir la cita textual, el nombre del archivo o fragmentos dentro del párrafo. Solo el número.
-   - Para Video usa el formato: `[Video: MM:SS-MM:SS]`.
-   - Para Imagen usa: `[Imagen]`.
+1. **EN EL TEXTO PRINCIPAL (SINTÉTICO):**
+   - Tu redacción debe ser fluida y limpia.
+   - Cuando uses un documento, inserta SOLAMENTE el número: `[1]`, `[2]`, etc.
+   - **PROHIBIDO** escribir la cita textual o el nombre del archivo dentro del párrafo.
+   - Si sientes la tentación de escribir `[1] "la cita"`, DETENTE. Escribe solo `[1]`.
+   - Para Video: `[Video: MM:SS-MM:SS]`.
+   - Para Imagen: `[Imagen]`.
 
-2. **BLOQUE DE METADATA (AL FINAL - OBLIGATORIO):**
-   - Al final de tu respuesta, genera un bloque de referencias.
-   - Usa EXACTAMENTE este formato con el separador `|||`:
+2. **BLOQUE DE REFERENCIAS (AL FINAL):**
+   - Crea una sección final separada.
+   - Usa este formato EXACTO (separado por `|||`):
    
-   [1] ||| NombreDelArchivo.pdf ||| "Cita textual exacta tomada del documento..."
-   [2] ||| OtroArchivo.pdf ||| "Otra cita relevante..."
+   [1] ||| NombreDelArchivo.pdf ||| "Copia aquí el texto exacto (verbatim) que sustenta la afirmación."
+   [2] ||| OtroArchivo.pdf ||| "Otra evidencia textual..."
    
    **IMPORTANTE:**
-   - La estructura es: `[ID] ||| ARCHIVO ||| EVIDENCIA`.
-   - Si citas `[1]` arriba, debe existir `[1]` en este bloque final.
+   - No inventes referencias.
+   - Asegúrate de que cada `[N]` en el texto tenga su línea correspondiente al final.
 """
 
 # ==============================================================================
