@@ -12,7 +12,7 @@ except ImportError:
     fitz = None
 
 # ==============================
-# CONFIGURACIÓN BÁSICA
+# CONFIGURACIÓN
 # ==============================
 @st.cache_resource
 def get_stopwords():
@@ -43,7 +43,7 @@ def clean_text(text): return str(text) if text else ""
 def clean_gemini_json(text): return re.sub(r'^```json\s*', '', re.sub(r'^```\s*', '', text, flags=re.MULTILINE), flags=re.MULTILINE).strip()
 
 # ==============================
-# LECTURA DE PDFS
+# LECTURA PDF
 # ==============================
 def extract_text_from_pdfs(uploaded_files):
     combined_text = ""
@@ -57,13 +57,12 @@ def extract_text_from_pdfs(uploaded_files):
     return combined_text
 
 # ==============================
-# RAG: RECUPERACIÓN DE CONTEXTO
+# RAG CONTEXT
 # ==============================
 def get_relevant_info(db, question, selected_files, max_chars=150000):
     if not selected_files: return ""
     selected_set = set(selected_files)
     candidate_chunks = []
-    
     for pres in db:
         if pres.get('nombre_archivo') in selected_set:
             try:
@@ -79,55 +78,98 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
 def validate_session_integrity(): pass 
 
 # =========================================================
-# LÓGICA INTEGRAL DE TOOLTIPS (V. FINAL)
+# LÓGICA INTEGRAL DE TOOLTIPS (V. DEFINITIVA)
 # =========================================================
 def process_text_with_tooltips(text):
     if not text: return ""
 
     try:
         source_map = {}
+        # Normalizar comillas para evitar errores de regex
         text = text.replace('“', '"').replace('”', '"')
         
         # ---------------------------------------------------------
-        # 1. COSECHA DE METADATA (Invisible para el usuario)
+        # 1. COSECHA DE METADATA (Invisible)
         # ---------------------------------------------------------
-        # Detecta: [ID] ||| Texto...
-        # Esta función "come" el texto del final para que no se vea feo.
+        # Esta regex busca patrones [ID] ||| TEXTO al final del prompt.
+        # Captura cualquier cosa que empiece con "Cita:", "SECCIÓN:", etc.
         def harvest_metadata(match):
             try:
-                ref_key = match.group(1).strip() # Puede ser '1' o 'Archivo.pdf'
+                ref_key = match.group(1).strip() # El ID o NombreArchivo
                 raw_content = match.group(2).strip()
 
-                # Limpiamos prefijos comunes que pone la IA
-                clean_content = re.sub(r'^(?:Cita:|Contexto:|Quote:|Evidencia:|SECCIÓN:\s*\d+:?)\s*', '', raw_content, flags=re.IGNORECASE).strip('"').strip("'")
+                # Limpieza del prefijo (ej: "SECCIÓN 2:", "Cita:")
+                clean_content = re.sub(r'^(?:Cita:|Contexto:|Quote:|Evidencia:|SECCIÓN:?\s*\d*:?)\s*', '', raw_content, flags=re.IGNORECASE).strip('"').strip("'")
                 
-                # Inicializamos
                 if ref_key not in source_map:
                     source_map[ref_key] = {"file": html.escape(ref_key), "context": ""}
                 
-                # Acumulamos evidencia (concatena si hay varias citas del mismo doc)
+                # Si hay múltiples citas para el mismo archivo, las separamos con una línea
                 separator = "<br/><hr style='margin:4px 0; border-top:1px dashed #ccc;'/>" if source_map[ref_key]["context"] else ""
                 source_map[ref_key]["context"] += f"{separator}<em>\"{html.escape(clean_content[:300])}...\"</em>"
                 
             except: pass
-            return "" # BORRA el bloque del texto final
+            return "" # <--- ESTO BORRA EL TEXTO VISIBLE DE LA PANTALLA
 
-        # Regex Universal: Busca [Corchetes] seguido de ||| y texto, hasta el siguiente [Corchete]
+        # Regex robusta: Busca [Algo] ... ||| ... hasta el siguiente corchete o fin de texto
         pattern_metadata = r'\[([^\]]+?)\]\s*\|\|\|\s*(.+?)(?=\s*\[[^\]]+?\]\s*\|\|\||$)'
         text = re.sub(pattern_metadata, harvest_metadata, text, flags=re.DOTALL)
 
         # ---------------------------------------------------------
-        # 2. RENDERIZADO DE BADGES (Video e Imagen)
+        # 2. RENDERIZADO (Reemplazo en el texto)
         # ---------------------------------------------------------
         
-        # Video: [Video: 0:00-0:15] -> 🎬 0:00-0:15
+        # Helper para crear el HTML del tooltip
+        def create_tooltip_html(icon, label, content, color_style="background-color:#f0f2f6; color:#444; border:1px solid #ddd;"):
+            # Si no hay contenido (verbatim), ponemos un placeholder
+            if not content: content = "<span style='color:#999; font-style:italic;'>(Ver documento completo)</span>"
+            
+            return (
+                f'&nbsp;<span class="tooltip-container">'
+                f'<span class="citation-number" style="{color_style} cursor:help;">{icon}</span>'
+                f'<span class="tooltip-text" style="width:320px;">'
+                f'<strong>Fuente:</strong> {html.escape(label)}<br/>'
+                f'<div style="margin-top:5px; padding-top:4px; border-top:1px solid #eee; font-size:0.9em; color:#333;">{content}</div>'
+                f'</span></span>'
+            )
+
+        # A. REFERENCIAS DIRECTAS (Video/Docs): [Archivo.pdf] o [Archivo.pdf, SECCIÓN...]
+        def replace_direct_ref(match):
+            fname = match.group(1).strip()
+            
+            # Buscamos el verbatim en lo que cosechamos
+            ctx = source_map.get(fname, {}).get("context", "")
+            # Búsqueda laxa (por si el nombre varía ligeramente)
+            if not ctx:
+                for k, v in source_map.items():
+                    if fname in k or k in fname:
+                        ctx = v["context"]; break
+            
+            return create_tooltip_html("📂", fname, ctx)
+
+        text = re.sub(r'\[([^\]]+\.pdf)(?:,\s*SECCIÓN:\s*[^\]]+)?\]', replace_direct_ref, text, flags=re.IGNORECASE)
+
+        # B. REFERENCIAS NUMÉRICAS: [1]
+        def replace_numeric_ref(match):
+            cid = match.group(1)
+            if cid in source_map:
+                data = source_map[cid]
+                # Si es PDF, icono carpeta. Si no, número.
+                is_pdf = ".pdf" in data["file"].lower()
+                icon = "📂" if is_pdf else f"[{cid}]"
+                return create_tooltip_html(icon, data["file"], data["context"])
+            return f'<span class="citation-number" style="color:#aaa;">[{cid}]</span>'
+
+        text = re.sub(r'\[(\d+)\]', replace_numeric_ref, text)
+
+        # C. VIDEO: [Video: 0:00-0:10]
         text = re.sub(
             r'\[Video:\s*([0-9:-]+)\]', 
             r'&nbsp;<span class="citation-number" style="background-color:#ffebee; color:#c62828; border:1px solid #ffcdd2; font-size:0.85em;">🎬 \1</span>', 
             text, flags=re.IGNORECASE
         )
-        
-        # Imagen: [Imagen] -> 🖼️ Ref. Visual
+
+        # D. IMAGEN: [Imagen]
         text = re.sub(
             r'\[Imagen\]', 
             r'&nbsp;<span class="citation-number" style="background-color:#e0f7fa; color:#006064; border:1px solid #b2ebf2; font-size:0.85em;">🖼️ Ref. Visual</span>', 
@@ -135,60 +177,12 @@ def process_text_with_tooltips(text):
         )
 
         # ---------------------------------------------------------
-        # 3. RENDERIZADO DE CITAS DE REPOSITORIO (El Tooltip)
+        # 3. LIMPIEZA FINAL (Eliminar basura residual)
         # ---------------------------------------------------------
+        # Borra encabezados de "Fuentes" que hayan quedado huérfanos
+        text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas| Consultadas| Bibliografía)?\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
         
-        # Helper para construir el HTML del Tooltip
-        def build_tooltip_html(display_icon, filename, context_text, extra_label=""):
-            # Si no hay contexto capturado, mensaje genérico
-            if not context_text: context_text = "(Ver documento original para detalles)"
-            
-            return (
-                f'&nbsp;<span class="tooltip-container">'
-                f'<span class="citation-number" style="background-color:#f0f2f6; color:#444; border:1px solid #ddd; cursor:help;">{display_icon}</span>'
-                f'<span class="tooltip-text" style="width:320px;">'
-                f'<strong>Fuente:</strong> {html.escape(filename)}<br/>'
-                f'{extra_label}'
-                f'<div style="margin-top:5px; padding-top:4px; border-top:1px solid #eee; font-size:0.9em; color:#333;">{context_text}</div>'
-                f'</span></span>'
-            )
-
-        # CASO A: Citas tipo Video/Directas -> [Archivo.pdf, SECCIÓN: 5]
-        def replace_direct_ref(match):
-            fname = match.group(1).strip()
-            section = match.group(2).strip() if match.group(2) else ""
-            
-            # Buscar contexto en lo que cosechamos
-            ctx = source_map.get(fname, {}).get("context", "")
-            # Si no está exacto, buscar parcial
-            if not ctx:
-                for k, v in source_map.items():
-                    if fname in k or k in fname:
-                        ctx = v["context"]; break
-            
-            extra = f"<span style='font-size:0.8em; opacity:0.8;'>Sección: {section}</span>" if section else ""
-            return build_tooltip_html("📂", fname, ctx, extra)
-
-        text = re.sub(r'\[([^\]]+\.pdf)(?:,\s*SECCIÓN:\s*([^\]]+))?\]', replace_direct_ref, text, flags=re.IGNORECASE)
-
-        # CASO B: Citas Numéricas -> [1]
-        def replace_numeric_ref(match):
-            cid = match.group(1)
-            if cid in source_map:
-                data = source_map[cid]
-                # Si el archivo termina en .pdf, usamos icono carpeta, si no, número
-                is_pdf = ".pdf" in data["file"].lower()
-                icon = "📂" if is_pdf else f"[{cid}]"
-                return build_tooltip_html(icon, data["file"], data["context"])
-            else:
-                return f'<span class="citation-number" style="color:#aaa;">[{cid}]</span>'
-
-        text = re.sub(r'\[(\d+)\]', replace_numeric_ref, text)
-
-        # ---------------------------------------------------------
-        # 4. LIMPIEZA FINAL
-        # ---------------------------------------------------------
-        text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas| Consultadas)?\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
+        # Eliminar líneas horizontales residuales o saltos excesivos
         text = re.sub(r'\n{3,}', '\n\n', text)
         
         return text
