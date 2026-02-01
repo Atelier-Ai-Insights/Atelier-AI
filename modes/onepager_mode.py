@@ -3,11 +3,12 @@ import time
 import json
 from datetime import datetime
 
-# --- IMPORTACIONES ACTUALIZADAS ---
-from services.gemini_api import call_gemini_api, call_gemini_stream
-from utils import get_relevant_info, process_text_with_tooltips
-# Asegúrate de que prompts.py ya tenga la función get_onepager_prompt (paso anterior)
+# --- IMPORTACIONES ---
+from services.gemini_api import call_gemini_api
+from utils import get_relevant_info
+# Importamos los prompts actualizados
 from prompts import get_onepager_prompt
+# Importamos EL NUEVO GENERADOR que creamos en el Paso 2
 from reporting.pptx_generator import create_pptx_from_structure
 from services.supabase_db import get_monthly_usage, log_query_event, log_message_feedback
 import constants as c
@@ -20,7 +21,7 @@ def one_pager_ppt_mode(db, selected_files):
     limit = st.session_state.plan_features.get('one_pagers_per_month', 5)
     usage = get_monthly_usage(st.session_state.user, c.MODE_ONE_PAGER)
     
-    # Barra de progreso de cuota
+    # Barra de progreso
     if limit != float('inf'):
         progress = min(usage / limit, 1.0)
         st.progress(progress, text=f"Uso mensual: {usage}/{int(limit)} One Pagers")
@@ -35,6 +36,7 @@ def one_pager_ppt_mode(db, selected_files):
         st.info("👈 Selecciona documentos para comenzar.")
         return
 
+    # Botón principal (Corregido width="stretch")
     if st.button("Generar PPTX", type="primary", width="stretch"):
         if not user_topic:
             st.warning("Escribe un tema."); return
@@ -44,7 +46,7 @@ def one_pager_ppt_mode(db, selected_files):
         
         with status_box.status("Diseñando diapositiva estratégica...", expanded=True) as status:
             
-            # Paso 1: Búsqueda
+            # 1. Búsqueda RAG
             status.write("Escaneando documentos relevantes...")
             context = get_relevant_info(db, user_topic, selected_files)
             
@@ -52,38 +54,39 @@ def one_pager_ppt_mode(db, selected_files):
                 status.update(label="Datos insuficientes", state="error")
                 return
 
-            # Paso 2: Generación de Estructura JSON
-            status.write("Estructurando contenido visual (Título, Bullets, Insights)...")
+            # 2. Estructura JSON con IA
+            status.write("Estructurando contenido visual...")
             prompt = get_onepager_prompt(user_topic, context)
             
-            # Usamos call_gemini_api directo porque necesitamos JSON estricto
+            # Llamada a Gemini (sin stream para asegurar JSON válido)
             response_json_str = call_gemini_api(prompt, generation_config_override={"response_mime_type": "application/json"})
             
             if response_json_str:
                 try:
-                    # Paso 3: Parseo y Creación de Archivo
+                    # 3. Parseo y Generación PPTX
                     status.write("Renderizando archivo PowerPoint...")
                     data = json.loads(response_json_str)
                     
                     if isinstance(data, list): data = data[0]
                     
-                    # Generar el PPTX binario
+                    # AQUÍ USAMOS LA FUNCIÓN DEL PASO 2
                     pptx_bytes = create_pptx_from_structure(data)
                     
                     # Guardar en estado
                     st.session_state.mode_state["last_onepager_pptx"] = pptx_bytes
                     st.session_state.mode_state["last_onepager_data"] = data
                     
-                    # Log de éxito
-                    log_query_event(f"OnePager: {user_topic}", mode=c.MODE_ONE_PAGER)
+                    # Log
+                    try: log_query_event(f"OnePager: {user_topic}", mode=c.MODE_ONE_PAGER)
+                    except: pass
                     
                     status.update(label="¡One Pager Listo!", state="complete", expanded=False)
                     time.sleep(0.7)
-                    status_box.empty() # Auto-limpieza
+                    status_box.empty() # Limpieza automática
 
                 except Exception as e:
                     status.update(label="Error de formato", state="error")
-                    st.error(f"Error procesando la respuesta: {e}")
+                    st.error(f"Error procesando: {e}")
             else:
                 status.update(label="Error de IA", state="error")
 
@@ -91,17 +94,17 @@ def one_pager_ppt_mode(db, selected_files):
     if "last_onepager_pptx" in st.session_state.mode_state:
         data = st.session_state.mode_state.get("last_onepager_data", {})
         
+        # Previsualización simple en pantalla
         with st.container(border=True):
             st.markdown(f"### {data.get('titulo', 'Sin Título')}")
             st.caption(data.get('subtitulo', ''))
-            
             st.markdown("**Puntos Clave:**")
             for p in data.get('puntos_clave', []):
                 st.markdown(f"- {p}")
-            
             if data.get('insight_principal'):
                 st.info(f"💡 **Insight:** {data.get('insight_principal')}")
 
+        # Barra de Acciones
         c_up, c_down, c_dl = st.columns([1, 1, 4])
         key_id = str(hash(data.get('titulo', 'op')))
         
@@ -116,7 +119,7 @@ def one_pager_ppt_mode(db, selected_files):
                 st.toast("Gracias por el feedback")
                 
         with c_dl:
-            # --- CAMBIO AQUI: width="stretch" ---
+            # Botón de Descarga (Corregido width="stretch")
             st.download_button(
                 label="Descargar .PPTX",
                 data=st.session_state.mode_state["last_onepager_pptx"],
