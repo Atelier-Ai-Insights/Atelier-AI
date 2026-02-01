@@ -73,7 +73,7 @@ def grounded_chat_mode(db, selected_files):
                 prompt = get_grounded_chat_prompt(hist_str, relevant_info)
                 
                 # Paso 4: Generación
-                status.write("✨ Redactando respuesta con citas...")
+                status.write("Redactando respuesta con citas...")
                 stream = call_gemini_stream(prompt)
                 
                 if stream:
