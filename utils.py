@@ -78,116 +78,77 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
 def validate_session_integrity(): pass 
 
 # =========================================================
-# LÓGICA DE CITAS V.ROBUSTA (Multi-Pass Parsing)
+# PROCESADOR DE CITAS V. CIRUJANO (Limpia fugas)
 # =========================================================
 def process_text_with_tooltips(text):
     if not text: return ""
 
     try:
         source_map = {}
-        # Normalizar comillas
+        # Normalizar comillas para que el regex funcione bien
         text = text.replace('“', '"').replace('”', '"')
         
         # ---------------------------------------------------------
-        # 1. EXTRACCIÓN Y LIMPIEZA DEL BLOQUE FINAL
+        # FASE 1: COSECHA DEL BLOQUE FINAL (Metadata Estándar)
         # ---------------------------------------------------------
-        # Estrategia: Buscar donde empieza la lista de referencias y procesarla aparte.
-        # Esto evita problemas con regex gigantes que fallan con saltos de línea.
-        
-        # Patrones que indican inicio del bloque de metadatos
-        split_patterns = [
-            r'\[1\]\s*\|\|\|',  # Formato estándar
-            r'\n\s*Referencias:\s*\n', 
-            r'\n\s*Fuentes:\s*\n',
-            r'\n\s*BLOQUE DE METADATA'
-        ]
-        
-        metadata_text = ""
-        main_text = text
-        
-        for pattern in split_patterns:
-            split_match = re.search(pattern, text, re.IGNORECASE)
-            if split_match:
-                # Separamos el texto principal de la metadata
-                idx = split_match.start()
-                # Si el match es [1] |||, queremos incluirlo en la metadata, no cortarlo antes
-                if "|||" in pattern:
-                     metadata_text = text[idx:]
-                     main_text = text[:idx]
-                else:
-                     metadata_text = text[split_match.end():]
-                     main_text = text[:idx]
-                break
-        
-        # Si no encontramos separador claro, intentamos buscar línea por línea al final
-        if not metadata_text:
-            # Fallback: Regex línea por línea para capturar definiciones dispersas
-            pass 
-
-        # ---------------------------------------------------------
-        # 2. PARSEO DE LA METADATA (Línea por línea es más seguro)
-        # ---------------------------------------------------------
-        # Procesamos metadata_text para llenar source_map
-        # Formatos soportados:
-        # A. [1] ||| Archivo ||| Cita
-        # B. [1] ||| Cita (Archivo inferido)
-        # C. [1] Archivo: Cita
-        
-        # Limpiamos el texto principal de residuos si quedaron
-        if metadata_text:
-            text = main_text # Actualizamos el texto visible
-            
-            # Normalizamos saltos de línea para iterar
-            lines = metadata_text.split('\n')
-            current_id = None
-            
-            for line in lines:
-                line = line.strip()
-                if not line: continue
+        # Busca: [1] ||| Archivo ||| Cita
+        def harvest_bottom_metadata(match):
+            try:
+                ref_id = match.group(1).strip()
+                filename = match.group(2).strip()
+                raw_quote = match.group(3).strip()
                 
-                # Detectar ID [N]
-                id_match = re.match(r'^\[(\d+)\]', line)
-                if id_match:
-                    current_id = id_match.group(1)
-                    content = line[id_match.end():].strip()
-                    
-                    # Intentar separar por |||
-                    parts = content.split('|||')
-                    parts = [p.strip() for p in parts if p.strip()]
-                    
-                    filename = "Fuente del Repositorio"
-                    quote = ""
-                    
-                    if len(parts) >= 2:
-                        filename = parts[0]
-                        quote = parts[1]
-                    elif len(parts) == 1:
-                        # Heurística: Si termina en pdf es archivo, si no es cita
-                        if '.pdf' in parts[0].lower(): filename = parts[0]
-                        else: quote = parts[0]
-                    
-                    # Limpieza final de la cita
-                    quote = re.sub(r'^(?:Cita:|Contexto:|Quote:|Evidencia:)\s*', '', quote, flags=re.IGNORECASE).strip('"')
-                    
-                    source_map[current_id] = {
-                        "file": html.escape(filename),
-                        "quote": html.escape(quote[:400]) + "..."
-                    }
+                clean_quote = re.sub(r'^(?:Cita:|Contexto:|Quote:|Evidencia:|SECCIÓN:?\s*\d*:?)\s*', '', raw_quote, flags=re.IGNORECASE).strip('"').strip("'")
+                
+                source_map[ref_id] = {
+                    "file": html.escape(filename),
+                    "quote": html.escape(clean_quote[:400])
+                }
+            except: pass
+            return "" # Borra este bloque del texto visible
+
+        # Regex para el bloque final: [N] ||| ... ||| ...
+        pattern_block = r'\[(\d+)\]\s*\|\|\|\s*(.*?)\s*\|\|\|\s*(.+?)(?=\s*\[\d+\]\s*\|\|\||$)'
+        text = re.sub(pattern_block, harvest_bottom_metadata, text, flags=re.DOTALL)
 
         # ---------------------------------------------------------
-        # 3. RENDERIZADO EN EL TEXTO
+        # FASE 2: CIRUGÍA DE FUGAS (Citas pegadas en el texto)
         # ---------------------------------------------------------
+        # Si la IA escribe: ...conclusión [1] "esto es una cita"...
+        # Detectamos [N] seguido de comillas, robamos el texto y borramos las comillas.
+        def harvest_leak(match):
+            ref_id = match.group(1)
+            leaked_quote = match.group(2).strip()
+            
+            # Si no teníamos datos para este ID, o si el dato nuevo parece mejor, lo guardamos
+            if ref_id not in source_map:
+                source_map[ref_id] = {"file": "Fuente del documento", "quote": ""}
+            
+            # Agregamos la cita fugada al tooltip
+            separator = "<br/>" if source_map[ref_id]["quote"] else ""
+            source_map[ref_id]["quote"] += f"{separator}{html.escape(leaked_quote[:300])}..."
+            
+            # Retornamos SOLO el número [1], borrando la cita del texto visible
+            return f"[{ref_id}]"
 
+        # Regex: [N] seguido opcionalmente de : o espacio, y luego "texto"
+        pattern_leak = r'\[(\d+)\]\s*:?\s*\"([^\"]+?)\"'
+        text = re.sub(pattern_leak, harvest_leak, text)
+
+        # ---------------------------------------------------------
+        # FASE 3: RENDERIZADO (Reemplazo Final)
+        # ---------------------------------------------------------
+        
         # Helper HTML Tooltip
         def create_tooltip(label_text, tooltip_title, tooltip_body, color_style="background-color:#f0f2f6; color:#444; border:1px solid #ccc;"):
-            if not tooltip_body: tooltip_body = "<em>(Detalle no disponible)</em>"
+            if not tooltip_body: tooltip_body = "<em>(Referencia contextual)</em>"
             return (
                 f'&nbsp;<span class="tooltip-container">'
                 f'<span class="citation-number" style="{color_style} font-weight:bold; cursor:help;">{label_text}</span>'
                 f'<span class="tooltip-text" style="width:350px;">'
                 f'<strong style="color:#ffd700;">📂 {tooltip_title}</strong><br/>'
                 f'<div style="margin-top:6px; padding-top:6px; border-top:1px solid #555; font-size:0.9em; line-height:1.3; color:#eee;">'
-                f'{tooltip_body}'
+                f'<em>"{tooltip_body}"</em>'
                 f'</div>'
                 f'</span></span>'
             )
@@ -197,11 +158,11 @@ def process_text_with_tooltips(text):
             cid = match.group(1)
             if cid in source_map:
                 data = source_map[cid]
-                return create_tooltip(f"[{cid}]", data["file"], data["quote"])
+                # Si el archivo termina en pdf, mostramos el nombre corto, si no "Fuente"
+                display_file = data["file"] if len(data["file"]) < 40 else data["file"][:35]+"..."
+                return create_tooltip(f"[{cid}]", display_file, data["quote"])
             else:
-                # FALLBACK INTELIGENTE: Si no está en el mapa, mostramos un tooltip genérico
-                # en lugar de un texto plano roto.
-                return create_tooltip(f"[{cid}]?", "Referencia faltante", "La IA citó este documento pero no proveyó el detalle técnico al final.")
+                return create_tooltip(f"[{cid}]", "Fuente Repositorio", "") # Fallback vacío pero visualmente correcto
 
         text = re.sub(r'\[(\d+)\]', replace_numeric, text)
 
@@ -219,7 +180,7 @@ def process_text_with_tooltips(text):
             text, flags=re.IGNORECASE
         )
 
-        # D. Limpieza final de basura visual
+        # D. Limpieza final de basura
         text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas| Consultadas| Bibliografía)?\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
         text = re.sub(r'\n{3,}', '\n\n', text)
         
