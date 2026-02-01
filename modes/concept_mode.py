@@ -122,11 +122,11 @@ def concept_generation_mode(db, selected_files):
                             file_name="Conceptos_Generados.pdf", 
                             mime="application/pdf", 
                             type="secondary",
-                            use_container_width=True
+                            width="stretch"
                         )
                 except Exception: pass
         
         with col2:
-            if st.button("Nueva Sesión", type="secondary", use_container_width=True):
+            if st.button("Nueva Sesión", type="secondary", width="stretch"):
                 st.session_state.mode_state["concept_history"] = []
                 st.rerun()
