@@ -273,3 +273,4 @@ def _draw_footer_insight(slide, text):
     # Hack para centrar verticalmente en python-pptx básico
     # (El ajuste fino de márgenes ayuda)
     tf.margin_top = Inches(0.2)
+
