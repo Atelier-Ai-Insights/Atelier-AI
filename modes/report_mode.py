@@ -19,7 +19,7 @@ def report_mode(db, selected_files):
         st.info("👈 Por favor, selecciona los documentos a analizar en el menú lateral.")
         return
 
-    if st.button("Generar Informe", type="primary", use_container_width=True):
+    if st.button("Generar Informe", type="primary", width="stretch"):
         if not user_question:
             st.warning("Debes definir un objetivo."); return
             
@@ -94,10 +94,10 @@ def report_mode(db, selected_files):
         with c1:
             pdf_bytes = generate_pdf_html(clean_text, title="Informe de Investigación", banner_path=banner_file)
             if pdf_bytes:
-                st.download_button("Descargar PDF", data=pdf_bytes, file_name="reporte_atelier.pdf", mime="application/pdf", use_container_width=True)
+                st.download_button("Descargar PDF", data=pdf_bytes, file_name="reporte_atelier.pdf", mime="application/pdf", width="stretch")
         
         with c2:
-            if st.button("Nuevo Informe", type="secondary", use_container_width=True):
+            if st.button("Nuevo Informe", type="secondary", width="stretch"):
                 st.session_state.mode_state.pop("report_step1", None)
                 st.session_state.mode_state.pop("report_final", None)
                 st.rerun()
