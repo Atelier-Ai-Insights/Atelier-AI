@@ -111,7 +111,7 @@ def google_trends_mode():
     geo_map = {"Colombia": "CO", "México": "MX", "Global": ""}
     geo_code = geo_map[market]
 
-    if st.button("Escanear Tendencia", type="primary", use_container_width=True):
+    if st.button("Escanear Tendencia", type="primary", width="stretch"):
         if not keyword: st.warning("Ingresa un término."); return
 
         trend_df, geo_df = None, None
@@ -201,11 +201,11 @@ def google_trends_mode():
                 color=alt.Gradient(gradient='linear', stops=[alt.GradientStop(color='#29B5E8', offset=0), alt.GradientStop(color='white', offset=1)], x1=1, x2=1, y1=1, y2=0)
             ).encode(x='Fecha:T', y='Interés:Q', tooltip=['Fecha', 'Interés']).properties(height=300)
             
-            st.altair_chart(chart_time, use_container_width=True)
+            st.altair_chart(chart_time, width="stretch")
         
         with t2:
             if geo_df is not None:
-                st.altair_chart(alt.Chart(geo_df).mark_bar().encode(x='Interés:Q', y=alt.Y('Región:N', sort='-x'), color='Interés:Q', tooltip=['Región', 'Interés']).properties(height=400), use_container_width=True)
+                st.altair_chart(alt.Chart(geo_df).mark_bar().encode(x='Interés:Q', y=alt.Y('Región:N', sort='-x'), color='Interés:Q', tooltip=['Región', 'Interés']).properties(height=400), width="stretch")
             else: st.caption("Sin datos regionales.")
 
         with t3:
