@@ -60,7 +60,7 @@ def render_logo(use_column_width=False, width=220):
     logo_file = "LogoDataStudio.png"
     if os.path.exists(logo_file):
         if use_column_width:
-            st.image(logo_file, use_container_width=True)
+            st.image(logo_file, width="stretch")
         else:
             st.image(logo_file, width=width)
     else:
@@ -74,7 +74,7 @@ def show_saved_insight(content, date_str):
     html_content = process_text_with_tooltips(content)
     st.markdown(html_content, unsafe_allow_html=True)
     
-    if st.button("Cerrar", use_container_width=True):
+    if st.button("Cerrar", width="stretch"):
         st.rerun()
 
 # =====================================================
@@ -162,7 +162,7 @@ def run_user_interface(db_full, user_features, footer_html):
             with st.sidebar.expander(category_name, expanded=(default_expanded == category_name)):
                 for mode_key, has_access in modes_dict.items():
                     if has_access:
-                        st.button(mode_key, on_click=set_mode_and_reset, args=(mode_key,), use_container_width=True, type="primary" if modo == mode_key else "secondary")
+                        st.button(mode_key, on_click=set_mode_and_reset, args=(mode_key,), width="stretch", type="primary" if modo == mode_key else "secondary")
 
     st.sidebar.divider()
 
@@ -181,18 +181,18 @@ def run_user_interface(db_full, user_features, footer_html):
                 st.caption(clean_text[:100] + "...") 
                 c1, c2 = st.columns(2)
                 with c1:
-                    if st.button("Ver", key=f"view_{pin['id']}", use_container_width=True):
+                    if st.button("Ver", key=f"view_{pin['id']}", width="stretch"):
                         st.session_state.pin_to_view = pin
                         st.rerun()
                 with c2:
-                    if st.button("Borrar", key=f"del_{pin['id']}", use_container_width=True):
+                    if st.button("Borrar", key=f"del_{pin['id']}", width="stretch"):
                         delete_project_memory(pin['id']); st.rerun()
     else:
         st.sidebar.caption("No hay hallazgos guardados.")
 
     # Logout
     st.sidebar.divider()
-    if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
+    if st.sidebar.button("Cerrar Sesión", key="logout_main", width="stretch"):
         try: supabase.table("users").update({"active_session_id": None}).eq("id", st.session_state.user_id).execute()
         except: pass
         supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
