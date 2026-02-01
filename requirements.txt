@@ -22,4 +22,4 @@ scipy
 seaborn
 openpyxl
 wordcloud
-python-pptx
+
