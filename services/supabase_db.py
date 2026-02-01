@@ -95,3 +95,32 @@ def get_daily_usage(username, action_type):
         response = supabase.table("queries").select("id", count='exact').eq("user_name", username).eq("mode", action_type).gte("timestamp", today_start_iso).execute()
         return response.count
     except Exception as e: print(f"Error get daily usage: {e}"); return 0
+
+# ==============================
+# NUEVA FUNCIÓN: REGISTRO DE FEEDBACK
+# ==============================
+def log_message_feedback(content: str, mode: str, vote_type: str):
+    """
+    Registra un voto positivo (up) o negativo (down) para un mensaje.
+    """
+    try:
+        if "user" not in st.session_state or not st.session_state.user:
+            return False # No hay usuario logueado
+
+        user_id = st.session_state.user.id
+        
+        # Guardamos solo los primeros 200 caracteres para contexto, ahorrar espacio
+        short_content = content[:200] + "..." if len(content) > 200 else content
+
+        data = {
+            "user_id": user_id,
+            "mode": mode,
+            "message_content": short_content,
+            "vote_type": vote_type
+        }
+
+        supabase.table("message_feedback").insert(data).execute()
+        return True
+    except Exception as e:
+        print(f"Error logging feedback: {e}")
+        return False
