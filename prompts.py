@@ -8,25 +8,25 @@ import json
 
 # --- BLOQUE DE INSTRUCCIONES DE CITAS ---
 INSTRUCCIONES_DE_CITAS = """
-### REGLAS DE CITAS Y EVIDENCIA (ESTRICTO)
+### REGLAS DE EVIDENCIA Y FORMATO (ESTRICTO)
 
-1. **EN EL TEXTO PRINCIPAL (Limpieza):**
-   - Escribe de forma fluida y analítica.
-   - Cuando uses información de un documento, inserta SOLAMENTE la referencia así: `[NombreDelArchivo.pdf]`.
-   - **PROHIBIDO** escribir la cita textual, verbatim o número de página dentro del párrafo narrativo.
-   - Para Video usa: `[Video: MM:SS-MM:SS]`.
+1. **EN EL TEXTO NARRATIVO (LIMPIEZA TOTAL):**
+   - Escribe tu análisis de forma fluida.
+   - Cuando uses información de un documento, usa SOLAMENTE una referencia numérica: `[1]`, `[2]`, etc.
+   - **PROHIBIDO** escribir la cita textual, el nombre del archivo o fragmentos dentro del párrafo. Solo el número.
+   - Para Video usa el formato: `[Video: MM:SS-MM:SS]`.
    - Para Imagen usa: `[Imagen]`.
 
-2. **BLOQUE DE METADATA (AL FINAL):**
-   - Al final de tu respuesta, genera un bloque oculto con la evidencia textual exacta.
+2. **BLOQUE DE METADATA (AL FINAL - OBLIGATORIO):**
+   - Al final de tu respuesta, genera un bloque de referencias.
    - Usa EXACTAMENTE este formato con el separador `|||`:
    
-   [NombreDelArchivo.pdf] ||| "Texto exacto tomado del documento que sustenta la afirmación..."
-   [OtroArchivo.pdf] ||| "Otro fragmento relevante..."
+   [1] ||| NombreDelArchivo.pdf ||| "Cita textual exacta tomada del documento..."
+   [2] ||| OtroArchivo.pdf ||| "Otra cita relevante..."
    
    **IMPORTANTE:**
-   - El separador `|||` es VITAL para que el sistema procese el tooltip.
-   - Si citas un archivo en el texto, DEBE tener su entrada correspondiente en este bloque final.
+   - La estructura es: `[ID] ||| ARCHIVO ||| EVIDENCIA`.
+   - Si citas `[1]` arriba, debe existir `[1]` en este bloque final.
 """
 
 # ==============================================================================
