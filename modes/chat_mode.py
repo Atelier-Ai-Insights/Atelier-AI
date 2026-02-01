@@ -101,6 +101,6 @@ def grounded_chat_mode(db, selected_files):
     # 4. BOTÓN LIMPIAR
     if st.session_state.mode_state["chat_history"]:
         st.write("")
-        if st.button("Limpiar Conversación", use_container_width=True):
+        if st.button("Limpiar Conversación", width="stretch"):
             st.session_state.mode_state["chat_history"] = []
             st.rerun()
