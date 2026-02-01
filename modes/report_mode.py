@@ -26,7 +26,7 @@ def report_mode(db, selected_files):
         for k in ["report_step1", "report_final"]: st.session_state.mode_state.pop(k, None)
         
         with st.status("Iniciando protocolo de investigación...", expanded=True) as status:
-            status.write("📂 Recopilando evidencia del repositorio (RAG)...")
+            status.write("Recopilando evidencia del repositorio (RAG)...")
             relevant_info = get_relevant_info(db, user_question, selected_files)
             
             if not relevant_info:
@@ -34,11 +34,11 @@ def report_mode(db, selected_files):
                 st.error("Intenta con otros documentos o una pregunta más amplia.")
                 return
 
-            status.write("🕵️ Analizando datos duros y hechos clave (Fase 1/2)...")
+            status.write("Analizando datos duros y hechos clave (Fase 1/2)...")
             findings = call_gemini_api(get_report_prompt1(user_question, relevant_info))
             st.session_state.mode_state["report_step1"] = findings
             
-            status.write("✍️ Redactando informe para C-Level (Fase 2/2)...")
+            status.write("Redactando informe para C-Level (Fase 2/2)...")
             prompt2 = get_report_prompt2(user_question, findings, relevant_info)
             stream = call_gemini_stream(prompt2)
             
@@ -94,10 +94,10 @@ def report_mode(db, selected_files):
         with c1:
             pdf_bytes = generate_pdf_html(clean_text, title="Informe de Investigación", banner_path=banner_file)
             if pdf_bytes:
-                st.download_button("📄 Descargar PDF", data=pdf_bytes, file_name="reporte_atelier.pdf", mime="application/pdf", use_container_width=True)
+                st.download_button("Descargar PDF", data=pdf_bytes, file_name="reporte_atelier.pdf", mime="application/pdf", use_container_width=True)
         
         with c2:
-            if st.button("🔄 Nuevo Informe", type="secondary", use_container_width=True):
+            if st.button("Nuevo Informe", type="secondary", use_container_width=True):
                 st.session_state.mode_state.pop("report_step1", None)
                 st.session_state.mode_state.pop("report_final", None)
                 st.rerun()
