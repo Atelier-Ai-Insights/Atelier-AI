@@ -108,13 +108,13 @@ def show_admin_dashboard(db_full):
                 # Agrupar por día
                 daily_usage = df_final.groupby('Fecha').size().reset_index(name='Consultas')
                 fig_line = px.line(daily_usage, x='Fecha', y='Consultas', markers=True, template="plotly_white")
-                st.plotly_chart(fig_line, use_container_width=True)
+                st.plotly_chart(fig_line, width="stretch")
                 
             with c2:
                 st.subheader("Costo por Empresa")
                 cost_client = df_final.groupby('client_name')['Costo_USD'].sum().reset_index().sort_values('Costo_USD', ascending=False)
                 fig_bar = px.bar(cost_client, x='client_name', y='Costo_USD', color='client_name', text_auto='.3f', template="plotly_white")
-                st.plotly_chart(fig_bar, use_container_width=True)
+                st.plotly_chart(fig_bar, width="stretch")
 
             # 3. GRÁFICOS (Fila 2)
             c3, c4 = st.columns(2)
@@ -124,13 +124,13 @@ def show_admin_dashboard(db_full):
                 mode_dist = df_final['mode'].value_counts().reset_index()
                 mode_dist.columns = ['Modo', 'Consultas']
                 fig_pie = px.pie(mode_dist, names='Modo', values='Consultas', hole=0.4, template="plotly_white")
-                st.plotly_chart(fig_pie, use_container_width=True)
+                st.plotly_chart(fig_pie, width="stretch")
 
             with c4:
                 st.subheader("Top 5 Usuarios (Gasto)")
                 top_users = df_final.groupby('user_name')['Costo_USD'].sum().reset_index().sort_values('Costo_USD', ascending=False).head(5)
                 fig_user = px.bar(top_users, x='Costo_USD', y='user_name', orientation='h', text_auto='.3f', template="plotly_white")
-                st.plotly_chart(fig_user, use_container_width=True)
+                st.plotly_chart(fig_user, width="stretch")
         else:
             st.warning("Selecciona un rango de fechas con actividad para ver los gráficos.")
 
@@ -179,7 +179,7 @@ def show_admin_dashboard(db_full):
                     "Rol": u.get('rol', 'user')
                 })
             
-            st.dataframe(pd.DataFrame(clean_users), use_container_width=True)
+            st.dataframe(pd.DataFrame(clean_users), width="stretch")
 
     # --- TAB 3: AUDITORÍA (Logs Crudos) ---
     with tab_audit:
@@ -189,7 +189,7 @@ def show_admin_dashboard(db_full):
             cols_to_show = ['timestamp', 'user_name', 'client_name', 'mode', 'query', 'total_tokens', 'Costo_USD']
             st.dataframe(
                 df_final[cols_to_show].sort_values('timestamp', ascending=False),
-                use_container_width=True,
+                width="stretch",
                 height=600,
                 column_config={
                     "timestamp": st.column_config.DatetimeColumn("Hora", format="D MMM, HH:mm"),
