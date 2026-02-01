@@ -10,24 +10,16 @@ import json
 INSTRUCCIONES_DE_CITAS = """
 ### REGLAS DE EVIDENCIA (SISTEMA RAG ESTRICTO)
 
-1. **EN EL TEXTO PRINCIPAL (SINTÉTICO):**
-   - Tu redacción debe ser fluida y limpia.
-   - Cuando uses un documento, inserta SOLAMENTE el número: `[1]`, `[2]`, etc.
-   - **PROHIBIDO** escribir la cita textual o el nombre del archivo dentro del párrafo.
-   - Si sientes la tentación de escribir `[1] "la cita"`, DETENTE. Escribe solo `[1]`.
-   - Para Video: `[Video: MM:SS-MM:SS]`.
-   - Para Imagen: `[Imagen]`.
+1. **EN EL TEXTO (LIMPIO):**
+   - Redacta fluido. Usa SOLAMENTE referencias numéricas: `[1]`, `[2]`.
+   - **PROHIBIDO** poner citas textuales, nombres de archivo o explicaciones entre paréntesis dentro del párrafo.
+   - Si vas a citar, pon solo el número. Ej: "El producto es rojo [1]." NO: "El producto es rojo [1] (porque lo dice el pdf)".
+   - Video: `[Video: MM:SS-MM:SS]`.
+   - Imagen: `[Imagen]`.
 
-2. **BLOQUE DE REFERENCIAS (AL FINAL):**
-   - Crea una sección final separada.
-   - Usa este formato EXACTO (separado por `|||`):
-   
-   [1] ||| NombreDelArchivo.pdf ||| "Copia aquí el texto exacto (verbatim) que sustenta la afirmación."
-   [2] ||| OtroArchivo.pdf ||| "Otra evidencia textual..."
-   
-   **IMPORTANTE:**
-   - No inventes referencias.
-   - Asegúrate de que cada `[N]` en el texto tenga su línea correspondiente al final.
+2. **AL FINAL (METADATA):**
+   - Crea un bloque final con el separador `|||`.
+   - Formato: `[1] ||| NombreArchivo.pdf ||| "Cita textual..."`
 """
 
 # ==============================================================================
