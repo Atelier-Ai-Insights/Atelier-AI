@@ -6,6 +6,7 @@ from datetime import datetime
 # --- IMPORTACIONES ACTUALIZADAS ---
 from services.gemini_api import call_gemini_api, call_gemini_stream
 from utils import get_relevant_info, process_text_with_tooltips
+# Asegúrate de que prompts.py ya tenga la función get_onepager_prompt (paso anterior)
 from prompts import get_onepager_prompt
 from reporting.pptx_generator import create_pptx_from_structure
 from services.supabase_db import get_monthly_usage, log_query_event, log_message_feedback
@@ -34,7 +35,8 @@ def one_pager_ppt_mode(db, selected_files):
         st.info("👈 Selecciona documentos para comenzar.")
         return
 
-    if st.button("Generar PPTX", type="primary", use_container_width=True):
+    # --- CAMBIO AQUI: width="stretch" en lugar de use_container_width=True ---
+    if st.button("Generar PPTX", type="primary", width="stretch"):
         if not user_topic:
             st.warning("Escribe un tema."); return
 
@@ -55,7 +57,7 @@ def one_pager_ppt_mode(db, selected_files):
             status.write("Estructurando contenido visual (Título, Bullets, Insights)...")
             prompt = get_onepager_prompt(user_topic, context)
             
-            # Usamos call_gemini_api directo porque necesitamos JSON estricto, no stream
+            # Usamos call_gemini_api directo porque necesitamos JSON estricto
             response_json_str = call_gemini_api(prompt, generation_config_override={"response_mime_type": "application/json"})
             
             if response_json_str:
@@ -64,13 +66,12 @@ def one_pager_ppt_mode(db, selected_files):
                     status.write("Renderizando archivo PowerPoint...")
                     data = json.loads(response_json_str)
                     
-                    # Soporte para lista o dict
                     if isinstance(data, list): data = data[0]
                     
                     # Generar el PPTX binario
                     pptx_bytes = create_pptx_from_structure(data)
                     
-                    # Guardar en estado para persistencia
+                    # Guardar en estado
                     st.session_state.mode_state["last_onepager_pptx"] = pptx_bytes
                     st.session_state.mode_state["last_onepager_data"] = data
                     
@@ -91,7 +92,6 @@ def one_pager_ppt_mode(db, selected_files):
     if "last_onepager_pptx" in st.session_state.mode_state:
         data = st.session_state.mode_state.get("last_onepager_data", {})
         
-        # 1. Previsualización Rápida (Texto enriquecido)
         with st.container(border=True):
             st.markdown(f"### {data.get('titulo', 'Sin Título')}")
             st.caption(data.get('subtitulo', ''))
@@ -103,11 +103,7 @@ def one_pager_ppt_mode(db, selected_files):
             if data.get('insight_principal'):
                 st.info(f"💡 **Insight:** {data.get('insight_principal')}")
 
-        # 2. Barra de Acciones (Feedback)
-        # Nota: Aquí no aplica tanto el PIN porque es un archivo, pero el feedback sí.
         c_up, c_down, c_dl = st.columns([1, 1, 4])
-        
-        # Usamos el título como ID único para el feedback
         key_id = str(hash(data.get('titulo', 'op')))
         
         with c_up:
@@ -121,11 +117,12 @@ def one_pager_ppt_mode(db, selected_files):
                 st.toast("Gracias por el feedback")
                 
         with c_dl:
+            # --- CAMBIO AQUI: width="stretch" ---
             st.download_button(
                 label="Descargar .PPTX",
                 data=st.session_state.mode_state["last_onepager_pptx"],
                 file_name=f"OnePager_{user_topic.replace(' ','_')}.pptx",
                 mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                use_container_width=True,
+                width="stretch",
                 type="primary"
             )
