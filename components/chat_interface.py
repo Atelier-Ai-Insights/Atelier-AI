@@ -19,45 +19,38 @@ def render_chat_history(history, source_mode="chat"):
         
         with st.chat_message(role, avatar=avatar):
             if role == "assistant":
-                # 1. Mostrar el texto enriquecido con tooltips
+                # 1. Mostrar el texto enriquecido
                 html_content = process_text_with_tooltips(content)
                 st.markdown(html_content, unsafe_allow_html=True)
                 
                 # --- BARRA DE ACCIONES INTEGRADA ---
-                # Usamos columnas estrechas para agrupar los botones tipo icono
-                # Estructura: [👍] [👎] [Espacio.....] [📌]
                 col_up, col_down, col_spacer, col_pin = st.columns([1, 1, 10, 1])
-                
-                # Clave base única para este mensaje
                 key_base = f"{source_mode}_{idx}"
 
-                # Botón Like 👍
                 with col_up:
                     if st.button("👍", key=f"up_{key_base}", help="Respuesta útil"):
                         if log_message_feedback(content, source_mode, "up"):
                             st.toast("Gracias por el feedback! 👍")
 
-                # Botón Dislike 👎
                 with col_down:
-                    if st.button("👎", key=f"down_{key_base}", help="Respuesta inexacta o irrelevante"):
+                    if st.button("👎", key=f"down_{key_base}", help="Respuesta inexacta"):
                         if log_message_feedback(content, source_mode, "down"):
                             st.toast("Gracias. Revisaremos esto. 🤔")
 
-                # Botón PIN 📌 (Integrado estéticamente)
+                # Botón PIN 📌 (CON RECARGA AUTOMÁTICA)
                 with col_pin:
                     if st.button("📌", key=f"pin_{key_base}", help="Guardar en Memoria del Proyecto"):
                         success = save_project_insight(content, source_mode=source_mode)
                         if success:
                             st.toast("✅ Guardado en bitácora")
+                            time.sleep(1) # Breve pausa para ver el mensaje
+                            st.rerun()    # <--- ESTO ACTUALIZA LA SIDEBAR AL INSTANTE
                         else:
                             st.toast("❌ Error al guardar")
 
             else:
-                # Mensaje del usuario (simple)
                 st.markdown(content)
 
-# Nota: handle_chat_interaction no necesita cambios para el botón PIN de la nueva respuesta,
-# ya que la próxima vez que se renderice el historial completo, aparecerá la barra integrada.
 def handle_chat_interaction(prompt, response_generator_func, history_key, source_mode, on_generation_success=None):
     st.session_state.mode_state[history_key].append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar="👤"):
