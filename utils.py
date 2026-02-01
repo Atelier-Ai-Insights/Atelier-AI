@@ -78,7 +78,7 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
 def validate_session_integrity(): pass 
 
 # =========================================================
-# PROCESADOR DE CITAS NUMÉRICAS V.FINAL
+# LÓGICA DE CITAS V.ROBUSTA (Multi-Pass Parsing)
 # =========================================================
 def process_text_with_tooltips(text):
     if not text: return ""
@@ -89,87 +89,137 @@ def process_text_with_tooltips(text):
         text = text.replace('“', '"').replace('”', '"')
         
         # ---------------------------------------------------------
-        # 1. COSECHA DE METADATA (FORMATO: [ID] ||| ARCHIVO ||| CITA)
+        # 1. EXTRACCIÓN Y LIMPIEZA DEL BLOQUE FINAL
         # ---------------------------------------------------------
-        def harvest_metadata(match):
-            try:
-                ref_id = match.group(1).strip()     # Ej: 1
-                filename = match.group(2).strip()   # Ej: archivo.pdf
-                raw_quote = match.group(3).strip()  # Ej: "Texto..."
-
-                # Limpieza de prefijos comunes
-                clean_quote = re.sub(r'^(?:Cita:|Contexto:|Quote:|Evidencia:|SECCIÓN:?\s*\d*:?)\s*', '', raw_quote, flags=re.IGNORECASE).strip('"').strip("'")
-                
-                # Guardamos en el mapa
-                source_map[ref_id] = {
-                    "file": html.escape(filename),
-                    "quote": html.escape(clean_quote[:400]) + ("..." if len(clean_quote) > 400 else "")
-                }
-            except: pass
-            return "" # Borrar el bloque de la pantalla
-
-        # Regex: [N] ||| ... ||| ... (Non-greedy)
-        # Captura: 1. ID, 2. Archivo, 3. Cita
-        pattern_strict = r'\[(\d+)\]\s*\|\|\|\s*(.*?)\s*\|\|\|\s*(.+?)(?=\s*\[\d+\]\s*\|\|\||$)'
-        text = re.sub(pattern_strict, harvest_metadata, text, flags=re.DOTALL)
+        # Estrategia: Buscar donde empieza la lista de referencias y procesarla aparte.
+        # Esto evita problemas con regex gigantes que fallan con saltos de línea.
         
-        # Regex Fallback (por si la IA olvida el nombre del archivo en el bloque final): [N] ||| Cita
-        pattern_fallback = r'\[(\d+)\]\s*\|\|\|\s*(.+?)(?=\s*\[\d+\]\s*\|\|\||$)'
-        # Solo aplicamos si no hemos capturado nada, para no romper
-        if not source_map:
-             def harvest_fallback(match):
-                ref_id = match.group(1).strip()
-                raw_quote = match.group(2).strip()
-                source_map[ref_id] = {"file": "Fuente del Repositorio", "quote": html.escape(raw_quote[:300])}
-                return ""
-             text = re.sub(pattern_fallback, harvest_fallback, text, flags=re.DOTALL)
+        # Patrones que indican inicio del bloque de metadatos
+        split_patterns = [
+            r'\[1\]\s*\|\|\|',  # Formato estándar
+            r'\n\s*Referencias:\s*\n', 
+            r'\n\s*Fuentes:\s*\n',
+            r'\n\s*BLOQUE DE METADATA'
+        ]
+        
+        metadata_text = ""
+        main_text = text
+        
+        for pattern in split_patterns:
+            split_match = re.search(pattern, text, re.IGNORECASE)
+            if split_match:
+                # Separamos el texto principal de la metadata
+                idx = split_match.start()
+                # Si el match es [1] |||, queremos incluirlo en la metadata, no cortarlo antes
+                if "|||" in pattern:
+                     metadata_text = text[idx:]
+                     main_text = text[:idx]
+                else:
+                     metadata_text = text[split_match.end():]
+                     main_text = text[:idx]
+                break
+        
+        # Si no encontramos separador claro, intentamos buscar línea por línea al final
+        if not metadata_text:
+            # Fallback: Regex línea por línea para capturar definiciones dispersas
+            pass 
 
         # ---------------------------------------------------------
-        # 2. RENDERIZADO EN EL TEXTO
+        # 2. PARSEO DE LA METADATA (Línea por línea es más seguro)
+        # ---------------------------------------------------------
+        # Procesamos metadata_text para llenar source_map
+        # Formatos soportados:
+        # A. [1] ||| Archivo ||| Cita
+        # B. [1] ||| Cita (Archivo inferido)
+        # C. [1] Archivo: Cita
+        
+        # Limpiamos el texto principal de residuos si quedaron
+        if metadata_text:
+            text = main_text # Actualizamos el texto visible
+            
+            # Normalizamos saltos de línea para iterar
+            lines = metadata_text.split('\n')
+            current_id = None
+            
+            for line in lines:
+                line = line.strip()
+                if not line: continue
+                
+                # Detectar ID [N]
+                id_match = re.match(r'^\[(\d+)\]', line)
+                if id_match:
+                    current_id = id_match.group(1)
+                    content = line[id_match.end():].strip()
+                    
+                    # Intentar separar por |||
+                    parts = content.split('|||')
+                    parts = [p.strip() for p in parts if p.strip()]
+                    
+                    filename = "Fuente del Repositorio"
+                    quote = ""
+                    
+                    if len(parts) >= 2:
+                        filename = parts[0]
+                        quote = parts[1]
+                    elif len(parts) == 1:
+                        # Heurística: Si termina en pdf es archivo, si no es cita
+                        if '.pdf' in parts[0].lower(): filename = parts[0]
+                        else: quote = parts[0]
+                    
+                    # Limpieza final de la cita
+                    quote = re.sub(r'^(?:Cita:|Contexto:|Quote:|Evidencia:)\s*', '', quote, flags=re.IGNORECASE).strip('"')
+                    
+                    source_map[current_id] = {
+                        "file": html.escape(filename),
+                        "quote": html.escape(quote[:400]) + "..."
+                    }
+
+        # ---------------------------------------------------------
+        # 3. RENDERIZADO EN EL TEXTO
         # ---------------------------------------------------------
 
-        # A. Citas Numéricas [1], [2] -> Badge Gris con Tooltip
+        # Helper HTML Tooltip
+        def create_tooltip(label_text, tooltip_title, tooltip_body, color_style="background-color:#f0f2f6; color:#444; border:1px solid #ccc;"):
+            if not tooltip_body: tooltip_body = "<em>(Detalle no disponible)</em>"
+            return (
+                f'&nbsp;<span class="tooltip-container">'
+                f'<span class="citation-number" style="{color_style} font-weight:bold; cursor:help;">{label_text}</span>'
+                f'<span class="tooltip-text" style="width:350px;">'
+                f'<strong style="color:#ffd700;">📂 {tooltip_title}</strong><br/>'
+                f'<div style="margin-top:6px; padding-top:6px; border-top:1px solid #555; font-size:0.9em; line-height:1.3; color:#eee;">'
+                f'{tooltip_body}'
+                f'</div>'
+                f'</span></span>'
+            )
+
+        # A. Citas Numéricas [N]
         def replace_numeric(match):
             cid = match.group(1)
             if cid in source_map:
                 data = source_map[cid]
-                # HTML DEL TOOLTIP
-                return (
-                    f'&nbsp;<span class="tooltip-container">'
-                    f'<span class="citation-number" style="background-color:#f0f2f6; color:#444; border:1px solid #ccc; font-weight:bold; cursor:help;">[{cid}]</span>'
-                    f'<span class="tooltip-text" style="width:350px;">'
-                    f'<strong style="color:#ffd700;">📂 {data["file"]}</strong><br/>'
-                    f'<div style="margin-top:6px; padding-top:6px; border-top:1px solid #555; font-size:0.9em; line-height:1.3; color:#eee;">'
-                    f'<em>"{data["quote"]}"</em>'
-                    f'</div>'
-                    f'</span></span>'
-                )
-            # Si no hay data, se deja el número en gris sin interacción
-            return f'<span class="citation-number" style="color:#aaa;">[{cid}]</span>'
+                return create_tooltip(f"[{cid}]", data["file"], data["quote"])
+            else:
+                # FALLBACK INTELIGENTE: Si no está en el mapa, mostramos un tooltip genérico
+                # en lugar de un texto plano roto.
+                return create_tooltip(f"[{cid}]?", "Referencia faltante", "La IA citó este documento pero no proveyó el detalle técnico al final.")
 
         text = re.sub(r'\[(\d+)\]', replace_numeric, text)
 
-        # B. Video [Video: 0:00-0:10] -> Badge Rojo
+        # B. Video
         text = re.sub(
             r'\[Video:\s*([0-9:-]+)\]', 
             r'&nbsp;<span class="citation-number" style="background-color:#ffebee; color:#c62828; border:1px solid #ffcdd2; font-size:0.85em; font-weight:bold;">🎬 \1</span>', 
             text, flags=re.IGNORECASE
         )
 
-        # C. Imagen [Imagen] -> Badge Azul
+        # C. Imagen
         text = re.sub(
             r'\[Imagen\]', 
             r'&nbsp;<span class="citation-number" style="background-color:#e0f7fa; color:#006064; border:1px solid #b2ebf2; font-size:0.85em; font-weight:bold;">🖼️ Visual</span>', 
             text, flags=re.IGNORECASE
         )
-        
-        # D. Limpieza de basura residual (Referencias directas viejas [Archivo.pdf])
-        # Si la IA falla y pone [Archivo.pdf] en el texto, lo convertimos a icono genérico
-        text = re.sub(r'\[([^\]]+\.pdf)\]', r' 📂', text, flags=re.IGNORECASE)
 
-        # ---------------------------------------------------------
-        # 3. LIMPIEZA FINAL
-        # ---------------------------------------------------------
+        # D. Limpieza final de basura visual
         text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas| Consultadas| Bibliografía)?\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
         text = re.sub(r'\n{3,}', '\n\n', text)
         
