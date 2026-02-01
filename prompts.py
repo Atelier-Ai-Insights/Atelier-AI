@@ -8,23 +8,25 @@ import json
 
 # --- BLOQUE DE INSTRUCCIONES DE CITAS ---
 INSTRUCCIONES_DE_CITAS = """
-**REGLAS DE EVIDENCIA (SISTEMA RAG):**
-1. **Atribución en Texto:**
-   - Si usas información de un PDF, marca el lugar exacto con `[NombreArchivo.pdf]`.
-   - Si usas información visual de un video, usa `[Video: MM:SS-MM:SS]`.
-   - Si usas información visual de una imagen, usa `[Imagen]`.
+### REGLAS DE FORMATO Y CITAS (ESTRICTO)
 
-2. **BLOQUE DE FUENTES (OBLIGATORIO AL FINAL):**
-   Al final de tu respuesta, DEBES generar un bloque oculto con la evidencia textual exacta para poblar los tooltips.
-   Usa EXACTAMENTE este formato por cada fuente citada:
+1. **EN EL TEXTO PRINCIPAL:**
+   - Escribe de forma fluida.
+   - Cuando uses información de un documento, marca el punto EXACTO con `[NombreDelArchivo.pdf]`.
+   - **PROHIBIDO** escribir la cita textual, verbatim o fragmento dentro del párrafo. Solo usa la etiqueta entre corchetes.
+   - Para referencias visuales de video usa: `[Video: MM:SS-MM:SS]`.
+   - Para referencias visuales de imagen usa: `[Imagen]`.
+
+2. **AL FINAL DE LA RESPUESTA (SECCIÓN DE METADATA):**
+   - Debes generar un bloque final separado donde coloques la evidencia para los tooltips.
+   - Usa EXACTAMENTE este formato con el separador `|||`:
    
-   [NombreArchivo.pdf] ||| Cita: "Texto exacto tomado del documento..." (Contexto breve)
-   [1] ||| Cita: "Texto exacto..."
+   [NombreDelArchivo.pdf] ||| Cita: "Copiar aquí el texto exacto del PDF..."
+   [NombreDelArchivo2.pdf] ||| Cita: "Otro fragmento..."
    
    **IMPORTANTE:**
-   - El separador `|||` es VITAL.
-   - Copia literalmente el fragmento de texto que sustenta tu afirmación.
-   - Si citas un video o imagen, NO lo incluyas en este bloque de texto, solo documentos PDF.
+   - Este bloque final es SOLO para documentos (PDFs). No incluyas videos ni imágenes aquí.
+   - El separador `|||` es obligatorio para que el sistema procese el tooltip.
 """
 
 # ==============================================================================
