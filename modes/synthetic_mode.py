@@ -36,7 +36,7 @@ def synthetic_users_mode(db, selected_files):
     with st.expander("Configurar Perfil Sintético", expanded=show_config):
         segment_name = st.text_input("Nombre del Segmento a simular:", placeholder="Ej: Compradores sensibles al precio, Mamás primerizas...")
         
-        if st.button("Generar ADN del Perfil", type="primary", use_container_width=True):
+        if st.button("Generar ADN del Perfil", type="primary", width="stretch"):
             if not selected_files:
                 st.warning("⚠️ Selecciona documentos en el menú lateral.")
                 return
@@ -182,15 +182,15 @@ def synthetic_users_mode(db, selected_files):
                 
                 pdf_bytes = generate_pdf_html(chat_content, title=f"Entrevista - {p.get('nombre')}", banner_path=banner_file)
                 if pdf_bytes:
-                    st.download_button("Descargar PDF", data=pdf_bytes, file_name=f"entrevista_{p.get('nombre')}.pdf", use_container_width=True)
+                    st.download_button("Descargar PDF", data=pdf_bytes, file_name=f"entrevista_{p.get('nombre')}.pdf", width="stretch")
 
             with c2:
-                if st.button("Reiniciar Chat", use_container_width=True):
+                if st.button("Reiniciar Chat", width="stretch"):
                     st.session_state.mode_state["synthetic_chat_history"] = []
                     st.rerun()
 
             with c3:
-                if st.button("Crear Nuevo Perfil", use_container_width=True, type="secondary"):
+                if st.button("Crear Nuevo Perfil", width="stretch", type="secondary"):
                     st.session_state.mode_state.pop("synthetic_persona_data", None)
                     st.session_state.mode_state.pop("synthetic_chat_history", None)
                     st.rerun()
