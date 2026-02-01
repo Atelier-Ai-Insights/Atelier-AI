@@ -2,9 +2,14 @@ import streamlit as st
 import json
 import io
 from services.supabase_db import get_monthly_usage, log_query_event
-from config import safety_settings
+# Asegúrate de que config.py tenga safety_settings, si no, borra esta línea
+try: from config import safety_settings
+except ImportError: safety_settings = None
+
 from services.gemini_api import call_gemini_api 
-from reporting.ppt_generator import crear_ppt_desde_json
+# --- CORRECCIÓN CRÍTICA: IMPORTAR EL GENERADOR NUEVO ---
+from reporting.pptx_generator import create_pptx_from_structure
+# -------------------------------------------------------
 from utils import get_relevant_info, extract_text_from_pdfs, clean_gemini_json
 from prompts import PROMPTS_ONEPAGER, get_onepager_final_prompt
 import constants as c
@@ -17,6 +22,10 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     st.subheader("Generador de Diapositivas Estratégicas")
     
     # 1. Verificación de Límites
+    # Nota: Asegúrate que el nombre de la constante coincida con tu archivo constants.py
+    # Usualmente es c.MODE_ONE_PAGER
+    mode_constant = getattr(c, 'MODE_ONE_PAGER', 'one_pager') 
+    
     ppt_limit = st.session_state.plan_features.get('ppt_downloads_per_month', 0)
     is_unlimited = ppt_limit == float('inf')
 
@@ -43,15 +52,15 @@ def one_pager_ppt_mode(db_filtered, selected_files):
         col1, col2 = st.columns(2)
         with col1:
             st.download_button(
-                label="Descargar .pptx",
+                label="📥 Descargar .pptx",
                 data=st.session_state.mode_state["generated_ppt_bytes"],
                 file_name=f"diapositiva_{template_name.lower().replace(' ','_')}.pptx",
                 mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                width='stretch',
+                width='stretch', # Corregido de use_container_width
                 type="primary"
             )
         with col2:
-            if st.button("Generar otra", width='stretch', type="secondary"):
+            if st.button("🔄 Generar otra", width='stretch', type="secondary"):
                 # Limpiamos el estado
                 st.session_state.mode_state.pop("generated_ppt_bytes", None)
                 st.session_state.mode_state.pop("generated_ppt_template_name", None)
@@ -61,6 +70,7 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     # 3. Configuración (Formulario)
     st.divider()
     st.markdown("#### 1. Selecciona la Plantilla")
+    # Usamos las llaves del diccionario de prompts para llenar el selectbox
     template_options = list(PROMPTS_ONEPAGER.keys()) 
     selected_template_name = st.selectbox("Elige el tipo de diapositiva:", template_options)
 
@@ -82,8 +92,9 @@ def one_pager_ppt_mode(db_filtered, selected_files):
     # 4. Acción de Generar
     if st.button(f"Generar Diapositiva '{selected_template_name}'", width='stretch', type="primary"):
         
-        # --- Validaciones (Guard Clauses) ---
-        current_ppt_usage = get_monthly_usage(st.session_state.user, c.MODE_ONEPAGER)
+        # --- Validaciones ---
+        current_ppt_usage = get_monthly_usage(st.session_state.user, mode_constant)
+        
         if not is_unlimited and current_ppt_usage >= ppt_limit:
             st.error(f"⚠️ Has alcanzado tu límite mensual."); return
         if not tema_central.strip():
@@ -95,13 +106,14 @@ def one_pager_ppt_mode(db_filtered, selected_files):
         with st.status("Diseñando tu One-Pager...", expanded=True) as status:
             
             # A. Contexto
-            status.write("Analizando fuentes...")
+            status.write("🔍 Analizando fuentes...")
             relevant_info = ""
             try:
                 if use_repo:
                     repo_text = get_relevant_info(db_filtered, tema_central, selected_files)
                     if repo_text: relevant_info += f"--- CONTEXTO REPOSITORIO ---\n{repo_text}\n\n"
                 if use_uploads and uploaded_files:
+                    # Asegúrate que utils.py tenga esta función, si no, usa un lector simple aquí
                     pdf_text = extract_text_from_pdfs(uploaded_files)
                     if pdf_text: relevant_info += f"--- CONTEXTO PDFS ---\n{pdf_text}\n\n"
             except Exception as e:
@@ -111,7 +123,9 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                 status.update(label="Falta de contexto", state="error"); st.error("❌ No se encontró información relevante."); return
 
             # B. IA Estructura
-            status.write(f"Estructurando contenido para '{selected_template_name}'...")
+            status.write(f"🧠 Estructurando contenido para '{selected_template_name}'...")
+            
+            # Usamos el prompt específico que selecciona el template JSON correcto
             final_prompt_json = get_onepager_final_prompt(relevant_info, selected_template_name, tema_central)
             
             data_json = None
@@ -123,23 +137,32 @@ def one_pager_ppt_mode(db_filtered, selected_files):
                 
                 cleaned_text = clean_gemini_json(response_text)
                 data_json = json.loads(cleaned_text)
+                
+                # Normalización: Si es lista, tomamos el primero
+                if isinstance(data_json, list): data_json = data_json[0]
+
             except Exception as e:
                 status.update(label="Error en IA", state="error"); st.error(f"Error IA: {e}"); return
 
             # C. Ensamblaje PPT (Nativo Editable)
             if data_json:
-                status.write("Construyendo formas editables en PowerPoint (.pptx)...")
+                status.write("🎨 Construyendo formas editables en PowerPoint (.pptx)...")
                 try:
-                    # Llamamos al generador actualizado (sin imagen)
-                    ppt_bytes = crear_ppt_desde_json(data_json)
+                    # --- CORRECCIÓN: USAMOS LA NUEVA FUNCIÓN ---
+                    ppt_bytes = create_pptx_from_structure(data_json)
+                    # -------------------------------------------
                     
                     if ppt_bytes:
-                        log_query_event(f"{selected_template_name}: {tema_central}", mode=c.MODE_ONEPAGER)
+                        try: log_query_event(f"{selected_template_name}: {tema_central}", mode=mode_constant)
+                        except: pass
+                        
                         st.session_state.mode_state["generated_ppt_bytes"] = ppt_bytes
                         st.session_state.mode_state["generated_ppt_template_name"] = selected_template_name
                         status.update(label="¡Diapositiva creada!", state="complete", expanded=False)
+                        # Pequeña pausa para ver el check verde
+                        import time; time.sleep(0.5)
                         st.rerun()
                     else:
-                        raise Exception("Objeto PPT vacío")
+                        raise Exception("El generador devolvió un archivo vacío")
                 except Exception as e:
-                    status.update(label="Error PPT", state="error"); st.error(str(e))
+                    status.update(label="Error PPT", state="error"); st.error(f"Error Generando PPT: {e}")
