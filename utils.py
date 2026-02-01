@@ -104,9 +104,9 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
                 for i, g in enumerate(pres.get("grupos", [])):
                     txt = str(g.get('contenido_texto', ''))
                     if txt and len(txt) > 20:
-                        # Usamos un formato estándar que la IA pueda leer bien
-                        chunk_meta = f"--- DOC: {doc_name} | SECCIÓN: {i+1} ---\nMETA: {doc_title}\n"
-                        full_chunk = f"{chunk_meta} - {txt}\n\n"
+                        # Simplificamos el META para ahorrar tokens y confundir menos a la IA
+                        chunk_meta = f"--- DOC: {doc_name} | SECCIÓN: {i+1} ---\n" 
+                        full_chunk = f"{chunk_meta}{txt}\n\n"
                         candidate_chunks.append({
                             "text": full_chunk,
                             "raw_content": txt.lower(),
@@ -151,54 +151,77 @@ def validate_session_integrity():
     pass 
 
 # =========================================================
-# LÓGICA DE CITAS V7 (FIX PARA FUGAS DE TEXTO)
+# LÓGICA DE CITAS V8 (FIX FINAL DE FORMATO Y ESTABILIDAD)
 # =========================================================
 def process_text_with_tooltips(text):
     if not text: return ""
 
     try:
         source_map = {}
+        # Normalizar comillas
         text = text.replace('“', '"').replace('”', '"')
         
-        # 1. Recolectar definiciones estándar [1] Archivo ||| Contexto
+        # 1. COSECHA DE METADATA (Estándar [1] File ||| Context)
+        # Usamos una regex más robusta que no se rompa con saltos de línea extraños
         def harvest_metadata(match):
-            cid = match.group(1)
-            fname = match.group(2).strip()
-            raw_context = match.group(3).strip()
-            clean_context = re.sub(r'^(?:Cita:|Contexto:|Quote:)\s*', '', raw_context, flags=re.IGNORECASE).strip('"').strip("'")
-            source_map[cid] = {
-                "file": html.escape(fname),
-                "context": html.escape(clean_context[:400]) + ("..." if len(clean_context)>400 else "")
-            }
-            return "" 
+            try:
+                cid = match.group(1)
+                fname = match.group(2).strip()
+                raw_context = match.group(3).strip()
+                clean_context = re.sub(r'^(?:Cita:|Contexto:|Quote:)\s*', '', raw_context, flags=re.IGNORECASE).strip('"').strip("'")
+                
+                source_map[cid] = {
+                    "file": html.escape(fname),
+                    "context": html.escape(clean_context[:300]) + "..."
+                }
+            except: pass
+            return "" # Borrar del texto visible
 
+        # Patrón estándar de footer
         pattern_metadata = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
         text = re.sub(pattern_metadata, harvest_metadata, text, flags=re.DOTALL)
         
-        # 2. LIMPIEZA DE FUGAS (NUEVO): Convierte [DOC: ... | SECCIÓN: ...] en icono tooltip
+        # 2. LIMPIEZA DE "FUGAS" [DOC:...] 
+        # Esta regex atrapa el formato crudo que está saliendo en tu pantalla
+        # y lo convierte en un bonito icono de carpeta [📂] con tooltip.
         def clean_raw_doc_leaks(match):
-            fname = match.group(1).strip()
-            sections = match.group(2).strip()
-            # Creamos un tooltip visual para salvar el error de la IA
-            return (
-                f'&nbsp;<span class="tooltip-container">'
-                f'<span class="citation-number" style="background-color:#f0f2f6; color:#555;">📂</span>'
-                f'<span class="tooltip-text">'
-                f'<strong>Fuente Directa:</strong><br/>{html.escape(fname)}<br/>'
-                f'<span style="font-size:0.9em; opacity:0.9;">Secciones relevantes: {sections}</span>'
-                f'</span></span>'
-            )
+            try:
+                # Capturamos todo lo que haya dentro de DOC: ... |
+                content_inside = match.group(1) 
+                
+                # Intentamos separar Nombre y Sección si existe el pipe |
+                if "|" in content_inside:
+                    parts = content_inside.split("|")
+                    fname = parts[0].replace("DOC:", "").strip()
+                    section_info = parts[1].strip()
+                else:
+                    fname = content_inside.replace("DOC:", "").strip()
+                    section_info = "Referencia general"
 
-        # Detecta el patrón que se ve en tu captura: [DOC: archivo.pdf | SECCIÓN: 1, 3]
-        text = re.sub(r'\[DOC:\s*([^|\]]+?)\s*\|\s*SECCIÓN:\s*([^\]]+?)\]', clean_raw_doc_leaks, text, flags=re.IGNORECASE)
+                # Tooltip visual
+                return (
+                    f'&nbsp;<span class="tooltip-container">'
+                    f'<span class="citation-number" style="background-color:#f0f2f6; color:#444; border:1px solid #ccc;">📂</span>'
+                    f'<span class="tooltip-text">'
+                    f'<strong>Fuente:</strong> {html.escape(fname)}<br/>'
+                    f'<span style="font-size:0.9em; opacity:0.9;">{html.escape(section_info)}</span>'
+                    f'</span></span>'
+                )
+            except:
+                return "" # Si falla, borrar la fuga
 
-        # 3. Limpieza general de basura
+        # Regex muy permisiva para atrapar cualquier variante de [DOC: ...]
+        # Busca [DOC: seguido de cualquier cosa que no sea ] hasta encontrar ]
+        text = re.sub(r'\[(DOC:.+?)\]', clean_raw_doc_leaks, text, flags=re.IGNORECASE)
+
+        # 3. LIMPIEZA GENERAL
+        # Borrar paréntesis repetitivos tipo (Contexto: ...)
         text = re.sub(r'\(\s*(?:Contexto|Cita|Quote|Evidencia)\s*:.*?\)', '', text, flags=re.IGNORECASE | re.DOTALL)
+        # Borrar títulos de footer residuales
         text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas| Consultadas)?\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
-        text = re.sub(r'\n{3,}', '\n\n', text)
-        text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
         
-        # 4. Renderizar tooltips numéricos estándar [1]
+        # 4. RENDERIZADO DE CITAS NUMÉRICAS [1]
+        # (Solo si sobrevivieron al proceso de cosecha)
         def replace_citation_group(match):
             content = match.group(1)
             ids = [x.strip() for x in re.findall(r'\d+', content)]
@@ -216,27 +239,35 @@ def process_text_with_tooltips(text):
                     )
                     html_out.append(tooltip)
                 else:
-                    html_out.append(f'<span class="citation-number" style="cursor:default; border:none;">[{cid}]</span>')
+                    # Si hay un número [1] pero no hay metadata (porque la IA falló al final),
+                    # lo mostramos gris para que no parezca un error
+                    html_out.append(f'<span class="citation-number" style="cursor:default; border:1px solid #eee; color:#aaa;">[{cid}]</span>')
             return f" {''.join(html_out)} "
 
+        # Reemplazar [1, 2]
         enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, text)
         
-        # 5. Footer
+        # 5. FOOTER DE SEGURIDAD
+        # Si logramos extraer fuentes, las mostramos abajo
         footer = ""
-        if source_map:
-            files = sorted(list(set(v['file'] for v in source_map.values())))
-            if files:
-                footer = "\n\n<div style='margin-top:20px; padding-top:10px; border-top:1px solid #eee;'>"
-                footer += "<p style='font-size:0.85em; color:#666; font-weight:bold; margin-bottom:5px;'>📚 Fuentes Consultadas:</p>"
-                footer += "<ul style='font-size:0.8em; color:#666; margin-top:0; padding-left:20px;'>"
-                for f in files: footer += f"<li style='margin-bottom:2px;'>{f}</li>"
-                footer += "</ul></div>"
+        unique_files = sorted(list(set(v['file'] for v in source_map.values())))
+        if unique_files:
+            footer = "\n\n<div style='margin-top:20px; padding-top:10px; border-top:1px solid #eee;'>"
+            footer += "<p style='font-size:0.85em; color:#666; font-weight:bold; margin-bottom:5px;'>📚 Fuentes Consultadas:</p>"
+            footer += "<ul style='font-size:0.8em; color:#666; margin-top:0; padding-left:20px;'>"
+            for f in unique_files: footer += f"<li style='margin-bottom:2px;'>{f}</li>"
+            footer += "</ul></div>"
 
         return enriched_body + footer
 
     except Exception as e:
+        # Si algo falla catastróficamente, devolvemos el texto original
+        # pero intentamos limpiar al menos las etiquetas [DOC] para que sea legible
         print(f"Error Tooltips: {e}")
-        return text
+        try:
+            return re.sub(r'\[DOC:.+?\]', '', text)
+        except:
+            return text
 
 def reset_report_workflow(): pass
 def reset_chat_workflow(): pass
