@@ -79,59 +79,55 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
 def validate_session_integrity(): pass 
 
 # =========================================================
-# LÓGICA DE CITAS V13 (LIMPIEZA AGRESIVA)
+# LÓGICA INTEGRAL DE TOOLTIPS (V. FINAL)
 # =========================================================
 def process_text_with_tooltips(text):
     if not text: return ""
 
     try:
         source_map = {}
-        # Normalización de comillas
         text = text.replace('“', '"').replace('”', '"')
         
         # ---------------------------------------------------------
-        # 1. COSECHA DE METADATA (Nivel Agresivo)
+        # 1. COSECHA DE METADATA (Invisible para el usuario)
         # ---------------------------------------------------------
-        # Esta función busca patrones [ID] ||| TEXTO y los guarda, 
-        # BORRÁNDOLOS del texto visible para que no se vean "fugados".
+        # Detecta: [ID] ||| Texto...
+        # Esta función "come" el texto del final para que no se vea feo.
         def harvest_metadata(match):
             try:
-                # Group 1: ID (puede ser '1', '2' o 'Archivo.pdf')
-                ref_key = match.group(1).strip()
-                # Group 2: El contenido de la cita
+                ref_key = match.group(1).strip() # Puede ser '1' o 'Archivo.pdf'
                 raw_content = match.group(2).strip()
 
-                # Limpieza interna del contenido
-                clean_content = re.sub(r'^(?:Cita:|Contexto:|Quote:|SECCIÓN:\s*\d+:?)\s*', '', raw_content, flags=re.IGNORECASE).strip('"').strip("'")
+                # Limpiamos prefijos comunes que pone la IA
+                clean_content = re.sub(r'^(?:Cita:|Contexto:|Quote:|Evidencia:|SECCIÓN:\s*\d+:?)\s*', '', raw_content, flags=re.IGNORECASE).strip('"').strip("'")
                 
-                # Si la clave es un nombre de archivo largo, la usamos tal cual
-                # Si es un número, también.
+                # Inicializamos
                 if ref_key not in source_map:
                     source_map[ref_key] = {"file": html.escape(ref_key), "context": ""}
                 
-                # Acumulamos citas si hay varias para el mismo ID
+                # Acumulamos evidencia (concatena si hay varias citas del mismo doc)
                 separator = "<br/><hr style='margin:4px 0; border-top:1px dashed #ccc;'/>" if source_map[ref_key]["context"] else ""
-                source_map[ref_key]["context"] += f"{separator}<em>\"{html.escape(clean_content[:250])}...\"</em>"
+                source_map[ref_key]["context"] += f"{separator}<em>\"{html.escape(clean_content[:300])}...\"</em>"
                 
-            except Exception as e: 
-                print(f"Error harvesting: {e}")
-            return "" # <--- IMPORTANTE: Esto borra el texto sucio de la pantalla
+            except: pass
+            return "" # BORRA el bloque del texto final
 
-        # Expresión regular "Non-Greedy" que soporta múltiples líneas e items pegados
-        # Busca [LO QUE SEA] ||| LO QUE SEA hasta que encuentra el siguiente [
+        # Regex Universal: Busca [Corchetes] seguido de ||| y texto, hasta el siguiente [Corchete]
         pattern_metadata = r'\[([^\]]+?)\]\s*\|\|\|\s*(.+?)(?=\s*\[[^\]]+?\]\s*\|\|\||$)'
         text = re.sub(pattern_metadata, harvest_metadata, text, flags=re.DOTALL)
 
         # ---------------------------------------------------------
         # 2. RENDERIZADO DE BADGES (Video e Imagen)
         # ---------------------------------------------------------
-        # Video: [Video: 0:00-0:15]
+        
+        # Video: [Video: 0:00-0:15] -> 🎬 0:00-0:15
         text = re.sub(
             r'\[Video:\s*([0-9:-]+)\]', 
             r'&nbsp;<span class="citation-number" style="background-color:#ffebee; color:#c62828; border:1px solid #ffcdd2; font-size:0.85em;">🎬 \1</span>', 
             text, flags=re.IGNORECASE
         )
-        # Imagen: [Imagen]
+        
+        # Imagen: [Imagen] -> 🖼️ Ref. Visual
         text = re.sub(
             r'\[Imagen\]', 
             r'&nbsp;<span class="citation-number" style="background-color:#e0f7fa; color:#006064; border:1px solid #b2ebf2; font-size:0.85em;">🖼️ Ref. Visual</span>', 
@@ -139,67 +135,60 @@ def process_text_with_tooltips(text):
         )
 
         # ---------------------------------------------------------
-        # 3. RENDERIZADO DE CITAS EN EL TEXTO
+        # 3. RENDERIZADO DE CITAS DE REPOSITORIO (El Tooltip)
         # ---------------------------------------------------------
         
-        # CASO A: Citas directas tipo [Archivo.pdf, SECCIÓN: 5] (Típico en Video)
-        def replace_direct_ref(match):
-            fname = match.group(1).strip()
-            extra_info = match.group(2).strip() if match.group(2) else ""
+        # Helper para construir el HTML del Tooltip
+        def build_tooltip_html(display_icon, filename, context_text, extra_label=""):
+            # Si no hay contexto capturado, mensaje genérico
+            if not context_text: context_text = "(Ver documento original para detalles)"
             
-            # Buscamos si tenemos contexto cosechado para este archivo
-            tooltip_content = ""
-            if fname in source_map:
-                tooltip_content = source_map[fname]["context"]
-            else:
-                # Si no hay contexto, intentamos buscar por coincidencia parcial
-                for key in source_map:
-                    if fname in key or key in fname:
-                        tooltip_content = source_map[key]["context"]
-                        break
-            
-            if not tooltip_content: tooltip_content = "(Ver documento completo)"
-
             return (
                 f'&nbsp;<span class="tooltip-container">'
-                f'<span class="citation-number" style="background-color:#f0f2f6; color:#444; border:1px solid #ddd;">📂</span>'
-                f'<span class="tooltip-text" style="width:300px;">'
-                f'<strong>Fuente:</strong> {html.escape(fname)}<br/>'
-                f'<span style="font-size:0.85em; opacity:0.8;">{extra_info}</span><br/>'
-                f'{tooltip_content}'
+                f'<span class="citation-number" style="background-color:#f0f2f6; color:#444; border:1px solid #ddd; cursor:help;">{display_icon}</span>'
+                f'<span class="tooltip-text" style="width:320px;">'
+                f'<strong>Fuente:</strong> {html.escape(filename)}<br/>'
+                f'{extra_label}'
+                f'<div style="margin-top:5px; padding-top:4px; border-top:1px solid #eee; font-size:0.9em; color:#333;">{context_text}</div>'
                 f'</span></span>'
             )
-        
+
+        # CASO A: Citas tipo Video/Directas -> [Archivo.pdf, SECCIÓN: 5]
+        def replace_direct_ref(match):
+            fname = match.group(1).strip()
+            section = match.group(2).strip() if match.group(2) else ""
+            
+            # Buscar contexto en lo que cosechamos
+            ctx = source_map.get(fname, {}).get("context", "")
+            # Si no está exacto, buscar parcial
+            if not ctx:
+                for k, v in source_map.items():
+                    if fname in k or k in fname:
+                        ctx = v["context"]; break
+            
+            extra = f"<span style='font-size:0.8em; opacity:0.8;'>Sección: {section}</span>" if section else ""
+            return build_tooltip_html("📂", fname, ctx, extra)
+
         text = re.sub(r'\[([^\]]+\.pdf)(?:,\s*SECCIÓN:\s*([^\]]+))?\]', replace_direct_ref, text, flags=re.IGNORECASE)
 
-        # CASO B: Citas numéricas [1] (Típico en Imagen/Reportes)
+        # CASO B: Citas Numéricas -> [1]
         def replace_numeric_ref(match):
             cid = match.group(1)
             if cid in source_map:
                 data = source_map[cid]
-                # Si el "file" parece un nombre de archivo real (termina en pdf), mostramos icono de carpeta
-                icon = "📂" if ".pdf" in data["file"].lower() else f"[{cid}]"
-                style = "background-color:#f0f2f6; color:#444; border:1px solid #ddd;" if icon == "📂" else ""
-                
-                return (
-                    f'<span class="tooltip-container">'
-                    f'<span class="citation-number" style="{style}">{icon}</span>'
-                    f'<span class="tooltip-text" style="width:300px;">'
-                    f'<strong>Fuente:</strong> {data["file"]}<br/>'
-                    f'{data["context"]}'
-                    f'</span></span>'
-                )
-            return f'<span class="citation-number" style="color:#aaa;">[{cid}]</span>'
+                # Si el archivo termina en .pdf, usamos icono carpeta, si no, número
+                is_pdf = ".pdf" in data["file"].lower()
+                icon = "📂" if is_pdf else f"[{cid}]"
+                return build_tooltip_html(icon, data["file"], data["context"])
+            else:
+                return f'<span class="citation-number" style="color:#aaa;">[{cid}]</span>'
 
         text = re.sub(r'\[(\d+)\]', replace_numeric_ref, text)
 
         # ---------------------------------------------------------
-        # 4. LIMPIEZA FINAL DE CADÁVERES
+        # 4. LIMPIEZA FINAL
         # ---------------------------------------------------------
-        # Borra cualquier rastro de "Fuentes Verificadas:" o bloques residuales
         text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas| Consultadas)?\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
-        
-        # Borra líneas vacías múltiples
         text = re.sub(r'\n{3,}', '\n\n', text)
         
         return text
