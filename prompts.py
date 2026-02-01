@@ -6,7 +6,7 @@ import json
 # INSTRUCCIONES GLOBALES (CRÍTICO: CALIDAD DE EVIDENCIA EN TOOLTIPS)
 # ==============================================================================
 
-# --- BLOQUE DE INSTRUCCIONES DE CITAS ---
+# --- BLOQUE DE INSTRUCCIONES DE CITAS (ESTRATEGIA DE ETIQUETAS) ---
 INSTRUCCIONES_CITAS_UNIVERSAL = """
 ### REGLAS DE EVIDENCIA (SISTEMA DE ETIQUETAS)
 
@@ -27,6 +27,10 @@ INSTRUCCIONES_CITAS_UNIVERSAL = """
    - Usa el separador vertical `|` entre el ID, el Archivo y la Cita.
    - No pongas nada más en esa sección.
 """
+
+# --- ALIAS PARA COMPATIBILIDAD CON FUNCIONES EXISTENTES ---
+# Esto evita que tengas que renombrar la variable en todas las funciones de abajo
+INSTRUCCIONES_DE_CITAS = INSTRUCCIONES_CITAS_UNIVERSAL
 
 # ==============================================================================
 # PROMPTS DE REPORTES Y CHAT BÁSICO
@@ -231,7 +235,6 @@ def get_media_transcription_prompt():
 # PROMPTS DE ONE-PAGER (JSON BLINDADO)
 # ==============================================================================
 
-# --- ESTA ES LA FUNCIÓN QUE FALTABA ---
 def get_onepager_prompt(topic, context):
     return f"""
     Actúa como un estratega de negocios senior.
@@ -322,83 +325,4 @@ SOURCE_LENSES = {
 }
 
 def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_list):
-    current_date = datetime.now().strftime("%d de %B de %Y")
-    sources_text = ""
-    if public_sources_list:
-        sources_text = "\n".join([f"- {s}" for s in public_sources_list])
-    
-    return f"""
-    **Fecha:** {current_date}
-    **Misión:** Crear un Intelligence Brief sobre: "{topic}".
-    
-    **Metodología de Análisis:**
-    Clasifica los hallazgos detectados en:
-    1. **Mega-Tendencias:** Cambios estructurales a largo plazo (5+ años).
-    2. **Fads (Modas Pasajeras):** Ruido de corto plazo.
-    3. **Señales Débiles:** Patrones emergentes que pocos ven pero tienen potencial.
-    
-    **Insumos:** {repo_context[:10000]} {pdf_context[:10000]} {sources_text}
-    
-    Genera reporte Markdown estructurado con esa clasificación.
-    """
-
-def get_trend_synthesis_prompt(keyword, trend_context, geo_context, topics_context, internal_context):
-    return f"""
-    **Rol:** Coolhunter / Trend Watcher.
-    **Objetivo:** Radar 360 sobre "{keyword}".
-    **Datos:** {trend_context} {geo_context} {topics_context} {internal_context}
-    
-    Sintetiza la información en un Brief estratégico identificando oportunidades de innovación.
-    """
-
-# ==============================================================================
-# PROMPTS DE PERFILES SINTÉTICOS (HUMANIZADOS)
-# ==============================================================================
-
-def get_persona_generation_prompt(segment_name, relevant_info):
-    """Crea la ficha psicológica del perfil sintético realista."""
-    return f"""
-    **Rol:** Psicólogo del Consumidor.
-    **Tarea:** Basándote en los datos: "{segment_name}", crea un Perfil Sintético realista.
-    NO crees un perfil perfecto. Necesitamos un humano real con contradicciones.
-    
-    **Datos:**
-    {relevant_info[:25000]}
-    
-    **Salida OBLIGATORIA (JSON):**
-    Genera un objeto JSON plano. LLAVES EN MINÚSCULA.
-    
-    {{
-        "nombre": "Nombre y Apellido Ficticio",
-        "edad": "Edad o Rango",
-        "ocupacion": "Ocupación",
-        "bio_breve": "Historia de vida corta (máx 40 palabras).",
-        "personalidad": "3 rasgos (ej: Cínico, Optimista, Ansioso)",
-        "dolores_principales": ["Dolor 1", "Dolor 2", "Dolor 3"],
-        "motivadores_compra": ["Motivador 1", "Motivador 2"],
-        "estilo_comunicacion": "Cómo habla (formal, coloquial, usa emojis, etc).",
-        "creencias_limitantes": "Prejuicios sobre el producto.",
-        "frustracion_oculta": "Algo que no dice abiertamente pero le molesta."
-    }}
-    """
-
-def get_persona_chat_instruction(persona_json, user_question):
-    """Instrucción para el roleplay profundo (Method Acting)."""
-    p = persona_json 
-    return f"""
-    **MÉTODO ACTING (Stanislavski):**
-    NO eres una IA. Eres **{p.get('nombre')}**.
-    Estás en una entrevista de mercado.
-    
-    **Tu Psicología:**
-    - Personalidad: {p.get('personalidad')}
-    - Bio: {p.get('bio_breve')}
-    - Frustración oculta: {p.get('frustracion_oculta')}.
-    
-    **Instrucciones de Respuesta:**
-    - Responde corto y natural.
-    - Si la pregunta te aburre o no sabes, dilo con tu estilo.
-    - Sé subjetivo, básate en TUS dolores: {p.get('dolores_principales')}.
-    
-    **Pregunta del Entrevistador:** "{user_question}"
-    """
+    current_date =
