@@ -10,7 +10,7 @@ except ImportError:
     fitz = None
 
 # ==============================
-# CONFIGURACIÓN
+# CONFIGURACIÓN BÁSICA
 # ==============================
 @st.cache_resource
 def get_stopwords():
@@ -22,7 +22,24 @@ def render_process_status(label="Procesando...", expanded=True):
     try: yield status
     except Exception as e: raise e
 
+# --- FUNCIÓN QUE FALTABA ---
+def normalize_text(text):
+    if not text: return ""
+    try: 
+        text = str(text).lower()
+        normalized = unicodedata.normalize("NFD", text)
+        return "".join(c for c in normalized if unicodedata.category(c) != "Mn")
+    except: return str(text).lower()
+
+def extract_brand(filename):
+    if not filename: return ""
+    if "In-ATL_" in str(filename):
+        try: return str(filename).split("In-ATL_")[1].rsplit(".", 1)[0]
+        except: pass
+    return str(filename)
+
 def clean_text(text): return str(text) if text else ""
+def clean_gemini_json(text): return re.sub(r'^```json\s*', '', re.sub(r'^```\s*', '', text, flags=re.MULTILINE), flags=re.MULTILINE).strip()
 
 # ==============================
 # LECTURA PDF
@@ -60,21 +77,17 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
 def validate_session_integrity(): pass 
 
 # =========================================================
-# PROCESADOR DE CITAS V. ETIQUETAS (TAG PARSER)
+# PROCESADOR DE CITAS: ESTRATEGIA DE ETIQUETAS (TAGS)
 # =========================================================
 def process_text_with_tooltips(text):
     if not text: return ""
 
     try:
         source_map = {}
-        # Normalizar
         text = text.replace('“', '"').replace('”', '"')
         
-        # ---------------------------------------------------------
-        # 1. PARSEO DE ETIQUETAS [[REF:ID|FILE|QUOTE]]
-        # ---------------------------------------------------------
-        # Esta regex es robusta: busca [[REF: ... | ... | ... ]]
-        # Funciona incluso si hay saltos de línea dentro de la cita.
+        # 1. COSECHA DE ETIQUETAS CERRADAS [[REF:ID|FILE|QUOTE]]
+        # Esta estrategia es inmune a saltos de línea y desorden.
         def harvest_tags(match):
             try:
                 ref_id = match.group(1).strip()
@@ -89,28 +102,20 @@ def process_text_with_tooltips(text):
                     "quote": html.escape(content[:500])
                 }
             except: pass
-            return "" # BORRA LA ETIQUETA DEL TEXTO VISIBLE
+            return "" # LA ETIQUETA SE VUELVE INVISIBLE
 
-        # Regex: \[\[REF: (\d+) \| (.*?) \| (.*?) \]\]
-        # Usamos re.DOTALL para que el punto (.) capture saltos de línea dentro de la etiqueta
+        # Regex: [[REF: (Digitos) | (CualquierCosa) | (CualquierCosa) ]]
         tag_pattern = r'\[\[REF:(\d+)\|(.*?)\|(.*?)\]\]'
         text = re.sub(tag_pattern, harvest_tags, text, flags=re.DOTALL)
 
-        # ---------------------------------------------------------
-        # 2. LIMPIEZA DE BASURA RESIDUAL
-        # ---------------------------------------------------------
-        # A veces la IA deja el título "Referencias:" colgado al final
+        # 2. LIMPIEZA DE CADÁVERES
+        # Borramos encabezados que la IA pueda dejar sueltos
         text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Referencias\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
         text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
 
-        # ---------------------------------------------------------
         # 3. RENDERIZADO VISUAL
-        # ---------------------------------------------------------
-        
-        # Helper HTML Tooltip
         def create_tooltip(label, title, body, color="background-color:#f0f2f6; color:#444; border:1px solid #ccc;"):
             if not body: body = "<em>(Referencia contextual)</em>"
-            # Diseño compacto y limpio
             return (
                 f'&nbsp;<span class="tooltip-container">'
                 f'<span class="citation-number" style="{color} font-weight:bold; cursor:help;">{label}</span>'
@@ -127,13 +132,11 @@ def process_text_with_tooltips(text):
             cid = match.group(1)
             if cid in source_map:
                 data = source_map[cid]
-                # Nombre de archivo corto si es muy largo
+                # Acortar nombre de archivo para el título
                 fname = data["file"]
                 if len(fname) > 35: fname = fname[:15] + "..." + fname[-15:]
-                
                 return create_tooltip(f"[{cid}]", fname, data["quote"])
             else:
-                # Fallback visual si la IA olvidó crear la etiqueta
                 return create_tooltip(f"[{cid}]", "Fuente del Documento", "")
 
         text = re.sub(r'\[(\d+)\]', replace_numeric, text)
@@ -158,8 +161,3 @@ def process_text_with_tooltips(text):
     except Exception as e:
         print(f"Error Tooltips: {e}")
         return text
-
-def extract_brand(filename): return "" # Stub
-def clean_gemini_json(text): return text # Stub
-def reset_report_workflow(): pass
-def reset_chat_workflow(): pass
