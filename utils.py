@@ -74,33 +74,25 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
     selected_set = set(selected_files)
     
     candidate_chunks = []
-    total_len = 0
     
     for pres in db:
         if pres.get('nombre_archivo') in selected_set:
             try:
                 doc_name = pres.get('nombre_archivo')
-                doc_title = pres.get('titulo_estudio', doc_name)
                 for i, g in enumerate(pres.get("grupos", [])):
                     txt = str(g.get('contenido_texto', ''))
                     if txt and len(txt) > 20:
                         chunk_meta = f"--- DOC: {doc_name} | SECCIÓN: {i+1} ---\n" 
                         full_chunk = f"{chunk_meta}{txt}\n\n"
-                        candidate_chunks.append({
-                            "text": full_chunk,
-                            "original_idx": len(candidate_chunks)
-                        })
-                        total_len += len(full_chunk)
+                        candidate_chunks.append({"text": full_chunk})
             except: pass
 
-    # Retorno simple (sin búsqueda semántica compleja para no recargar visual mode)
     return "".join([c["text"] for c in candidate_chunks])[:max_chars]
-
 
 def validate_session_integrity(): pass 
 
 # =========================================================
-# LÓGICA DE CITAS V9 (SOPORTE IMAGEN + TOOLTIPS)
+# LÓGICA DE CITAS V10 (SOPORTE VIDEO + PDFS DIRECTOS)
 # =========================================================
 def process_text_with_tooltips(text):
     if not text: return ""
@@ -109,83 +101,77 @@ def process_text_with_tooltips(text):
         source_map = {}
         text = text.replace('“', '"').replace('”', '"')
         
-        # 1. COSECHA DE METADATA (Estándar [1] File ||| Context)
+        # 1. COSECHA DE METADATA (Captura el bloque feo del final y lo oculta)
+        # Adaptado para capturar tanto [1] archivo como [archivo.pdf] directo
         def harvest_metadata(match):
             try:
-                cid = match.group(1)
-                fname = match.group(2).strip()
-                raw_context = match.group(3).strip()
-                clean_context = re.sub(r'^(?:Cita:|Contexto:|Quote:)\s*', '', raw_context, flags=re.IGNORECASE).strip('"').strip("'")
+                # Intentamos capturar ID o Nombre de archivo
+                ref_id = match.group(1).strip()
+                raw_context = match.group(2).strip()
                 
-                source_map[cid] = {
-                    "file": html.escape(fname),
+                # Limpiar el contexto
+                clean_context = re.sub(r'^(?:Cita:|Contexto:|Quote:|SECCIÓN:\s*\d+:)\s*', '', raw_context, flags=re.IGNORECASE).strip('"').strip("'")
+                
+                # Guardamos en el mapa. Si no es un número, usamos el nombre como clave
+                source_map[ref_id] = {
+                    "file": html.escape(ref_id) if not ref_id.isdigit() else "Fuente",
                     "context": html.escape(clean_context[:300]) + "..."
                 }
             except: pass
-            return "" # Borrar del texto visible
+            return "" # Esto ELIMINA el texto crudo del final
 
-        pattern_metadata = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
+        # Regex agresiva para atrapar el bloque de fuentes del final
+        # Busca: [CualquierCosa] ||| CualquierCosa hasta nueva linea o fin
+        pattern_metadata = r'\[([^\]]+?)\]\s*\|\|\|\s*(.+?)(?=\n\[|$)'
         text = re.sub(pattern_metadata, harvest_metadata, text, flags=re.DOTALL)
-        
-        # 2. LIMPIEZA DE FUGAS [DOC:...]
-        def clean_raw_doc_leaks(match):
-            try:
-                content = match.group(1).replace("DOC:", "").strip()
-                return (
-                    f'&nbsp;<span class="tooltip-container">'
-                    f'<span class="citation-number" style="background-color:#f0f2f6; color:#444;">📂</span>'
-                    f'<span class="tooltip-text"><strong>Fuente:</strong> {html.escape(content)}</span></span>'
-                )
-            except: return ""
-        text = re.sub(r'\[(DOC:.+?)\]', clean_raw_doc_leaks, text, flags=re.IGNORECASE)
 
-        # 3. SOPORTE PARA [IMAGEN] (Nuevo para Visual Mode)
-        # Convierte [Imagen] en un badge visual
+        # 2. LIMPIEZA Y FORMATO DE VIDEO [Video: 0:00-0:10]
+        # Convierte timestamps en badges rojos
         text = re.sub(
-            r'\[Imagen\]', 
-            r'&nbsp;<span class="citation-number" style="background-color:#e0f7fa; color:#006064; border:1px solid #b2ebf2; font-size:0.8em;">🖼️ Ref. Visual</span>', 
+            r'\[Video:\s*([0-9:-]+)\]', 
+            r'&nbsp;<span class="citation-number" style="background-color:#ffebee; color:#c62828; border:1px solid #ffcdd2; font-size:0.85em;">🎬 \1</span>', 
             text, 
             flags=re.IGNORECASE
         )
 
-        # 4. LIMPIEZA GENERAL
-        text = re.sub(r'\(\s*(?:Contexto|Cita|Quote|Evidencia)\s*:.*?\)', '', text, flags=re.IGNORECASE | re.DOTALL)
+        # 3. LIMPIEZA DE IMAGEN [Imagen]
+        text = re.sub(
+            r'\[Imagen\]', 
+            r'&nbsp;<span class="citation-number" style="background-color:#e0f7fa; color:#006064; border:1px solid #b2ebf2; font-size:0.85em;">🖼️ Ref. Visual</span>', 
+            text, 
+            flags=re.IGNORECASE
+        )
+
+        # 4. LIMPIEZA DE CITAS PDF DIRECTAS (La que sale en tu captura)
+        # Patrón: [NombreArchivo.pdf, SECCIÓN: 5]
+        def clean_pdf_direct_ref(match):
+            try:
+                fname = match.group(1).strip()
+                section = match.group(2).strip()
+                return (
+                    f'&nbsp;<span class="tooltip-container">'
+                    f'<span class="citation-number" style="background-color:#f0f2f6; color:#444;">📂</span>'
+                    f'<span class="tooltip-text">'
+                    f'<strong>Fuente:</strong> {html.escape(fname)}<br/>'
+                    f'<span style="font-size:0.9em; opacity:0.9;">Sección: {section}</span>'
+                    f'</span></span>'
+                )
+            except: return ""
+
+        text = re.sub(r'\[([^\]]+\.pdf),\s*SECCIÓN:\s*([^\]]+)\]', clean_pdf_direct_ref, text, flags=re.IGNORECASE)
+
+        # 5. LIMPIEZA DE CITAS NUMÉRICAS [1] (Si quedara alguna)
+        def replace_numeric_citation(match):
+            cid = match.group(1)
+            # Intentamos buscar en el mapa, si no existe, mostramos genérico
+            return f'<span class="citation-number" style="cursor:default; border:1px solid #eee; color:#aaa;">[{cid}]</span>'
+
+        text = re.sub(r"\[(\d+)\]", replace_numeric_citation, text)
+
+        # 6. LIMPIEZA FINAL DE BASURA
         text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas| Consultadas)?\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
         
-        # 5. RENDERIZADO DE CITAS NUMÉRICAS [1]
-        def replace_citation_group(match):
-            content = match.group(1)
-            ids = [x.strip() for x in re.findall(r'\d+', content)]
-            html_out = []
-            for cid in ids:
-                data = source_map.get(cid)
-                if data:
-                    tooltip = (
-                        f'<span class="tooltip-container">'
-                        f'<span class="citation-number">[{cid}]</span>'
-                        f'<span class="tooltip-text">'
-                        f'<strong>📂 {data["file"]}</strong><br/>'
-                        f'<span style="font-size:0.9em; opacity:0.9;">"{data["context"]}"</span>'
-                        f'</span></span>'
-                    )
-                    html_out.append(tooltip)
-                else:
-                    html_out.append(f'<span class="citation-number" style="cursor:default; border:1px solid #eee; color:#aaa;">[{cid}]</span>')
-            return f" {''.join(html_out)} "
-
-        enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, text)
-        
-        # 6. FOOTER DE SEGURIDAD
-        footer = ""
-        unique_files = sorted(list(set(v['file'] for v in source_map.values())))
-        if unique_files:
-            footer = "\n\n<div style='margin-top:20px; padding-top:10px; border-top:1px solid #eee;'>"
-            footer += "<p style='font-size:0.85em; color:#666; font-weight:bold; margin-bottom:5px;'>📚 Fuentes Consultadas:</p>"
-            footer += "<ul style='font-size:0.8em; color:#666; margin-top:0; padding-left:20px;'>"
-            for f in unique_files: footer += f"<li style='margin-bottom:2px;'>{f}</li>"
-            footer += "</ul></div>"
-
-        return enriched_body + footer
+        return text
 
     except Exception as e:
         print(f"Error Tooltips: {e}")
