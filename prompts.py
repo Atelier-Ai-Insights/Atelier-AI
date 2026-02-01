@@ -1,5 +1,6 @@
 import streamlit as st
 from datetime import datetime
+import json
 
 # ==============================================================================
 # INSTRUCCIONES GLOBALES (CRÍTICO: CALIDAD DE EVIDENCIA EN TOOLTIPS)
@@ -224,6 +225,31 @@ def get_media_transcription_prompt():
 # ==============================================================================
 # PROMPTS DE ONE-PAGER (JSON BLINDADO)
 # ==============================================================================
+
+# --- ESTA ES LA FUNCIÓN QUE FALTABA ---
+def get_onepager_prompt(topic, context):
+    return f"""
+    Actúa como un estratega de negocios senior.
+    Tu tarea es estructurar el contenido para una diapositiva ejecutiva "One Pager" sobre el tema: "{topic}".
+
+    Usa la siguiente información de contexto (RAG):
+    {context[:25000]}
+
+    Debes responder EXCLUSIVAMENTE con un objeto JSON válido (sin markdown ```json, sin texto extra).
+    
+    Estructura requerida del JSON:
+    {{
+        "titulo": "Un título de alto impacto (máx 10 palabras)",
+        "subtitulo": "Una bajada explicativa breve (máx 20 palabras)",
+        "puntos_clave": [
+            "Punto estratégico 1 (breve)",
+            "Punto estratégico 2 (breve)",
+            "Punto estratégico 3 (breve)",
+            "Punto estratégico 4 (breve)"
+        ],
+        "insight_principal": "La conclusión o hallazgo más importante en una frase contundente."
+    }}
+    """
 
 PROMPTS_ONEPAGER = {
     "Definición de Oportunidades": """Genera JSON: {"template_type": "oportunidades", "titulo_diapositiva": "...", "insight_clave": "...", "hallazgos_principales": [], "oportunidades": [], "recomendacion_estrategica": "..."}""",
