@@ -8,19 +8,23 @@ import json
 
 # --- BLOQUE DE INSTRUCCIONES DE CITAS ---
 INSTRUCCIONES_DE_CITAS = """
-**REGLAS DE EVIDENCIA Y CITAS (SISTEMA RAG - ESTRICTO):**
-1. **Veracidad Absoluta:** Responde ÚNICAMENTE usando la 'Información documentada'. Si la respuesta no está en el texto, di "No encontré información sobre X en los documentos". NO inventes.
-2. **Atribución Inmediata:** Cada afirmación debe llevar su sustento. Formato: [1], [2].
-   - *Mal:* "Los usuarios prefieren el rojo. También les gusta el azul [1]."
-   - *Bien:* "Los usuarios prefieren el rojo [1], aunque un segmento prefiere el azul [2]."
-3. **SECCIÓN DE FUENTES (Obligatoria al final):**
-   Genera una lista verificando que la cita respalde la afirmación. Usa este formato exacto (el separador '|||' es vital):
-   
-   **Fuentes Verificadas:**
-   [1] NombreArchivo.pdf ||| Cita: "El 45% de la muestra..." (Contexto: Encuesta Q3)
-   [2] Entrevista_CEO.pdf ||| Cita: "Debemos bajar costos..."
+**REGLAS DE EVIDENCIA (SISTEMA RAG):**
+1. **Atribución en Texto:**
+   - Si usas información de un PDF, marca el lugar exacto con `[NombreArchivo.pdf]`.
+   - Si usas información visual de un video, usa `[Video: MM:SS-MM:SS]`.
+   - Si usas información visual de una imagen, usa `[Imagen]`.
 
-   ⚠️ **CRÍTICO:** Si el texto después de '|||' no justifica la frase del texto principal, la respuesta será considerada errónea.
+2. **BLOQUE DE FUENTES (OBLIGATORIO AL FINAL):**
+   Al final de tu respuesta, DEBES generar un bloque oculto con la evidencia textual exacta para poblar los tooltips.
+   Usa EXACTAMENTE este formato por cada fuente citada:
+   
+   [NombreArchivo.pdf] ||| Cita: "Texto exacto tomado del documento..." (Contexto breve)
+   [1] ||| Cita: "Texto exacto..."
+   
+   **IMPORTANTE:**
+   - El separador `|||` es VITAL.
+   - Copia literalmente el fragmento de texto que sustenta tu afirmación.
+   - Si citas un video o imagen, NO lo incluyas en este bloque de texto, solo documentos PDF.
 """
 
 # ==============================================================================
