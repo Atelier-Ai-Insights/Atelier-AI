@@ -22,19 +22,12 @@ def get_stopwords():
         'the', 'and', 'to', 'of', 'in', 'is', 'that', 'for', 'it', 'as', 'was', 'with', 'on', 'at', 'by'
     }
 
-# --- CORRECCIÓN DEL ERROR DE RERUN ---
 @contextmanager
 def render_process_status(label="Procesando...", expanded=True):
-    """
-    Maneja el estado visual del proceso.
-    CORREGIDO: Ya no usa un 'try-except' genérico que atrapaba el st.rerun().
-    """
     status = st.status(label, expanded=expanded)
     try:
         yield status
     except Exception as e:
-        # Solo atrapamos errores de lógica (Exception), NO errores de sistema (BaseException)
-        # como RerunException o StopException.
         raise e
 
 def normalize_text(text):
@@ -64,7 +57,6 @@ def clean_gemini_json(text):
 # ==============================
 def expand_search_query(query):
     if not query or len(query.split()) > 10: return [query]
-    
     try:
         from services.gemini_api import call_gemini_api
         prompt = (
@@ -112,6 +104,7 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
                 for i, g in enumerate(pres.get("grupos", [])):
                     txt = str(g.get('contenido_texto', ''))
                     if txt and len(txt) > 20:
+                        # Usamos un formato estándar que la IA pueda leer bien
                         chunk_meta = f"--- DOC: {doc_name} | SECCIÓN: {i+1} ---\nMETA: {doc_title}\n"
                         full_chunk = f"{chunk_meta} - {txt}\n\n"
                         candidate_chunks.append({
@@ -158,7 +151,7 @@ def validate_session_integrity():
     pass 
 
 # =========================================================
-# LÓGICA DE CITAS V6
+# LÓGICA DE CITAS V7 (FIX PARA FUGAS DE TEXTO)
 # =========================================================
 def process_text_with_tooltips(text):
     if not text: return ""
@@ -167,6 +160,7 @@ def process_text_with_tooltips(text):
         source_map = {}
         text = text.replace('“', '"').replace('”', '"')
         
+        # 1. Recolectar definiciones estándar [1] Archivo ||| Contexto
         def harvest_metadata(match):
             cid = match.group(1)
             fname = match.group(2).strip()
@@ -180,11 +174,31 @@ def process_text_with_tooltips(text):
 
         pattern_metadata = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
         text = re.sub(pattern_metadata, harvest_metadata, text, flags=re.DOTALL)
+        
+        # 2. LIMPIEZA DE FUGAS (NUEVO): Convierte [DOC: ... | SECCIÓN: ...] en icono tooltip
+        def clean_raw_doc_leaks(match):
+            fname = match.group(1).strip()
+            sections = match.group(2).strip()
+            # Creamos un tooltip visual para salvar el error de la IA
+            return (
+                f'&nbsp;<span class="tooltip-container">'
+                f'<span class="citation-number" style="background-color:#f0f2f6; color:#555;">📂</span>'
+                f'<span class="tooltip-text">'
+                f'<strong>Fuente Directa:</strong><br/>{html.escape(fname)}<br/>'
+                f'<span style="font-size:0.9em; opacity:0.9;">Secciones relevantes: {sections}</span>'
+                f'</span></span>'
+            )
+
+        # Detecta el patrón que se ve en tu captura: [DOC: archivo.pdf | SECCIÓN: 1, 3]
+        text = re.sub(r'\[DOC:\s*([^|\]]+?)\s*\|\s*SECCIÓN:\s*([^\]]+?)\]', clean_raw_doc_leaks, text, flags=re.IGNORECASE)
+
+        # 3. Limpieza general de basura
         text = re.sub(r'\(\s*(?:Contexto|Cita|Quote|Evidencia)\s*:.*?\)', '', text, flags=re.IGNORECASE | re.DOTALL)
         text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas| Consultadas)?\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
         text = re.sub(r'\n{3,}', '\n\n', text)
         text = re.sub(r'(?<=\d)\]\s*\[(?=\d)', ', ', text)
         
+        # 4. Renderizar tooltips numéricos estándar [1]
         def replace_citation_group(match):
             content = match.group(1)
             ids = [x.strip() for x in re.findall(r'\d+', content)]
@@ -207,6 +221,7 @@ def process_text_with_tooltips(text):
 
         enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, text)
         
+        # 5. Footer
         footer = ""
         if source_map:
             files = sorted(list(set(v['file'] for v in source_map.values())))
