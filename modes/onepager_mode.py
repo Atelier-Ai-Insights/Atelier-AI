@@ -35,7 +35,6 @@ def one_pager_ppt_mode(db, selected_files):
         st.info("👈 Selecciona documentos para comenzar.")
         return
 
-    # --- CAMBIO AQUI: width="stretch" en lugar de use_container_width=True ---
     if st.button("Generar PPTX", type="primary", width="stretch"):
         if not user_topic:
             st.warning("Escribe un tema."); return
