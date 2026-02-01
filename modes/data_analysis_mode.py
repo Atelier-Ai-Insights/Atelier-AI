@@ -63,19 +63,19 @@ def show_project_analyzer(df):
     # --- MENÚ DE NAVEGACIÓN ---
     st.markdown("---")
     c1 = st.columns(3)
-    if plan.get("da_has_pivot_table") and c1[0].button("Tablas Dinámicas", type="primary" if sub_modo=="Tabla Dinámica" else "secondary", use_container_width=True): 
+    if plan.get("da_has_pivot_table") and c1[0].button("Tablas Dinámicas", type="primary" if sub_modo=="Tabla Dinámica" else "secondary", width="stretch"): 
         st.session_state.mode_state["da_current_sub_mode"] = "Tabla Dinámica"; st.rerun()
-    if plan.get("da_has_autocode") and c1[1].button("Auto-Code", type="primary" if sub_modo=="Auto-Codificación" else "secondary", use_container_width=True): 
+    if plan.get("da_has_autocode") and c1[1].button("Auto-Code", type="primary" if sub_modo=="Auto-Codificación" else "secondary", width="stretch"): 
         st.session_state.mode_state["da_current_sub_mode"] = "Auto-Codificación"; st.rerun()
-    if plan.get("da_has_wordcloud") and c1[2].button("Nube Palabras", type="primary" if sub_modo=="Nube de Palabras" else "secondary", use_container_width=True): 
+    if plan.get("da_has_wordcloud") and c1[2].button("Nube Palabras", type="primary" if sub_modo=="Nube de Palabras" else "secondary", width="stretch"): 
         st.session_state.mode_state["da_current_sub_mode"] = "Nube de Palabras"; st.rerun()
     
     c2 = st.columns(3)
-    if plan.get("da_has_correlation") and c2[0].button("Correlación", type="primary" if sub_modo=="Análisis de Correlación" else "secondary", use_container_width=True): 
+    if plan.get("da_has_correlation") and c2[0].button("Correlación", type="primary" if sub_modo=="Análisis de Correlación" else "secondary", width="stretch"): 
         st.session_state.mode_state["da_current_sub_mode"] = "Análisis de Correlación"; st.rerun()
-    if plan.get("da_has_group_comparison") and c2[1].button("Comparar Grupos", type="primary" if sub_modo=="Comparación de Grupos" else "secondary", use_container_width=True): 
+    if plan.get("da_has_group_comparison") and c2[1].button("Comparar Grupos", type="primary" if sub_modo=="Comparación de Grupos" else "secondary", width="stretch"): 
         st.session_state.mode_state["da_current_sub_mode"] = "Comparación de Grupos"; st.rerun()
-    if plan.get("da_has_ppt_export") and c2[2].button("Exportar PPT", type="primary" if sub_modo=="Exportar a PPT" else "secondary", use_container_width=True): 
+    if plan.get("da_has_ppt_export") and c2[2].button("Exportar PPT", type="primary" if sub_modo=="Exportar a PPT" else "secondary", width="stretch"): 
         st.session_state.mode_state["da_current_sub_mode"] = "Exportar a PPT"; st.rerun()
 
     st.divider()
@@ -90,7 +90,7 @@ def show_project_analyzer(df):
         
         if idx != "(Ninguno)" and val:
             pivot = pd.pivot_table(df, values=val, index=idx, columns=col if col != "(Ninguno)" else None, aggfunc='count', fill_value=0)
-            st.dataframe(pivot, use_container_width=True)
+            st.dataframe(pivot, width="stretch")
             st.session_state.mode_state["da_pivot_table"] = pivot 
             
             p, residuals = calculate_chi_squared(pivot)
@@ -99,7 +99,7 @@ def show_project_analyzer(df):
                 st.metric("P-Value", f"{p:.4f}", delta="Significativo" if p < 0.05 else "No significativo", delta_color="inverse")
                 if p < 0.05:
                     st.caption("Los colores indican diferencias estadísticas.")
-                    st.dataframe(residuals.style.applymap(style_residuals), use_container_width=True)
+                    st.dataframe(residuals.style.applymap(style_residuals), width="stretch")
 
     # --- SUB-MODO: NUBE DE PALABRAS ---
     if sub_modo == "Nube de Palabras":
@@ -115,7 +115,7 @@ def show_project_analyzer(df):
                 st.image(img_buffer, use_column_width=True)
                 st.session_state.mode_state["da_wordcloud_fig"] = img_buffer
                 with st.expander("Ver tabla de frecuencias"):
-                    st.dataframe(freqs.head(20), use_container_width=True)
+                    st.dataframe(freqs.head(20), width="stretch")
 
     # --- SUB-MODO: CORRELACIÓN ---
     if sub_modo == "Análisis de Correlación":
@@ -156,7 +156,7 @@ def show_project_analyzer(df):
         
         if "da_autocode_results_df" in st.session_state.mode_state:
             st.success("✅ Resultados")
-            st.dataframe(st.session_state.mode_state["da_autocode_results_df"], use_container_width=True)
+            st.dataframe(st.session_state.mode_state["da_autocode_results_df"], width="stretch")
             st.download_button("📥 Descargar Excel", data=to_excel(st.session_state.mode_state["da_autocode_results_df"]), file_name="autocode.xlsx")
             if st.button("Reiniciar"):
                 st.session_state.mode_state.pop("da_autocode_results_df", None); st.rerun()
