@@ -123,12 +123,12 @@ def ideacion_mode(db, selected_files):
                             file_name="Ideacion_Creativa.pdf",
                             mime="application/pdf",
                             type="secondary",
-                            use_container_width=True
+                            width="stretch"
                         )
                 except Exception as e:
                     st.error(f"Error PDF: {e}")
 
         with col2:
-            if st.button("Nueva Búsqueda", type="secondary", use_container_width=True):
+            if st.button("Nueva Búsqueda", type="secondary", width="stretch"):
                 st.session_state.mode_state["ideation_history"] = []
                 st.rerun()
