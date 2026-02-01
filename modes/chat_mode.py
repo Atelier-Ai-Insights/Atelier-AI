@@ -26,7 +26,7 @@ except ImportError:
     def log_query_event(q, mode): pass
 
 # ==========================================
-# FUNCIÓN PRINCIPAL DEL CHAT (VISUALMENTE MEJORADA)
+# FUNCIÓN PRINCIPAL DEL CHAT (AUTO-LIMPIEZA)
 # ==========================================
 def grounded_chat_mode(db, selected_files):
     st.subheader("Chat de Consulta Directa")
@@ -46,18 +46,21 @@ def grounded_chat_mode(db, selected_files):
     # 3. INTERACCIÓN DEL USUARIO
     if user_input := st.chat_input("Haz una pregunta sobre tus documentos..."):
         
-        # Generador con PASOS VISUALES (Estilo Trend Radar)
+        # Generador con STATUS BOX EFÍMERO
         def chat_generator():
-            # Iniciamos el contenedor expandido
-            with st.status("Iniciando motor de respuesta...", expanded=True) as status:
+            # 1. Creamos un placeholder para poder borrar la caja después
+            status_box = st.empty()
+            
+            # 2. Construimos el status DENTRO del placeholder
+            with status_box.status("Iniciando motor de respuesta...", expanded=True) as status:
                 
                 # Paso 1: Verificación
                 if not gemini_available:
                     status.update(label="Error: IA no disponible", state="error")
                     return iter(["⚠️ El servicio de IA no está disponible."])
                 
-                # Paso 2: Búsqueda (Feedback visual)
-                status.write("Escaneando documentos...")
+                # Paso 2: Búsqueda
+                status.write("Escaneando documentos (Motor RAG)...")
                 relevant_info = get_relevant_info(db, user_input, selected_files)
                 
                 if not relevant_info:
@@ -70,16 +73,21 @@ def grounded_chat_mode(db, selected_files):
                 prompt = get_grounded_chat_prompt(hist_str, relevant_info)
                 
                 # Paso 4: Generación
-                status.write("Redactando respuesta con citas...")
+                status.write("✨ Redactando respuesta con citas...")
                 stream = call_gemini_stream(prompt)
                 
                 if stream:
-                    # Al final, cerramos la caja y mostramos check verde
+                    # Éxito visual momentáneo
                     status.update(label="¡Respuesta lista!", state="complete", expanded=False)
-                    return stream
                 else:
                     status.update(label="Error de conexión", state="error")
                     return iter(["Error de conexión con la IA."])
+
+            # 3. MAGIA: Si todo salió bien, borramos la caja antes de mostrar el texto
+            if stream:
+                time.sleep(0.7) # Pequeña pausa para que el usuario vea el check verde ✅
+                status_box.empty() # <--- ESTO BORRA LA CAJA
+                return stream
 
         # Delegamos al componente
         handle_chat_interaction(
