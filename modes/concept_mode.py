@@ -1,12 +1,12 @@
 import streamlit as st
+import time
 import constants as c
 
-# --- NUEVO: COMPONENTE UNIFICADO ---
+# --- COMPONENTE UNIFICADO ---
 from components.chat_interface import render_chat_history, handle_chat_interaction
 
 # 1. Servicios IA
 try:
-    # Cambiamos a STREAM para mejor UX
     from services.gemini_api import call_gemini_stream
     gemini_available = True
 except ImportError:
@@ -37,7 +37,7 @@ except ImportError:
 
 
 # ==========================================
-# FUNCIÓN PRINCIPAL: CONCEPTOS (OPTIMIZADA)
+# FUNCIÓN PRINCIPAL: CONCEPTOS (AUTO-LIMPIEZA)
 # ==========================================
 def concept_generation_mode(db, selected_files):
     st.subheader("Generador de Conceptos")
@@ -51,36 +51,45 @@ def concept_generation_mode(db, selected_files):
     if "concept_history" not in st.session_state.mode_state:
         st.session_state.mode_state["concept_history"] = []
 
-    # 2. RENDERIZAR HISTORIAL (Automático)
+    # 2. RENDERIZAR HISTORIAL
     render_chat_history(st.session_state.mode_state["concept_history"], source_mode="concept")
 
     # 3. INTERACCIÓN DEL USUARIO
     if concept_input := st.chat_input("Describe la idea base para el concepto..."):
 
-        # Definimos el generador
+        # Generador con STATUS BOX EFÍMERO
         def concept_generator():
-            with st.status("Diseñando concepto ganador...", expanded=True) as status:
+            # 1. Placeholder para poder borrar la caja
+            status_box = st.empty()
+            
+            with status_box.status("Diseñando concepto ganador...", expanded=True) as status:
                 if not gemini_available:
                     status.update(label="IA no disponible", state="error")
                     return iter(["Error: IA no disponible."])
 
-                # Búsqueda RAG
+                # Paso 1: RAG
                 status.write("Buscando evidencia de soporte...")
                 relevant_info = get_relevant_info(db, concept_input, selected_files)
                 
-                # Prompt de Concepto
+                # Paso 2: Estructura
                 status.write("Estructurando Insight, Beneficio y RTB...")
                 prompt = get_concept_gen_prompt(concept_input, relevant_info)
                 
-                # Llamada Streaming
+                # Paso 3: Generación
+                status.write("Redactando propuesta...")
                 stream = call_gemini_stream(prompt)
                 
                 if stream:
-                    status.update(label="Concepto Generado", state="complete", expanded=False)
-                    return stream
+                    status.update(label="¡Concepto Generado!", state="complete", expanded=False)
                 else:
                     status.update(label="Error al generar", state="error")
                     return iter(["Error al generar el concepto."])
+
+            # 2. Limpieza automática si hubo éxito
+            if stream:
+                time.sleep(0.7) # Breve pausa para ver el check verde
+                status_box.empty() # ¡Desaparece la caja!
+                return stream
 
         # Delegamos al componente visual
         handle_chat_interaction(
@@ -91,7 +100,7 @@ def concept_generation_mode(db, selected_files):
             on_generation_success=lambda resp: log_query_event(f"Concepto: {concept_input[:30]}", mode=c.MODE_CONCEPT)
         )
 
-    # 4. BOTONES DE ACCIÓN (PDF / Nueva Sesión)
+    # 4. BOTONES DE ACCIÓN
     if st.session_state.mode_state["concept_history"]:
         st.write("") 
         
