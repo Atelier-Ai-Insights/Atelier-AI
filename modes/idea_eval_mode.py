@@ -83,10 +83,10 @@ def idea_evaluator_mode(db, selected_files):
                     data=pdf_bytes,
                     file_name="Evaluacion_Ideas.pdf",
                     mime="application/pdf",
-                    use_container_width=True  # Ocupa todo el ancho de la columna
+                    width="stretch"  # Ocupa todo el ancho de la columna
                 )
         
         with col2:
-            if st.button("Limpiar Chat", use_container_width=True): # Ocupa todo el ancho de la columna
+            if st.button("Limpiar Chat", width="stretch"): # Ocupa todo el ancho de la columna
                 st.session_state.mode_state["eval_history"] = []
                 st.rerun()
