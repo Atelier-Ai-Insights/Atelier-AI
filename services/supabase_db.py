@@ -100,3 +100,23 @@ def log_message_feedback(content: str, mode: str, vote_type: str):
         # Opcional: Mostrar error en pantalla para debug (bórralo después)
         # st.error(f"Error DB: {e}")
         return False
+
+# ==============================
+# FUNCIÓN RECUPERADA: USO MENSUAL
+# ==============================
+def get_monthly_usage(user, mode):
+    try:
+        if not user: return 0
+        email = user.email
+        # Calcular el primer día del mes actual
+        start_of_month = datetime.now().replace(day=1).strftime("%Y-%m-%dT00:00:00")
+        
+        response = supabase.table("queries") \
+            .select("id", count='exact') \
+            .eq("user_name", email) \
+            .eq("mode", mode) \
+            .gte("timestamp", start_of_month) \
+            .execute()
+        return response.count
+    except:
+        return 0
