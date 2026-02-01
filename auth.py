@@ -24,7 +24,7 @@ def show_login_page():
         st.warning("**Este usuario ya tiene una sesión activa en otro dispositivo.**")
         
         # Botón 1: Acción principal
-        if st.button("Cerrar la otra sesión e iniciar aquí", key="btn_force_login", use_container_width=True, type="primary"):
+        if st.button("Cerrar la otra sesión e iniciar aquí", key="btn_force_login", width="stretch", type="primary"):
             try:
                 pending = st.session_state.pending_login_info
                 supabase.auth.set_session(pending['access_token'], pending['refresh_token'])
@@ -55,7 +55,7 @@ def show_login_page():
                 st.error(f"Error recuperando sesión: {e}")
             
         # Botón 2: Cancelar
-        if st.button("Cancelar", key="btn_cancel_login", use_container_width=True):
+        if st.button("Cancelar", key="btn_cancel_login", width="stretch"):
             st.session_state.pop('pending_login_info')
             st.rerun()
     
@@ -65,7 +65,7 @@ def show_login_page():
         password = st.text_input("Contraseña", type="password", placeholder="••••••")
         st.write("")
         
-        if st.button("Ingresar", use_container_width=True, type="primary"):
+        if st.button("Ingresar", width="stretch", type="primary"):
             if not email or not password:
                 st.warning("Por favor ingresa usuario y contraseña."); return
 
@@ -125,21 +125,21 @@ def show_login_page():
                 elif "email not confirmed" in msg: st.warning("Tu correo no ha sido confirmado.")
                 else: st.error(f"Error de conexión: {e}")
 
-        if st.button("¿Olvidaste tu contraseña?", type="secondary", use_container_width=True):
+        if st.button("¿Olvidaste tu contraseña?", type="secondary", width="stretch"):
             st.session_state.page = "reset_password"; st.rerun()
 
 def show_reset_password_page():
     st.header("Recuperar Acceso")
     st.write("Ingresa tu correo para recibir un enlace de recuperación.")
     email = st.text_input("Tu Correo Electrónico")
-    if st.button("Enviar enlace", use_container_width=True, type="primary"):
+    if st.button("Enviar enlace", width="stretch", type="primary"):
         try:
             # Usamos la URL genérica para asegurar compatibilidad
             supabase.auth.reset_password_for_email(email, options={"redirect_to": "https://atelier-ai.streamlit.app"})
             st.success("✅ Correo enviado. Revisa tu bandeja de entrada.")
         except Exception as e: st.error(f"Error al enviar: {e}")
     
-    if st.button("Volver al Login", type="secondary", use_container_width=True):
+    if st.button("Volver al Login", type="secondary", width="stretch"):
          st.session_state.page = "login"; st.rerun()
 
 # ========================================================
@@ -165,7 +165,7 @@ def show_activation_flow(otp_token, auth_type):
         
         email_input = st.text_input("Correo Electrónico")
         
-        if st.button("Validar Identidad", use_container_width=True, type="primary"):
+        if st.button("Validar Identidad", width="stretch", type="primary"):
             if not email_input:
                 st.warning("Debes ingresar tu correo."); return
             
@@ -218,7 +218,7 @@ def show_activation_flow(otp_token, auth_type):
         p1 = st.text_input("Nueva Contraseña", type="password")
         p2 = st.text_input("Confirmar Contraseña", type="password")
 
-        if st.button("Guardar y Finalizar", use_container_width=True, type="primary"):
+        if st.button("Guardar y Finalizar", width="stretch", type="primary"):
             if p1 != p2: st.error("Las contraseñas no coinciden."); return
             if len(p1) < 6: st.error("La contraseña debe tener al menos 6 caracteres."); return
 
