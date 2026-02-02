@@ -17,7 +17,7 @@ INSTRUCCIONES_DE_CITAS = """
    Genera una lista verificando que la cita respalde la afirmación. Usa este formato exacto (el separador '|||' es vital):
    
    **Fuentes Verificadas:**
-   [1] NombreArchivo.pdf ||| Cita: "El 45% de la muestra..." (Contexto: Encuesta Q3)
+   [1] NombreArchivo.pdf ||| Cita: "El 45% de la muestra..."
    [2] Entrevista_CEO.pdf ||| Cita: "Debemos bajar costos..."
 
    ⚠️ **CRÍTICO:** Si el texto después de '|||' no justifica la frase del texto principal, la respuesta será considerada errónea.
