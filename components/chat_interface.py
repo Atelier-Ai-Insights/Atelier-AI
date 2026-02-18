@@ -18,7 +18,7 @@ def render_final_actions(content, title, mode_key, on_reset_func):
     word_template = "Plantilla_Word_ATL.docx"
     
     # --- SECCIÓN DE EXPORTACIÓN Y CONTROL ---
-    reset_label = "🔍 Nueva Búsqueda" if any(x in mode_key for x in ["chat", "ideation", "concept"]) else "🔄 Reiniciar"
+    reset_label = "Nueva Búsqueda" if any(x in mode_key for x in ["chat", "ideation", "concept"]) else "Reiniciar"
     
     col_pdf, col_word, col_reset = st.columns(3)
 
