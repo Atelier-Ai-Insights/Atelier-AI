@@ -6,21 +6,20 @@ import json
 # INSTRUCCIONES GLOBALES (CRÍTICO: CALIDAD DE EVIDENCIA EN TOOLTIPS)
 # ==============================================================================
 
-# --- BLOQUE DE INSTRUCCIONES DE CITAS ---
+# --- BLOQUE DE INSTRUCCIONES DE CITAS ACTUALIZADO (CITAS CORTAS) ---
 INSTRUCCIONES_DE_CITAS = """
 **REGLAS DE EVIDENCIA Y CITAS (SISTEMA RAG - ESTRICTO):**
 1. **Veracidad Absoluta:** Responde ÚNICAMENTE usando la 'Información documentada'. Si la respuesta no está en el texto, di "No encontré información sobre X en los documentos". NO inventes.
-2. **Atribución Inmediata:** Cada afirmación debe llevar su sustento. Formato: [1], [2].
-   - *Mal:* "Los usuarios prefieren el rojo. También les gusta el azul [1]."
+2. **Atribución Inmediata:** Cada afirmación debe llevar su sustento técnico. Formato: [1], [2].
    - *Bien:* "Los usuarios prefieren el rojo [1], aunque un segmento prefiere el azul [2]."
 3. **SECCIÓN DE FUENTES (Obligatoria al final):**
-   Genera una lista verificando que la cita respalde la afirmación. Usa este formato exacto (el separador '|||' es vital):
+   Genera una lista numerada que relacione los índices usados. Para mantener la limpieza visual, usa este formato exacto:
    
    **Fuentes Verificadas:**
-   [1] NombreArchivo.pdf ||| Cita: "El 45% de la muestra..."
-   [2] Entrevista_CEO.pdf ||| Cita: "Debemos bajar costos..."
+   [1] Nombre_del_Archivo_A.pdf
+   [2] Nombre_del_Archivo_B.pdf
 
-   ⚠️ **CRÍTICO:** Si el texto después de '|||' no justifica la frase del texto principal, la respuesta será considerada errónea.
+   ⚠️ **CRÍTICO:** No repitas el texto de la cita después del nombre del archivo. El sistema extraerá la evidencia automáticamente para los tooltips internos.
 """
 
 # ==============================================================================
