@@ -1,33 +1,38 @@
 import streamlit as st
 import re
 import html
+import time
 from utils import process_text_with_tooltips
+from services.supabase_db import log_message_feedback
+from services.memory_service import save_project_insight
 
 # --- VENTANA EMERGENTE DE FUENTES ---
 @st.dialog("Fuentes y Evidencia")
 def show_sources_dialog(content):
     """
-    Extrae la metadata oculta y la muestra de forma estructurada en un modal.
+    Extrae la metadata oculta [1] Archivo ||| Cita y la muestra en un modal elegante.
     """
-    # Buscamos el patrón: [1] Nombre.pdf ||| Cita: "..."
     pattern = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
     matches = re.findall(pattern, content, flags=re.DOTALL)
     
     if not matches:
-        st.write("No hay citas detalladas para esta respuesta.")
+        st.info("No hay citas detalladas registradas para esta respuesta.")
         return
 
     for cid, fname, quote in matches:
         with st.container(border=True):
-            # Limpiamos el nombre como en utils.py
+            # Simplificación de nombre (quitando fechas y extensiones como en utils.py)
             clean_name = re.sub(r'\.(pdf|docx|xlsx|txt)$', '', fname, flags=re.IGNORECASE)
             clean_name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', clean_name).replace("In-ATL_", "")
             
             st.markdown(f"**[{cid}] {clean_name}**")
-            st.caption(f"Evidencia detectada:")
+            st.caption("Evidencia detectada en el documento:")
             st.info(quote.strip().strip('"'))
 
 def render_chat_history(history, source_mode="chat"):
+    """
+    Renderiza el historial con la nueva barra de iconos: Feedback + Fuentes + Pin.
+    """
     if not history:
         return
 
@@ -38,24 +43,47 @@ def render_chat_history(history, source_mode="chat"):
         
         with st.chat_message(role, avatar=avatar):
             if role == "assistant":
-                # 1. Limpieza visual total: cortamos TODO lo que venga después del cuerpo del mensaje
-                # Buscamos donde empiezan las fuentes verificadas o los metadatos técnicos
+                # 1. Limpieza visual: ocultamos bloques técnicos [x]...|||
                 display_text = re.split(r'\n\s*(\*\*|##)?\s*Fuentes( Verificadas| Consultadas)?\s*:?', content, flags=re.IGNORECASE)[0]
-                # También cortamos si detectamos el separador técnico directamente
                 display_text = re.split(r'\[\d+\].*?\|\|\|', display_text, flags=re.DOTALL)[0]
                 
                 html_content = process_text_with_tooltips(display_text)
                 st.markdown(html_content, unsafe_allow_html=True)
                 
-                # 2. Botón para abrir el modal de fuentes
-                # Solo lo mostramos si el contenido original tiene el separador técnico |||
-                if "|||" in content:
-                    if st.button("Ver Fuentes y Citas", key=f"src_btn_{source_mode}_{idx}", icon="📖"):
-                        show_sources_dialog(content)
+                # --- NUEVA BARRA DE ICONOS (Fila Única) ---
+                # Usamos 5 columnas pequeñas para los iconos y una grande para espacio
+                c_up, c_down, c_src, c_pin, c_spacer = st.columns([1, 1, 1, 1, 8])
+                key_base = f"{source_mode}_{idx}"
+
+                with c_up:
+                    if st.button("👍", key=f"up_{key_base}", help="Respuesta útil"):
+                        if log_message_feedback(content, source_mode, "up"):
+                            st.toast("Feedback registrado 👍")
+
+                with c_down:
+                    if st.button("👎", key=f"down_{key_base}", help="Respuesta inexacta"):
+                        if log_message_feedback(content, source_mode, "down"):
+                            st.toast("Gracias por tu feedback 🤔")
+
+                with c_src:
+                    # BOTÓN DE FUENTES: Aparece si hay separador técnico ||| en el contenido
+                    if "|||" in content:
+                        if st.button("📖", key=f"src_{key_base}", help="Ver Fuentes y Citas"):
+                            show_sources_dialog(content)
+
+                with c_pin:
+                    if st.button("📌", key=f"pin_{key_base}", help="Guardar en Bitácora"):
+                        if save_project_insight(content, source_mode=source_mode):
+                            st.toast("✅ Guardado")
+                            time.sleep(0.5)
+                            st.rerun()
             else:
                 st.markdown(content)
 
 def handle_chat_interaction(prompt, response_generator_func, history_key, source_mode, on_generation_success=None):
+    """
+    Maneja la entrada del usuario y la respuesta de IA.
+    """
     st.session_state.mode_state[history_key].append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar="👤"):
         st.markdown(prompt)
@@ -70,21 +98,12 @@ def handle_chat_interaction(prompt, response_generator_func, history_key, source
                 full_response += chunk
                 placeholder.markdown(full_response + "▌")
             
-            # Al finalizar, renderizamos limpio
-            display_text = re.split(r'\n\s*(\*\*|##)?\s*Fuentes( Verificadas| Consultadas)?\s*:?', full_response, flags=re.IGNORECASE)[0]
-            display_text = re.split(r'\[\d+\].*?\|\|\|', display_text, flags=re.DOTALL)[0]
-            
-            final_html = process_text_with_tooltips(display_text)
-            placeholder.markdown(final_html, unsafe_allow_html=True)
-            
-            # IMPORTANTE: El botón no aparecerá en el "streaming" inmediato por limitación de Streamlit,
-            # pero aparecerá en cuanto el componente se refresque o se haga scroll.
-            if "|||" in full_response:
-                st.button("Ver Fuentes y Citas", key=f"src_btn_live", on_click=show_sources_dialog, args=(full_response,))
-            
+            # Al finalizar, recargamos para que aparezcan los botones de iconos
             st.session_state.mode_state[history_key].append({"role": "assistant", "content": full_response})
             if on_generation_success:
                 on_generation_success(full_response)
+            
+            st.rerun() # Forzamos recarga para dibujar la nueva barra de iconos
             return full_response
         else:
             st.error("Error: No se recibió respuesta de la IA.")
