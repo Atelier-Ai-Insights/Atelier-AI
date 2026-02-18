@@ -1,55 +1,107 @@
 import streamlit as st
-from reporting.pdf_generator import generate_pdf_html
-from reporting.docx_generator import generate_docx
-from config import banner_file
+import re
+import html
+import time
+from utils import process_text_with_tooltips
+from services.supabase_db import log_message_feedback
+from services.memory_service import save_project_insight
 
-def render_final_actions(content, title, mode_key, on_reset_func):
+# --- VENTANA EMERGENTE DE FUENTES ---
+@st.dialog("Fuentes y Evidencia")
+def show_sources_dialog(content):
     """
-    Barra de Acciones Finales: Gestiona la exportación global del historial 
-    y el reinicio de la sesión actual.
+    Extrae la metadata oculta [1] Archivo ||| Cita y la muestra en un modal.
     """
-    if not content:
+    pattern = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
+    matches = re.findall(pattern, content, flags=re.DOTALL)
+    
+    if not matches:
+        st.info("No hay citas detalladas registradas para esta respuesta.")
         return
 
-    st.divider()
-    
-    # Limpieza de sintaxis markdown técnica para los documentos descargables
-    clean_text = content.replace("```markdown", "").replace("```", "").strip()
-    word_template = "Plantilla_Word_ATL.docx"
-    
-    # --- SECCIÓN DE EXPORTACIÓN Y CONTROL ---
-    reset_label = "Nueva Búsqueda" if any(x in mode_key for x in ["chat", "ideation", "concept"]) else "Reiniciar"
-    
-    col_pdf, col_word, col_reset = st.columns(3)
+    for cid, fname, quote in matches:
+        with st.container(border=True):
+            # Simplificación de nombre (quitando fechas y extensiones)
+            clean_name = re.sub(r'\.(pdf|docx|xlsx|txt)$', '', fname, flags=re.IGNORECASE)
+            clean_name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', clean_name).replace("In-ATL_", "")
+            
+            st.markdown(f"**[{cid}] {clean_name}**")
+            st.caption("Evidencia detectada en el documento:")
+            st.info(quote.strip().strip('"'))
 
-    with col_pdf:
-        # El generador de PDF ya inyecta el banner_file y el footer institucional
-        pdf_bytes = generate_pdf_html(clean_text, title=title, banner_path=banner_file)
-        if pdf_bytes:
-            st.download_button(
-                label="Descargar en PDF", 
-                data=pdf_bytes, 
-                file_name=f"{title}.pdf", 
-                mime="application/pdf", 
-                use_container_width=True,
-                key=f"pdf_final_{mode_key}"
-            )
+def render_chat_history(history, source_mode="chat"):
+    """
+    Renderiza el historial con la nueva barra de iconos: Feedback + Fuentes + Pin.
+    """
+    if not history:
+        return
 
-    with col_word:
-        # Se pasa la plantilla .docx para mantener la identidad visual en Word
-        docx_bytes = generate_docx(clean_text, title=title, template_path=word_template)
-        if docx_bytes:
-            st.download_button(
-                label="Descargar en Word", 
-                data=docx_bytes, 
-                file_name=f"{title}.docx", 
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
-                use_container_width=True,
-                key=f"word_final_{mode_key}"
-            )
+    for idx, msg in enumerate(history):
+        role = msg["role"]
+        content = msg["content"]
+        avatar = "✨" if role == "assistant" else "👤"
+        
+        with st.chat_message(role, avatar=avatar):
+            if role == "assistant":
+                # 1. Limpieza visual: ocultamos bloques técnicos para la app
+                display_text = re.split(r'\n\s*(\*\*|##)?\s*Fuentes( Verificadas| Consultadas)?\s*:?', content, flags=re.IGNORECASE)[0]
+                display_text = re.split(r'\[\d+\].*?\|\|\|', display_text, flags=re.DOTALL)[0]
+                
+                html_content = process_text_with_tooltips(display_text)
+                st.markdown(html_content, unsafe_allow_html=True)
+                
+                # --- BARRA DE ICONOS ---
+                c_up, c_down, c_src, c_pin, c_spacer = st.columns([1, 1, 1, 1, 8])
+                key_base = f"{source_mode}_{idx}"
 
-    with col_reset:
-        # Ejecuta la función de limpieza de estado definida en el modo correspondiente
-        if st.button(reset_label, use_container_width=True, type="secondary", key=f"reset_final_{mode_key}"):
-            on_reset_func()
-            st.rerun()
+                with c_up:
+                    if st.button("👍", key=f"up_{key_base}", help="Respuesta útil"):
+                        if log_message_feedback(content, source_mode, "up"):
+                            st.toast("Feedback registrado 👍")
+
+                with c_down:
+                    if st.button("👎", key=f"down_{key_base}", help="Respuesta inexacta"):
+                        if log_message_feedback(content, source_mode, "down"):
+                            st.toast("Gracias por tu feedback 🤔")
+
+                with c_src:
+                    if "|||" in content:
+                        if st.button("📖", key=f"src_{key_base}", help="Ver Fuentes y Citas"):
+                            show_sources_dialog(content)
+
+                with c_pin:
+                    if st.button("📌", key=f"pin_{key_base}", help="Guardar en Bitácora"):
+                        if save_project_insight(content, source_mode=source_mode):
+                            st.toast("✅ Guardado")
+                            time.sleep(0.5)
+                            st.rerun()
+            else:
+                st.markdown(content)
+
+def handle_chat_interaction(prompt, response_generator_func, history_key, source_mode, on_generation_success=None):
+    """
+    Maneja la entrada del usuario y la respuesta de IA con recarga para iconos.
+    """
+    st.session_state.mode_state[history_key].append({"role": "user", "content": prompt})
+    with st.chat_message("user", avatar="👤"):
+        st.markdown(prompt)
+
+    with st.chat_message("assistant", avatar="✨"):
+        full_response = ""
+        placeholder = st.empty()
+        stream = response_generator_func()
+        
+        if stream:
+            for chunk in stream:
+                full_response += chunk
+                placeholder.markdown(full_response + "▌")
+            
+            st.session_state.mode_state[history_key].append({"role": "assistant", "content": full_response})
+            if on_generation_success:
+                on_generation_success(full_response)
+            
+            st.rerun() 
+            return full_response
+        else:
+            st.error("Error: No se recibió respuesta de la IA.")
+            return None
