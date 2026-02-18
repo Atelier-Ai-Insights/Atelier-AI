@@ -7,40 +7,39 @@ from services.supabase_db import log_message_feedback
 from services.memory_service import save_project_insight
 from config import banner_file
 
-# --- VENTANA EMERGENTE (MODAL DE RESPALDO) ---
+# --- VENTANA EMERGENTE (MODAL DE RESPALDO SISTEMÁTICO) ---
 @st.dialog("Documentación de Respaldo")
 def show_sources_dialog(content):
-    """Extrae las fuentes del contenido oculto y las lista numeradas."""
+    """
+    Extrae las fuentes del contenido oculto usando una lógica de detección agresiva 
+    para garantizar que la numeración funcione sistemáticamente.
+    """
+    # Esta Regex busca cualquier número en corchetes seguido de algo que parezca un archivo
+    # Captura: [1] archivo.pdf, [2] documento.docx, etc.
+    raw_matches = re.findall(r'\[(\d+)\]\s*([^\[\]\n|]+(?:pdf|docx|xlsx)?)', content, flags=re.IGNORECASE)
     
-    # 1. Buscamos nombres de archivos PDF con su número asociado [1]
-    matches = re.findall(r'\[(\d+)\]\s*([^\[\]\|\n\s]+?\.pdf)', content, flags=re.IGNORECASE)
-    
-    # 2. Respaldo: regex técnica de las tres barras
-    if not matches:
-        matches = re.findall(r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|', content)
-
-    if not matches:
-        st.info("Este análisis se basó en el contexto general de los documentos seleccionados.")
+    if not raw_matches:
+        st.info("No se detectaron referencias numeradas en este mensaje.")
         return
 
-    fuentes_finales = {}
-    for cid, fname in matches:
-        # Limpieza de nombres para la visualización
+    fuentes_limpias = {}
+    for cid, fname in raw_matches:
+        # Limpiamos el nombre: quitamos extensiones y prefijos técnicos
         name = re.sub(r'\.(pdf|docx|xlsx)$', '', fname, flags=re.IGNORECASE)
         name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', name).replace("In-ATL_", "")
-        fuentes_finales[cid] = name.strip()
+        fuentes_limpias[cid] = name.strip()
 
-    st.write("### Fuentes asociadas a este análisis:")
-    # Listado numerado y ordenado
-    for cid in sorted(fuentes_finales.keys(), key=int):
-        st.markdown(f"**[{cid}]** 📄 {fuentes_finales[cid]}")
+    st.write("### Evidencia Documental")
+    # Ordenamos numéricamente para garantizar consistencia [1, 2, 3...]
+    for cid in sorted(fuentes_limpias.keys(), key=int):
+        st.markdown(f"**[{cid}]** 📄 {fuentes_limpias[cid]}")
 
 def render_final_actions(content, title, mode_key, on_reset_func):
     """Barra de acciones finales con limpieza para exportación."""
     if not content: return
     st.divider()
     
-    # Limpiamos el texto para PDF/Word (eliminamos metadatos |||)
+    # Limpiamos el texto para PDF/Word (eliminamos metadatos técnicos y nombres de archivos sueltos)
     clean_export_text = re.split(r'\|\|\|', content)[0]
     clean_export_text = re.split(r'\d{2}-\d{2}-\d{2}_In-ATL_.*?\.pdf', clean_export_text, flags=re.IGNORECASE)[0]
     clean_export_text = clean_export_text.strip()
@@ -72,7 +71,7 @@ def render_final_actions(content, title, mode_key, on_reset_func):
     col_ref, col_pdf, col_word, col_reset = st.columns(4)
     
     with col_ref:
-        # El modal recibe el 'content' completo con metadatos
+        # El modal recibe el 'content' completo con metadatos para que la Regex agresiva funcione
         if st.button("Ver Referencias", use_container_width=True, key=f"ref_{mode_key}"):
             show_sources_dialog(content)
     
