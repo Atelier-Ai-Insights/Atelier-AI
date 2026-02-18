@@ -7,32 +7,40 @@ from services.supabase_db import log_message_feedback
 from services.memory_service import save_project_insight
 from config import banner_file
 
-# --- VENTANA EMERGENTE (MODAL DE RESPALDO SISTEMÁTICO) ---
+# --- VENTANA EMERGENTE (MODAL CON FILTRADO DE DUPLICADOS) ---
 @st.dialog("Documentación de Respaldo")
 def show_sources_dialog(content):
     """
-    Extrae las fuentes del contenido oculto usando una lógica de detección agresiva 
-    para garantizar que la numeración funcione sistemáticamente.
+    Extrae las fuentes y garantiza que cada archivo aparezca solo una vez,
+    incluso si tiene múltiples citas en el texto.
     """
-    # Esta Regex busca cualquier número en corchetes seguido de algo que parezca un archivo
-    # Captura: [1] archivo.pdf, [2] documento.docx, etc.
+    # Regex agresiva para capturar referencias [n] archivo
     raw_matches = re.findall(r'\[(\d+)\]\s*([^\[\]\n|]+(?:pdf|docx|xlsx)?)', content, flags=re.IGNORECASE)
     
     if not raw_matches:
-        st.info("No se detectaron referencias numeradas en este mensaje.")
+        st.info("Este análisis se basó en el contexto general de los documentos seleccionados.")
         return
 
-    fuentes_limpias = {}
-    for cid, fname in raw_matches:
-        # Limpiamos el nombre: quitamos extensiones y prefijos técnicos
+    fuentes_unicas = {}
+    nombres_procesados = set() # Para rastrear nombres de archivos ya agregados
+    
+    # Ordenamos por número de cita primero para mantener coherencia
+    for cid, fname in sorted(raw_matches, key=lambda x: int(x[0])):
+        # Limpieza estándar del nombre: quitamos extensiones y prefijos técnicos
         name = re.sub(r'\.(pdf|docx|xlsx)$', '', fname, flags=re.IGNORECASE)
         name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', name).replace("In-ATL_", "")
-        fuentes_limpias[cid] = name.strip()
+        clean_name = name.strip()
+        
+        # SOLO agregamos al diccionario si el nombre limpio no ha sido visto antes
+        if clean_name not in nombres_procesados:
+            fuentes_unicas[cid] = clean_name
+            nombres_procesados.add(clean_name)
 
     st.write("### Evidencia Documental")
-    # Ordenamos numéricamente para garantizar consistencia [1, 2, 3...]
-    for cid in sorted(fuentes_limpias.keys(), key=int):
-        st.markdown(f"**[{cid}]** 📄 {fuentes_limpias[cid]}")
+    
+    # Renderizado final: ahora solo habrá una entrada por cada archivo diferente
+    for cid in sorted(fuentes_unicas.keys(), key=int):
+        st.markdown(f"**[{cid}]** 📄 {fuentes_unicas[cid]}")
 
 def render_final_actions(content, title, mode_key, on_reset_func):
     """Barra de acciones finales con limpieza para exportación."""
