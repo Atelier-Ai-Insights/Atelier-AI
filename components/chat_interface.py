@@ -3,7 +3,10 @@ import re
 from utils import process_text_with_tooltips
 
 def render_chat_history(history, source_mode="chat"):
-    """Renderiza el historial de forma ultra-limpia."""
+    """
+    Renderiza el historial de forma ultra-limpia en la UI, 
+    pero mantiene los metadatos en el estado para las exportaciones y el modal.
+    """
     if not history:
         return
 
@@ -14,20 +17,28 @@ def render_chat_history(history, source_mode="chat"):
         
         with st.chat_message(role, avatar=avatar):
             if role == "assistant":
-                # Limpiamos el bloque técnico para que no se vea en la burbuja
+                # Limpieza visual: cortamos el texto antes del bloque de fuentes y metadata técnica
+                # Buscamos el separador de fuentes o el patrón técnico |||
                 display_text = re.split(r'\n\s*(\*\*|##)?\s*Fuentes( Verificadas| Consultadas)?\s*:?', content, flags=re.IGNORECASE)[0]
                 display_text = re.split(r'\[\d+\].*?\|\|\|', display_text, flags=re.DOTALL)[0]
                 
+                # Procesamos tooltips sobre el texto limpio
                 html_content = process_text_with_tooltips(display_text)
                 st.markdown(html_content, unsafe_allow_html=True)
             else:
                 st.markdown(content)
 
 def handle_chat_interaction(prompt, response_generator_func, history_key, source_mode, on_generation_success=None):
+    """
+    Gestiona el envío del usuario y la respuesta de la IA, asegurando que el contenido
+    íntegro se guarde para habilitar el botón de Referencias.
+    """
+    # Guardar mensaje del usuario
     st.session_state.mode_state[history_key].append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar="👤"):
         st.markdown(prompt)
 
+    # Generar respuesta de la asistente
     with st.chat_message("assistant", avatar="✨"):
         full_response = ""
         placeholder = st.empty()
@@ -38,8 +49,16 @@ def handle_chat_interaction(prompt, response_generator_func, history_key, source
                 full_response += chunk
                 placeholder.markdown(full_response + "▌")
             
+            # CRÍTICO: Guardamos la respuesta COMPLETA (con metadatos |||) en el historial
+            # Esto permite que render_final_actions detecte las citas y habilite el botón.
             st.session_state.mode_state[history_key].append({"role": "assistant", "content": full_response})
+            
             if on_generation_success:
                 on_generation_success(full_response)
             
-            st.rerun() # Recarga para que aparezca el bloque de exportación final
+            # Recarga vital para procesar el estado y mostrar la barra de acciones final
+            st.rerun() 
+            return full_response
+        else:
+            st.error("Error: No se recibió respuesta de la IA.")
+            return None
