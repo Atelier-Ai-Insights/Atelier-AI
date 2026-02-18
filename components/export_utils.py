@@ -7,36 +7,37 @@ from services.supabase_db import log_message_feedback
 from services.memory_service import save_project_insight
 from config import banner_file
 
-# --- VENTANA EMERGENTE (MODAL SIMPLIFICADO) ---
+# --- VENTANA EMERGENTE (MODAL CON NUMERACIÓN) ---
 @st.dialog("Documentación de Respaldo")
 def show_sources_dialog(content):
-    """Muestra la lista de archivos consultados para generar el análisis."""
+    """Muestra la lista de archivos consultados con su índice de cita [x]."""
     
-    # 1. Intento por patrón técnico: [1] NombreArchivo.pdf |||
-    pattern_tech = r'\[\d+\]\s*([^\[\]\|\n]+?)\s*\|\|\|'
+    # Buscamos el patrón: [1] NombreArchivo.pdf |||
+    # El primer grupo (\d+) es el número, el segundo ([^\[\]\|\n]+?) es el nombre
+    pattern_tech = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|'
     matches = re.findall(pattern_tech, content)
     
-    # 2. Si falla, busca nombres de archivos PDF (ej: 24-8-30_In-ATL_...)
-    if not matches:
-        pattern_files = r'(\d{1,4}-\d{1,2}-\d{1,2}_In-ATL_.*?\.pdf)'
-        matches = re.findall(pattern_files, content)
-
     if not matches:
         st.info("Este análisis se basó en el contexto general de los documentos seleccionados.")
         return
 
-    # Eliminamos duplicados y limpiamos nombres para la UI
-    fuentes_unicas = set()
-    for fname in matches:
+    # Usamos un diccionario para mantener la asociación {Número: NombreLimpio}
+    fuentes_mapeadas = {}
+    
+    for cid, fname in matches:
+        # Limpieza del nombre del archivo
         clean_name = re.sub(r'\.(pdf|docx|xlsx|txt)$', '', fname, flags=re.IGNORECASE)
         clean_name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', clean_name).replace("In-ATL_", "")
-        fuentes_unicas.add(clean_name.strip())
+        
+        # Guardamos usando el ID de la cita (cid) como llave
+        fuentes_mapeadas[cid] = clean_name.strip()
 
-    st.markdown("Los siguientes documentos fueron utilizados como evidencia para este análisis:")
+    st.markdown("Documentos utilizados como evidencia (asociados a las citas del texto):")
     
-    # Listado visual con iconos
-    for fuente in sorted(list(fuentes_unicas)):
-        st.markdown(f"📄 **{fuente}**")
+    # Listado ordenado por el número de cita
+    # Ordenamos las llaves numéricamente para que aparezca [1], [2], [3]...
+    for cid in sorted(fuentes_mapeadas.keys(), key=int):
+        st.markdown(f"**[{cid}]** 📄 {fuentes_mapeadas[cid]}")
 
 def render_final_actions(content, title, mode_key, on_reset_func):
     """Barra maestra con Feedback, Pin, Ver Referencias y Descargas."""
@@ -70,11 +71,11 @@ def render_final_actions(content, title, mode_key, on_reset_func):
 
     st.write("") 
 
-    # --- BLOQUE 2: ACCIONES PRINCIPALES ---
+    # --- BLOQUE 2: ACCIONES PRINCIPALES (4 COLUMNAS) ---
     col_ref, col_pdf, col_word, col_reset = st.columns(4)
 
     with col_ref:
-        # Se habilita si detecta cualquier rastro de documentación
+        # Se habilita si detecta cualquier rastro de documentación técnica
         tiene_citas = "|||" in content or re.search(r'\[\d+\]', content) or ".pdf" in content.lower()
         if st.button("Ver Referencias", use_container_width=True, key=f"ref_{mode_key}", disabled=not tiene_citas):
             show_sources_dialog(content)
