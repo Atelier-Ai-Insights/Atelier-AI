@@ -3,28 +3,33 @@ import re
 from utils import process_text_with_tooltips
 
 def render_chat_history(history, source_mode="chat"):
-    """Renderiza el historial de forma ultra-limpia en la UI."""
+    """
+    Renderiza el historial de forma ultra-limpia en la UI, 
+    manteniendo los metadatos intactos en la variable original.
+    """
     if not history:
         return
 
     for msg in history:
         role = msg["role"]
-        content = msg["content"]
+        content = msg["content"] # Contenido íntegro original
         avatar = "✨" if role == "assistant" else "👤"
         
         with st.chat_message(role, avatar=avatar):
             if role == "assistant":
-                # Limpieza visual: cortamos antes de bloques técnicos
-                display_text = re.split(r'\n\s*(\*\*|##)?\s*Fuentes( Verificadas| Consultadas)?\s*:?', content, flags=re.IGNORECASE)[0]
-                display_text = re.split(r'\[\d+\].*?\|\|\|', display_text, flags=re.DOTALL)[0]
+                # LIMPIEZA SOLO PARA LA PANTALLA:
+                # 1. Cortar si detecta el bloque técnico |||
+                display_text = re.split(r'\[\d+\].*?\|\|\|', content, flags=re.DOTALL)[0]
+                # 2. Cortar si detecta la palabra "Fuentes" al final
+                display_text = re.split(r'\n\s*(\*\*|##)?\s*Fuentes', display_text, flags=re.IGNORECASE)[0]
                 
-                html_content = process_text_with_tooltips(display_text)
+                html_content = process_text_with_tooltips(display_text.strip())
                 st.markdown(html_content, unsafe_allow_html=True)
             else:
                 st.markdown(content)
 
 def handle_chat_interaction(prompt, response_generator_func, history_key, source_mode, on_generation_success=None):
-    """Maneja la entrada del usuario y guarda la respuesta íntegra."""
+    """Maneja la entrada del usuario y guarda la respuesta íntegra para el modal."""
     st.session_state.mode_state[history_key].append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar="👤"):
         st.markdown(prompt)
@@ -39,7 +44,7 @@ def handle_chat_interaction(prompt, response_generator_func, history_key, source
                 full_response += chunk
                 placeholder.markdown(full_response + "▌")
             
-            # GUARDADO CRÍTICO: Mantiene la metadata original para el modal
+            # GUARDADO CRÍTICO: Se guarda con metadatos ||| para que el modal los lea
             st.session_state.mode_state[history_key].append({"role": "assistant", "content": full_response})
             if on_generation_success:
                 on_generation_success(full_response)
