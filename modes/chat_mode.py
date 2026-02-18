@@ -4,6 +4,7 @@ import constants as c
 from components.chat_interface import render_chat_history, handle_chat_interaction
 from components.export_utils import render_final_actions
 
+# --- CARGA DE SERVICIOS ---
 try:
     from services.gemini_api import call_gemini_stream
     gemini_available = True
@@ -31,11 +32,14 @@ def grounded_chat_mode(db, selected_files):
         st.info("👈 Selecciona documentos en el menú lateral para comenzar.")
         return
 
+    # Inicializar historial si no existe
     if "chat_history" not in st.session_state.mode_state:
         st.session_state.mode_state["chat_history"] = []
 
+    # 1. Renderizar historial acumulado
     render_chat_history(st.session_state.mode_state["chat_history"], source_mode="chat")
 
+    # 2. Entrada de usuario
     if user_input := st.chat_input("Haz una pregunta sobre tus documentos..."):
         
         def chat_generator():
@@ -54,6 +58,7 @@ def grounded_chat_mode(db, selected_files):
                     return iter(["No encontré información relevante en los documentos seleccionados."])
                 
                 status.write("Estructurando evidencia y contexto...")
+                # Tomar los últimos mensajes para contexto
                 hist_str = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.mode_state["chat_history"][-3:]])
                 prompt = get_grounded_chat_prompt(hist_str, relevant_info)
                 
@@ -71,6 +76,7 @@ def grounded_chat_mode(db, selected_files):
                 status_box.empty() 
                 return stream
 
+        # Procesar interacción
         handle_chat_interaction(
             prompt=user_input,
             response_generator_func=chat_generator,
@@ -79,15 +85,19 @@ def grounded_chat_mode(db, selected_files):
             on_generation_success=lambda resp: log_query_event(user_input, c.MODE_CHAT)
         )
 
+    # 3. Acciones Finales (Solo si hay historial)
     if st.session_state.mode_state["chat_history"]:
+        # Construimos el contenido para exportación
         full_content = ""
         for msg in st.session_state.mode_state["chat_history"]:
             role_label = "Usuario" if msg["role"] == "user" else "Atelier AI"
+            # Mantenemos el content original para que el botón "Ver Referencias" funcione
             full_content += f"### {role_label}\n{msg['content']}\n\n"
         
         def reset_chat_workflow():
             st.session_state.mode_state["chat_history"] = []
 
+        # Invocamos la barra maestra de exportación
         render_final_actions(
             content=full_content,
             title="Consulta_Atelier",
