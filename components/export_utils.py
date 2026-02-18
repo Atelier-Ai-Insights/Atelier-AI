@@ -7,42 +7,43 @@ from services.supabase_db import log_message_feedback
 from services.memory_service import save_project_insight
 from config import banner_file
 
-# --- VENTANA EMERGENTE (MODAL CON NUMERACIÓN) ---
+# --- VENTANA EMERGENTE (VERSIÓN ROBUSTA) ---
 @st.dialog("Documentación de Respaldo")
 def show_sources_dialog(content):
-    """Muestra la lista de archivos consultados con su índice de cita [x]."""
+    """Extrae y muestra las fuentes detectadas con su numeración."""
     
-    # Regex robusta para capturar el índice y el nombre: [1] NombreArchivo.pdf |||
-    pattern_tech = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|'
-    matches = re.findall(pattern_tech, content, flags=re.IGNORECASE | re.DOTALL)
+    # 1. Intentamos capturar el formato técnico: [1] Nombre.pdf |||
+    matches = re.findall(r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|', content)
     
+    # 2. Respaldo: Buscamos archivos mencionados con su número [1] Nombre.pdf
+    if not matches:
+        matches = re.findall(r'\[(\d+)\]\s*([a-zA-Z0-9_-]+\.(?:pdf|docx|xlsx))', content, flags=re.IGNORECASE)
+
     if not matches:
         st.info("Este análisis se basó en el contexto general de los documentos seleccionados.")
         return
 
-    # Usar diccionario para mapear {Número: NombreLimpio} y evitar duplicados
-    fuentes_mapeadas = {}
+    # Diccionario para mapear {Número: NombreLimpio}
+    fuentes_finales = {}
     for cid, fname in matches:
-        # Limpieza estética del nombre del archivo (quitar fechas y marcas de sistema)
-        clean_name = re.sub(r'\.(pdf|docx|xlsx|txt)$', '', fname, flags=re.IGNORECASE)
-        clean_name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', clean_name).replace("In-ATL_", "")
-        fuentes_mapeadas[cid] = clean_name.strip()
+        # Limpieza de extensiones y prefijos técnicos
+        name = re.sub(r'\.(pdf|docx|xlsx)$', '', fname, flags=re.IGNORECASE)
+        name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', name).replace("In-ATL_", "")
+        fuentes_finales[cid] = name.strip()
 
-    st.write("### Documentos utilizados como evidencia:")
+    st.write("### Fuentes asociadas a este análisis:")
     
-    # Renderizado con la numeración asociada a las citas del texto
-    # Se ordena numéricamente para que aparezca [1], [2], [3]...
-    for cid in sorted(fuentes_mapeadas.keys(), key=int):
-        st.markdown(f"**[{cid}]** 📄 {fuentes_mapeadas[cid]}")
+    # Renderizar lista numerada ordenada
+    for cid in sorted(fuentes_finales.keys(), key=int):
+        st.markdown(f"**[{cid}]** 📄 {fuentes_finales[cid]}")
 
 def render_final_actions(content, title, mode_key, on_reset_func):
-    """Barra maestra con Feedback, Pin, Ver Referencias y Descargas."""
+    """Barra maestra de acciones finales."""
     if not content:
         return
 
     st.divider()
     clean_text = content.replace("```markdown", "").replace("```", "").strip()
-    word_template = "Plantilla_Word_ATL.docx"
     
     # --- BLOQUE 1: FEEDBACK Y PIN ---
     st.caption("¿Qué te pareció este análisis?")
@@ -71,20 +72,20 @@ def render_final_actions(content, title, mode_key, on_reset_func):
     col_ref, col_pdf, col_word, col_reset = st.columns(4)
 
     with col_ref:
-        # El botón recibe el 'content' original con los metadatos técnicos
-        tiene_citas = "|||" in content or re.search(r'\[\d+\]', content)
-        if st.button("Ver Referencias", use_container_width=True, key=f"ref_{mode_key}", disabled=not tiene_citas):
+        # Habilitado si detecta corchetes o rastro de archivos
+        tiene_datos = "[" in content or ".pdf" in content.lower()
+        if st.button("Ver Referencias", use_container_width=True, key=f"ref_{mode_key}", disabled=not tiene_datos):
             show_sources_dialog(content)
 
     with col_pdf:
         pdf_bytes = generate_pdf_html(clean_text, title=title, banner_path=banner_file)
         if pdf_bytes:
-            st.download_button("Descargar PDF", pdf_bytes, f"{title}.pdf", "application/pdf", use_container_width=True, key=f"pdf_{mode_key}")
+            st.download_button("Descargar PDF", pdf_bytes, f"{title}.pdf", use_container_width=True, key=f"p_{mode_key}")
 
     with col_word:
-        docx_bytes = generate_docx(clean_text, title=title, template_path=word_template)
+        docx_bytes = generate_docx(clean_text, title=title)
         if docx_bytes:
-            st.download_button("Descargar Word", docx_bytes, f"{title}.docx", use_container_width=True, key=f"word_{mode_key}")
+            st.download_button("Descargar Word", docx_bytes, f"{title}.docx", use_container_width=True, key=f"w_{mode_key}")
 
     with col_reset:
         label = "Nueva Búsqueda" if "chat" in mode_key else "Reiniciar"
