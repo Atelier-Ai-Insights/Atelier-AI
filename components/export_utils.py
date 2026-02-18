@@ -11,6 +11,7 @@ from config import banner_file
 @st.dialog("Referencias y Evidencia Documental")
 def show_sources_dialog(content):
     """Extrae la información técnica y la muestra en un modal."""
+    # Buscamos el patrón: [1] NombreArchivo ||| Cita: "..."
     pattern = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
     matches = re.findall(pattern, content, flags=re.DOTALL)
     
@@ -20,7 +21,7 @@ def show_sources_dialog(content):
 
     for cid, fname, quote in matches:
         with st.container(border=True):
-            # Simplificación del nombre del archivo
+            # Simplificación del nombre del archivo (quita fechas y extensiones)
             clean_name = re.sub(r'\.(pdf|docx|xlsx|txt)$', '', fname, flags=re.IGNORECASE)
             clean_name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', clean_name).replace("In-ATL_", "")
             
@@ -63,12 +64,14 @@ def render_final_actions(content, title, mode_key, on_reset_func):
     col_ref, col_pdf, col_reset = st.columns([1, 1, 1])
 
     with col_ref:
-        # Solo mostramos el botón si existen metadatos técnicos en el contenido
-        if "|||" in content:
-            if st.button("🔍 Ver Referencias", use_container_width=True, key=f"ref_{mode_key}"):
+        # LÓGICA AJUSTADA: Habilita si hay separador ||| o si detecta referencias [1]
+        tiene_citas = re.search(r'\[\d+\]', content) or "|||" in content
+        
+        if tiene_citas:
+            if st.button("Ver Referencias", use_container_width=True, key=f"ref_active_{mode_key}"):
                 show_sources_dialog(content)
         else:
-            st.button("🔍 Ver Referencias", use_container_width=True, disabled=True, key=f"ref_dis_{mode_key}")
+            st.button("🔍 Ver Referencias", use_container_width=True, disabled=True, key=f"ref_inactive_{mode_key}")
 
     with col_pdf:
         pdf_bytes = generate_pdf_html(clean_text, title=title, banner_path=banner_file)
