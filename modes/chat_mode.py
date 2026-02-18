@@ -90,7 +90,7 @@ def grounded_chat_mode(db, selected_files):
 
         render_final_actions(
             content=full_content,
-            title="Chat_Consulta_Atelier",
+            title="Consulta_Atelier",
             mode_key="chat_directo",
             on_reset_func=reset_chat_workflow
         )
