@@ -1,38 +1,38 @@
 import streamlit as st
 import re
 import time
+import html
 from utils import process_text_with_tooltips
 from services.supabase_db import log_message_feedback
 from services.memory_service import save_project_insight
 
-# --- VENTANA EMERGENTE DE REFERENCIAS (MODAL) ---
-@st.dialog("Referencias y Evidencia")
+# --- 1. VENTANA EMERGENTE (MODAL) ---
+# Esta función crea la ventana emergente igual a la de búsquedas guardadas
+@st.dialog("Referencias y Evidencia Documental")
 def show_sources_dialog(content):
     """
-    Muestra la evidencia técnica extraída del separador técnico |||.
+    Extrae la información técnica y la muestra en un modal.
     """
-    # Buscamos el patrón técnico: [1] Archivo ||| Cita
+    # Buscamos el patrón: [1] NombreArchivo ||| Cita: "..."
     pattern = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
     matches = re.findall(pattern, content, flags=re.DOTALL)
     
     if not matches:
-        st.info("No se encontraron detalles técnicos de referencias en esta respuesta.")
+        st.warning("No se encontraron detalles técnicos de las citas para este mensaje.")
         return
 
     for cid, fname, quote in matches:
         with st.container(border=True):
-            # Simplificación estética del nombre del archivo
+            # Simplificación del nombre del archivo (quita fechas y extensiones)
             clean_name = re.sub(r'\.(pdf|docx|xlsx|txt)$', '', fname, flags=re.IGNORECASE)
             clean_name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', clean_name).replace("In-ATL_", "")
             
-            st.markdown(f"**[{cid}] {clean_name}**")
-            st.caption("Cita textual de respaldo:")
-            st.info(quote.strip().strip('"'))
+            st.markdown(f"### Fuente [{cid}]: {clean_name}")
+            st.markdown("**Cita textual:**")
+            st.info(f"\"{quote.strip()}\"")
 
+# --- 2. RENDERIZADO DEL HISTORIAL ---
 def render_chat_history(history, source_mode="chat"):
-    """
-    Renderiza el historial con la barra de acciones: Feedback | Ver Referencias | Pin.
-    """
     if not history:
         return
 
@@ -43,49 +43,49 @@ def render_chat_history(history, source_mode="chat"):
         
         with st.chat_message(role, avatar=avatar):
             if role == "assistant":
-                # Guardamos si tiene referencias antes de limpiar el texto
-                has_references = "|||" in content
+                # Guardamos la marca de si hay referencias antes de limpiar el texto
+                has_ref = "|||" in content
                 
-                # 1. Limpieza visual: cortamos el texto para que no se vea el bloque técnico
+                # Limpieza visual para la App (oculta el bloque técnico)
                 display_text = re.split(r'\n\s*(\*\*|##)?\s*Fuentes( Verificadas| Consultadas)?\s*:?', content, flags=re.IGNORECASE)[0]
                 display_text = re.split(r'\[\d+\].*?\|\|\|', display_text, flags=re.DOTALL)[0]
                 
+                # Renderizar texto principal con tooltips
                 html_content = process_text_with_tooltips(display_text)
                 st.markdown(html_content, unsafe_allow_html=True)
                 
-                # --- BARRA DE ACCIONES INFERIOR ---
-                col_up, col_down, col_ref, col_pin, col_spacer = st.columns([0.7, 0.7, 2.5, 0.7, 6])
-                key_base = f"{source_mode}_{idx}"
+                # --- BARRA DE ACCIONES (Feedback, Referencias, Pin) ---
+                # Ajustamos anchos: pulgares pequeños, botón de referencias ancho
+                col1, col2, col3, col4, col5 = st.columns([0.5, 0.5, 2.0, 0.5, 5])
+                k = f"{source_mode}_{idx}"
 
-                with col_up:
-                    if st.button("👍", key=f"up_{key_base}", help="Respuesta útil"):
+                with col1:
+                    if st.button("👍", key=f"up_{k}"):
                         log_message_feedback(content, source_mode, "up")
-                        st.toast("Feedback registrado 👍")
+                        st.toast("¡Gracias!")
 
-                with col_down:
-                    if st.button("👎", key=f"down_{key_base}", help="Respuesta inexacta"):
+                with col2:
+                    if st.button("👎", key=f"down_{k}"):
                         log_message_feedback(content, source_mode, "down")
-                        st.toast("Feedback registrado 🤔")
+                        st.toast("Registrado")
 
-                with col_ref:
-                    # Forzamos la aparición del botón basándonos en la variable previa
-                    if has_references:
-                        if st.button("Ver Referencias", key=f"btn_ref_{key_base}", use_container_width=True, type="secondary"):
+                with col3:
+                    # EL BOTÓN SOLICITADO
+                    if has_ref:
+                        if st.button("🔍 Ver Referencias", key=f"btn_ref_{k}", use_container_width=True):
                             show_sources_dialog(content)
 
-                with col_pin:
-                    if st.button("📌", key=f"pin_{key_base}", help="Guardar en Bitácora"):
+                with col4:
+                    if st.button("📌", key=f"pin_{k}"):
                         if save_project_insight(content, source_mode=source_mode):
-                            st.toast("✅ Guardado en bitácora")
+                            st.toast("📌 Guardado")
                             time.sleep(0.5)
                             st.rerun()
             else:
                 st.markdown(content)
 
+# --- 3. GESTIÓN DE INTERACCIÓN ---
 def handle_chat_interaction(prompt, response_generator_func, history_key, source_mode, on_generation_success=None):
-    """
-    Maneja la entrada del usuario y fuerza el rerun para dibujar los botones tras el streaming.
-    """
     st.session_state.mode_state[history_key].append({"role": "user", "content": prompt})
     
     with st.chat_message("user", avatar="👤"):
@@ -101,15 +101,15 @@ def handle_chat_interaction(prompt, response_generator_func, history_key, source
                 full_response += chunk
                 placeholder.markdown(full_response + "▌")
             
-            # Guardamos la respuesta completa (con el bloque |||) en el historial
+            # Al terminar, guardamos la respuesta completa (con metadata)
             st.session_state.mode_state[history_key].append({"role": "assistant", "content": full_response})
             
             if on_generation_success:
                 on_generation_success(full_response)
             
-            # El st.rerun es vital para que al terminar el stream aparezca la barra de columnas
+            # RECARGA VITAL: Para que Streamlit reconozca los botones de la barra de acciones
             st.rerun()
             return full_response
         else:
-            st.error("Error: No se recibió respuesta de la IA.")
+            st.error("No se pudo obtener respuesta de la IA.")
             return None
