@@ -12,8 +12,7 @@ from config import banner_file
 def show_sources_dialog(content):
     """Muestra la lista de archivos consultados con su índice de cita [x]."""
     
-    # Buscamos el patrón: [1] NombreArchivo.pdf |||
-    # El primer grupo (\d+) es el número, el segundo ([^\[\]\|\n]+?) es el nombre
+    # Regex robusta para capturar [Número] NombreArchivo |||
     pattern_tech = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|'
     matches = re.findall(pattern_tech, content)
     
@@ -21,21 +20,17 @@ def show_sources_dialog(content):
         st.info("Este análisis se basó en el contexto general de los documentos seleccionados.")
         return
 
-    # Usamos un diccionario para mantener la asociación {Número: NombreLimpio}
+    # Mapeo de {Número: NombreLimpio}
     fuentes_mapeadas = {}
-    
     for cid, fname in matches:
-        # Limpieza del nombre del archivo
+        # Limpieza estética del nombre del archivo
         clean_name = re.sub(r'\.(pdf|docx|xlsx|txt)$', '', fname, flags=re.IGNORECASE)
         clean_name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', clean_name).replace("In-ATL_", "")
-        
-        # Guardamos usando el ID de la cita (cid) como llave
         fuentes_mapeadas[cid] = clean_name.strip()
 
-    st.markdown("Documentos utilizados como evidencia (asociados a las citas del texto):")
+    st.write("### Documentos utilizados como evidencia:")
     
-    # Listado ordenado por el número de cita
-    # Ordenamos las llaves numéricamente para que aparezca [1], [2], [3]...
+    # Listado ordenado numéricamente para coincidir con las citas [1], [2]...
     for cid in sorted(fuentes_mapeadas.keys(), key=int):
         st.markdown(f"**[{cid}]** 📄 {fuentes_mapeadas[cid]}")
 
@@ -69,14 +64,12 @@ def render_final_actions(content, title, mode_key, on_reset_func):
                 time.sleep(0.5)
                 st.rerun()
 
-    st.write("") 
-
-    # --- BLOQUE 2: ACCIONES PRINCIPALES (4 COLUMNAS) ---
+    # --- BLOQUE 2: ACCIONES PRINCIPALES ---
     col_ref, col_pdf, col_word, col_reset = st.columns(4)
 
     with col_ref:
-        # Se habilita si detecta cualquier rastro de documentación técnica
-        tiene_citas = "|||" in content or re.search(r'\[\d+\]', content) or ".pdf" in content.lower()
+        # El botón recibe el 'content' original con los metadatos técnicos
+        tiene_citas = "|||" in content or re.search(r'\[\d+\]', content)
         if st.button("Ver Referencias", use_container_width=True, key=f"ref_{mode_key}", disabled=not tiene_citas):
             show_sources_dialog(content)
 
