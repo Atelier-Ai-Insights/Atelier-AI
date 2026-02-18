@@ -1,106 +1,76 @@
 import streamlit as st
+import re
 import time
-import constants as c
-from components.chat_interface import render_chat_history, handle_chat_interaction
-from components.export_utils import render_final_actions
+from reporting.pdf_generator import generate_pdf_html
+from reporting.docx_generator import generate_docx
+from config import banner_file
 
-# --- CARGA DE SERVICIOS ---
-try:
-    from services.gemini_api import call_gemini_stream
-    gemini_available = True
-except ImportError:
-    gemini_available = False
-    def call_gemini_stream(prompt): return None
+# --- VENTANA EMERGENTE (VERSIÓN DE SEGURIDAD) ---
+@st.dialog("Documentación de Respaldo")
+def show_sources_dialog(content):
+    """Extrae y muestra las fuentes detectadas en el texto."""
+    
+    # 1. Intentamos capturar el formato: [1] Nombre.pdf |||
+    matches = re.findall(r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|', content)
+    
+    # 2. Si falla, buscamos nombres de archivos .pdf mencionadas con su número [1] Nombre.pdf
+    if not matches:
+        matches = re.findall(r'\[(\d+)\]\s*([a-zA-Z0-9_-]+\.(?:pdf|docx))', content)
 
-try:
-    from utils import get_relevant_info
-except ImportError:
-    def get_relevant_info(db, q, f): return "Info simulada"
-
-try:
-    from prompts import get_grounded_chat_prompt
-    from services.supabase_db import log_query_event
-except ImportError:
-    def get_grounded_chat_prompt(h, r): return "Prompt simulado"
-    def log_query_event(q, mode): pass
-
-def grounded_chat_mode(db, selected_files):
-    st.subheader("Chat de Consulta Directa")
-    st.caption("Consulta tus documentos con referencias verificadas.")
-
-    if not selected_files:
-        st.info("👈 Selecciona documentos en el menú lateral para comenzar.")
+    if not matches:
+        st.info("Este análisis se basó en el contexto general de los documentos seleccionados.")
         return
 
-    # Inicializar historial si no existe
-    if "chat_history" not in st.session_state.mode_state:
-        st.session_state.mode_state["chat_history"] = []
+    # Usamos diccionario para limpiar y organizar {Número: NombreLimpio}
+    fuentes_finales = {}
+    for cid, fname in matches:
+        # Limpieza profunda del nombre
+        name = re.sub(r'\.(pdf|docx|xlsx)$', '', fname, flags=re.IGNORECASE)
+        name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', name).replace("In-ATL_", "")
+        fuentes_finales[cid] = name.strip()
 
-    # 1. Renderizar historial acumulado
-    render_chat_history(st.session_state.mode_state["chat_history"], source_mode="chat")
+    st.write("### Fuentes asociadas a este análisis:")
+    
+    # Renderizar la lista numerada
+    for cid in sorted(fuentes_finales.keys(), key=int):
+        st.markdown(f"**[{cid}]** 📄 {fuentes_finales[cid]}")
 
-    # 2. Entrada de usuario
-    if user_input := st.chat_input("Haz una pregunta sobre tus documentos..."):
-        
-        def chat_generator():
-            status_box = st.empty()
-            
-            with status_box.status("Iniciando motor de respuesta...", expanded=True) as status:
-                if not gemini_available:
-                    status.update(label="Error: IA no disponible", state="error")
-                    return iter(["⚠️ El servicio de IA no está disponible."])
-                
-                status.write("Escaneando documentos (Motor RAG)...")
-                relevant_info = get_relevant_info(db, user_input, selected_files)
-                
-                if not relevant_info:
-                    status.update(label="Sin hallazgos", state="error")
-                    return iter(["No encontré información relevante en los documentos seleccionados."])
-                
-                status.write("Estructurando evidencia y contexto...")
-                # Tomar los últimos mensajes para contexto
-                hist_str = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.mode_state["chat_history"][-3:]])
-                prompt = get_grounded_chat_prompt(hist_str, relevant_info)
-                
-                status.write("Redactando respuesta con citas...")
-                stream = call_gemini_stream(prompt)
-                
-                if stream:
-                    status.update(label="¡Respuesta lista!", state="complete", expanded=False)
-                else:
-                    status.update(label="Error de conexión", state="error")
-                    return iter(["Error de conexión con la IA."])
+def render_final_actions(content, title, mode_key, on_reset_func):
+    """Barra Maestra con Feedback y Exportación."""
+    if not content: return
+    st.divider()
+    
+    # Botones de Feedback y Pin
+    col_f1, col_f2, col_pin, col_spacer = st.columns([1, 1, 1, 9])
+    with col_f1: st.button("👍", key=f"up_{mode_key}")
+    with col_f2: st.button("👎", key=f"down_{mode_key}")
+    with col_pin:
+        if st.button("📌", key=f"pin_{mode_key}"):
+            st.toast("✅ Guardado")
+            time.sleep(0.5)
+            st.rerun()
 
-            if stream:
-                time.sleep(0.7) 
-                status_box.empty() 
-                return stream
+    st.write("")
+    
+    # Acciones de Exportación
+    col_ref, col_pdf, col_word, col_reset = st.columns(4)
+    with col_ref:
+        # El botón se habilita si hay rastro de citas o PDFs
+        tiene_datos = "[" in content or ".pdf" in content.lower()
+        if st.button("Ver Referencias", use_container_width=True, key=f"ref_{mode_key}", disabled=not tiene_datos):
+            show_sources_dialog(content)
 
-        # Procesar interacción
-        handle_chat_interaction(
-            prompt=user_input,
-            response_generator_func=chat_generator,
-            history_key="chat_history",
-            source_mode="chat",
-            on_generation_success=lambda resp: log_query_event(user_input, c.MODE_CHAT)
-        )
+    with col_pdf:
+        pdf_bytes = generate_pdf_html(content, title=title, banner_path=banner_file)
+        if pdf_bytes:
+            st.download_button("Descargar PDF", pdf_bytes, f"{title}.pdf", use_container_width=True, key=f"p_{mode_key}")
 
-    # 3. Acciones Finales (Solo si hay historial)
-    if st.session_state.mode_state["chat_history"]:
-        # Construimos el contenido para exportación
-        full_content = ""
-        for msg in st.session_state.mode_state["chat_history"]:
-            role_label = "Usuario" if msg["role"] == "user" else "Atelier AI"
-            # Mantenemos el content original para que el botón "Ver Referencias" funcione
-            full_content += f"### {role_label}\n{msg['content']}\n\n"
-        
-        def reset_chat_workflow():
-            st.session_state.mode_state["chat_history"] = []
+    with col_word:
+        docx_bytes = generate_docx(content, title=title)
+        if docx_bytes:
+            st.download_button("Descargar Word", docx_bytes, f"{title}.docx", use_container_width=True, key=f"w_{mode_key}")
 
-        # Invocamos la barra maestra de exportación
-        render_final_actions(
-            content=full_content,
-            title="Consulta_Atelier",
-            mode_key="chat_directo",
-            on_reset_func=reset_chat_workflow
-        )
+    with col_reset:
+        if st.button("Nueva Búsqueda", use_container_width=True, type="secondary", key=f"r_{mode_key}"):
+            on_reset_func()
+            st.rerun()
