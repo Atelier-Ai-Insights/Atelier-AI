@@ -1,110 +1,96 @@
 import streamlit as st
-import re
 import time
-from utils import process_text_with_tooltips
-from services.supabase_db import log_message_feedback
-from services.memory_service import save_project_insight
+import constants as c
+from components.chat_interface import render_chat_history, handle_chat_interaction
+from components.export_utils import render_final_actions
 
-# --- VENTANA EMERGENTE DE REFERENCIAS ---
-@st.dialog("Referencias y Evidencia")
-def show_sources_dialog(content):
-    """
-    Muestra la evidencia técnica extraída del separador técnico |||.
-    """
-    pattern = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
-    matches = re.findall(pattern, content, flags=re.DOTALL)
-    
-    if not matches:
-        st.info("No se encontraron referencias detalladas en esta respuesta.")
+try:
+    from services.gemini_api import call_gemini_stream
+    gemini_available = True
+except ImportError:
+    gemini_available = False
+    def call_gemini_stream(prompt): return None
+
+try:
+    from utils import get_relevant_info
+except ImportError:
+    def get_relevant_info(db, q, f): return "Info simulada"
+
+try:
+    from prompts import get_grounded_chat_prompt
+    from services.supabase_db import log_query_event
+except ImportError:
+    def get_grounded_chat_prompt(h, r): return "Prompt simulado"
+    def log_query_event(q, mode): pass
+
+def grounded_chat_mode(db, selected_files):
+    st.subheader("Chat de Consulta Directa")
+    st.caption("Consulta tus documentos con referencias verificadas.")
+
+    if not selected_files:
+        st.info("👈 Selecciona documentos en el menú lateral para comenzar.")
         return
 
-    for cid, fname, quote in matches:
-        with st.container(border=True):
-            # Simplificación de nombre (limpieza de fechas y extensiones)
-            clean_name = re.sub(r'\.(pdf|docx|xlsx|txt)$', '', fname, flags=re.IGNORECASE)
-            clean_name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', clean_name).replace("In-ATL_", "")
-            
-            st.markdown(f"**[{cid}] {clean_name}**")
-            st.caption("Evidencia detectada:")
-            st.info(quote.strip().strip('"'))
+    if "chat_history" not in st.session_state.mode_state:
+        st.session_state.mode_state["chat_history"] = []
 
-def render_chat_history(history, source_mode="chat"):
-    """
-    Renderiza el historial con la barra de acciones: Feedback | Ver Referencias | Pin.
-    """
-    if not history:
-        return
+    render_chat_history(st.session_state.mode_state["chat_history"], source_mode="chat")
 
-    for idx, msg in enumerate(history):
-        role = msg["role"]
-        content = msg["content"]
-        avatar = "✨" if role == "assistant" else "👤"
+    if user_input := st.chat_input("Haz una pregunta sobre tus documentos..."):
         
-        with st.chat_message(role, avatar=avatar):
-            if role == "assistant":
-                # 1. Limpieza visual: ocultamos el bloque técnico ||| para la app
-                display_text = re.split(r'\n\s*(\*\*|##)?\s*Fuentes( Verificadas| Consultadas)?\s*:?', content, flags=re.IGNORECASE)[0]
-                display_text = re.split(r'\[\d+\].*?\|\|\|', display_text, flags=re.DOTALL)[0]
+        def chat_generator():
+            status_box = st.empty()
+            
+            with status_box.status("Iniciando motor de respuesta...", expanded=True) as status:
+                if not gemini_available:
+                    status.update(label="Error: IA no disponible", state="error")
+                    return iter(["⚠️ El servicio de IA no está disponible."])
                 
-                html_content = process_text_with_tooltips(display_text)
-                st.markdown(html_content, unsafe_allow_html=True)
+                status.write("Escaneando documentos (Motor RAG)...")
+                relevant_info = get_relevant_info(db, user_input, selected_files)
                 
-                # --- BARRA DE ACCIONES (Alineada como en tus capturas) ---
-                # Ajustamos los anchos para que el botón de texto quepa bien
-                col_up, col_down, col_ref, col_pin, col_spacer = st.columns([0.6, 0.6, 2.2, 0.6, 6])
-                key_base = f"{source_mode}_{idx}"
+                if not relevant_info:
+                    status.update(label="Sin hallazgos", state="error")
+                    return iter(["No encontré información relevante en los documentos seleccionados."])
+                
+                status.write("Estructurando evidencia y contexto...")
+                hist_str = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.mode_state["chat_history"][-3:]])
+                prompt = get_grounded_chat_prompt(hist_str, relevant_info)
+                
+                status.write("Redactando respuesta con citas...")
+                stream = call_gemini_stream(prompt)
+                
+                if stream:
+                    status.update(label="¡Respuesta lista!", state="complete", expanded=False)
+                else:
+                    status.update(label="Error de conexión", state="error")
+                    return iter(["Error de conexión con la IA."])
 
-                with col_up:
-                    if st.button("👍", key=f"up_{key_base}", help="Útil"):
-                        log_message_feedback(content, source_mode, "up")
-                        st.toast("Feedback registrado 👍")
+            if stream:
+                time.sleep(0.7) 
+                status_box.empty() 
+                return stream
 
-                with col_down:
-                    if st.button("👎", key=f"down_{key_base}", help="No es lo que esperaba"):
-                        log_message_feedback(content, source_mode, "down")
-                        st.toast("Feedback registrado 🤔")
+        handle_chat_interaction(
+            prompt=user_input,
+            response_generator_func=chat_generator,
+            history_key="chat_history",
+            source_mode="chat",
+            on_generation_success=lambda resp: log_query_event(user_input, c.MODE_CHAT)
+        )
 
-                with col_ref:
-                    # El botón aparece si el contenido original tiene metadatos técnicos
-                    if "|||" in content:
-                        if st.button("Ver Referencias", key=f"btn_ref_{key_base}", use_container_width=True):
-                            show_sources_dialog(content)
-
-                with col_pin:
-                    if st.button("📌", key=f"pin_{key_base}", help="Guardar en Bitácora"):
-                        if save_project_insight(content, source_mode=source_mode):
-                            st.toast("✅ Guardado en bitácora")
-                            time.sleep(0.5)
-                            st.rerun()
-            else:
-                st.markdown(content)
-
-def handle_chat_interaction(prompt, response_generator_func, history_key, source_mode, on_generation_success=None):
-    """
-    Maneja la interacción y asegura que la UI se refresque para mostrar los botones tras la respuesta.
-    """
-    st.session_state.mode_state[history_key].append({"role": "user", "content": prompt})
-    
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(prompt)
-
-    with st.chat_message("assistant", avatar="✨"):
-        full_response = ""
-        placeholder = st.empty()
-        stream = response_generator_func()
+    if st.session_state.mode_state["chat_history"]:
+        full_content = ""
+        for msg in st.session_state.mode_state["chat_history"]:
+            role_label = "Usuario" if msg["role"] == "user" else "Atelier AI"
+            full_content += f"### {role_label}\n{msg['content']}\n\n"
         
-        if stream:
-            for chunk in stream:
-                full_response += chunk
-                placeholder.markdown(full_response + "▌")
-            
-            # Guardamos y forzamos recarga para que Streamlit dibuje la barra de columnas
-            st.session_state.mode_state[history_key].append({"role": "assistant", "content": full_response})
-            if on_generation_success:
-                on_generation_success(full_response)
-            
-            st.rerun()
-            return full_response
-        else:
-            st.error("Error: No se recibió respuesta de la IA.")
-            return None
+        def reset_chat_workflow():
+            st.session_state.mode_state["chat_history"] = []
+
+        render_final_actions(
+            content=full_content,
+            title="Consulta_Atelier",
+            mode_key="chat_directo",
+            on_reset_func=reset_chat_workflow
+        )
