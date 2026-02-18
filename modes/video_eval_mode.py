@@ -1,25 +1,27 @@
 import streamlit as st
-from io import BytesIO
 import time
-
-# --- UTILS & SERVICES ---
-from utils import get_relevant_info, render_process_status, process_text_with_tooltips
-from services.gemini_api import call_gemini_stream 
-from services.supabase_db import log_query_event, log_message_feedback
-from services.memory_service import save_project_insight
-from config import banner_file
-from prompts import get_video_eval_prompt_parts
 import constants as c
 
-# --- GENERADORES ---
-from reporting.pdf_generator import generate_pdf_html
-from reporting.docx_generator import generate_docx
+# --- UTILS & SERVICES ---
+from utils import get_relevant_info, render_process_status
+from services.gemini_api import call_gemini_stream 
+from services.supabase_db import log_query_event
+from config import banner_file
+from prompts import get_video_eval_prompt_parts
+
+# --- COMPONENTES UNIFICADOS ---
+from components.chat_interface import render_chat_history
+from components.export_utils import render_final_actions
 
 def video_evaluation_mode(db, selected_files):
+    """
+    Modo de Evaluación de Video: Integra el estándar de invisibilidad de fuentes
+    y la barra maestra de acciones finales.
+    """
     st.subheader("Evaluación de Video")
     st.markdown("Analiza piezas audiovisuales comparando objetivos contra hallazgos del repositorio.") 
     
-    # 1. Inputs
+    # 1. Inputs de Usuario
     uploaded_file = st.file_uploader("Sube tu video aquí:", type=["mp4", "mov", "avi", "wmv", "mkv"])
     target_audience = st.text_area("Describe el público objetivo:", height=100)
     comm_objectives = st.text_area("Define objetivos:", height=100)
@@ -31,85 +33,66 @@ def video_evaluation_mode(db, selected_files):
             
     st.markdown("---")
     
-    # ==========================================
-    # 2. MOSTRAR RESULTADOS
-    # ==========================================
-    if "video_evaluation_result" in st.session_state.mode_state:
-        raw_text = st.session_state.mode_state["video_evaluation_result"]
-        
-        st.markdown("### Resultados Evaluación:")
-        
-        # --- A. Renderizado Inteligente ---
-        clean_text = raw_text.replace("```markdown", "").replace("```", "")
-        # Esta llamada usa el nuevo utils.py que "absorbe" el footer y lo mete en el tooltip
-        html_content = process_text_with_tooltips(clean_text)
-        st.markdown(html_content, unsafe_allow_html=True)
-        
-        # --- B. Barra de Acciones ---
-        st.write("") 
-        col_up, col_down, col_spacer, col_pin = st.columns([1, 1, 10, 1])
-        key_suffix = str(hash(raw_text))[:10]
+    # 2. MOSTRAR RESULTADOS (Persistencia de Historial)
+    # Usamos una lista para que render_chat_history pueda procesar el mensaje
+    if "video_eval_history" not in st.session_state.mode_state:
+        st.session_state.mode_state["video_eval_history"] = []
 
-        with col_up:
-            if st.button("👍", key=f"vid_up_{key_suffix}"):
-                log_message_feedback(raw_text, "video_eval", "up")
-                st.toast("Feedback registrado 👍")
+    # Renderizado limpio (oculta metadatos técnicos del video si los hubiera)
+    render_chat_history(st.session_state.mode_state["video_eval_history"], source_mode="video")
 
-        with col_down:
-            if st.button("👎", key=f"vid_down_{key_suffix}"):
-                log_message_feedback(raw_text, "video_eval", "down")
-                st.toast("Gracias por el feedback")
-
-        with col_pin:
-            if st.button("📌", key=f"vid_pin_{key_suffix}"):
-                if save_project_insight(raw_text, source_mode="video_eval"):
-                    st.toast("✅ Guardado en bitácora")
-                    time.sleep(1)
-                    st.rerun()
-
-        st.divider()
-        
-        # --- C. Descargas ---
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            pdf_bytes = generate_pdf_html(clean_text, title="Evaluacion Video", banner_path=banner_file)
-            if pdf_bytes: st.download_button("Descargar PDF", data=pdf_bytes, file_name="eval_video.pdf", mime="application/pdf", width='stretch')
-        with col2:
-            docx_bytes = generate_docx(clean_text, title="Evaluación de Video")
-            if docx_bytes: st.download_button("Descargar Word", data=docx_bytes, file_name="eval_video.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width='stretch', type="primary")
-        with col3:
-            if st.button("Nuevo Análisis", width='stretch'): 
-                st.session_state.mode_state.pop("video_evaluation_result", None); st.rerun()
-
-    # ==========================================
     # 3. PROCESAMIENTO
-    # ==========================================
-    elif st.button("Evaluar Video", width='stretch', disabled=(uploaded_file is None)):
+    if st.button("Evaluar Video", use_container_width=True, disabled=(uploaded_file is None)):
         if not video_bytes or not target_audience.strip() or not comm_objectives.strip(): 
-            st.warning("Completa los campos."); return
+            st.warning("Completa los campos obligatorios."); return
         
-        stream = None
         full_response = ""
         
-        with render_process_status("Analizando video...", expanded=True) as status:
+        with render_process_status("Analizando video y contrastando con repositorio...", expanded=True) as status:
+            # Búsqueda RAG de contexto
             relevant_text_context = get_relevant_info(db, f"Contexto: {target_audience}", selected_files)
-            if len(relevant_text_context) > 200000: relevant_text_context = relevant_text_context[:200000]
             
+            # Preparación de datos para Gemini (Multimodal)
             video_file_data = {'mime_type': uploaded_file.type, 'data': video_bytes}
             prompt_parts = get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context)
             prompt_parts.append("\n\n**Video para evaluar:**")
             prompt_parts.append(video_file_data)
             
+            # Streaming de respuesta
             stream = call_gemini_stream(prompt_parts)
-            if stream: status.update(label="¡Listo!", state="complete", expanded=False)
-            else: status.update(label="Error", state="error")
+            
+            if stream:
+                status.update(label="¡Análisis completado!", state="complete", expanded=False)
+                st.markdown("### Resultados Evaluación:")
+                full_response = st.write_stream(stream)
+                
+                # GUARDADO CRÍTICO: Persistencia para render_final_actions
+                st.session_state.mode_state["video_eval_history"] = [
+                    {"role": "user", "content": f"Evaluación de: {uploaded_file.name}"},
+                    {"role": "assistant", "content": full_response}
+                ]
+                
+                try: log_query_event(f"Video Eval: {uploaded_file.name}", mode=c.MODE_VIDEO_EVAL)
+                except: pass
+                
+                st.rerun()
+            else:
+                status.update(label="Error en el análisis", state="error")
+                st.error("No se pudo generar la evaluación del video.")
+
+    # 4. ACCIONES FINALES (Barra Maestra Unificada)
+    if st.session_state.mode_state["video_eval_history"]:
+        # Recuperamos el contenido del asistente (el análisis)
+        analysis_content = st.session_state.mode_state["video_eval_history"][-1]["content"]
         
-        if stream: 
-            st.markdown("### Resultados Evaluación:")
-            full_response = st.write_stream(stream)
-            st.session_state.mode_state["video_evaluation_result"] = full_response
-            try: log_query_event(f"Evaluación Video: {uploaded_file.name}", mode=c.MODE_VIDEO_EVAL)
-            except: pass
+        def reset_video_workflow():
+            st.session_state.mode_state["video_eval_history"] = []
             st.rerun()
-        else: 
-            if not full_response: st.error("No se pudo generar evaluación video.")
+
+        # Renderiza Feedback, Referencias (Modal con numeración filtrada) y Exportaciones
+        render_final_actions(
+            content=analysis_content,
+            title=f"Evaluacion_Video_{uploaded_file.name if uploaded_file else 'Atelier'}",
+            mode_key="video_eval_actions",
+            on_reset_func=reset_video_workflow
+        )
