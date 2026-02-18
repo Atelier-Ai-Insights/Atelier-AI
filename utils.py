@@ -104,7 +104,6 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
                 for i, g in enumerate(pres.get("grupos", [])):
                     txt = str(g.get('contenido_texto', ''))
                     if txt and len(txt) > 20:
-                        # Simplificamos el META para ahorrar tokens y confundir menos a la IA
                         chunk_meta = f"--- DOC: {doc_name} | SECCIÓN: {i+1} ---\n" 
                         full_chunk = f"{chunk_meta}{txt}\n\n"
                         candidate_chunks.append({
@@ -119,7 +118,6 @@ def get_relevant_info(db, question, selected_files, max_chars=150000):
     if total_len <= max_chars:
         return "".join([c["text"] for c in candidate_chunks])
 
-    print(f"Content overflow ({total_len} chars). Activating Smart Search for: {question}")
     search_terms = expand_search_query(question)
     search_terms = [normalize_text(t) for t in search_terms]
     
@@ -151,45 +149,43 @@ def validate_session_integrity():
     pass 
 
 # =========================================================
-# LÓGICA DE CITAS V8 (FIX FINAL DE FORMATO Y ESTABILIDAD)
+# LÓGICA DE CITAS V8 (AJUSTADA: NOMBRES LIMPIOS Y ESTABILIDAD)
 # =========================================================
 def process_text_with_tooltips(text):
     if not text: return ""
 
     try:
         source_map = {}
-        # Normalizar comillas
         text = text.replace('“', '"').replace('”', '"')
         
-        # 1. COSECHA DE METADATA (Estándar [1] File ||| Context)
-        # Usamos una regex más robusta que no se rompa con saltos de línea extraños
+        # 1. COSECHA DE METADATA CON NOMBRES LIMPIOS
         def harvest_metadata(match):
             try:
                 cid = match.group(1)
                 fname = match.group(2).strip()
+                
+                # --- SIMPLIFICACIÓN DE NOMBRE ---
+                clean_name = re.sub(r'\.(pdf|docx|xlsx|txt)$', '', fname, flags=re.IGNORECASE)
+                clean_name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', clean_name)
+                clean_name = clean_name.replace("In-ATL_", "")
+                
                 raw_context = match.group(3).strip()
                 clean_context = re.sub(r'^(?:Cita:|Contexto:|Quote:)\s*', '', raw_context, flags=re.IGNORECASE).strip('"').strip("'")
                 
                 source_map[cid] = {
-                    "file": html.escape(fname),
+                    "file": html.escape(clean_name),
                     "context": html.escape(clean_context[:300]) + "..."
                 }
             except: pass
-            return "" # Borrar del texto visible
+            return "" 
 
-        # Patrón estándar de footer
         pattern_metadata = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
         text = re.sub(pattern_metadata, harvest_metadata, text, flags=re.DOTALL)
         
-        # 2. LIMPIEZA DE "FUGAS" [DOC:...] 
-        # Esta regex atrapa el formato crudo que está saliendo en tu pantalla
-        # y lo convierte en un bonito icono de carpeta [📂] con tooltip.
+        # 2. LIMPIEZA DE "FUGAS" [DOC:...]
         def clean_raw_doc_leaks(match):
             try:
-                # Capturamos todo lo que haya dentro de DOC: ... |
                 content_inside = match.group(1) 
-                
-                # Intentamos separar Nombre y Sección si existe el pipe |
                 if "|" in content_inside:
                     parts = content_inside.split("|")
                     fname = parts[0].replace("DOC:", "").strip()
@@ -198,7 +194,10 @@ def process_text_with_tooltips(text):
                     fname = content_inside.replace("DOC:", "").strip()
                     section_info = "Referencia general"
 
-                # Tooltip visual
+                fname = re.sub(r'\.(pdf|docx|xlsx|txt)$', '', fname, flags=re.IGNORECASE)
+                fname = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', fname)
+                fname = fname.replace("In-ATL_", "")
+
                 return (
                     f'&nbsp;<span class="tooltip-container">'
                     f'<span class="citation-number" style="background-color:#f0f2f6; color:#444; border:1px solid #ccc;">📂</span>'
@@ -208,20 +207,15 @@ def process_text_with_tooltips(text):
                     f'</span></span>'
                 )
             except:
-                return "" # Si falla, borrar la fuga
+                return ""
 
-        # Regex muy permisiva para atrapar cualquier variante de [DOC: ...]
-        # Busca [DOC: seguido de cualquier cosa que no sea ] hasta encontrar ]
         text = re.sub(r'\[(DOC:.+?)\]', clean_raw_doc_leaks, text, flags=re.IGNORECASE)
 
         # 3. LIMPIEZA GENERAL
-        # Borrar paréntesis repetitivos tipo (Contexto: ...)
         text = re.sub(r'\(\s*(?:Contexto|Cita|Quote|Evidencia)\s*:.*?\)', '', text, flags=re.IGNORECASE | re.DOTALL)
-        # Borrar títulos de footer residuales
         text = re.sub(r'(?:\n|^)\s*(?:\*\*|##)?\s*Fuentes(?: Verificadas| Consultadas)?\s*:?\s*(?:\*\*|##)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
         
         # 4. RENDERIZADO DE CITAS NUMÉRICAS [1]
-        # (Solo si sobrevivieron al proceso de cosecha)
         def replace_citation_group(match):
             content = match.group(1)
             ids = [x.strip() for x in re.findall(r'\d+', content)]
@@ -239,16 +233,12 @@ def process_text_with_tooltips(text):
                     )
                     html_out.append(tooltip)
                 else:
-                    # Si hay un número [1] pero no hay metadata (porque la IA falló al final),
-                    # lo mostramos gris para que no parezca un error
                     html_out.append(f'<span class="citation-number" style="cursor:default; border:1px solid #eee; color:#aaa;">[{cid}]</span>')
             return f" {''.join(html_out)} "
 
-        # Reemplazar [1, 2]
         enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, text)
         
         # 5. FOOTER DE SEGURIDAD
-        # Si logramos extraer fuentes, las mostramos abajo
         footer = ""
         unique_files = sorted(list(set(v['file'] for v in source_map.values())))
         if unique_files:
@@ -261,8 +251,6 @@ def process_text_with_tooltips(text):
         return enriched_body + footer
 
     except Exception as e:
-        # Si algo falla catastróficamente, devolvemos el texto original
-        # pero intentamos limpiar al menos las etiquetas [DOC] para que sea legible
         print(f"Error Tooltips: {e}")
         try:
             return re.sub(r'\[DOC:.+?\]', '', text)
