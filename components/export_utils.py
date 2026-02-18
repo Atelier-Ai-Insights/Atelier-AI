@@ -11,26 +11,30 @@ from config import banner_file
 @st.dialog("Documentación de Respaldo")
 def show_sources_dialog(content):
     """Muestra la lista de archivos consultados para generar el análisis."""
-    # Extraemos el nombre del archivo basándonos en el patrón técnico: [1] NombreArchivo.pdf |||
-    pattern = r'\[\d+\]\s*([^\[\]\|\n]+?)\s*\|\|\|'
-    matches = re.findall(pattern, content)
     
+    # 1. Intento por patrón técnico: [1] NombreArchivo.pdf |||
+    pattern_tech = r'\[\d+\]\s*([^\[\]\|\n]+?)\s*\|\|\|'
+    matches = re.findall(pattern_tech, content)
+    
+    # 2. Si falla, busca nombres de archivos PDF (ej: 24-8-30_In-ATL_...)
+    if not matches:
+        pattern_files = r'(\d{1,4}-\d{1,2}-\d{1,2}_In-ATL_.*?\.pdf)'
+        matches = re.findall(pattern_files, content)
+
     if not matches:
         st.info("Este análisis se basó en el contexto general de los documentos seleccionados.")
         return
 
-    # Eliminamos duplicados y limpiamos nombres para una visualización estética
+    # Eliminamos duplicados y limpiamos nombres para la UI
     fuentes_unicas = set()
     for fname in matches:
-        # 1. Quitamos la extensión del archivo
         clean_name = re.sub(r'\.(pdf|docx|xlsx|txt)$', '', fname, flags=re.IGNORECASE)
-        # 2. Quitamos prefijos de fecha (ej: 24-08-30_) y marcas de sistema (In-ATL_)
         clean_name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', clean_name).replace("In-ATL_", "")
         fuentes_unicas.add(clean_name.strip())
 
     st.markdown("Los siguientes documentos fueron utilizados como evidencia para este análisis:")
     
-    # Listado visual ordenado alfabéticamente
+    # Listado visual con iconos
     for fuente in sorted(list(fuentes_unicas)):
         st.markdown(f"📄 **{fuente}**")
 
@@ -43,7 +47,7 @@ def render_final_actions(content, title, mode_key, on_reset_func):
     clean_text = content.replace("```markdown", "").replace("```", "").strip()
     word_template = "Plantilla_Word_ATL.docx"
     
-    # --- BLOQUE 1: FEEDBACK Y PIN (Interacción rápida) ---
+    # --- BLOQUE 1: FEEDBACK Y PIN ---
     st.caption("¿Qué te pareció este análisis?")
     col_f1, col_f2, col_pin, col_spacer = st.columns([1, 1, 1, 9])
     
@@ -64,14 +68,14 @@ def render_final_actions(content, title, mode_key, on_reset_func):
                 time.sleep(0.5)
                 st.rerun()
 
-    st.write("") # Espaciador vertical
+    st.write("") 
 
-    # --- BLOQUE 2: ACCIONES PRINCIPALES (4 COLUMNAS) ---
+    # --- BLOQUE 2: ACCIONES PRINCIPALES ---
     col_ref, col_pdf, col_word, col_reset = st.columns(4)
 
     with col_ref:
-        # Detectar si hay referencias en el contenido para habilitar el botón
-        tiene_citas = "|||" in content or re.search(r'\[\d+\]', content)
+        # Se habilita si detecta cualquier rastro de documentación
+        tiene_citas = "|||" in content or re.search(r'\[\d+\]', content) or ".pdf" in content.lower()
         if st.button("Ver Referencias", use_container_width=True, key=f"ref_{mode_key}", disabled=not tiene_citas):
             show_sources_dialog(content)
 
