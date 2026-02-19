@@ -139,10 +139,9 @@ def process_text_with_tooltips(text):
 
     try:
         source_map = {}
-        # Normalizamos comillas para evitar errores de renderizado
         text = text.replace('“', '"').replace('”', '"')
         
-        # 1. COSECHA DE METADATA (Lógica que no interrumpe el flujo)
+        # 1. COSECHA DE METADATA
         def harvest_metadata(match):
             try:
                 cid = match.group(1)
@@ -160,12 +159,10 @@ def process_text_with_tooltips(text):
             except: pass
             return "" 
 
-        # Extraemos metadatos técnicos y los removemos del cuerpo principal
         pattern_metadata = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
         text = re.sub(pattern_metadata, harvest_metadata, text, flags=re.DOTALL)
         
-        # 2. LIMPIEZA DE CITAS ABIERTAS (Evita que Streamlit corte el texto)
-        # Si hay un corchete de cita abierto sin cerrar al final, lo removemos para no romper el renderizado
+        # 2. LIMPIEZA DE CITAS ABIERTAS (Evita cortes en el renderizado)
         text = re.sub(r'\[(?!\d+\]).*?$', '', text)
 
         # 3. RENDERIZADO DE CITAS NUMÉRICAS
@@ -192,10 +189,33 @@ def process_text_with_tooltips(text):
         enriched_body = re.sub(r"\[\s*([\d,\s]+)\s*\]", replace_citation_group, text)
         return enriched_body
 
-    except Exception as e:
-        # En caso de error crítico, devolvemos el texto original sin procesar para no perderlo
+    except Exception:
         return text
 
-def validate_session_integrity(): pass
-def reset_report_workflow(): pass
-def reset_chat_workflow(): pass
+# =========================================================
+# GESTIÓN DE WORKFLOWS (RESTAURADOS)
+# =========================================================
+def reset_transcript_chat_workflow():
+    """Limpia el estado del chat de transcripciones para evitar errores de importación."""
+    if "transcript_chat_history" in st.session_state:
+        st.session_state.transcript_chat_history = []
+    if "current_transcript_analysis" in st.session_state:
+        st.session_state.current_transcript_analysis = None
+
+def reset_chat_workflow():
+    """Limpia el estado del chat general."""
+    if "chat_history" in st.session_state:
+        st.session_state.chat_history = []
+
+def reset_report_workflow():
+    """Limpia el estado de generación de reportes."""
+    if "report_step" in st.session_state:
+        st.session_state.report_step = 1
+    if "report_results" in st.session_state:
+        st.session_state.report_results = {}
+
+def validate_session_integrity():
+    """Valida la integridad de la sesión activa."""
+    if "logged_in" not in st.session_state or not st.session_state.logged_in:
+        return False
+    return True
