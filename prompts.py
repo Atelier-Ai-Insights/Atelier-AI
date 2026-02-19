@@ -174,17 +174,27 @@ def get_persona_chat_instruction(persona_name, persona_data):
     return f"Actúa como el perfil sintetizado: {persona_name}. Datos: {persona_data}. Responde detalladamente."
 
 # ==============================================================================
-# ANÁLISIS NUMÉRICO (EXCEL)
+# PROMPTS DE ANÁLISIS DE DATOS
 # ==============================================================================
 
-def get_excel_autocode_prompt(main_topic, sample_data):
-    return f"Codificación para {main_topic}. Data: {sample_data}"
+def get_survey_articulation_prompt(survey_context, repository_context, conversation_history):
+    return (
+        f"**Rol:** Investigador de Mercados Cuantitativo.\n"
+        f"**Tarea:** Articula los hallazgos numéricos del Excel con el contexto cualitativo del Repositorio.\n"
+        f"**Datos Excel:**\n{survey_context}\n"
+        f"**Contexto Cualitativo (Repo):**\n{repository_context}\n"
+        f"**Historial:**\n{conversation_history}\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
+    )
+
+def get_data_summary_prompt(data_snapshot_str):
+    return f"Resumen ejecutivo de los datos cargados:\n{data_snapshot_str}\nDestaca valores atípicos, medias y distribución general."
 
 def get_correlation_prompt(correlation_matrix_str):
-    return f"Analiza esta matriz de correlación: {correlation_matrix_str}"
+    return f"Interpreta la siguiente matriz de correlación:\n{correlation_matrix_str}\nIdentifica las relaciones fuertes (positivas o negativas) y explica su posible significado de negocio."
 
-def get_stat_test_prompt(test_type, p_value, var_num, var_cat, n_groups):
-    return f"Interpreta: {test_type}, p={p_value}, variables {var_num}/{var_cat}."
+def get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups):
+    return f"Interpreta el resultado de la prueba {test_type} para la variable '{num_col}' agrupada por '{cat_col}'. P-value: {p_value}. ¿Es estadísticamente significativo? ¿Qué implica esto?"
 
 # ==============================================================================
 # EVALUACIÓN DE IDEAS [RESTAURADO]
@@ -202,29 +212,58 @@ def get_idea_eval_prompt(idea_input, context_info):
     )
 
 # ==============================================================================
-# REPORTES ESPECIALES (ONE-PAGER)
+# PROMPTS DE ONE-PAGER (JSON BLINDADO)
 # ==============================================================================
 
-# 1. Definición para el Generador One Pager [RESTAURADO]
+# --- ESTA ES LA FUNCIÓN QUE FALTABA ---
+def get_onepager_prompt(topic, context):
+    return f"""
+    Actúa como un estratega de negocios senior.
+    Tu tarea es estructurar el contenido para una diapositiva ejecutiva "One Pager" sobre el tema: "{topic}".
+
+    Usa la siguiente información de contexto (RAG):
+    {context[:25000]}
+
+    Debes responder EXCLUSIVAMENTE con un objeto JSON válido (sin markdown ```json, sin texto extra).
+    
+    Estructura requerida del JSON:
+    {{
+        "titulo": "Un título de alto impacto (máx 10 palabras)",
+        "subtitulo": "Una bajada explicativa breve (máx 20 palabras)",
+        "puntos_clave": [
+            "Punto estratégico 1 (breve)",
+            "Punto estratégico 2 (breve)",
+            "Punto estratégico 3 (breve)",
+            "Punto estratégico 4 (breve)"
+        ],
+        "insight_principal": "La conclusión o hallazgo más importante en una frase contundente."
+    }}
+    """
+
 PROMPTS_ONEPAGER = {
-    "Analítico": "Crea un resumen técnico y denso basado en datos.",
-    "Creativo": "Desarrolla una narrativa inspiradora basada en los hallazgos.",
-    "Ejecutivo": "Enfoque en KPIs y decisiones de negocio clave."
+    "Definición de Oportunidades": """Genera JSON: {"template_type": "oportunidades", "titulo_diapositiva": "...", "insight_clave": "...", "hallazgos_principales": [], "oportunidades": [], "recomendacion_estrategica": "..."}""",
+    "Análisis DOFA (SWOT)": """Genera JSON: {"template_type": "dofa", "titulo_diapositiva": "...", "fortalezas": [], "oportunidades": [], "debilidades": [], "amenazas": []}""",
+    "Mapa de Empatía": """Genera JSON: {"template_type": "empatia", "titulo_diapositiva": "...", "piensa_siente": [], "ve": [], "dice_hace": [], "oye": [], "esfuerzos": [], "resultados": []}""",
+    "Propuesta de Valor (Value Proposition)": """Genera JSON: {"template_type": "propuesta_valor", "titulo_diapositiva": "...", "producto_servicio": "...", "creadores_alegria": [], "aliviadores_frustracion": [], "trabajos_cliente": [], "alegrias": [], "frustraciones": []}""",
+    "Mapa del Viaje (Journey Map)": """Genera JSON: {"template_type": "journey_map", "titulo_diapositiva": "...", "etapa_1": {"nombre": "...", "accion": "...", "pensamiento": "..."}, "etapa_2": {}, "etapa_3": {}}""",
+    "Matriz de Posicionamiento (2x2)": """Genera JSON: {"template_type": "matriz_2x2", "titulo_diapositiva": "...", "eje_x_positivo": "...", "eje_x_negativo": "...", "eje_y_positivo": "...", "eje_y_negativo": "...", "items_cuadrante_sup_izq": [], "items_cuadrante_sup_der": [], "items_cuadrante_inf_izq": [], "items_cuadrante_inf_der": [], "conclusion_clave": "..."}""",
+    "Perfil de Buyer Persona": """Genera JSON: {"template_type": "buyer_persona", "titulo_diapositiva": "...", "perfil_nombre": "...", "perfil_demografia": "...", "necesidades_jtbd": [], "puntos_dolor_frustraciones": [], "deseos_motivaciones": [], "citas_clave": []}"""
 }
 
-def get_onepager_prompt(topic, context):
-    return f"Estructura JSON para One Pager sobre {topic} usando {context}."
-
-def get_onepager_final_prompt(relevant_info, template_name, tema_central):
-    return f"Completa el template {template_name} para {tema_central} con {relevant_info}. Solo JSON crudo."
-
-def get_followup_suggestions_prompt(previous_answer):
-    return f"Sugiere 3 preguntas de profundización para: {previous_answer[:1000]}"
-
-def get_ideation_prompt(conv_history, relevant):
+def get_onepager_final_prompt(relevant_info, selected_template_name, tema_central):
+    t = PROMPTS_ONEPAGER.get(selected_template_name, "{}")
     return (
-        f"**Rol:** Estratega de Innovación Disruptiva.\n"
-        f"**Contexto:**\n{relevant}\n"
-        f"**Tarea:** Genera 5 ideas aplicando 'Pensamiento Lateral' sustentadas en datos.\n"
-        f"{INSTRUCCIONES_DE_CITAS}"
+        f"**SISTEMA:** Generador de Estructuras de Datos JSON.\n"
+        f"**Tarea:** Completa el template para '{tema_central}' basándote en la información provista.\n"
+        f"**Info:** {relevant_info[:15000]}\n\n"
+        f"**TEMPLATE OBJETIVO:**\n{t}\n\n"
+        f"**REGLA DE SALIDA OBLIGATORIA:**\n"
+        f"1. Devuelve SOLAMENTE el objeto JSON crudo.\n"
+        f"2. NO uses bloques de código markdown (```json ... ```).\n"
+        f"3. NO añadas texto introductorio ni de cierre.\n"
+        f"4. Asegúrate de que sea un JSON válido parseable por Python."
     )
+
+def get_excel_autocode_prompt(main_topic, responses_sample):
+    return f"Define categorías (nodos) para agrupar estas respuestas sobre '{main_topic}'. Respuestas de muestra: {str(responses_sample)}. Salida: JSON array de strings con los nombres de las categorías."
+
