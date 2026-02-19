@@ -18,7 +18,7 @@ INSTRUCCIONES_DE_CITAS = """
     [1] Nombre_del_Archivo_A.pdf
     [2] Nombre_del_Archivo_B.pdf
 
-    ⚠️ **CRÍTICO:** Solo el nombre del archivo. El sistema ocultará esta lista visualmente en el chat, pero la usará para habilitar el modal de referencias detalladas.
+    ⚠️ **CRÍTICO:** Solo el nombre del archivo. El sistema ocultará esta lista visualmente en el chat, pero la usará para habilitar el modal de referencias detalladas. La numeración debe estar relacionada con las citas mencionadas en el texto generado.
 """
 
 # ==============================================================================
