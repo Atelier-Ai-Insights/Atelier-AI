@@ -67,113 +67,92 @@ def get_grounded_chat_prompt(conversation_history, relevant_info, long_term_memo
     )
 
 # ==============================================================================
-# PROMPTS DE ANÁLISIS DE TEXTOS (TRANSCRIPCIONES)
+# PROMPTS DE ANÁLISIS DE TEXTOS Y TRANSCRIPCIONES
 # ==============================================================================
 
 def get_transcript_prompt(transcript_text, additional_instructions=""):
-    """Análisis profundo de transcripciones de entrevistas o focus groups."""
     return (
-        f"**Rol:** Especialista en Análisis Cualitativo y Semiótica.\n"
+        f"**Rol:** Especialista en Análisis Cualitativo.\n"
         f"**Tarea:** Realiza un análisis exhaustivo de la siguiente transcripción:\n"
-        f"--- INICIO TRANSCRIPCIÓN ---\n{transcript_text}\n--- FIN TRANSCRIPCIÓN ---\n\n"
-        f"**Instrucciones específicas:** {additional_instructions}\n"
-        f"Busca tensiones, verbatims poderosos, insights subyacentes y patrones de comportamiento.\n"
-        f"**Regla:** No resumas. Desarrolla cada hallazgo con profundidad analítica.\n"
+        f"{transcript_text}\n\n"
+        f"**Instrucciones:** {additional_instructions}\n"
+        f"No resumas. Desarrolla cada hallazgo con profundidad analítica."
     )
 
 def get_text_analysis_summary_prompt(analysis_results):
-    """Genera una síntesis estratégica de múltiples análisis cualitativos."""
     return (
         f"**Rol:** Director de Estrategia.\n"
         f"**Insumos:** {analysis_results}\n"
-        f"**Tarea:** Cruza los hallazgos de todos los textos analizados para identificar temas recurrentes y discrepancias críticas.\n"
-        f"**Salida:** Informe ejecutivo de alta densidad con recomendaciones accionables."
+        f"**Tarea:** Cruza los hallazgos de todos los textos analizados. Salida: Informe ejecutivo de alta densidad."
     )
 
 # ==============================================================================
-# PROMPTS DE ANÁLISIS NUMÉRICO (RESTAURADOS)
+# PROMPTS RESTAURADOS (MULTIMEDIA Y TENDENCIAS)
+# ==============================================================================
+
+def get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context):
+    """Restaurado para el modo de Evaluación de Imagen."""
+    return [
+        "**Rol:** Director Semiótico.",
+        f"Target: {target_audience} | Objetivos: {comm_objectives}",
+        f"Contexto Estratégico: {relevant_text_context[:8000]}",
+        "Evalúa la imagen con profundidad técnica y estratégica.",
+        INSTRUCCIONES_DE_CITAS
+    ]
+
+def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context):
+    """Restaurado para el modo de Evaluación de Video."""
+    return [
+        "**Rol:** Director Audiovisual.",
+        f"Target: {target_audience} | Objetivos: {comm_objectives}",
+        f"Contexto Estratégico: {relevant_text_context[:8000]}",
+        "Realiza una crítica técnica y estratégica del video.",
+        INSTRUCCIONES_DE_CITAS
+    ]
+
+def get_trend_synthesis_prompt(topic, context):
+    """Restaurado para el módulo de Tendencias."""
+    return f"Sintetiza tendencias para {topic} usando: {context}. Clasifica en Mega-tendencias y Fads."
+
+def get_etnochat_prompt(context):
+    """Restaurado para el módulo Etnochat."""
+    return f"Actúa como un etnográfo digital. Analiza este contenido multimodal: {context}."
+
+def get_media_transcription_prompt(media_data):
+    return f"Describe y transcribe el contenido de este archivo multimedia: {media_data}."
+
+# ==============================================================================
+# PROMPTS RESTAURADOS (PERSONAS SINTÉTICAS)
+# ==============================================================================
+
+def get_persona_generation_prompt(context):
+    return f"Genera 3 perfiles de consumidores (Personas) basados en: {context[:15000]}. Salida: JSON."
+
+def get_persona_chat_instruction(persona_name, persona_data):
+    return f"Actúa como el perfil sintetizado: {persona_name}. Datos: {persona_data}. Responde detalladamente."
+
+# ==============================================================================
+# ANÁLISIS NUMÉRICO (EXCEL)
 # ==============================================================================
 
 def get_excel_autocode_prompt(main_topic, sample_data):
-    """Genera categorías para codificación automática de Excel."""
-    return f"""
-    Actúa como un experto en codificación cualitativa de mercado.
-    **Tema Principal:** {main_topic}
-    **Muestra de Respuestas:** {sample_data}
-    
-    **Tarea:** Crea un libro de códigos (codebook) con máximo 8 categorías mutuamente excluyentes.
-    Para cada categoría define:
-    1. Nombre corto y claro.
-    2. Palabras clave o conceptos asociados (Regex patterns).
-    
-    Respuesta EXCLUSIVAMENTE en formato JSON:
-    {{ "categorias": [ {{ "nombre": "...", "keywords": "palabra1|palabra2" }} ] }}
-    """
+    return f"Codificación para {main_topic}. Data: {sample_data}"
 
 def get_correlation_prompt(correlation_matrix_str):
-    """Interpretación de matrices de correlación."""
-    return f"""
-    Analiza la siguiente matriz de correlación:
-    {correlation_matrix_str}
-    
-    **Tarea:** Identifica las relaciones más fuertes y explica su implicación estratégica. 
-    No te limites a los números; interpreta el comportamiento del consumidor.
-    Sé exhaustivo en tu explicación y desarrolla cada punto.
-    """
+    return f"Analiza esta matriz de correlación: {correlation_matrix_str}"
 
 def get_stat_test_prompt(test_type, p_value, var_num, var_cat, n_groups):
-    """Interpretación de significancia estadística."""
-    return f"""
-    Interpreta los resultados:
-    - **Prueba:** {test_type}
-    - **Variable:** {var_num} por {var_cat}
-    - **P-Value:** {p_value:.4f}
-    
-    **Tarea:** Explica si existen diferencias significativas. Si p < 0.05, describe qué grupo destaca y por qué es un insight accionable. 
-    Evita respuestas cortas; desarrolla la importancia de este hallazgo.
-    """
+    return f"Interpreta: {test_type}, p={p_value}, variables {var_num}/{var_cat}."
 
 # ==============================================================================
-# PROMPTS CREATIVOS Y EVALUACIÓN
+# REPORTES ESPECIALES (ONE-PAGER)
 # ==============================================================================
 
-def get_ideation_prompt(conv_history, relevant):
-    return (
-        f"**Rol:** Estratega de Innovación Disruptiva.\n"
-        f"**Contexto:**\n{relevant}\n"
-        f"**Tarea:** Genera 5 ideas aplicando 'Pensamiento Lateral' sustentadas en datos.\n"
-        f"{INSTRUCCIONES_DE_CITAS}"
-    )
+def get_onepager_prompt(topic, context):
+    return f"Estructura JSON para One Pager sobre {topic} usando {context}."
 
-def get_concept_gen_prompt(product_idea, context_info):
-    return (
-        f"**Rol:** Estratega de Producto Senior.\n"
-        f"**Tarea:** Desarrolla un concepto GANADOR y detallado para: \"{product_idea}\".\n"
-        f"**Mercado:** {context_info}\n\n"
-        f"{INSTRUCCIONES_DE_CITAS}"
-    )
-
-def get_idea_eval_prompt(idea_input, context_info):
-    return (
-        f"**Rol:** Director de Estrategia.\n"
-        f"**Idea:** {idea_input}\n"
-        f"**Evidencia:** {context_info}\n"
-        f"{INSTRUCCIONES_DE_CITAS}"
-    )
-
-# ==============================================================================
-# OTROS
-# ==============================================================================
-
-def get_data_analysis_prompt(user_query, relevant_info):
-    return (
-        f"**Tarea:** Análisis numérico detallado de: {user_query}\n"
-        f"**Datos:** {relevant_info}\n"
-        f"{INSTRUCCIONES_DE_CITAS}"
-    )
+def get_onepager_final_prompt(relevant_info, template_name, tema_central):
+    return f"Completa el template {template_name} para {tema_central} con {relevant_info}. Solo JSON crudo."
 
 def get_followup_suggestions_prompt(previous_answer):
-    return f"""
-    **Contexto:** Respuesta previa: "{previous_answer[:1500]}"
-    **Tarea:** Sugiere 3 preguntas de profundización (JSON list).
-    """
+    return f"Sugiere 3 preguntas de profundización para: {previous_answer[:1000]}"
