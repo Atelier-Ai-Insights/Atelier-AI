@@ -2,8 +2,8 @@ import streamlit as st
 import boto3
 import json
 import os  # <--- IMPORTANTE: Necesario para leer variables de Railway
+import datetime
 from utils import normalize_text
-# --- ¡NUEVA IMPORTACIÓN! ---
 from services.logger import log_error
 
 # ==========================================
@@ -11,8 +11,9 @@ from services.logger import log_error
 # ==========================================
 def get_secret(key):
     """
-    Busca la clave primero en las Variables de Entorno (Railway).
+    Busca la clave primero en las Variables de Envorno (Railway).
     Si no la encuentra, la busca en st.secrets (Local/Streamlit Cloud).
+   
     """
     # 1. Intento Railway (Environment Variable)
     value = os.environ.get(key)
@@ -26,6 +27,9 @@ def get_secret(key):
 
 @st.cache_data(show_spinner=False)
 def load_database(cliente: str):
+    """
+    Carga la base de datos principal desde S3.
+    """
     try:
         # --- OBTENER CREDENCIALES DE FORMA SEGURA ---
         endpoint = get_secret("S3_ENDPOINT_URL")
@@ -33,7 +37,7 @@ def load_database(cliente: str):
         secret_key = get_secret("S3_SECRET_KEY")
         bucket_name = get_secret("S3_BUCKET")
 
-        # Validación para evitar errores feos si faltan variables
+        # Validación para evitar errores si faltan variables
         if not endpoint or not access_key:
             print("❌ Error Crítico: Faltan variables de entorno S3")
             st.error("Error de configuración: Faltan credenciales de almacenamiento.")
@@ -58,10 +62,45 @@ def load_database(cliente: str):
         return data
 
     except Exception as e: 
-        # --- ¡LOGGING MEJORADO! ---
-        # Imprimimos el error en la consola de Railway para que puedas verlo en "View Logs" si falla
+        # --- LOGGING MEJORADO ---
         print(f"❌ ERROR S3: {str(e)}")
-        
         st.error(f"Error de conexión con el repositorio (S3).")
         log_error("Fallo crítico al cargar base de datos S3", module="Storage", error=e, level="CRITICAL")
         return []
+
+# ==========================================
+# REGISTRO DE EVENTOS (AUDITORÍA) - INTEGRADO
+# ==========================================
+def log_query_event(event_description, mode=None):
+    """
+    Registra una acción del usuario en el sistema.
+    Se añadió 'mode=None' para corregir el TypeError en el Generador de Conceptos.
+   
+    """
+    try:
+        from services.supabase_db import supabase
+
+        # Obtenemos el usuario de la sesión actual
+        user_id = st.session_state.get("user_id", "unknown_user")
+        client_name = st.session_state.get("cliente", "unknown_client")
+
+        data = {
+            "user_id": user_id,
+            "cliente": client_name,
+            "description": event_description,
+            "mode": mode if mode else "General",
+            "created_at": datetime.datetime.now().isoformat()
+        }
+
+        # Guardado en Supabase
+        if supabase:
+            try:
+                supabase.table("activity_logs").insert(data).execute()
+            except:
+                pass
+        
+        # Backup en logs de consola de Railway
+        print(f"🕒 LOG [{mode or 'General'}]: {event_description} by {user_id}")
+
+    except Exception as e:
+        print(f"⚠️ Error al registrar evento: {e}")
