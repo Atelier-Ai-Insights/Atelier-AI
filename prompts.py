@@ -91,7 +91,6 @@ def get_text_analysis_summary_prompt(analysis_results):
 # ==============================================================================
 
 def get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context):
-    """Restaurado para el modo de Evaluación de Imagen."""
     return [
         "**Rol:** Director Semiótico.",
         f"Target: {target_audience} | Objetivos: {comm_objectives}",
@@ -101,7 +100,6 @@ def get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
     ]
 
 def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context):
-    """Restaurado para el modo de Evaluación de Video."""
     return [
         "**Rol:** Director Audiovisual.",
         f"Target: {target_audience} | Objetivos: {comm_objectives}",
@@ -111,11 +109,9 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
     ]
 
 def get_trend_synthesis_prompt(topic, context):
-    """Restaurado para el módulo de Tendencias."""
     return f"Sintetiza tendencias para {topic} usando: {context}. Clasifica en Mega-tendencias y Fads."
 
 def get_etnochat_prompt(context):
-    """Restaurado para el módulo Etnochat."""
     return f"Actúa como un etnográfo digital. Analiza este contenido multimodal: {context}."
 
 def get_media_transcription_prompt(media_data):
@@ -145,8 +141,30 @@ def get_stat_test_prompt(test_type, p_value, var_num, var_cat, n_groups):
     return f"Interpreta: {test_type}, p={p_value}, variables {var_num}/{var_cat}."
 
 # ==============================================================================
+# EVALUACIÓN DE IDEAS [RESTAURADO]
+# ==============================================================================
+
+def get_idea_eval_prompt(idea_input, context_info):
+    """Genera una evaluación crítica y exhaustiva de una idea de negocio."""
+    return (
+        f"**Rol:** Director de Estrategia Senior.\n"
+        f"**Idea a Evaluar:** {idea_input}\n"
+        f"**Evidencia Documentada:** {context_info}\n\n"
+        f"Realiza un análisis profundo de viabilidad y factibilidad. No resumas. "
+        f"Utiliza toda la evidencia para justificar tu juicio.\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
+    )
+
+# ==============================================================================
 # REPORTES ESPECIALES (ONE-PAGER)
 # ==============================================================================
+
+# 1. Definición para el Generador One Pager [RESTAURADO]
+PROMPTS_ONEPAGER = {
+    "Analítico": "Crea un resumen técnico y denso basado en datos.",
+    "Creativo": "Desarrolla una narrativa inspiradora basada en los hallazgos.",
+    "Ejecutivo": "Enfoque en KPIs y decisiones de negocio clave."
+}
 
 def get_onepager_prompt(topic, context):
     return f"Estructura JSON para One Pager sobre {topic} usando {context}."
@@ -156,3 +174,11 @@ def get_onepager_final_prompt(relevant_info, template_name, tema_central):
 
 def get_followup_suggestions_prompt(previous_answer):
     return f"Sugiere 3 preguntas de profundización para: {previous_answer[:1000]}"
+
+def get_ideation_prompt(conv_history, relevant):
+    return (
+        f"**Rol:** Estratega de Innovación Disruptiva.\n"
+        f"**Contexto:**\n{relevant}\n"
+        f"**Tarea:** Genera 5 ideas aplicando 'Pensamiento Lateral' sustentadas en datos.\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
+    )
