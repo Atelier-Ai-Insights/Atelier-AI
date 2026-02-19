@@ -67,7 +67,7 @@ def get_grounded_chat_prompt(conversation_history, relevant_info, long_term_memo
     )
 
 # ==============================================================================
-# PROMPTS DE ANÁLISIS DE TEXTOS (TRANSCRIPCIONES) - RESTAURADOS
+# PROMPTS DE ANÁLISIS DE TEXTOS (TRANSCRIPCIONES)
 # ==============================================================================
 
 def get_transcript_prompt(transcript_text, additional_instructions=""):
@@ -91,30 +91,69 @@ def get_text_analysis_summary_prompt(analysis_results):
     )
 
 # ==============================================================================
+# PROMPTS DE ANÁLISIS NUMÉRICO (RESTAURADOS)
+# ==============================================================================
+
+def get_excel_autocode_prompt(main_topic, sample_data):
+    """Genera categorías para codificación automática de Excel."""
+    return f"""
+    Actúa como un experto en codificación cualitativa de mercado.
+    **Tema Principal:** {main_topic}
+    **Muestra de Respuestas:** {sample_data}
+    
+    **Tarea:** Crea un libro de códigos (codebook) con máximo 8 categorías mutuamente excluyentes.
+    Para cada categoría define:
+    1. Nombre corto y claro.
+    2. Palabras clave o conceptos asociados (Regex patterns).
+    
+    Respuesta EXCLUSIVAMENTE en formato JSON:
+    {{ "categorias": [ {{ "nombre": "...", "keywords": "palabra1|palabra2" }} ] }}
+    """
+
+def get_correlation_prompt(correlation_matrix_str):
+    """Interpretación de matrices de correlación."""
+    return f"""
+    Analiza la siguiente matriz de correlación:
+    {correlation_matrix_str}
+    
+    **Tarea:** Identifica las relaciones más fuertes y explica su implicación estratégica. 
+    No te limites a los números; interpreta el comportamiento del consumidor.
+    Sé exhaustivo en tu explicación y desarrolla cada punto.
+    """
+
+def get_stat_test_prompt(test_type, p_value, var_num, var_cat, n_groups):
+    """Interpretación de significancia estadística."""
+    return f"""
+    Interpreta los resultados:
+    - **Prueba:** {test_type}
+    - **Variable:** {var_num} por {var_cat}
+    - **P-Value:** {p_value:.4f}
+    
+    **Tarea:** Explica si existen diferencias significativas. Si p < 0.05, describe qué grupo destaca y por qué es un insight accionable. 
+    Evita respuestas cortas; desarrolla la importancia de este hallazgo.
+    """
+
+# ==============================================================================
 # PROMPTS CREATIVOS Y EVALUACIÓN
 # ==============================================================================
 
 def get_ideation_prompt(conv_history, relevant):
-    """Ideación fundamentada en evidencia documental."""
     return (
         f"**Rol:** Estratega de Innovación Disruptiva.\n"
-        f"**Contexto de Datos:**\n{relevant}\n"
-        f"**Historial:**\n{conv_history}\n"
-        f"**Tarea:** Genera 5 ideas aplicando el método 'Pensamiento Lateral'.\n"
+        f"**Contexto:**\n{relevant}\n"
+        f"**Tarea:** Genera 5 ideas aplicando 'Pensamiento Lateral' sustentadas en datos.\n"
         f"{INSTRUCCIONES_DE_CITAS}"
     )
 
 def get_concept_gen_prompt(product_idea, context_info):
-    """Desarrollo de concepto estratégico con RTB sólido."""
     return (
         f"**Rol:** Estratega de Producto Senior.\n"
         f"**Tarea:** Desarrolla un concepto GANADOR y detallado para: \"{product_idea}\".\n"
-        f"**Sustento de Mercado:** {context_info}\n\n"
+        f"**Mercado:** {context_info}\n\n"
         f"{INSTRUCCIONES_DE_CITAS}"
     )
 
 def get_idea_eval_prompt(idea_input, context_info):
-    """Evaluación crítica basada en datos duros."""
     return (
         f"**Rol:** Director de Estrategia.\n"
         f"**Idea:** {idea_input}\n"
@@ -123,12 +162,12 @@ def get_idea_eval_prompt(idea_input, context_info):
     )
 
 # ==============================================================================
-# ANÁLISIS NUMÉRICO Y TENDENCIAS
+# OTROS
 # ==============================================================================
 
 def get_data_analysis_prompt(user_query, relevant_info):
     return (
-        f"**Tarea:** Realiza un análisis numérico detallado de: {user_query}\n"
+        f"**Tarea:** Análisis numérico detallado de: {user_query}\n"
         f"**Datos:** {relevant_info}\n"
         f"{INSTRUCCIONES_DE_CITAS}"
     )
