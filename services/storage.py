@@ -11,13 +11,10 @@ from services.logger import log_error
 # ==========================================
 def get_secret(key):
     """
-    Busca la clave primero en las Variables de Envorno (Railway).
+    Busca la clave primero en las Variables de Entorno (Railway).
     Si no la encuentra, la busca en st.secrets (Local/Streamlit Cloud).
-   
     """
-    # 1. Intento Railway (Environment Variable)
     value = os.environ.get(key)
-    # 2. Intento Local (secrets.toml)
     if not value:
         try:
             value = st.secrets[key]
@@ -31,19 +28,16 @@ def load_database(cliente: str):
     Carga la base de datos principal desde S3.
     """
     try:
-        # --- OBTENER CREDENCIALES DE FORMA SEGURA ---
         endpoint = get_secret("S3_ENDPOINT_URL")
         access_key = get_secret("S3_ACCESS_KEY")
         secret_key = get_secret("S3_SECRET_KEY")
         bucket_name = get_secret("S3_BUCKET")
 
-        # Validación para evitar errores si faltan variables
         if not endpoint or not access_key:
             print("❌ Error Crítico: Faltan variables de entorno S3")
             st.error("Error de configuración: Faltan credenciales de almacenamiento.")
             return []
 
-        # --- CONEXIÓN ---
         s3 = boto3.client(
             "s3", 
             endpoint_url=endpoint, 
@@ -62,45 +56,44 @@ def load_database(cliente: str):
         return data
 
     except Exception as e: 
-        # --- LOGGING MEJORADO ---
         print(f"❌ ERROR S3: {str(e)}")
         st.error(f"Error de conexión con el repositorio (S3).")
         log_error("Fallo crítico al cargar base de datos S3", module="Storage", error=e, level="CRITICAL")
         return []
 
 # ==========================================
-# REGISTRO DE EVENTOS (AUDITORÍA) - INTEGRADO
+# REGISTRO DE EVENTOS (AUDITORÍA) - VERSIÓN MAESTRA
 # ==========================================
-def log_query_event(event_description, mode=None):
+def log_query_event(event_description, mode="General", *args, **kwargs):
     """
-    Registra una acción del usuario en el sistema.
-    Se añadió 'mode=None' para corregir el TypeError en el Generador de Conceptos.
-   
+    Versión blindada: Acepta 'mode' por posición o nombre. 
+    '*args' y '**kwargs' absorben cualquier parámetro inesperado para evitar TypeErrors.
     """
     try:
         from services.supabase_db import supabase
 
-        # Obtenemos el usuario de la sesión actual
         user_id = st.session_state.get("user_id", "unknown_user")
         client_name = st.session_state.get("cliente", "unknown_client")
+
+        # Resolvemos el modo priorizando el parámetro nombrado (kwargs)
+        final_mode = kwargs.get("mode", mode)
 
         data = {
             "user_id": user_id,
             "cliente": client_name,
             "description": event_description,
-            "mode": mode if mode else "General",
+            "mode": final_mode,
             "created_at": datetime.datetime.now().isoformat()
         }
 
-        # Guardado en Supabase
         if supabase:
             try:
                 supabase.table("activity_logs").insert(data).execute()
             except:
                 pass
         
-        # Backup en logs de consola de Railway
-        print(f"🕒 LOG [{mode or 'General'}]: {event_description} by {user_id}")
+        # Log de consola para Railway
+        print(f"🕒 LOG [{final_mode}]: {event_description} by {user_id}")
 
     except Exception as e:
         print(f"⚠️ Error al registrar evento: {e}")
