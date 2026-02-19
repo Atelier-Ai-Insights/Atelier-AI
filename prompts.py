@@ -99,7 +99,6 @@ def get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
         INSTRUCCIONES_DE_CITAS
     ]
 
-
 def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context):
     return [
         "**Rol:** Director Audiovisual.",
@@ -153,6 +152,46 @@ def get_idea_eval_prompt(idea_input, context_info):
         f"**Evidencia Documentada:** {context_info}\n\n"
         f"Realiza un análisis profundo de viabilidad y factibilidad. No resumas. "
         f"Utiliza toda la evidencia para justificar tu juicio.\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
+    )
+
+# ==============================================================================
+# EVALUACIÓN DE CONCEPTOS [RESTAURADO]
+# ==============================================================================
+
+def get_concept_gen_prompt(product_idea, context_info):
+    """Concepto estructurado en términos de Insight, What y RTB."""
+    return (
+        f"**Rol:** Estratega de Producto Senior.\n"
+        f"**Tarea:** Desarrolla un concepto GANADOR para la idea: \"{product_idea}\".\n"
+        f"**Contexto de Mercado:** \"{context_info}\".\n\n"
+        
+        f"**Formato de Salida OBLIGATORIO (Markdown):**\n\n"
+        
+        f"### 1. Consumer Truth\n"
+        f"(Describe la tensión o necesidad oculta del consumidor. Sustenta con citas [x])\n\n"
+        
+        f"### 2. La Solución\n"
+        f"(Descripción enriquecida del producto)\n\n"
+        
+        f"### 3. Beneficios Clave\n"
+        f"(Lista de 3-4 beneficios funcionales y emocionales)\n\n"
+        
+        f"### 4. Conceptos Creativos\n"
+        f"Debes proponer 2 rutas distintas de posicionamiento. Para cada una usa esta estructura exacta:\n\n"
+        
+        f"#### Ruta A: [Ponle un Nombre Creativo]\n"
+        f"* **Insight:** (La verdad humana profunda que detona la compra).\n"
+        f"* **What:** (La promesa principal: qué gano yo).\n"
+        f"* **Reason to Believe:** (La evidencia técnica o de mercado que lo hace creíble. Usa citas [x]).\n"
+        f"* **Claim/Slogan:** (Frase de cierre memorable).\n\n"
+        
+        f"#### Ruta B: [Ponle un Nombre Alternativo]\n"
+        f"* **Insight:** ...\n"
+        f"* **What:** ...\n"
+        f"* **Reason to Believe:** ...\n"
+        f"* **Claim/Slogan:** ...\n\n"
+        
         f"{INSTRUCCIONES_DE_CITAS}"
     )
 
