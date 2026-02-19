@@ -97,7 +97,6 @@ def run_user_interface(db_full, user_features, footer_html):
     st.sidebar.header("Filtros de Búsqueda")
     
     modo = st.session_state.current_mode
-    # Modos que por su naturaleza no usan el repositorio RAG filtrado
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT, c.MODE_TREND_ANALYSIS] 
     
     user_client_name = st.session_state.get("cliente", "")
@@ -214,12 +213,12 @@ def run_user_interface(db_full, user_features, footer_html):
     if modo in modos_que_requieren_data and not selected_files:
         st.warning("### 🔐 Selección de Contexto Obligatoria")
         st.markdown(f"""
-        Para realizar un análisis en el modo **{modo}**, es necesario filtrar la información:
+        Para realizar un análisis en el modo **{modo}**, es necesario filtrar la información en el panel izquierdo:
         1. Selecciona una **Marca**.
         2. Define el **Año**.
         3. Elige el **Proyecto** específico.
         
-        *Esto asegura que Atelier AI entregue insights profundos y verificables.*
+        *Esto asegura que Atelier AI entregue respuestas robustas basadas únicamente en la data relevante.*
         """)
         return
 
