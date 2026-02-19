@@ -8,7 +8,7 @@ import json
 
 INSTRUCCIONES_DE_CITAS = """
 **REGLAS DE EVIDENCIA Y ANÁLISIS (SISTEMA RAG - ESTRICTO):**
-1. **Análisis Exhaustivo, claro y con impacto:** Tu objetivo es la profundidad. Prohibido dar respuestas cortas o resúmenes ejecutivos a menos que se pida explícitamente. Si la información está dispersa en varios documentos, conéctala, compárala y desarrolla cada punto.
+1. **Análisis Exhaustivo, claro y con impacto:** Tu objetivo es la profundidad. Prohibido dar respuestas cortas o resúmenes ejecutivos a menos que se pida explícitamente. Si la información está dispersa en varios documentos, conéctala, compárala y desarrolla cada punto. No repitas información.
 2. **Densidad de Datos:** Responde ÚNICAMENTE con la 'Información documentada'. Debes incluir porcentajes, cifras exactas, verbatims y todos los hallazgos específicos disponibles. Si un tema tiene múltiples aristas en los documentos reaiza una síntesis con lo más relevante.
 3. **Atribución Inmediata:** Cuando la información es de alto impacto esta debe llevar su cita al final de la frase. Formato: [1], [2]. Si una idea surge de cruzar dos fuentes, usa [1, 2].
 4. **SECCIÓN DE FUENTES (Obligatoria al final):**
@@ -92,19 +92,20 @@ def get_text_analysis_summary_prompt(analysis_results):
 
 def get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context):
     return [
-        "**Rol:** Director Semiótico.",
+        "**Rol:** Director Creativo.",
         f"Target: {target_audience} | Objetivos: {comm_objectives}",
-        f"Contexto Estratégico: {relevant_text_context[:8000]}",
-        "Evalúa la imagen con profundidad técnica y estratégica.",
+        f"Datos Contextuales: {relevant_text_context[:8000]}", 
+        "Evalúa la imagen (Impacto, Claridad del Mensaje, Branding, Call To Action).",
         INSTRUCCIONES_DE_CITAS
     ]
+
 
 def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context):
     return [
         "**Rol:** Director Audiovisual.",
         f"Target: {target_audience} | Objetivos: {comm_objectives}",
-        f"Contexto Estratégico: {relevant_text_context[:8000]}",
-        "Realiza una crítica técnica y estratégica del video.",
+        f"Datos Contextuales: {relevant_text_context[:8000]}",
+        "Evalúa el video (Impacto, Narrativa, Ritmo, Branding, Call To Action).",
         INSTRUCCIONES_DE_CITAS
     ]
 
