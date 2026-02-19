@@ -6,8 +6,6 @@ import json
 # INSTRUCCIONES GLOBALES (BLINDAJE DE EXHAUSTIVIDAD Y TRAZABILIDAD)
 # ==============================================================================
 
-# Este bloque es el corazón del sistema RAG. Prohíbe la brevedad y asegura 
-# que la metadata técnica se genere correctamente para el frontend.
 INSTRUCCIONES_DE_CITAS = """
 **REGLAS DE EVIDENCIA Y ANÁLISIS (SISTEMA RAG - ESTRICTO):**
 1. **Análisis Exhaustivo y Extenso:** Tu objetivo es la profundidad. Prohibido dar respuestas cortas o resúmenes ejecutivos a menos que se pida explícitamente. Si la información está dispersa en varios documentos, conéctala, compárala y desarrolla cada punto con detalle técnico.
@@ -44,12 +42,9 @@ def get_report_prompt2(question, result1, relevant_info):
         f"**Objetivo:** Redactar un Intelligence Report de alto impacto que agote TODA la evidencia disponible. Evita la brevedad; se busca un análisis robusto.\n"
         f"**Pregunta de Negocio:** {question}\n"
         f"**Insumos Brutos:**\n1. Hallazgos preliminares: {result1}\n2. Data Room Completo: {relevant_info}\n\n"
-        
         f"**Instrucciones de Rigor:**\n"
         f"- **Prohibido resumir en exceso:** Explica la importancia estratégica de cada hallazgo y conéctalo con otros datos del Data Room para dar profundidad.\n"
-        f"- **Cruce de Fuentes Obligatorio:** La respuesta debe reflejar un análisis comparativo entre múltiples archivos.\n"
-        f"- **Principio de la Pirámide:** Empieza con un BLUF contundente, pero desarrolla el cuerpo del informe con extensión analítica.\n\n"
-        
+        f"- **Cruce de Fuentes Obligatorio:** La respuesta debe reflejar un análisis comparativo entre múltiples archivos.\n\n"
         f"**Estructura del Entregable:**\n"
         f"1. **Resumen Ejecutivo:** (3-5 líneas).\n"
         f"2. **Análisis por Pilares:** Hallazgos detallados y extendidos con alta densidad de citas [1, 2].\n"
@@ -61,25 +56,39 @@ def get_report_prompt2(question, result1, relevant_info):
 def get_grounded_chat_prompt(conversation_history, relevant_info, long_term_memory=""):
     """Chat RAG estricto configurado para respuestas largas y detalladas."""
     bloque_memoria = f"**🧠 MEMORIA DEL PROYECTO (Contexto previo):**\n{long_term_memory}\n---" if long_term_memory else ""
-
     return (
         f"**Rol:** Analista de Insights Senior en Atelier AI.\n"
-        f"**Misión:** Proporcionar respuestas PROFUNDAS, extensas y verificables. Si el usuario hace una pregunta, no te limites a lo obvio; explora toda la Información Documentada para dar la versión más completa y detallada posible.\n\n"
+        f"**Misión:** Proporcionar respuestas PROFUNDAS, extensas y verificables.\n\n"
         f"{bloque_memoria}\n"
         f"**📄 Información Documentada (Fuente de Verdad):**\n{relevant_info}\n\n"
         f"**💬 Historial de Conversación:**\n{conversation_history}\n\n"
-        f"**Instrucción Adicional:** Desarrolla tus ideas. Si un tema es mencionado brevemente en un documento pero se conecta con otro, elabora esa conexión. Sé elocuente y exhaustivo.\n"
         f"{INSTRUCCIONES_DE_CITAS}\n"
         "**Respuesta Analítica Extendida:**"
     )
 
-def get_followup_suggestions_prompt(previous_answer):
-    """Sugerencias de seguimiento lógicas."""
-    return f"""
-    **Contexto:** Acabas de dar esta respuesta: "{previous_answer[:2000]}"
-    **Tarea:** Sugiere 3 preguntas cortas (máx 7 palabras) para profundizar en los datos o explorar áreas laterales del análisis.
-    **Salida:** JSON list[str].
-    """
+# ==============================================================================
+# PROMPTS DE ANÁLISIS DE TEXTOS (TRANSCRIPCIONES) - RESTAURADOS
+# ==============================================================================
+
+def get_transcript_prompt(transcript_text, additional_instructions=""):
+    """Análisis profundo de transcripciones de entrevistas o focus groups."""
+    return (
+        f"**Rol:** Especialista en Análisis Cualitativo y Semiótica.\n"
+        f"**Tarea:** Realiza un análisis exhaustivo de la siguiente transcripción:\n"
+        f"--- INICIO TRANSCRIPCIÓN ---\n{transcript_text}\n--- FIN TRANSCRIPCIÓN ---\n\n"
+        f"**Instrucciones específicas:** {additional_instructions}\n"
+        f"Busca tensiones, verbatims poderosos, insights subyacentes y patrones de comportamiento.\n"
+        f"**Regla:** No resumas. Desarrolla cada hallazgo con profundidad analítica.\n"
+    )
+
+def get_text_analysis_summary_prompt(analysis_results):
+    """Genera una síntesis estratégica de múltiples análisis cualitativos."""
+    return (
+        f"**Rol:** Director de Estrategia.\n"
+        f"**Insumos:** {analysis_results}\n"
+        f"**Tarea:** Cruza los hallazgos de todos los textos analizados para identificar temas recurrentes y discrepancias críticas.\n"
+        f"**Salida:** Informe ejecutivo de alta densidad con recomendaciones accionables."
+    )
 
 # ==============================================================================
 # PROMPTS CREATIVOS Y EVALUACIÓN
@@ -91,9 +100,7 @@ def get_ideation_prompt(conv_history, relevant):
         f"**Rol:** Estratega de Innovación Disruptiva.\n"
         f"**Contexto de Datos:**\n{relevant}\n"
         f"**Historial:**\n{conv_history}\n"
-        
-        f"**Tarea:** Genera 5 ideas aplicando el método 'Pensamiento Lateral'. Cada idea debe estar profundamente sustentada en datos reales del contexto (usa citas [x]). Desarrolla el razonamiento detrás de cada idea.\n"
-        f"Estructura: Idea, Provocación, Analogía e Insight de soporte extendido.\n"
+        f"**Tarea:** Genera 5 ideas aplicando el método 'Pensamiento Lateral'.\n"
         f"{INSTRUCCIONES_DE_CITAS}"
     )
 
@@ -101,15 +108,33 @@ def get_concept_gen_prompt(product_idea, context_info):
     """Desarrollo de concepto estratégico con RTB sólido."""
     return (
         f"**Rol:** Estratega de Producto Senior.\n"
-        f"**Tarea:** Desarrolla un concepto GANADOR y detallado para la idea: \"{product_idea}\".\n"
+        f"**Tarea:** Desarrolla un concepto GANADOR y detallado para: \"{product_idea}\".\n"
         f"**Sustento de Mercado:** {context_info}\n\n"
-        
-        f"**Formato de Salida OBLIGATORIO (Markdown):**\n"
-        f"1. **Consumer Truth:** (Tensión analizada a profundidad con citas [x])\n"
-        f"2. **La Solución:** (Propuesta de valor enriquecida y detallada)\n"
-        f"3. **Beneficios Clave:** (Lista de beneficios con explicación de por qué importan)\n"
-        f"4. **Rutas Creativas (A y B):** Incluye Insight, What y RTB con amplia evidencia técnica.\n\n"
         f"{INSTRUCCIONES_DE_CITAS}"
     )
 
-# ... (Resto de funciones: Evaluación, One-Pager, Análisis Numérico)
+def get_idea_eval_prompt(idea_input, context_info):
+    """Evaluación crítica basada en datos duros."""
+    return (
+        f"**Rol:** Director de Estrategia.\n"
+        f"**Idea:** {idea_input}\n"
+        f"**Evidencia:** {context_info}\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
+    )
+
+# ==============================================================================
+# ANÁLISIS NUMÉRICO Y TENDENCIAS
+# ==============================================================================
+
+def get_data_analysis_prompt(user_query, relevant_info):
+    return (
+        f"**Tarea:** Realiza un análisis numérico detallado de: {user_query}\n"
+        f"**Datos:** {relevant_info}\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
+    )
+
+def get_followup_suggestions_prompt(previous_answer):
+    return f"""
+    **Contexto:** Respuesta previa: "{previous_answer[:1500]}"
+    **Tarea:** Sugiere 3 preguntas de profundización (JSON list).
+    """
