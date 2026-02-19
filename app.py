@@ -55,12 +55,13 @@ def set_mode_and_reset(new_mode):
     else:
         st.session_state.mode_state = {}
 
-# --- FUNCIÓN SEGURA PARA RENDERIZAR LOGO ---
+# --- FUNCIÓN CORREGIDA PARA RENDERIZAR LOGO ---
+# Se eliminó la advertencia de deprecación usando use_container_width
 def render_logo(use_column_width=False, width=220):
     logo_file = "LogoDataStudio.png"
     if os.path.exists(logo_file):
         if use_column_width:
-            st.image(logo_file, use_column_width=True)
+            st.image(logo_file, use_container_width=True)
         else:
             st.image(logo_file, width=width)
     else:
@@ -78,7 +79,7 @@ def show_saved_insight(content, date_str):
         st.rerun()
 
 # =====================================================
-# FUNCIÓN DE UI (REORDENADA: FILTROS -> MODOS -> PINES)
+# FUNCIÓN DE UI (CON GUARDÍAN DE FILTROS)
 # =====================================================
 def run_user_interface(db_full, user_features, footer_html):
     # Sidebar
@@ -91,12 +92,12 @@ def run_user_interface(db_full, user_features, footer_html):
     st.sidebar.divider()
     
     # ---------------------------------------------------------
-    # 1. FILTROS DE BÚSQUEDA (AHORA EN PRIMER LUGAR)
+    # 1. FILTROS DE BÚSQUEDA
     # ---------------------------------------------------------
     st.sidebar.header("Filtros de Búsqueda")
     
-    # Determinamos si el modo actual permite filtros
     modo = st.session_state.current_mode
+    # Modos que por su naturaleza no usan el repositorio RAG filtrado
     run_filters = modo not in [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT, c.MODE_TREND_ANALYSIS] 
     
     user_client_name = st.session_state.get("cliente", "")
@@ -123,7 +124,7 @@ def run_user_interface(db_full, user_features, footer_html):
     st.sidebar.divider()
 
     # ---------------------------------------------------------
-    # 2. SELECTOR DE MODOS (EN SEGUNDO LUGAR)
+    # 2. SELECTOR DE MODOS
     # ---------------------------------------------------------
     st.sidebar.header("Seleccione el modo de uso")
     
@@ -167,7 +168,7 @@ def run_user_interface(db_full, user_features, footer_html):
     st.sidebar.divider()
 
     # ---------------------------------------------------------
-    # 3. BITÁCORA / PINES (AL FINAL)
+    # 3. BITÁCORA / PINES
     # ---------------------------------------------------------
     st.sidebar.subheader("Conversaciones y Reportes")
     saved_pins = get_project_memory()
@@ -187,8 +188,6 @@ def run_user_interface(db_full, user_features, footer_html):
                 with c2:
                     if st.button("Borrar", key=f"del_{pin['id']}", use_container_width=True):
                         delete_project_memory(pin['id']); st.rerun()
-    else:
-        st.sidebar.caption("No hay hallazgos guardados.")
 
     # Logout
     st.sidebar.divider()
@@ -200,38 +199,31 @@ def run_user_interface(db_full, user_features, footer_html):
     st.sidebar.markdown(footer_html, unsafe_allow_html=True)
     
     # --- ÁREA PRINCIPAL ---
-    
-    # Modal
     if "pin_to_view" in st.session_state:
         pin = st.session_state.pin_to_view
         show_saved_insight(pin['content'], pin.get('created_at', '')[:10])
         del st.session_state.pin_to_view
 
     # VALIDACIÓN GLOBAL DE FILTROS
-    # Obtenemos los archivos filtrados por el usuario
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
-    
-    # Lista de modos que NO requieren selección de archivos (Fase Administrativa o Análisis Externo)
-    modos_libres = [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT, c.MODE_TREND_ANALYSIS]
+    modos_que_requieren_data = [
+        c.MODE_REPORT, c.MODE_IDEATION, c.MODE_CONCEPT, c.MODE_CHAT, 
+        c.MODE_IDEA_EVAL, c.MODE_ONEPAGER, c.MODE_SYNTHETIC
+    ]
 
-    # Guardián de Acceso: Si el modo requiere data y no hay filtros aplicados, bloqueamos
-    if modo not in modos_libres and not selected_files:
-        st.container()
+    if modo in modos_que_requieren_data and not selected_files:
         st.warning("### 🔐 Selección de Contexto Obligatoria")
         st.markdown(f"""
-        Para activar las capacidades de **Atelier AI** en el modo `{modo}`, 
-        es necesario definir un marco de datos en el panel lateral:
+        Para realizar un análisis en el modo **{modo}**, es necesario filtrar la información:
+        1. Selecciona una **Marca**.
+        2. Define el **Año**.
+        3. Elige el **Proyecto** específico.
         
-        1. **Selecciona una Marca** (o varias).
-        2. **Define los Años** de interés.
-        3. **Elige los Proyectos** específicos.
-        
-        *Esto garantiza que el motor RAG enfoque su búsqueda en la data correcta y proporcione la profundidad requerida.*
+        *Esto asegura que Atelier AI entregue insights profundos y verificables.*
         """)
-        st.info("💡 Una vez selecciones los filtros en la barra lateral, las herramientas de consulta se habilitarán automáticamente.")
-        return # Detiene el renderizado del modo operativo
+        return
 
-    # --- CARGA DE MÓDULOS OPERATIVOS ---
+    # --- CARGA DE MÓDULOS ---
     if modo == c.MODE_REPORT: 
         from modes.report_mode import report_mode; report_mode(db_filtered, selected_files)
     elif modo == c.MODE_IDEATION: 
@@ -284,40 +276,15 @@ def main():
         footer_text = "Atelier Consultoría y Estrategia S.A.S - Todos los Derechos Reservados 2025"
         footer_html = f"<div style='text-align: center; color: gray; font-size: 12px;'>{footer_text}</div>"
 
-        # Rutas de Login
-        if st.session_state.get('flow_email_verified') or (params.get("type") in ["recovery", "invite"]):
-            status_placeholder.empty()
-            apply_login_styles()
-            c1, c2, c3 = st.columns([3, 2, 3])
-            with c2:
-                render_logo(use_column_width=True) 
-                auth_type = params.get("type", "recovery")
-                token = params.get("access_token")
-                if isinstance(token, list): token = token[0]
-                show_activation_flow(token, auth_type)
-            st.stop()
-
-        # Sesión Activa
+        # Manejo de Sesión y Login
         if st.session_state.get("logged_in"):
-            status_placeholder.info("🔐 Verificando credenciales...")
             validate_session_integrity()
-            
             if "user" not in st.session_state: st.session_state.clear(); st.rerun()
-
-            if st.session_state.get("access_token"):
-                try: supabase.auth.set_session(st.session_state.access_token, st.session_state.refresh_token)
-                except: supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
             
             if not hasattr(st.session_state, 'db_full'):
-                status_placeholder.info("📂 Cargando base de datos del cliente...")
-                try: 
-                    st.session_state.db_full = load_database(st.session_state.cliente)
-                except Exception as e:
-                    st.error(f"Error cargando datos: {e}")
-                    st.stop()
+                st.session_state.db_full = load_database(st.session_state.cliente)
             
             status_placeholder.empty()
-            
             if st.session_state.get("is_admin", False):
                 t1, t2 = st.tabs(["Modo Usuario", "Modo Administrador"])
                 with t1: run_user_interface(st.session_state.db_full, st.session_state.plan_features, footer_html)
@@ -326,7 +293,7 @@ def main():
                 run_user_interface(st.session_state.db_full, st.session_state.plan_features, footer_html)
             st.stop() 
 
-        # Login por defecto
+        # Pantalla de Login
         status_placeholder.empty()
         apply_login_styles()
         c1, c2, c3 = st.columns([3, 2, 3])
@@ -338,7 +305,7 @@ def main():
         st.markdown(footer_html, unsafe_allow_html=True)
 
     except Exception as e:
-        st.error("🔥 Error Fatal de Ejecución")
+        st.error("🔥 Error Fatal")
         st.code(traceback.format_exc())
 
 if __name__ == "__main__":
