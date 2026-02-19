@@ -60,7 +60,7 @@ def render_logo(use_column_width=False, width=220):
     logo_file = "LogoDataStudio.png"
     if os.path.exists(logo_file):
         if use_column_width:
-            st.image(logo_file, width="stretch")
+            st.image(logo_file, use_column_width=True)
         else:
             st.image(logo_file, width=width)
     else:
@@ -74,7 +74,7 @@ def show_saved_insight(content, date_str):
     html_content = process_text_with_tooltips(content)
     st.markdown(html_content, unsafe_allow_html=True)
     
-    if st.button("Cerrar", width="stretch"):
+    if st.button("Cerrar", use_container_width=True):
         st.rerun()
 
 # =====================================================
@@ -162,7 +162,7 @@ def run_user_interface(db_full, user_features, footer_html):
             with st.sidebar.expander(category_name, expanded=(default_expanded == category_name)):
                 for mode_key, has_access in modes_dict.items():
                     if has_access:
-                        st.button(mode_key, on_click=set_mode_and_reset, args=(mode_key,), width="stretch", type="primary" if modo == mode_key else "secondary")
+                        st.button(mode_key, on_click=set_mode_and_reset, args=(mode_key,), use_container_width=True, type="primary" if modo == mode_key else "secondary")
 
     st.sidebar.divider()
 
@@ -181,18 +181,18 @@ def run_user_interface(db_full, user_features, footer_html):
                 st.caption(clean_text[:100] + "...") 
                 c1, c2 = st.columns(2)
                 with c1:
-                    if st.button("Ver", key=f"view_{pin['id']}", width="stretch"):
+                    if st.button("Ver", key=f"view_{pin['id']}", use_container_width=True):
                         st.session_state.pin_to_view = pin
                         st.rerun()
                 with c2:
-                    if st.button("Borrar", key=f"del_{pin['id']}", width="stretch"):
+                    if st.button("Borrar", key=f"del_{pin['id']}", use_container_width=True):
                         delete_project_memory(pin['id']); st.rerun()
     else:
         st.sidebar.caption("No hay hallazgos guardados.")
 
     # Logout
     st.sidebar.divider()
-    if st.sidebar.button("Cerrar Sesión", key="logout_main", width="stretch"):
+    if st.sidebar.button("Cerrar Sesión", key="logout_main", use_container_width=True):
         try: supabase.table("users").update({"active_session_id": None}).eq("id", st.session_state.user_id).execute()
         except: pass
         supabase.auth.sign_out(); st.session_state.clear(); st.rerun()
@@ -207,9 +207,31 @@ def run_user_interface(db_full, user_features, footer_html):
         show_saved_insight(pin['content'], pin.get('created_at', '')[:10])
         del st.session_state.pin_to_view
 
+    # VALIDACIÓN GLOBAL DE FILTROS
+    # Obtenemos los archivos filtrados por el usuario
     selected_files = [d.get("nombre_archivo") for d in db_filtered]
     
-    # Carga de módulos
+    # Lista de modos que NO requieren selección de archivos (Fase Administrativa o Análisis Externo)
+    modos_libres = [c.MODE_TEXT_ANALYSIS, c.MODE_DATA_ANALYSIS, c.MODE_ETNOCHAT, c.MODE_TREND_ANALYSIS]
+
+    # Guardián de Acceso: Si el modo requiere data y no hay filtros aplicados, bloqueamos
+    if modo not in modos_libres and not selected_files:
+        st.container()
+        st.warning("### 🔐 Selección de Contexto Obligatoria")
+        st.markdown(f"""
+        Para activar las capacidades de **Atelier AI** en el modo `{modo}`, 
+        es necesario definir un marco de datos en el panel lateral:
+        
+        1. **Selecciona una Marca** (o varias).
+        2. **Define los Años** de interés.
+        3. **Elige los Proyectos** específicos.
+        
+        *Esto garantiza que el motor RAG enfoque su búsqueda en la data correcta y proporcione la profundidad requerida.*
+        """)
+        st.info("💡 Una vez selecciones los filtros en la barra lateral, las herramientas de consulta se habilitarán automáticamente.")
+        return # Detiene el renderizado del modo operativo
+
+    # --- CARGA DE MÓDULOS OPERATIVOS ---
     if modo == c.MODE_REPORT: 
         from modes.report_mode import report_mode; report_mode(db_filtered, selected_files)
     elif modo == c.MODE_IDEATION: 
