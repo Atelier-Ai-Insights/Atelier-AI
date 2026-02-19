@@ -108,117 +108,77 @@ def get_video_eval_prompt_parts(target_audience, comm_objectives, relevant_text_
         INSTRUCCIONES_DE_CITAS
     ]
 
-def get_trend_synthesis_prompt(topic, context):
-    return f"Sintetiza tendencias para {topic} usando: {context}. Clasifica en Mega-tendencias y Fads."
+def get_etnochat_prompt(conversation_history, text_context):
+    return (
+        f"**Rol:** Etnógrafo Digital.\n"
+        f"**Tarea:** Responde sintetizando fuentes variadas (Chat, Transcripciones, Multimedia).\n"
+        f"**Historial:**\n{conversation_history}\n"
+        f"**Contexto (Transcripciones/Notas):**\n{text_context}\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
+    )
 
-def get_etnochat_prompt(context):
-    return f"Actúa como un etnográfo digital. Analiza este contenido multimodal: {context}."
+def get_media_transcription_prompt():
+    return """
+    **Rol:** Transcriptor Profesional.
+    **Tarea:** Transcribe el audio palabra por palabra.
+    **Formato:**
+    - Usa parráfos claros.
+    - Identifica hablantes si es posible (Hablante 1, Hablante 2).
+    - Describe acciones visuales o ruidos importantes entre corchetes [Risas], [Música de fondo].
+    **Salida:** Texto plano.
+    """
 
-def get_media_transcription_prompt(media_data):
-    return f"Describe y transcribe el contenido de este archivo multimedia: {media_data}."
+# ==============================================================================
+# ANÁLISIS DE TENDENCIAS
+# ==============================================================================
+
+SOURCE_LENSES = {
+    "DANE": "Indicadores duros: IPC, Desempleo.",
+    "Banco de la República": "Macroeconomía, tasas.",
+    "Fenalco": "Comercio y Retail.",
+    "Camacol": "Vivienda y Construcción.",
+    "Euromonitor": "Megatendencias.",
+    "Google Trends": "Intención Digital.",
+    "McKinsey/Deloitte": "Futuro del Consumidor.",
+    "SIC": "Regulación."
+}
+
+def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_list):
+    current_date = datetime.now().strftime("%d de %B de %Y")
+    sources_text = ""
+    if public_sources_list:
+        sources_text = "\n".join([f"- {s}" for s in public_sources_list])
+    
+    return f"""
+    **Fecha:** {current_date}
+    **Misión:** Crear un Intelligence Brief sobre: "{topic}".
+    
+    **Metodología de Análisis:**
+    Clasifica los hallazgos detectados en:
+    1. **Mega-Tendencias:** Cambios estructurales a largo plazo (5+ años).
+    2. **Fads (Modas Pasajeras):** Ruido de corto plazo.
+    3. **Señales Débiles:** Patrones emergentes que pocos ven pero tienen potencial.
+    
+    **Insumos:** {repo_context[:10000]} {pdf_context[:10000]} {sources_text}
+    
+    Genera reporte Markdown estructurado con esa clasificación.
+    """
+
+def get_trend_synthesis_prompt(keyword, trend_context, geo_context, topics_context, internal_context):
+    return f"""
+    **Rol:** Coolhunter / Trend Watcher.
+    **Objetivo:** Radar 360 sobre "{keyword}".
+    **Datos:** {trend_context} {geo_context} {topics_context} {internal_context}
+    
+    Sintetiza la información en un Brief estratégico identificando oportunidades de innovación.
+    """
 
 # ==============================================================================
 # PROMPTS RESTAURADOS (PERSONAS SINTÉTICAS)
 # ==============================================================================
 
-def get_persona_generation_prompt(context):
-    return f"Genera 3 perfiles de consumidores (Personas) basados en: {context[:15000]}. Salida: JSON."
-
-def get_persona_chat_instruction(persona_name, persona_data):
-    return f"Actúa como el perfil sintetizado: {persona_name}. Datos: {persona_data}. Responde detalladamente."
-
-# ==============================================================================
-# ANÁLISIS NUMÉRICO (EXCEL)
-# ==============================================================================
-
-def get_excel_autocode_prompt(main_topic, sample_data):
-    return f"Codificación para {main_topic}. Data: {sample_data}"
-
-def get_correlation_prompt(correlation_matrix_str):
-    return f"Analiza esta matriz de correlación: {correlation_matrix_str}"
-
-def get_stat_test_prompt(test_type, p_value, var_num, var_cat, n_groups):
-    return f"Interpreta: {test_type}, p={p_value}, variables {var_num}/{var_cat}."
-
-# ==============================================================================
-# EVALUACIÓN DE IDEAS [RESTAURADO]
-# ==============================================================================
-
-def get_idea_eval_prompt(idea_input, context_info):
-    """Genera una evaluación crítica y exhaustiva de una idea de negocio."""
-    return (
-        f"**Rol:** Director de Estrategia Senior.\n"
-        f"**Idea a Evaluar:** {idea_input}\n"
-        f"**Evidencia Documentada:** {context_info}\n\n"
-        f"Realiza un análisis profundo de viabilidad y factibilidad. No resumas. "
-        f"Utiliza toda la evidencia para justificar tu juicio.\n"
-        f"{INSTRUCCIONES_DE_CITAS}"
-    )
-
-# ==============================================================================
-# EVALUACIÓN DE CONCEPTOS [RESTAURADO]
-# ==============================================================================
-
-def get_concept_gen_prompt(product_idea, context_info):
-    """Concepto estructurado en términos de Insight, What y RTB."""
-    return (
-        f"**Rol:** Estratega de Producto Senior.\n"
-        f"**Tarea:** Desarrolla un concepto GANADOR para la idea: \"{product_idea}\".\n"
-        f"**Contexto de Mercado:** \"{context_info}\".\n\n"
-        
-        f"**Formato de Salida OBLIGATORIO (Markdown):**\n\n"
-        
-        f"### 1. Consumer Truth\n"
-        f"(Describe la tensión o necesidad oculta del consumidor. Sustenta con citas [x])\n\n"
-        
-        f"### 2. La Solución\n"
-        f"(Descripción enriquecida del producto)\n\n"
-        
-        f"### 3. Beneficios Clave\n"
-        f"(Lista de 3-4 beneficios funcionales y emocionales)\n\n"
-        
-        f"### 4. Conceptos Creativos\n"
-        f"Debes proponer 2 rutas distintas de posicionamiento. Para cada una usa esta estructura exacta:\n\n"
-        
-        f"#### Ruta A: [Ponle un Nombre Creativo]\n"
-        f"* **Insight:** (La verdad humana profunda que detona la compra).\n"
-        f"* **What:** (La promesa principal: qué gano yo).\n"
-        f"* **Reason to Believe:** (La evidencia técnica o de mercado que lo hace creíble. Usa citas [x]).\n"
-        f"* **Claim/Slogan:** (Frase de cierre memorable).\n\n"
-        
-        f"#### Ruta B: [Ponle un Nombre Alternativo]\n"
-        f"* **Insight:** ...\n"
-        f"* **What:** ...\n"
-        f"* **Reason to Believe:** ...\n"
-        f"* **Claim/Slogan:** ...\n\n"
-        
-        f"{INSTRUCCIONES_DE_CITAS}"
-    )
-
-# ==============================================================================
-# REPORTES ESPECIALES (ONE-PAGER)
-# ==============================================================================
-
-# 1. Definición para el Generador One Pager [RESTAURADO]
-PROMPTS_ONEPAGER = {
-    "Analítico": "Crea un resumen técnico y denso basado en datos.",
-    "Creativo": "Desarrolla una narrativa inspiradora basada en los hallazgos.",
-    "Ejecutivo": "Enfoque en KPIs y decisiones de negocio clave."
-}
-
-def get_onepager_prompt(topic, context):
-    return f"Estructura JSON para One Pager sobre {topic} usando {context}."
-
-def get_onepager_final_prompt(relevant_info, template_name, tema_central):
-    return f"Completa el template {template_name} para {tema_central} con {relevant_info}. Solo JSON crudo."
-
-def get_followup_suggestions_prompt(previous_answer):
-    return f"Sugiere 3 preguntas de profundización para: {previous_answer[:1000]}"
-
-def get_ideation_prompt(conv_history, relevant):
-    return (
-        f"**Rol:** Estratega de Innovación Disruptiva.\n"
-        f"**Contexto:**\n{relevant}\n"
-        f"**Tarea:** Genera 5 ideas aplicando 'Pensamiento Lateral' sustentadas en datos.\n"
-        f"{INSTRUCCIONES_DE_CITAS}"
-    )
+def get_persona_generation_prompt(segment_name, relevant_info):
+    """Crea la ficha psicológica del perfil sintético realista."""
+    return f"""
+    **Rol:** Psicólogo del Consumidor.
+    **Tarea:** Basándote en los datos: "{segment_name}", crea un Perfil Sintético realista
