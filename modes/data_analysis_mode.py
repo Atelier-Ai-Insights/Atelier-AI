@@ -9,11 +9,17 @@ from utils import clean_gemini_json, render_process_status
 from services.gemini_api import call_gemini_api
 from services.supabase_db import supabase
 
-# --- Componentes Refactorizados (Fase 3) ---
+# --- Componentes Refactorizados ---
 from components.project_manager import show_project_creator, show_project_list, PROJECT_BUCKET
 from services.statistics import calculate_chi_squared, calculate_group_comparison, process_autocode_results
 from services.plotting import generate_wordcloud_img, generate_correlation_heatmap
-from reporting.ppt_generator import add_analysis_slide
+
+# AJUSTE: Manejo de error si el generador de PPT no existe
+try:
+    from reporting.ppt_generator import add_analysis_slide
+    ppt_available = True
+except ImportError:
+    ppt_available = False
 
 # --- Prompts ---
 from prompts import (
@@ -22,7 +28,11 @@ from prompts import (
 )
 
 # --- Librería PPTX ---
-from pptx import Presentation
+try:
+    from pptx import Presentation
+except ImportError:
+    pass
+
 import constants as c
 
 # =====================================================
@@ -58,24 +68,26 @@ def show_project_analyzer(df):
     sub_modo = st.session_state.mode_state.get("da_current_sub_mode", "Tabla Dinámica")
     
     st.markdown(f"### Analizando: **{st.session_state.mode_state['da_selected_project_name']}**")
-    if st.button("← Volver a proyectos"): st.session_state.mode_state = {}; st.rerun()
+    if st.button("← Volver a proyectos"): 
+        st.session_state.mode_state = {}
+        st.rerun()
     
     # --- MENÚ DE NAVEGACIÓN ---
     st.markdown("---")
     c1 = st.columns(3)
-    if plan.get("da_has_pivot_table") and c1[0].button("Tablas Dinámicas", type="primary" if sub_modo=="Tabla Dinámica" else "secondary", width="stretch"): 
+    if plan.get("da_has_pivot_table") and c1[0].button("Tablas Dinámicas", type="primary" if sub_modo=="Tabla Dinámica" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Tabla Dinámica"; st.rerun()
-    if plan.get("da_has_autocode") and c1[1].button("Auto-Code", type="primary" if sub_modo=="Auto-Codificación" else "secondary", width="stretch"): 
+    if plan.get("da_has_autocode") and c1[1].button("Auto-Code", type="primary" if sub_modo=="Auto-Codificación" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Auto-Codificación"; st.rerun()
-    if plan.get("da_has_wordcloud") and c1[2].button("Nube Palabras", type="primary" if sub_modo=="Nube de Palabras" else "secondary", width="stretch"): 
+    if plan.get("da_has_wordcloud") and c1[2].button("Nube Palabras", type="primary" if sub_modo=="Nube de Palabras" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Nube de Palabras"; st.rerun()
     
     c2 = st.columns(3)
-    if plan.get("da_has_correlation") and c2[0].button("Correlación", type="primary" if sub_modo=="Análisis de Correlación" else "secondary", width="stretch"): 
+    if plan.get("da_has_correlation") and c2[0].button("Correlación", type="primary" if sub_modo=="Análisis de Correlación" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Análisis de Correlación"; st.rerun()
-    if plan.get("da_has_group_comparison") and c2[1].button("Comparar Grupos", type="primary" if sub_modo=="Comparación de Grupos" else "secondary", width="stretch"): 
+    if plan.get("da_has_group_comparison") and c2[1].button("Comparar Grupos", type="primary" if sub_modo=="Comparación de Grupos" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Comparación de Grupos"; st.rerun()
-    if plan.get("da_has_ppt_export") and c2[2].button("Exportar PPT", type="primary" if sub_modo=="Exportar a PPT" else "secondary", width="stretch"): 
+    if plan.get("da_has_ppt_export") and c2[2].button("Exportar PPT", type="primary" if sub_modo=="Exportar a PPT" else "secondary", use_container_width=True): 
         st.session_state.mode_state["da_current_sub_mode"] = "Exportar a PPT"; st.rerun()
 
     st.divider()
@@ -90,7 +102,7 @@ def show_project_analyzer(df):
         
         if idx != "(Ninguno)" and val:
             pivot = pd.pivot_table(df, values=val, index=idx, columns=col if col != "(Ninguno)" else None, aggfunc='count', fill_value=0)
-            st.dataframe(pivot, width="stretch")
+            st.dataframe(pivot, use_container_width=True)
             st.session_state.mode_state["da_pivot_table"] = pivot 
             
             p, residuals = calculate_chi_squared(pivot)
@@ -99,7 +111,7 @@ def show_project_analyzer(df):
                 st.metric("P-Value", f"{p:.4f}", delta="Significativo" if p < 0.05 else "No significativo", delta_color="inverse")
                 if p < 0.05:
                     st.caption("Los colores indican diferencias estadísticas.")
-                    st.dataframe(residuals.style.applymap(style_residuals), width="stretch")
+                    st.dataframe(residuals.style.applymap(style_residuals), use_container_width=True)
 
     # --- SUB-MODO: NUBE DE PALABRAS ---
     if sub_modo == "Nube de Palabras":
@@ -112,10 +124,10 @@ def show_project_analyzer(df):
                 status.update(label="¡Listo!", state="complete", expanded=False)
                 
             if img_buffer:
-                st.image(img_buffer, use_column_width=True)
+                st.image(img_buffer, use_container_width=True)
                 st.session_state.mode_state["da_wordcloud_fig"] = img_buffer
                 with st.expander("Ver tabla de frecuencias"):
-                    st.dataframe(freqs.head(20), width="stretch")
+                    st.dataframe(freqs.head(20), use_container_width=True)
 
     # --- SUB-MODO: CORRELACIÓN ---
     if sub_modo == "Análisis de Correlación":
@@ -149,14 +161,14 @@ def show_project_analyzer(df):
                         status.update(label="Listo", state="complete", expanded=False)
                      st.markdown(resp)
 
-    # --- SUB-MODO: AUTO-CODIFICACIÓN (REFACTORIZADO) ---
+    # --- SUB-MODO: AUTO-CODIFICACIÓN ---
     if sub_modo == "Auto-Codificación":
         st.header("Auto-Codificación con IA")
         text_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
         
         if "da_autocode_results_df" in st.session_state.mode_state:
             st.success("✅ Resultados")
-            st.dataframe(st.session_state.mode_state["da_autocode_results_df"], width="stretch")
+            st.dataframe(st.session_state.mode_state["da_autocode_results_df"], use_container_width=True)
             st.download_button("📥 Descargar Excel", data=to_excel(st.session_state.mode_state["da_autocode_results_df"]), file_name="autocode.xlsx")
             if st.button("Reiniciar"):
                 st.session_state.mode_state.pop("da_autocode_results_df", None); st.rerun()
@@ -166,10 +178,8 @@ def show_project_analyzer(df):
             
             if st.button("Iniciar Auto-Codificación", type="primary"):
                 if col_to_autocode and main_topic:
-                    # PROCESO CON STATUS VISUAL
                     with render_process_status("Ejecutando proceso de codificación...", expanded=True) as status:
                         try:
-                            # 1. IA Genera Categorías
                             status.write("🧠 Analizando muestra y definiendo categorías...")
                             sample = list(df[col_to_autocode].dropna().unique()[:80])
                             prompt = get_excel_autocode_prompt(main_topic, sample)
@@ -178,8 +188,6 @@ def show_project_analyzer(df):
                             if not raw_response: raise Exception("IA no respondió")
                             
                             categories = json.loads(clean_gemini_json(raw_response))
-                            
-                            # 2. Procesamiento Estadístico (Delegado a Servicio)
                             status.write("📊 Clasificando respuestas con Regex...")
                             results_df = process_autocode_results(df, col_to_autocode, categories)
                             
@@ -196,15 +204,17 @@ def show_project_analyzer(df):
     if sub_modo == "Exportar a PPT":
         st.header("Generar Reporte PowerPoint")
         
+        if not ppt_available:
+            st.warning("⚠️ El módulo de exportación PPT no está disponible.")
+            return
+
         if st.button("Generar .pptx", type="primary"):
             try:
                 try: prs = Presentation("Plantilla_PPT_ATL.pptx")
                 except: prs = Presentation()
                 
-                # Portada
                 add_analysis_slide(prs, "title", f"Reporte: {st.session_state.mode_state['da_selected_project_name']}", None)
                 
-                # Slides condicionales usando el nuevo Helper
                 if "da_pivot_table" in st.session_state.mode_state:
                     add_analysis_slide(prs, "table", "Cruce de Variables", st.session_state.mode_state["da_pivot_table"])
                     
@@ -222,7 +232,6 @@ def data_analysis_mode(db, selected_files):
     st.subheader(c.MODE_DATA_ANALYSIS)
     st.divider()
     
-    # 1. Cargar datos si hay proyecto seleccionado
     if "da_selected_project_id" in st.session_state.mode_state and "data_analysis_df" not in st.session_state.mode_state:
         with render_process_status("Cargando dataset...", expanded=True) as status:
             df = load_project_data(st.session_state.mode_state["da_storage_path"])
@@ -233,7 +242,6 @@ def data_analysis_mode(db, selected_files):
         else: 
             st.session_state.mode_state.pop("da_selected_project_id", None)
 
-    # 2. Router de Vistas
     if "data_analysis_df" in st.session_state.mode_state:
         show_project_analyzer(st.session_state.mode_state["data_analysis_df"])
     else:
