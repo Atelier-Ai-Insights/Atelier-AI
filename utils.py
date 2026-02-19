@@ -56,10 +56,6 @@ def clean_gemini_json(text):
 # MOTOR DE BÚSQUEDA INTELIGENTE
 # ==============================
 def expand_search_query(query):
-    """
-    Expande la consulta para capturar sinónimos y conceptos relacionales.
-   
-    """
     if not query or len(query.split()) > 10: return [query]
     try:
         from services.gemini_api import call_gemini_api
@@ -80,17 +76,11 @@ def expand_search_query(query):
 # RAG: RECUPERACIÓN DE CONTEXTO ROBUSTA
 # ==========================================
 def get_relevant_info(db, question, selected_files, max_chars=200000):
-    """
-    Motor RAG de alta capacidad (200k chars).
-    Prioriza la densidad informativa para informes extensos.
-    """
     if not selected_files: return ""
     selected_set = set(selected_files)
-    
     candidate_chunks = []
     total_len = 0
     
-    # 1. Recolección de fragmentos del repositorio filtrado
     for pres in db:
         if pres.get('nombre_archivo') in selected_set:
             try:
@@ -109,11 +99,9 @@ def get_relevant_info(db, question, selected_files, max_chars=200000):
                         total_len += len(full_chunk)
             except: pass
 
-    # Si la data total es menor al límite, la enviamos íntegra
     if total_len <= max_chars:
         return "".join([c["text"] for c in candidate_chunks])
 
-    # 2. Puntuación semántica avanzada
     search_terms = expand_search_query(question)
     search_terms = [normalize_text(t) for t in search_terms]
     
@@ -122,14 +110,11 @@ def get_relevant_info(db, question, selected_files, max_chars=200000):
         norm_content = normalize_text(chunk["raw_content"])
         for term in search_terms:
             if term in norm_content:
-                # Peso 5x para coincidencia exacta con la pregunta
                 weight = 5 if term == normalize_text(question) else 2
                 score += (norm_content.count(term) * weight)
         chunk["score"] = score
 
-    # 3. Selección de fragmentos hasta agotar el límite de 200k
     scored_chunks = sorted(candidate_chunks, key=lambda x: x["score"], reverse=True)
-    
     chunks_to_include = []
     current_chars = 0
     for chunk in scored_chunks:
@@ -143,32 +128,30 @@ def get_relevant_info(db, question, selected_files, max_chars=200000):
     return "".join([c["text"] for c in chunks_to_include])
 
 # =========================================================
-# PROCESAMIENTO DE TEXTO (TOOLTIPS E INVISIBILIDAD)
+# PROCESAMIENTO DE TEXTO (BLINDAJE ANTICORTES)
 # =========================================================
 def process_text_with_tooltips(text):
     """
-    Renderiza citas [n] con tooltips y oculta metadatos técnicos.
+    Versión blindada: limpia citas y metadatos sin cortar el flujo del texto.
    
     """
     if not text: return ""
 
     try:
         source_map = {}
+        # Normalizamos comillas para evitar errores de renderizado
         text = text.replace('“', '"').replace('”', '"')
         
-        # 1. Cosecha de metadatos invisible
+        # 1. COSECHA DE METADATA (Lógica que no interrumpe el flujo)
         def harvest_metadata(match):
             try:
                 cid = match.group(1)
                 fname = match.group(2).strip()
-                
-                # Limpieza sistemática de nombres de archivo
                 clean_name = re.sub(r'\.(pdf|docx|xlsx|txt)$', '', fname, flags=re.IGNORECASE)
-                clean_name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', clean_name)
                 clean_name = clean_name.replace("In-ATL_", "")
                 
                 raw_context = match.group(3).strip()
-                clean_context = re.sub(r'^(?:Cita:|Contexto:|Quote:)\s*', '', raw_context, flags=re.IGNORECASE).strip('"').strip("'")
+                clean_context = re.sub(r'^(?:Cita:|Contexto:|Quote:)\s*', '', raw_context, flags=re.IGNORECASE).strip('"')
                 
                 source_map[cid] = {
                     "file": html.escape(clean_name),
@@ -177,11 +160,15 @@ def process_text_with_tooltips(text):
             except: pass
             return "" 
 
-        # Regex para capturar el bloque de metadatos inyectado por el prompt
+        # Extraemos metadatos técnicos y los removemos del cuerpo principal
         pattern_metadata = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
         text = re.sub(pattern_metadata, harvest_metadata, text, flags=re.DOTALL)
         
-        # 2. Renderizado de Tooltips Analíticos
+        # 2. LIMPIEZA DE CITAS ABIERTAS (Evita que Streamlit corte el texto)
+        # Si hay un corchete de cita abierto sin cerrar al final, lo removemos para no romper el renderizado
+        text = re.sub(r'\[(?!\d+\]).*?$', '', text)
+
+        # 3. RENDERIZADO DE CITAS NUMÉRICAS
         def replace_citation_group(match):
             content = match.group(1)
             ids = [x.strip() for x in re.findall(r'\d+', content)]
@@ -206,7 +193,7 @@ def process_text_with_tooltips(text):
         return enriched_body
 
     except Exception as e:
-        print(f"Error Tooltips: {e}")
+        # En caso de error crítico, devolvemos el texto original sin procesar para no perderlo
         return text
 
 def validate_session_integrity(): pass
