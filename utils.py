@@ -53,6 +53,29 @@ def clean_gemini_json(text):
     return text.strip()
 
 # ==============================
+# EXTRACCIÓN DE DOCUMENTOS
+# ==============================
+def extract_text_from_pdfs(files):
+    """
+    Extrae texto de una lista de archivos subidos. 
+    Requerido por onepager_mode.py
+    """
+    text = ""
+    for file in files:
+        try:
+            if fitz:
+                # Abrimos el documento desde el stream de bytes
+                doc = fitz.open(stream=file.read(), filetype="pdf")
+                for page in doc:
+                    text += page.get_text()
+                file.seek(0) # Reset del puntero para futuros usos
+            else:
+                text += "\n[Error: Librería PyMuPDF/fitz no disponible]"
+        except Exception as e:
+            text += f"\n[Error procesando archivo: {e}]"
+    return text
+
+# ==============================
 # MOTOR DE BÚSQUEDA INTELIGENTE
 # ==============================
 def expand_search_query(query):
@@ -131,17 +154,12 @@ def get_relevant_info(db, question, selected_files, max_chars=200000):
 # PROCESAMIENTO DE TEXTO (BLINDAJE ANTICORTES)
 # =========================================================
 def process_text_with_tooltips(text):
-    """
-    Versión blindada: limpia citas y metadatos sin cortar el flujo del texto.
-   
-    """
     if not text: return ""
 
     try:
         source_map = {}
         text = text.replace('“', '"').replace('”', '"')
         
-        # 1. COSECHA DE METADATA
         def harvest_metadata(match):
             try:
                 cid = match.group(1)
@@ -162,10 +180,8 @@ def process_text_with_tooltips(text):
         pattern_metadata = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
         text = re.sub(pattern_metadata, harvest_metadata, text, flags=re.DOTALL)
         
-        # 2. LIMPIEZA DE CITAS ABIERTAS (Evita cortes en el renderizado)
         text = re.sub(r'\[(?!\d+\]).*?$', '', text)
 
-        # 3. RENDERIZADO DE CITAS NUMÉRICAS
         def replace_citation_group(match):
             content = match.group(1)
             ids = [x.strip() for x in re.findall(r'\d+', content)]
@@ -193,29 +209,25 @@ def process_text_with_tooltips(text):
         return text
 
 # =========================================================
-# GESTIÓN DE WORKFLOWS (RESTAURADOS)
+# GESTIÓN DE WORKFLOWS
 # =========================================================
 def reset_transcript_chat_workflow():
-    """Limpia el estado del chat de transcripciones para evitar errores de importación."""
     if "transcript_chat_history" in st.session_state:
         st.session_state.transcript_chat_history = []
     if "current_transcript_analysis" in st.session_state:
         st.session_state.current_transcript_analysis = None
 
 def reset_chat_workflow():
-    """Limpia el estado del chat general."""
     if "chat_history" in st.session_state:
         st.session_state.chat_history = []
 
 def reset_report_workflow():
-    """Limpia el estado de generación de reportes."""
     if "report_step" in st.session_state:
         st.session_state.report_step = 1
     if "report_results" in st.session_state:
         st.session_state.report_results = {}
 
 def validate_session_integrity():
-    """Valida la integridad de la sesión activa."""
     if "logged_in" not in st.session_state or not st.session_state.logged_in:
         return False
     return True
