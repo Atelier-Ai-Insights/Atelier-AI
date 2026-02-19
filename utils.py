@@ -57,7 +57,7 @@ def clean_gemini_json(text):
 # ==============================
 def expand_search_query(query):
     """
-    Expande la consulta del usuario para capturar más fuentes relevantes.
+    Expande la consulta para capturar sinónimos y conceptos relacionales.
    
     """
     if not query or len(query.split()) > 10: return [query]
@@ -65,7 +65,7 @@ def expand_search_query(query):
         from services.gemini_api import call_gemini_api
         prompt = (
             f"Actúa como un motor de búsqueda experto en investigación de mercados. "
-            f"Para el término de búsqueda: '{query}', genera 3 palabras clave alternativas o sinónimos técnicos. "
+            f"Para el término: '{query}', genera 3 palabras clave alternativas o sinónimos técnicos. "
             f"Devuelve SOLAMENTE las palabras separadas por coma."
         )
         response = call_gemini_api(prompt, generation_config_override={"max_output_tokens": 100})
@@ -81,8 +81,8 @@ def expand_search_query(query):
 # ==========================================
 def get_relevant_info(db, question, selected_files, max_chars=200000):
     """
-    Motor RAG optimizado para evitar respuestas cortas.
-    Aumentado a 200k caracteres para permitir informes de alta densidad.
+    Motor RAG de alta capacidad (200k chars).
+    Prioriza la densidad informativa para informes extensos.
     """
     if not selected_files: return ""
     selected_set = set(selected_files)
@@ -90,7 +90,7 @@ def get_relevant_info(db, question, selected_files, max_chars=200000):
     candidate_chunks = []
     total_len = 0
     
-    # 1. Cosecha inicial de fragmentos
+    # 1. Recolección de fragmentos del repositorio filtrado
     for pres in db:
         if pres.get('nombre_archivo') in selected_set:
             try:
@@ -109,11 +109,11 @@ def get_relevant_info(db, question, selected_files, max_chars=200000):
                         total_len += len(full_chunk)
             except: pass
 
-    # Si el total es menor al límite, enviamos todo para máxima robustez
+    # Si la data total es menor al límite, la enviamos íntegra
     if total_len <= max_chars:
         return "".join([c["text"] for c in candidate_chunks])
 
-    # 2. Búsqueda semántica/palabras clave expandida
+    # 2. Puntuación semántica avanzada
     search_terms = expand_search_query(question)
     search_terms = [normalize_text(t) for t in search_terms]
     
@@ -122,12 +122,12 @@ def get_relevant_info(db, question, selected_files, max_chars=200000):
         norm_content = normalize_text(chunk["raw_content"])
         for term in search_terms:
             if term in norm_content:
-                # Damos peso extra a la pregunta original del usuario
+                # Peso 5x para coincidencia exacta con la pregunta
                 weight = 5 if term == normalize_text(question) else 2
                 score += (norm_content.count(term) * weight)
         chunk["score"] = score
 
-    # 3. Selección de los fragmentos más densos en información
+    # 3. Selección de fragmentos hasta agotar el límite de 200k
     scored_chunks = sorted(candidate_chunks, key=lambda x: x["score"], reverse=True)
     
     chunks_to_include = []
@@ -137,9 +137,8 @@ def get_relevant_info(db, question, selected_files, max_chars=200000):
             chunks_to_include.append(chunk)
             current_chars += chunk["len"]
         else:
-            if current_chars > max_chars * 0.9: break 
+            if current_chars > max_chars * 0.95: break 
     
-    # Ordenar por posición original para mantener coherencia narrativa
     chunks_to_include.sort(key=lambda x: x["original_idx"])
     return "".join([c["text"] for c in chunks_to_include])
 
@@ -148,7 +147,8 @@ def get_relevant_info(db, question, selected_files, max_chars=200000):
 # =========================================================
 def process_text_with_tooltips(text):
     """
-    Procesa las referencias [n] para ocultar metadatos y mostrar tooltips.
+    Renderiza citas [n] con tooltips y oculta metadatos técnicos.
+   
     """
     if not text: return ""
 
@@ -156,13 +156,13 @@ def process_text_with_tooltips(text):
         source_map = {}
         text = text.replace('“', '"').replace('”', '"')
         
-        # 1. COSECHA DE METADATA (Lógica invisible)
+        # 1. Cosecha de metadatos invisible
         def harvest_metadata(match):
             try:
                 cid = match.group(1)
                 fname = match.group(2).strip()
                 
-                # Limpieza de nombres
+                # Limpieza sistemática de nombres de archivo
                 clean_name = re.sub(r'\.(pdf|docx|xlsx|txt)$', '', fname, flags=re.IGNORECASE)
                 clean_name = re.sub(r'^\d{2,4}[-_]\d{1,2}[-_]\d{1,2}[-_]', '', clean_name)
                 clean_name = clean_name.replace("In-ATL_", "")
@@ -172,15 +172,16 @@ def process_text_with_tooltips(text):
                 
                 source_map[cid] = {
                     "file": html.escape(clean_name),
-                    "context": html.escape(clean_context[:300]) + "..."
+                    "context": html.escape(clean_context[:350]) + "..."
                 }
             except: pass
             return "" 
 
+        # Regex para capturar el bloque de metadatos inyectado por el prompt
         pattern_metadata = r'\[(\d+)\]\s*([^\[\]\|\n]+?)\s*\|\|\|\s*(.+?)(?=\n\[\d+\]|$|\n\n)'
         text = re.sub(pattern_metadata, harvest_metadata, text, flags=re.DOTALL)
         
-        # 2. RENDERIZADO DE TOOLTIPS RICOS
+        # 2. Renderizado de Tooltips Analíticos
         def replace_citation_group(match):
             content = match.group(1)
             ids = [x.strip() for x in re.findall(r'\d+', content)]
