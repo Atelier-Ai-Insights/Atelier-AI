@@ -231,3 +231,11 @@ def validate_session_integrity():
     if "logged_in" not in st.session_state or not st.session_state.logged_in:
         return False
     return True
+
+# --- GESTIÓN DE ETNOCHAT (NUEVA) ---
+def reset_etnochat_chat_workflow():
+    """Limpia el estado del chat del modo Etnochat/Multimodal."""
+    if "etnochat_history" in st.session_state:
+        st.session_state.etnochat_history = []
+    if "current_media_analysis" in st.session_state:
+        st.session_state.current_media_analysis = None
