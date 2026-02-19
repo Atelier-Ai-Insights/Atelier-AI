@@ -7,26 +7,15 @@ from components.chat_interface import render_chat_history, handle_chat_interacti
 from components.export_utils import render_final_actions
 
 # 1. Servicios IA
-try:
-    from services.gemini_api import call_gemini_stream
-    gemini_available = True
-except ImportError:
-    gemini_available = False
-    def call_gemini_stream(prompt): return None
+from services.gemini_api import call_gemini_stream
+gemini_available = True
 
 # 2. Utilidades
-try:
-    from utils import get_relevant_info
-except ImportError:
-    def get_relevant_info(db, q, f): return ""
+from utils import get_relevant_info
 
-# 3. Base de Datos y Prompts
-try:
-    from services.supabase_db import log_query_event
-    from prompts import get_concept_gen_prompt 
-except ImportError:
-    def log_query_event(q, m): pass
-    def get_concept_gen_prompt(h, r): return ""
+# 3. Base de Datos y Prompts [Sincronizados]
+from services.storage import log_query_event
+from prompts import get_concept_gen_prompt 
 
 def concept_generation_mode(db, selected_files):
     """
@@ -44,8 +33,7 @@ def concept_generation_mode(db, selected_files):
     if "concept_history" not in st.session_state.mode_state:
         st.session_state.mode_state["concept_history"] = []
 
-    # 2. RENDERIZAR HISTORIAL (Limpio visualmente)
-    # Oculta metadatos técnicos mientras mantiene las referencias vivas.
+    # 2. RENDERIZAR HISTORIAL
     render_chat_history(st.session_state.mode_state["concept_history"], source_mode="concept")
 
     # 3. INTERACCIÓN DEL USUARIO
@@ -54,19 +42,15 @@ def concept_generation_mode(db, selected_files):
         def concept_generator():
             status_box = st.empty()
             with status_box.status("Diseñando concepto ganador...", expanded=True) as status:
-                if not gemini_available:
-                    status.update(label="IA no disponible", state="error")
-                    return iter(["Error: IA no disponible."])
-
                 # Paso 1: RAG
                 status.write("Buscando evidencia de soporte en el repositorio...")
                 relevant_info = get_relevant_info(db, concept_input, selected_files)
                 
                 # Paso 2: Estructuración
                 status.write("Estructurando Insight, Beneficio y RTB...")
-                # Contexto de los últimos 3 mensajes para coherencia
+                # Contexto para coherencia
                 hist_str = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.mode_state["concept_history"][-3:]])
-                prompt = get_concept_gen_prompt(hist_str, relevant_info)
+                prompt = get_concept_gen_prompt(concept_input, relevant_info)
                 
                 # Paso 3: Generación Stream
                 status.write("Redactando propuesta estratégica...")
@@ -87,12 +71,12 @@ def concept_generation_mode(db, selected_files):
             response_generator_func=concept_generator,
             history_key="concept_history",
             source_mode="concept",
-            on_generation_success=lambda resp: log_query_event(f"Concepto: {concept_input[:30]}", mode=c.MODE_CONCEPT)
+            # CORRECCIÓN: Llamada posicional para evitar TypeError
+            on_generation_success=lambda resp: log_query_event(f"Concepto: {concept_input[:30]}", c.MODE_CONCEPT)
         )
 
-    # 4. ACCIONES FINALES (Barra Maestra Unificada)
+    # 4. ACCIONES FINALES
     if st.session_state.mode_state["concept_history"]:
-        # Construimos el contenido acumulado preservando metadatos para el modal
         full_content = ""
         for m in st.session_state.mode_state["concept_history"]:
             role_label = "Idea Base" if m["role"] == "user" else "Atelier AI"
@@ -102,7 +86,6 @@ def concept_generation_mode(db, selected_files):
             st.session_state.mode_state["concept_history"] = []
             st.rerun()
 
-        # Renderiza Feedback, Referencias (con filtrado único) y Exportaciones
         render_final_actions(
             content=full_content,
             title="Generacion_Conceptos_Atelier",
