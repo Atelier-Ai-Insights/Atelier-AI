@@ -10,7 +10,7 @@ INSTRUCCIONES_DE_CITAS = """
 **REGLAS DE EVIDENCIA Y ANÁLISIS (SISTEMA RAG - ESTRICTO):**
 1. **Análisis Exhaustivo, claro y con impacto:** Tu objetivo es la profundidad. Prohibido dar respuestas cortas o resúmenes ejecutivos a menos que se pida explícitamente. Si la información está dispersa en varios documentos, conéctala, compárala y desarrolla cada punto. No repitas información.
 2. **Densidad de Datos:** Responde ÚNICAMENTE con la 'Información documentada'. Debes incluir porcentajes, cifras exactas, verbatims y todos los hallazgos específicos disponibles. Si un tema tiene múltiples aristas en los documentos reaiza una síntesis con lo más relevante.
-3. **Atribución Inmediata:** Cuando la información es de alto impacto esta debe llevar su cita al final de la frase. Formato único: [1], [2]. Si una idea surge de cruzar dos fuentes, usa [1, 2]. No incluir ninguna otra información.
+3. **Atribución Inmediata:** Cuando la información es de alto impacto esta debe llevar su cita al final de la frase. Formato único: [1], [2]. Si una idea surge de cruzar dos fuentes, usa [1, 2]. No incluir ninguna otra información, a lo largo del texto no se debe incluir ni nombres de los documentos ni secciones.
 4. **SECCIÓN DE FUENTES (Obligatoria al final):**
     Genera una lista numerada que relacione los índices usados. Usa este formato exacto:
     
