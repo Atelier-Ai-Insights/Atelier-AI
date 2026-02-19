@@ -3,37 +3,31 @@ import streamlit as st
 import traceback
 from services.supabase_db import supabase
 
-# Configuración básica del logger de Python (para consola)
+# Configuración del logger para consola (Streamlit Cloud Logs)
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-
 logger = logging.getLogger("AtelierApp")
 
 def log_error(message: str, module: str = "General", error: Exception = None, level: str = "ERROR"):
     """
-    Registra un error en la consola y lo guarda en Supabase error_logs.
+    Registra errores en consola y persiste en Supabase.
     """
-    # 1. Log en consola (Streamlit Cloud logs)
+    stack_trace = None
     if error:
-        # Obtener el stack trace completo si hay una excepción
+        # Extraemos el rastro del error para depuración técnica
         stack_trace = "".join(traceback.format_exception(None, error, error.__traceback__))
         full_message = f"{message} | Error: {str(error)}"
         logger.error(f"[{module}] {full_message}\n{stack_trace}")
     else:
-        stack_trace = None
         full_message = message
-        if level == "WARNING":
-            logger.warning(f"[{module}] {message}")
-        else:
-            logger.error(f"[{module}] {message}")
+        logger.warning(f"[{module}] {message}") if level == "WARNING" else logger.error(f"[{module}] {message}")
 
-    # 2. Guardar en Supabase (Persistencia)
+    # PERSISTENCIA EN SUPABASE
     try:
-        # Intentar obtener el usuario actual, si existe
-        user_email = st.session_state.user if "user" in st.session_state else "Anonymous/System"
+        # Obtenemos el usuario de la sesión de Atelier
+        user_email = st.session_state.get("user", "Anonymous/System")
         
         log_entry = {
             "level": level,
@@ -43,15 +37,14 @@ def log_error(message: str, module: str = "General", error: Exception = None, le
             "stack_trace": stack_trace
         }
         
-        # Insertar de forma asíncrona (fire and forget) para no bloquear la UI
+        # Inserción en la tabla de logs
         supabase.table("error_logs").insert(log_entry).execute()
         
     except Exception as e_db:
-        # Si falla el log a la DB, al menos imprimirlo en consola
         print(f"CRITICAL: Falló el guardado del log en Supabase: {e_db}")
 
 def log_action(message: str, module: str = "General"):
     """
-    Registra una acción informativa (solo consola, o ampliar a DB si se desea).
+    Registra acciones informativas en consola.
     """
     logger.info(f"[{module}] {message}")
