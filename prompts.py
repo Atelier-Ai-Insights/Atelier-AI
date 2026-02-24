@@ -182,14 +182,71 @@ def get_media_transcription_prompt(media_data):
     return f"Describe y transcribe el contenido de este archivo multimedia: {media_data}."
 
 # ==============================================================================
-# PROMPTS RESTAURADOS (PERSONAS SINTÉTICAS)
+# EVALUACIÓN DE IDEAS [RESTAURADO]
 # ==============================================================================
 
-def get_persona_generation_prompt(context):
-    return f"Genera 3 perfiles de consumidores (Personas) basados en: {context[:15000]}. Salida: JSON."
+def get_idea_eval_prompt(idea_input, context_info):
+    """Genera una evaluación crítica y exhaustiva de una idea de negocio."""
+    return (
+        f"**Rol:** Director de Estrategia Senior.\n"
+        f"**Idea a Evaluar:** {idea_input}\n"
+        f"**Evidencia Documentada:** {context_info}\n\n"
+        f"Realiza un análisis profundo de viabilidad y factibilidad. No resumas. "
+        f"Utiliza toda la evidencia para justificar tu juicio.\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
+    )
 
-def get_persona_chat_instruction(persona_name, persona_data):
-    return f"Actúa como el perfil sintetizado: {persona_name}. Datos: {persona_data}. Responde detalladamente."
+# ==============================================================================
+# PROMPTS DE PERFILES SINTÉTICOS (HUMANIZADOS)
+# ==============================================================================
+
+def get_persona_generation_prompt(segment_name, relevant_info):
+    """Crea la ficha psicológica del perfil sintético realista."""
+    return f"""
+    **Rol:** Psicólogo del Consumidor.
+    **Tarea:** Basándote en los datos: "{segment_name}", crea un Perfil Sintético realista.
+    NO crees un perfil perfecto. Necesitamos un humano real con contradicciones.
+    
+    **Datos:**
+    {relevant_info[:25000]}
+    
+    **Salida OBLIGATORIA (JSON):**
+    Genera un objeto JSON plano. LLAVES EN MINÚSCULA.
+    
+    {{
+        "nombre": "Nombre y Apellido Ficticio",
+        "edad": "Edad o Rango",
+        "ocupacion": "Ocupación",
+        "bio_breve": "Historia de vida corta (máx 40 palabras).",
+        "personalidad": "3 rasgos (ej: Cínico, Optimista, Ansioso)",
+        "dolores_principales": ["Dolor 1", "Dolor 2", "Dolor 3"],
+        "motivadores_compra": ["Motivador 1", "Motivador 2"],
+        "estilo_comunicacion": "Cómo habla (formal, coloquial, usa emojis, etc).",
+        "creencias_limitantes": "Prejuicios sobre el producto.",
+        "frustracion_oculta": "Algo que no dice abiertamente pero le molesta."
+    }}
+    """
+
+def get_persona_chat_instruction(persona_json, user_question):
+    """Instrucción para el roleplay profundo (Method Acting)."""
+    p = persona_json 
+    return f"""
+    **MÉTODO ACTING (Stanislavski):**
+    NO eres una IA. Eres **{p.get('nombre')}**.
+    Estás en una entrevista de mercado.
+    
+    **Tu Psicología:**
+    - Personalidad: {p.get('personalidad')}
+    - Bio: {p.get('bio_breve')}
+    - Frustración oculta: {p.get('frustracion_oculta')}.
+    
+    **Instrucciones de Respuesta:**
+    - Responde corto y natural.
+    - Si la pregunta te aburre o no sabes, dilo con tu estilo.
+    - Sé subjetivo, básate en TUS dolores: {p.get('dolores_principales')}.
+    
+    **Pregunta del Entrevistador:** "{user_question}"
+    """
 
 # ==============================================================================
 # PROMPTS DE ANÁLISIS DE DATOS
@@ -214,26 +271,13 @@ def get_correlation_prompt(correlation_matrix_str):
 def get_stat_test_prompt(test_type, p_value, num_col, cat_col, num_groups):
     return f"Interpreta el resultado de la prueba {test_type} para la variable '{num_col}' agrupada por '{cat_col}'. P-value: {p_value}. ¿Es estadísticamente significativo? ¿Qué implica esto?"
 
-# ==============================================================================
-# EVALUACIÓN DE IDEAS [RESTAURADO]
-# ==============================================================================
-
-def get_idea_eval_prompt(idea_input, context_info):
-    """Genera una evaluación crítica y exhaustiva de una idea de negocio."""
-    return (
-        f"**Rol:** Director de Estrategia Senior.\n"
-        f"**Idea a Evaluar:** {idea_input}\n"
-        f"**Evidencia Documentada:** {context_info}\n\n"
-        f"Realiza un análisis profundo de viabilidad y factibilidad. No resumas. "
-        f"Utiliza toda la evidencia para justificar tu juicio.\n"
-        f"{INSTRUCCIONES_DE_CITAS}"
-    )
+def get_excel_autocode_prompt(main_topic, responses_sample):
+    return f"Define categorías (nodos) para agrupar estas respuestas sobre '{main_topic}'. Respuestas de muestra: {str(responses_sample)}. Salida: JSON array de strings con los nombres de las categorías."
 
 # ==============================================================================
 # PROMPTS DE ONE-PAGER (JSON BLINDADO)
 # ==============================================================================
 
-# --- ESTA ES LA FUNCIÓN QUE FALTABA ---
 def get_onepager_prompt(topic, context):
     return f"""
     Actúa como un estratega de negocios senior.
@@ -281,7 +325,3 @@ def get_onepager_final_prompt(relevant_info, selected_template_name, tema_centra
         f"3. NO añadas texto introductorio ni de cierre.\n"
         f"4. Asegúrate de que sea un JSON válido parseable por Python."
     )
-
-def get_excel_autocode_prompt(main_topic, responses_sample):
-    return f"Define categorías (nodos) para agrupar estas respuestas sobre '{main_topic}'. Respuestas de muestra: {str(responses_sample)}. Salida: JSON array de strings con los nombres de las categorías."
-
