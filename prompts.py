@@ -54,16 +54,23 @@ def get_report_prompt2(question, result1, relevant_info):
     )
 
 def get_grounded_chat_prompt(conversation_history, relevant_info, long_term_memory=""):
-    """Chat RAG estricto configurado para respuestas largas y detalladas."""
-    bloque_memoria = f"**🧠 MEMORIA DEL PROYECTO (Contexto previo):**\n{long_term_memory}\n---" if long_term_memory else ""
+    """Chat RAG estricto con tooltips ricos."""
+    bloque_memoria = ""
+    if long_term_memory:
+        bloque_memoria = f"""
+    **🧠 MEMORIA DEL PROYECTO (Contexto previo):**
+    {long_term_memory}
+    --------------------------------------------------
+    """
+
     return (
-        f"**Rol:** Analista de Insights Senior en Atelier AI.\n"
-        f"**Misión:** Proporcionar respuestas PROFUNDAS, extensas y verificables.\n\n"
-        f"{bloque_memoria}\n"
-        f"**📄 Información Documentada (Fuente de Verdad):**\n{relevant_info}\n\n"
+        f"**Rol:** Asistente de Investigación Senior.\n"
+        f"**Tarea:** Responde la ÚLTIMA pregunta del usuario sintetizando la 'Información Documentada' y la 'Memoria'.\n\n"
+        f"{bloque_memoria}"
+        f"**📄 Info Documentada (Fuente de Verdad):**\n{relevant_info}\n\n"
         f"**💬 Historial de Conversación:**\n{conversation_history}\n\n"
         f"{INSTRUCCIONES_DE_CITAS}\n"
-        "**Respuesta Analítica Extendida:**"
+        "**Respuesta:**"
     )
 
 # ==============================================================================
@@ -87,8 +94,19 @@ def get_text_analysis_summary_prompt(analysis_results):
     )
 
 # ==============================================================================
-# PROMPTS RESTAURADOS (MULTIMEDIA Y TENDENCIAS)
+# PROMPTS DE EVALUACIÓN Y GENERACIÓN DE IDEAS
 # ==============================================================================
+
+def get_ideation_prompt(conv_history, relevant):
+    """Ideación usando utilizando diferentes referentes, según sea solicitado por el usuario: Pensamiento Lateral, Design Thinking, El poder de las Pequeñas Ideas, entre otros modelos conceptuales de pensamiento creativo."""
+    return (
+        f"**Rol:** Estratega de Innovación.\n"
+        f"**Contexto:**\n{relevant}\n"
+        f"**Historial:**\n{conv_history}\n"
+        
+        f"**Tarea:** Genera ideas aplicando el método que solicite el usuario: 'Lateral Thinking', 'Design Thinking', 'El poder de las pequeñas ideas'.\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
+    )
 
 def get_image_eval_prompt_parts(target_audience, comm_objectives, relevant_text_context):
     return [
