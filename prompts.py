@@ -3,7 +3,7 @@ from datetime import datetime
 import json
 
 # ==============================================================================
-# INSTRUCCIONES GLOBALES (BLINDAJE DE EXHAUSTIVIDAD Y TRAZABILIDAD)
+# INSTRUCCIONES GLOBALES
 # ==============================================================================
 
 INSTRUCCIONES_DE_CITAS = """
@@ -195,17 +195,18 @@ def get_concept_gen_prompt(product_idea, context_info):
     )
 
 def get_idea_eval_prompt(idea_input, context_info):
-    return f"""
-    **Rol:** Director de Estrategia.
-    **Evidencia:** {context_info}
-    **Idea a Evaluar:** "{idea_input}"
-    
-    Evalúa la viabilidad, deseabilidad y factibilidad basándote estrictamente en los datos.
-    \n{INSTRUCCIONES_DE_CITAS}
-    """
+    """Genera una evaluación crítica y exhaustiva de una idea de negocio."""
+    return (
+        f"**Rol:** Director de Estrategia Senior.\n"
+        f"**Idea a Evaluar:** {idea_input}\n"
+        f"**Evidencia Documentada:** {context_info}\n\n"
+        f"Realiza un análisis profundo de viabilidad, deseabiliad y factibilidad. No resumas. "
+        f"Utiliza toda la evidencia para justificar tu juicio.\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
+    )
 
 # ==============================================================================
-# SECCIÓN: ANÁLISIS DE TENDENCIAS
+# PROMT ANÁLISIS DE TENDENCIAS
 # ==============================================================================
 
 SOURCE_LENSES = {
@@ -250,22 +251,7 @@ def get_trend_synthesis_prompt(keyword, trend_context, geo_context, topics_conte
     """
 
 # ==============================================================================
-# EVALUACIÓN DE IDEAS [RESTAURADO]
-# ==============================================================================
-
-def get_idea_eval_prompt(idea_input, context_info):
-    """Genera una evaluación crítica y exhaustiva de una idea de negocio."""
-    return (
-        f"**Rol:** Director de Estrategia Senior.\n"
-        f"**Idea a Evaluar:** {idea_input}\n"
-        f"**Evidencia Documentada:** {context_info}\n\n"
-        f"Realiza un análisis profundo de viabilidad y factibilidad. No resumas. "
-        f"Utiliza toda la evidencia para justificar tu juicio.\n"
-        f"{INSTRUCCIONES_DE_CITAS}"
-    )
-
-# ==============================================================================
-# PROMPTS DE PERFILES SINTÉTICOS (HUMANIZADOS)
+# PROMPTS DE PERFILES SINTÉTICOS
 # ==============================================================================
 
 def get_persona_generation_prompt(segment_name, relevant_info):
