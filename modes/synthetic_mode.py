@@ -21,7 +21,7 @@ from reporting.pdf_generator import generate_pdf_html
 from config import banner_file
 
 # ==========================================
-# MODO: PERFILES SINTÉTICOS (OPTIMIZADO V2)
+# MODO: PERFILES SINTÉTICOS (RELEVANCIA OPTIMIZADA)
 # ==========================================
 def synthetic_users_mode(db, selected_files):
     st.subheader("Perfil Sintético")
@@ -49,7 +49,7 @@ def synthetic_users_mode(db, selected_files):
                     status.update(label="IA no disponible", state="error")
                     return
 
-                # A. Buscar contexto inicial para el ADN
+                # Contexto inicial para crear la identidad
                 status.write("🔍 Escaneando documentos para el ADN del perfil...")
                 context = get_relevant_info(db, segment_name, selected_files)
                 
@@ -57,7 +57,6 @@ def synthetic_users_mode(db, selected_files):
                     status.update(label="No hay datos suficientes.", state="error")
                     return
                 
-                # B. Generar Perfil (JSON) - Ahora incluye visión prospectiva
                 status.write("Diseñando personalidad y visión de futuro...")
                 prompt = get_persona_generation_prompt(segment_name, context)
                 
@@ -77,7 +76,7 @@ def synthetic_users_mode(db, selected_files):
                         st.session_state.mode_state["synthetic_chat_history"] = [] 
                         
                         try:
-                            log_query_event(f"Persona: {segment_name}", mode=c.MODE_SYNTHETIC)
+                            log_query_event(f"Persona: {segment_name}", c.MODE_SYNTHETIC)
                         except: pass
                         
                         status.update(label="¡Perfil Creado!", state="complete", expanded=False)
@@ -126,31 +125,29 @@ def synthetic_users_mode(db, selected_files):
                 st.markdown(f"**Estilo:** *{p.get('estilo_comunicacion', 'Estándar')}*")
 
         st.divider()
-        st.markdown(f"#### 💬 Entrevista Dinámica con {p.get('nombre', 'Usuario')}")
+        st.markdown(f"#### 💬 Entrevista con {p.get('nombre', 'Usuario')}")
         
         # 1. Renderizar historial
         render_chat_history(st.session_state.mode_state["synthetic_chat_history"], source_mode="synthetic")
 
-        # 2. Interacción con Memoria y Contexto RAG
-        placeholder_text = f"Pregunta a {p.get('nombre')} sobre el presente o futuro..."
+        # 2. Interacción con RAG Dinámico por Pregunta
+        placeholder_text = f"Pregunta a {p.get('nombre')} sobre temas específicos..."
         
         if user_question := st.chat_input(placeholder_text):
             
             def acting_generator():
-                with st.spinner(f"{p.get('nombre')} está procesando tu pregunta..."):
+                with st.spinner(f"{p.get('nombre')} está redactando una respuesta detallada..."):
                     if not gemini_available: return iter(["(Error: IA desconectada)"])
                     
-                    # --- MEJORA: MEMORIA ---
-                    # Extraemos los últimos 5 mensajes para dar continuidad
+                    # MEJORA: Buscamos información relevante ESPECÍFICA para la pregunta del usuario
+                    # Esto garantiza que la respuesta extensa esté anclada a la pregunta.
+                    current_context = get_relevant_info(db, user_question, selected_files)
+                    
+                    # Memoria de la conversación
                     history_slice = st.session_state.mode_state["synthetic_chat_history"][-5:]
                     history_str = "\n".join([f"{m['role']}: {m['content']}" for m in history_slice])
 
-                    # --- MEJORA: DATOS DEL REPOSITORIO ---
-                    # Buscamos información relevante para la pregunta específica del usuario
-                    current_context = get_relevant_info(db, user_question, selected_files)
-                    
-                    # --- MEJORA: PROSPECTIVA Y PERSONA ---
-                    # Enviamos ADN + Memoria + Datos RAG al prompt
+                    # Prompt con jerarquía de relevancia
                     acting_prompt = get_persona_chat_instruction(
                         p, 
                         user_question, 
@@ -175,7 +172,7 @@ def synthetic_users_mode(db, selected_files):
             
             with c1:
                 chat_content = f"# Entrevista: {p.get('nombre')}\n\n"
-                chat_content += f"**Bio:** {p.get('bio_breve')}\n**Prospectiva:** {p.get('vision_prospectiva')}\n\n---\n\n"
+                chat_content += f"**Bio:** {p.get('bio_breve')}\n\n---\n\n"
                 for m in st.session_state.mode_state["synthetic_chat_history"]:
                     role_label = "Entrevistador" if m['role'] == 'user' else p.get('nombre')
                     chat_content += f"**{role_label}:** {m['content']}\n\n"
