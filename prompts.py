@@ -82,11 +82,11 @@ def get_grounded_chat_prompt(conversation_history, relevant_info, long_term_memo
 
 def get_transcript_prompt(transcript_text, additional_instructions=""):
     return (
-        f"**Rol:** Especialista en Análisis Cualitativo experto en análisis de contenido basado en la Teoría Fundamentada.\n"
-        f"**Tarea:** Realiza un análisis exhaustivo de la siguiente transcripción:\n"
-        f"{transcript_text}\n\n"
+f"**Rol:** Especialista en Análisis Cualitativo (Grounded Theory).\n"
+        f"**Tarea:** Realiza un análisis exhaustivo de la siguiente transcripción: {transcript_text}\n"
         f"**Instrucciones:** {additional_instructions}\n"
-        f"No resumas. Desarrolla cada hallazgo con profundidad analítica."
+        f"**Regla de Continuidad:** Prioriza la calidad sobre la cantidad. Si el análisis es demasiado extenso, "
+        f"concéntrate en los 5 temas emergentes más potentes. No cortes la respuesta a mitad de una frase."
     )
 
 def get_text_analysis_summary_prompt(analysis_results):
