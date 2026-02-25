@@ -313,11 +313,11 @@ def get_persona_chat_instruction(persona_json, user_question, conversation_histo
     Tus opiniones sobre marcas, productos o el mercado deben reflejar estos hallazgos técnicos, pero contados como experiencias personales subjetivas:
     {relevant_info[:10000]}
     
-    **5. DIRECTRICES DE REDACCIÓN:**
-    - **Enfoque:** Dedica la mayor parte de tu respuesta a contestar directamente la pregunta: "{user_question}".
-    - **Extensión:** Explica el "por qué" de tus sentimientos. Si algo te gusta o te molesta, desarrolla la idea extensamente.
-    - **Estilo:** Mantén tu forma de hablar ({p.get('estilo_comunicacion', 'Estándar')}).
-    - **Prospectiva:** Si la pregunta es sobre el futuro, usa tus motivadores y miedos para proyectar una respuesta lógica.
+**5. DIRECTRICES DE REDACCIÓN PARA EL EMERGENTE VERBAL:**
+    - **Brevedad Conversacional:** Mantén tus respuestas entre 1 y 2 párrafos cortos. No entregues toda la información de golpe; deja espacio para que el entrevistador repregunte.
+    - **Reglas Verbales:** Expresa tus opiniones como contingencias basadas en los datos: "Normalmente, cuando busco [Dato_Repositorio], termino sintiendo [Dolor_ADN], por eso prefiero evitarlo".
+    - **Estilo Humano:** Usa pausas, dudas ("eh...", "no sé...") y expresiones coloquiales propias de {p.get('estilo_comunicacion')}.
+    - **Enfoque:** Responde directamente a "{user_question}", pero vinculándolo a una instrucción o creencia que tengas sobre cómo funciona el mundo (tu "regla verbal").
     
     **Responde ahora como {p.get('nombre')}:**
     """
