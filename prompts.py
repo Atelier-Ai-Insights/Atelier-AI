@@ -36,20 +36,23 @@ def get_report_prompt1(question, relevant_info):
     )
 
 def get_report_prompt2(question, result1, relevant_info):
-    """Fase 2: Redacción de informe ejecutivo de alta densidad (C-Level)."""
+    """Redacción de informe nivel Consultoría Estratégica."""
     return (
         f"**Rol:** Socio Senior de Consultoría Estratégica (Atelier).\n"
-        f"**Objetivo:** Redactar un Intelligence Report de alto impacto que agote TODA la evidencia disponible. Evita la brevedad; se busca un análisis robusto.\n"
+        f"**Objetivo:** Redactar un informe de alto impacto para C-Level.\n"
         f"**Pregunta de Negocio:** {question}\n"
-        f"**Insumos Brutos:**\n1. Hallazgos preliminares: {result1}\n2. Data Room Completo: {relevant_info}\n\n"
-        f"**Instrucciones de Rigor:**\n"
-        f"- **Prohibido resumir en exceso:** Explica la importancia estratégica de cada hallazgo y conéctalo con otros datos del Data Room para dar profundidad.\n"
-        f"- **Cruce de Fuentes Obligatorio:** La respuesta debe reflejar un análisis comparativo entre múltiples archivos.\n\n"
+        f"**Insumos Brutos:**\n1. Hallazgos preliminares: {result1}\n2. Data Room: {relevant_info}\n\n"
+        
+        f"**Instrucciones de Redacción:**\n"
+        f"- **Principio de la Pirámide:** Empieza con la conclusión principal (BLUF).\n"
+        f"- **Lenguaje:** Directo, activo, sin adjetivos vacíos (evita 'interesante', 'importante').\n"
+        f"- **Profundidad:** No solo describas QUÉ pasó, explica POR QUÉ importa (Implicaciones).\n\n"
+        
         f"**Estructura del Entregable:**\n"
-        f"1. **Resumen Ejecutivo:** (3-5 líneas).\n"
-        f"2. **Análisis por Pilares:** Hallazgos detallados y extendidos con alta densidad de citas [1, 2].\n"
-        f"3. **Insights y Tensiones:** Conexión de puntos y lecturas profundas.\n"
-        f"4. **Recomendaciones Estratégicas:** Pasos accionables basados en la evidencia.\n\n"
+        f"1. **Resumen Ejecutivo:** La respuesta directa en 3 líneas.\n"
+        f"2. **Hallazgos Críticos:** Evidencia dura estructurada.\n"
+        f"3. **Insights Estratégicos:** Conexión de puntos no obvios.\n"
+        f"4. **Recomendaciones:** Próximos pasos accionables.\n\n"
         f"{INSTRUCCIONES_DE_CITAS}\n"
     )
 
@@ -79,7 +82,7 @@ def get_grounded_chat_prompt(conversation_history, relevant_info, long_term_memo
 
 def get_transcript_prompt(transcript_text, additional_instructions=""):
     return (
-        f"**Rol:** Especialista en Análisis Cualitativo.\n"
+        f"**Rol:** Especialista en Análisis Cualitativo experto en análisis de contenido basado en la Teoría Fundamentada.\n"
         f"**Tarea:** Realiza un análisis exhaustivo de la siguiente transcripción:\n"
         f"{transcript_text}\n\n"
         f"**Instrucciones:** {additional_instructions}\n"
@@ -93,6 +96,35 @@ def get_text_analysis_summary_prompt(analysis_results):
         f"**Tarea:** Cruza los hallazgos de todos los textos analizados. Salida: Informe ejecutivo de alta densidad."
     )
 
+def get_autocode_prompt(context, main_topic):
+    return f"""
+    **Rol:** Codificador Cualitativo (Grounded Theory).
+    **Tarea:** Extrae códigos y categorías sobre '{main_topic}'.
+    **Texto Base:** {context}
+    **Salida:** Lista de Temas clave (Categorías de Análisis), Códigos asociados y citas de ejemplo.
+    {INSTRUCCIONES_DE_CITAS}
+    """
+
+def get_etnochat_prompt(conversation_history, text_context):
+    return (
+        "**Rol:** Etnógrafo Digital.\n"
+        "**Tarea:** Responde sintetizando fuentes variadas (Chat, Transcripciones, Multimedia).\n"
+        f"**Historial:**\n{conversation_history}\n"
+        f"**Contexto (Transcripciones/Notas):**\n{text_context}\n"
+        f"{INSTRUCCIONES_DE_CITAS}"
+    )
+
+def get_media_transcription_prompt():
+    return """
+    **Rol:** Transcriptor Profesional.
+    **Tarea:** Transcribe el audio palabra por palabra.
+    **Formato:**
+    - Usa parráfos claros.
+    - Identifica hablantes si es posible (Hablante 1, Hablante 2).
+    - Describe acciones visuales o ruidos importantes entre corchetes [Risas], [Música de fondo].
+    **Salida:** Texto plano.
+    """
+    
 # ==============================================================================
 # PROMPTS DE EVALUACIÓN Y GENERACIÓN DE IDEAS
 # ==============================================================================
@@ -172,14 +204,50 @@ def get_idea_eval_prompt(idea_input, context_info):
     \n{INSTRUCCIONES_DE_CITAS}
     """
 
-def get_trend_synthesis_prompt(topic, context):
-    return f"Sintetiza tendencias para {topic} usando: {context}. Clasifica en Mega-tendencias y Fads."
+# ==============================================================================
+# SECCIÓN: ANÁLISIS DE TENDENCIAS
+# ==============================================================================
 
-def get_etnochat_prompt(context):
-    return f"Actúa como un etnográfo digital. Analiza este contenido multimodal: {context}."
+SOURCE_LENSES = {
+    "DANE": "Indicadores duros: IPC, Desempleo.",
+    "Banco de la República": "Macroeconomía, tasas.",
+    "Fenalco": "Comercio y Retail.",
+    "Camacol": "Vivienda y Construcción.",
+    "Euromonitor": "Megatendencias.",
+    "Google Trends": "Intención Digital.",
+    "McKinsey/Deloitte": "Futuro del Consumidor.",
+    "SIC": "Regulación."
+}
 
-def get_media_transcription_prompt(media_data):
-    return f"Describe y transcribe el contenido de este archivo multimedia: {media_data}."
+def get_trend_analysis_prompt(topic, repo_context, pdf_context, public_sources_list):
+    current_date = datetime.now().strftime("%d de %B de %Y")
+    sources_text = ""
+    if public_sources_list:
+        sources_text = "\n".join([f"- {s}" for s in public_sources_list])
+    
+    return f"""
+    **Fecha:** {current_date}
+    **Misión:** Crear un Intelligence Brief sobre: "{topic}".
+    
+    **Metodología de Análisis:**
+    Clasifica los hallazgos detectados en:
+    1. **Mega-Tendencias:** Cambios estructurales a largo plazo (5+ años).
+    2. **Fads (Modas Pasajeras):** Ruido de corto plazo.
+    3. **Señales Débiles:** Patrones emergentes que pocos ven pero tienen potencial.
+    
+    **Insumos:** {repo_context[:10000]} {pdf_context[:10000]} {sources_text}
+    
+    Genera reporte Markdown estructurado con esa clasificación.
+    """
+
+def get_trend_synthesis_prompt(keyword, trend_context, geo_context, topics_context, internal_context):
+    return f"""
+    **Rol:** Coolhunter / Trend Watcher.
+    **Objetivo:** Radar 360 sobre "{keyword}".
+    **Datos:** {trend_context} {geo_context} {topics_context} {internal_context}
+    
+    Sintetiza la información en un Brief estratégico identificando oportunidades de innovación.
+    """
 
 # ==============================================================================
 # EVALUACIÓN DE IDEAS [RESTAURADO]
