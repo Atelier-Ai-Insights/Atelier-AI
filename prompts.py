@@ -254,7 +254,7 @@ def get_trend_synthesis_prompt(keyword, trend_context, geo_context, topics_conte
 # PROMPTS DE PERFILES SINTÉTICOS
 # ==============================================================================
 
-def get_persona_generation_prompt(segment_name, relevant_info):
+def get_persona_generation_prompt(segment_name, relevant_info, *args, **kwargs):
     """Crea la ficha psicológica del perfil sintético realista."""
     return f"""
     **Rol:** Psicólogo del Consumidor.
