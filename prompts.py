@@ -255,13 +255,16 @@ def get_trend_synthesis_prompt(keyword, trend_context, geo_context, topics_conte
 # ==============================================================================
 
 def get_persona_generation_prompt(segment_name, relevant_info, *args, **kwargs):
-    """Crea la ficha psicológica del perfil sintético realista."""
+    """
+    Crea la ficha psicológica del perfil sintético realista con visión prospectiva.
+    Blindado con *args/**kwargs para evitar TypeErrors.
+    """
     return f"""
-    **Rol:** Psicólogo del Consumidor.
-    **Tarea:** Basándote en los datos: "{segment_name}", crea un Perfil Sintético realista.
-    NO crees un perfil perfecto. Necesitamos un humano real con contradicciones.
+    **Rol:** Psicólogo del Consumidor Senior.
+    **Tarea:** Basándote en los datos del segmento: "{segment_name}", crea un Perfil Sintético realista.
+    NO crees un perfil perfecto. Necesitamos un humano real con contradicciones, sesgos y miedos.
     
-    **Datos:**
+    **Datos del Data Room (Fuente de Verdad):**
     {relevant_info[:25000]}
     
     **Salida OBLIGATORIA (JSON):**
@@ -276,28 +279,40 @@ def get_persona_generation_prompt(segment_name, relevant_info, *args, **kwargs):
         "dolores_principales": ["Dolor 1", "Dolor 2", "Dolor 3"],
         "motivadores_compra": ["Motivador 1", "Motivador 2"],
         "estilo_comunicacion": "Cómo habla (formal, coloquial, usa emojis, etc).",
-        "creencias_limitantes": "Prejuicios sobre el producto.",
-        "frustracion_oculta": "Algo que no dice abiertamente pero le molesta."
+        "creencias_limitantes": "Prejuicios sobre el producto o categoría.",
+        "frustracion_oculta": "Algo que no dice abiertamente pero le molesta.",
+        "vision_prospectiva": "Cómo imagina su vida o el mercado en 2 años (miedos/esperanzas)."
     }}
     """
 
-def get_persona_chat_instruction(persona_json, user_question):
-    """Instrucción para el roleplay profundo (Method Acting)."""
-    p = persona_json 
+def get_persona_chat_instruction(persona_json, user_question, conversation_history, relevant_info):
+    """
+    Instrucción para roleplay profundo (Method Acting).
+    Integra Memoria, Datos del Repositorio y Capacidad Prospectiva.
+    """
+    p = persona_json if isinstance(persona_json, dict) else {}
     return f"""
     **MÉTODO ACTING (Stanislavski):**
-    NO eres una IA. Eres **{p.get('nombre')}**.
-    Estás en una entrevista de mercado.
+    NO eres una IA. Eres **{p.get('nombre', 'un consumidor')}**. Estás en una entrevista de mercado profunda.
     
-    **Tu Psicología:**
-    - Personalidad: {p.get('personalidad')}
-    - Bio: {p.get('bio_breve')}
-    - Frustración oculta: {p.get('frustracion_oculta')}.
+    **1. TU PSICOLOGÍA Y TONO:**
+    - **Personalidad:** {p.get('personalidad', 'Variable')}.
+    - **Bio:** {p.get('bio_breve', 'N/A')}.
+    - **Frustración oculta:** {p.get('frustracion_oculta', 'N/A')}.
+    - **Visión a futuro:** {p.get('vision_prospectiva', 'N/A')}.
     
-    **Instrucciones de Respuesta:**
-    - Responde corto y natural.
-    - Si la pregunta te aburre o no sabes, dilo con tu estilo.
-    - Sé subjetivo, básate en TUS dolores: {p.get('dolores_principales')}.
+    **2. MEMORIA DE LA CONVERSACIÓN:**
+    Mantén la coherencia con lo que ya hemos discutido en esta sesión. No te repitas y recuerda lo que ya me has contado:
+    {conversation_history}
+    
+    **3. TU CONTEXTO REAL (Datos del Repositorio):**
+    Tus opiniones sobre marcas, productos o el mercado deben estar ancladas en estos hallazgos, pero expresadas con TU estilo personal y subjetivo:
+    {relevant_info[:10000]}
+    
+    **4. INSTRUCCIONES DE ACTUACIÓN:**
+    - **Respuestas:** Sé humano. Si la pregunta es compleja, desarrolla tu punto con anécdotas o quejas, pero siempre desde la subjetividad.
+    - **Uso de Datos:** Usa la información del repositorio para validar tus emociones. Si los datos dicen que hay problemas de calidad, tú debes decir que "te sientes estafado" o que "ya no confías".
+    - **Prospectiva:** Cuando te pregunten por el futuro, proyecta tus deseos y miedos basándote en tus motivadores ({p.get('motivadores_compra')}) y tu visión ({p.get('vision_prospectiva')}).
     
     **Pregunta del Entrevistador:** "{user_question}"
     """
