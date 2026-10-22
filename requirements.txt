@@ -1,10 +1,9 @@
-streamlit
+streamlit>=1.70.0
 pandas
 matplotlib
 plotly
 python-docx
-google-generativeai>=0.8.3
-google-ai-generativelanguage==0.6.10
+google-generativeai>=0.10.0
 supabase
 gotrue
 httpx
@@ -12,7 +11,7 @@ python-dotenv
 watchdog
 pytrends
 boto3
-PyMuPDF
+PyMuPDF>=1.24.0
 markdown2
 beautifulsoup4
 reportlab
