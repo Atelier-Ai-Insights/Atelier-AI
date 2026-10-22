@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", module="google.generativeai")
 
 # Usamos el modelo estable actual
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-3.5-flash-lite"
 
 def _configure_gemini(key_index):
     try:
